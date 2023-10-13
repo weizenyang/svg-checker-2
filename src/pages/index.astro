@@ -137,7 +137,7 @@ fileInput.addEventListener("change", function() {
       // Get the SVG element from the document object
       var svgElement = svgDoc.documentElement;
 	  var list = svgElement.querySelectorAll(`[id]`)
-	  
+	  document.getElementById("id-list").innerHTML = "";
 
 	  list.forEach((i) => {
 		var listItem = document.createElement("li")
