@@ -1,0 +1,123 @@
+---
+
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Astro</title>
+	</head>
+	<body>
+		<input type="file" id="myFile" name="filename">
+		<?xml version="1.0" encoding="UTF-8"?>
+		<div class="output" id="svg-container">
+			
+		</div>
+
+<div id="tag">
+	<h3 id="label"> - </h1>
+</div>
+<svg id="svg"></svg>
+	</body>
+</html>
+
+<style>
+	#tag{
+		position: fixed;
+		background-color: #cccccccc;
+		padding: 0em 0.5em;
+		text-align: center;
+		justify-content: center;
+		min-width: 100px;
+		pointer-events: none;
+		/* transform: translate(-50%); */
+		height: 50px;
+		border-radius: 20px;
+	}
+	#label{
+		
+	}
+</style>
+
+<script>
+	var svg = document.getElementById("svg"); // get the SVG element
+var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
+	var currentSelected = null
+	document.addEventListener('mousemove', (e) => {
+		
+		// console.log(e.srcElement.getIntersectionList())
+		mouseRect.x = e.y; // set the x coordinate of the rectangle
+mouseRect.y = e.x; // set the y coordinate of the rectangle
+mouseRect.width = 1; // set the width of the rectangle
+mouseRect.height = 1; // set the height of the rectangle
+var intersectionList = svg.getIntersectionList(mouseRect, null); // get the list of SVG
+
+// console.log(intersectionList) 
+		if(e.srcElement.id != "Layer_1" && e.srcElement.id != ""){
+			console.log(e.srcElement.id)
+			if(currentSelected != null){
+				currentSelected.style.fill = ""
+			}
+			document.getElementById("label").innerText = e.srcElement.id 
+			currentSelected = e.srcElement
+			e.srcElement.style.fill = "#f00"
+		}
+	})
+
+	document.addEventListener("mousemove", (e) => {
+		
+		document.getElementById('tag').style.left = `${e.x}px`
+		document.getElementById('tag').style.top = `${e.y}px`
+		document.getElementById('tag').style.transform = `translate(${(e.x / window.innerWidth) * - 100}%, ${(e.y / window.innerHeight) * -500}%)`
+	})
+
+	// document.getElementById("myFile").addEventListener("change", (e) => {
+	// 	console.log(e)
+	// })
+
+	var fileInput = document.getElementById("myFile");
+
+// Add a change event listener
+fileInput.addEventListener("change", function() {
+  // Get the selected file
+  var file = fileInput.files[0];
+
+  // Check if the file is an SVG image
+  if (file.type === "image/svg+xml") {
+    // Create a file reader object
+    var reader = new FileReader();
+
+    // Add a load event listener
+    reader.addEventListener("load", function() {
+      // Get the SVG content as a string
+      var svgString = reader.result;
+
+      // Parse the SVG string into a document object
+      var parser = new DOMParser();
+      var svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+
+      // Get the SVG element from the document object
+      var svgElement = svgDoc.documentElement;
+
+      // Append the SVG element to the div element
+      var svgContainer = document.getElementById("svg-container");
+      svgContainer.appendChild(svgElement);
+    });
+
+    // Read the file as text
+    reader.readAsText(file);
+  } else {
+    // Display an error message if the file is not an SVG image
+    alert("Please select an SVG image file.");
+  }
+});
+
+	// function getImg(evt){
+    //         var files = evt.target.files;
+    //         var file = files[0];
+    //         console.log(file.name);
+    //     }
+</script>
