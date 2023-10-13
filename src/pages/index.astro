@@ -11,7 +11,7 @@
 		<title>Astro</title>
 	</head>
 	<body>
-		<h3>Import a SVG file here</h3>
+		<h3 style="font-family: san-serif">Import a SVG file here</h3>
 		<input type="file" id="myFile" name="filename">
 		<?xml version="1.0" encoding="UTF-8"?>
 		<div class="output" id="svg-container">
@@ -32,7 +32,7 @@
 		padding: 0em 0.5em;
 		text-align: center;
 		justify-content: center;
-		min-width: 100px;
+		min-width: max-content;
 		pointer-events: none;
 		/* transform: translate(-50%); */
 		height: 50px;
@@ -110,6 +110,7 @@ fileInput.addEventListener("change", function() {
 
       // Append the SVG element to the div element
       var svgContainer = document.getElementById("svg-container");
+	  svgContainer.innerHTML = "";
       svgContainer.appendChild(svgElement);
     });
 
