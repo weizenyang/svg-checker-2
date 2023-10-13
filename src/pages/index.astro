@@ -12,6 +12,13 @@
 	</head>
 	<body>
 		<h3 style="font-family: san-serif">Import a SVG file here</h3>
+
+		<div id="id-container">
+			<p style="padding: 0em 1em; font-weight: bold;">CTRL + F to look for items</p>
+			<ul id="id-list">
+
+			</ul>
+		</div>
 		<input type="file" id="myFile" name="filename">
 		<?xml version="1.0" encoding="UTF-8"?>
 		<div class="output" id="svg-container">
@@ -26,6 +33,10 @@
 </html>
 
 <style>
+
+	*{
+		font-family: sans-serif;
+	}
 	#tag{
 		position: fixed;
 		background-color: #cccccccc;
@@ -45,6 +56,24 @@
 
 	.output{
 		pointer-events: fill;
+	}
+
+	#id-container{
+		background-color: #eee;
+		height: 300px;
+		width: 300px;
+		position:fixed;
+		right: 0%;
+		top: 0%;
+		display: flex;
+		overflow-y: none;
+		list-style: none;
+		flex-direction: column;
+	}
+
+	#id-list{
+		margin: 0%;
+		overflow-y: scroll;
 	}
 </style>
 
@@ -107,6 +136,17 @@ fileInput.addEventListener("change", function() {
 
       // Get the SVG element from the document object
       var svgElement = svgDoc.documentElement;
+	  var list = svgElement.querySelectorAll(`[id]`)
+	  
+
+	  list.forEach((i) => {
+		var listItem = document.createElement("li")
+		listItem.innerHTML = i.id;
+		listItem.style.listStyle = "none"
+		listItem.style.padding="0.5em 0em"
+		document.getElementById("id-list").append(listItem)
+	  })
+
 
       // Append the SVG element to the div element
       var svgContainer = document.getElementById("svg-container");
