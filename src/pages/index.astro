@@ -11,33 +11,78 @@
 		<title>Astro</title>
 	</head>
 	<body>
-		<h3 style="font-family: san-serif">Import a SVG file here</h3>
+		<h3 style="font-family: san-serif">1. Choose your SVG ID Formatting</h3>
+		<div class="toggle">
+			<input
+				type="radio"
+				name="data-format"
+				class="formatting"
+				id="underscore"
+				value="underscore"
+				checked="checked"
+			/>Underscore on Last Identifier
+		
 
-		<div id="id-container">
-			<p style="padding: 0em 1em; font-weight: bold;">CTRL + F to look for items</p>
-			<ul id="id-list">
+		<input
+			type="radio"
+			name="data-format"
+			class="formatting"
+			value="dash"
+			id="dash"
+		/>Dash on Last Identifier
+		<input
+		type="radio"
+		name="data-format"
+		class="formatting"
+		value="none"
+		id="none"
+		checked="checked"
+	/>None
 
-			</ul>
-		</div>
-		<input type="file" id="myFile" name="filename">
-		<?xml version="1.0" encoding="UTF-8"?>
-		<div class="output" id="svg-container">
-			
-		</div>
+</div>
+
+	<h3 style="font-family: san-serif">2. Import a SVG file here</h3>
+
+<div id="id-container">
+	<div class="id-list-title-container">
+		<p class="id-list-title" style="padding: 0em 0em; font-weight: bold;">
+			CTRL + F to look for items
+		</p>
+		<p class="hide-toggle" id="hide-toggle">^</p>
+	</div>
+	<ul class="id-list" id="id-list"></ul>
+</div>
+
+<input type="file" id="myFile" name="filename" />
+
+<h3 style="font-family: san-serif">3. Export</h3>
+<div style="display: flex">
+	<button id="export" style="margin-right: 1em">Export</button>
+	<button id="export-csv-count" style="margin-right: 1em">Export CSV with Count</button>
+	<button id="export-csv">Export CSV No Count</button>
+</div>
+<br><br>
+<!--?xml version="1.0" encoding="UTF-8"?-->
+<h3 style="font-family: san-serif">Viewer</h3>
+<div class="output" id="svg-container"></div>
 
 <div id="tag">
-	<h3 id="label"> - </h1>
+	<h3 id="label">-</h3>
 </div>
 <svg id="svg"></svg>
 	</body>
+
+	
 </html>
 
-<style>
 
-	*{
+
+<style>
+	* {
 		font-family: sans-serif;
 	}
-	#tag{
+	#tag {
+		display: flex;
 		position: fixed;
 		background-color: #cccccccc;
 		padding: 0em 0.5em;
@@ -47,22 +92,27 @@
 		pointer-events: none;
 		/* transform: translate(-50%); */
 		height: 50px;
-		border-radius: 20px;
+		border-radius: 6px;
 		font-family: sans-serif;
 	}
-	#label{
+	#label {
+		display: flex;
+		text-align: center;
+		justify-content: center;
+		margin: 0%;
+		height: 100%;
 		font-family: sans-serif;
 	}
 
-	.output{
+	.output {
 		pointer-events: fill;
 	}
 
-	#id-container{
+	#id-container {
 		background-color: #eee;
-		height: 300px;
+		max-height: 300px;
 		width: 300px;
-		position:fixed;
+		position: fixed;
 		right: 0%;
 		top: 0%;
 		display: flex;
@@ -71,100 +121,315 @@
 		flex-direction: column;
 	}
 
-	#id-list{
+	.hide {
+		display: none;
+	}
+
+	.expand {
+		transform: rotate(180deg);
+	}
+
+	.hide-toggle:hover {
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	.id-list {
 		margin: 0%;
 		overflow-y: scroll;
+		min-height: 50px;
+	}
+
+	.id-list-title-container {
+		display: flex;
+		justify-content: space-between;
+		padding: 0em 1em;
+	}
+
+	.id-list-title span:hover {
+		cursor: pointer;
+		text-decoration: underline;
 	}
 </style>
 
 <script>
-	var svg = document.getElementById("svg"); // get the SVG element
-var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
-	var currentSelected = null
-	document.addEventListener('mousemove', (e) => {
-		
-		// console.log(e.srcElement.getIntersectionList())
-		mouseRect.x = e.y; // set the x coordinate of the rectangle
-mouseRect.y = e.x; // set the y coordinate of the rectangle
-mouseRect.width = 1; // set the width of the rectangle
-mouseRect.height = 1; // set the height of the rectangle
-var intersectionList = svg.getIntersectionList(mouseRect, null); // get the list of SVG
+	enum format {
+		underscore,
+		dash,
+		none,
+	}
 
-// console.log(intersectionList) 
-		if(e.srcElement.id != "Layer_1" && e.srcElement.id != ""){
-			console.log(e.srcElement.id)
-			if(currentSelected != null){
-				currentSelected.style.fill = ""
-			}
-			document.getElementById("label").innerText = e.srcElement.id 
-			currentSelected = e.srcElement
-			e.srcElement.style.fill = "#f00"
+	var clusterId = [];
+
+	var idFormat = format.underscore; //SVG ID format
+
+	var formattingButtons = document.querySelectorAll(".formatting");
+	formattingButtons.forEach((e) => {
+		e.addEventListener("change", (event) => setFormat(event.target.value));
+	});
+
+	function setFormat(data) {
+		if (data == "underscore") {
+			idFormat = format.underscore;
+		} else if (data == "dash") {
+			idFormat = format.dash;
+		} else if (data == "none") {
+			idFormat = format.none;
 		}
-	})
+	}
 
+	var svg = document.getElementById("svg"); // get the SVG element
+	var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
+	var currentSelected = null;
 	document.addEventListener("mousemove", (e) => {
-		
-		document.getElementById('tag').style.left = `${e.x}px`
-		document.getElementById('tag').style.top = `${e.y}px`
-		document.getElementById('tag').style.transform = `translate(${(e.x / window.innerWidth) * - 100}%, ${(e.y / window.innerHeight) * -500}%)`
-	})
+		if (e.srcElement.id != "Layer_1" && e.srcElement.id != "") {
+			console.log(e.srcElement.id);
+			if (currentSelected != null) {
+				currentSelected.style.fill = "";
+			}
+			document.getElementById("label").innerText = e.srcElement.id;
+			currentSelected = e.srcElement;
+			e.srcElement.style.fill = "#f00";
+		}
+	});
 
-	// document.getElementById("myFile").addEventListener("change", (e) => {
-	// 	console.log(e)
-	// })
+	//Tag
+	document.addEventListener("mousemove", (e) => {
+		document.getElementById("tag").style.left = `${e.x}px`;
+		document.getElementById("tag").style.top = `${e.y}px`;
+		document.getElementById("tag").style.transform = `translate(${
+			(e.clientX / window.innerWidth) * -100
+		}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+	});
 
 	var fileInput = document.getElementById("myFile");
 
-// Add a change event listener
-fileInput.addEventListener("change", function() {
-  // Get the selected file
-  var file = fileInput.files[0];
+	//SVG Uploading
+	fileInput.addEventListener("change", function () {
+		// Get the selected file
+		var file = fileInput.files[0];
 
-  // Check if the file is an SVG image
-  if (file.type === "image/svg+xml") {
-    // Create a file reader object
-    var reader = new FileReader();
+		// Check if the file is an SVG image
+		if (file.type === "image/svg+xml") {
+			var reader = new FileReader();
 
-    // Add a load event listener
-    reader.addEventListener("load", function() {
-      // Get the SVG content as a string
-      var svgString = reader.result;
+			// Add a load event listener
+			reader.addEventListener("load", function () {
+				// Get the SVG content as a string
+				var svgString = reader.result;
+				var parser = new DOMParser();
+				var svgDoc = parser.parseFromString(svgString, "image/svg+xml");
 
-      // Parse the SVG string into a document object
-      var parser = new DOMParser();
-      var svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+				var svgElement = svgDoc.documentElement;
 
-      // Get the SVG element from the document object
-      var svgElement = svgDoc.documentElement;
-	  var list = svgElement.querySelectorAll(`[id]`)
-	  document.getElementById("id-list").innerHTML = "";
+				var list = svgElement.querySelectorAll(`[id]`);
+				document.getElementById("id-list").innerHTML = "";
+				
+				//Regex Options
+				const regexLastUnderscore = /_(?=[^_]*$)/g;
+				const regexLastDash = /-(?=[^-]*$)/g;
+				const regexDashUnderscore = /\w+-\w+_\w+/;
+				const regexText = /^[^-]*/;
+				if (idFormat == format.underscore) {
+					var count = 0;
+					//If Underscore mode
+					list.forEach((i) => {
+						const currentId = i.id;
+						var listItem = document.createElement("li");
 
-	  list.forEach((i) => {
-		var listItem = document.createElement("li")
-		listItem.innerHTML = i.id;
-		listItem.style.listStyle = "none"
-		listItem.style.padding="0.5em 0em"
-		document.getElementById("id-list").append(listItem)
-	  })
+						//Check if ID ends with a dash
 
+						if (!regexDashUnderscore.test(currentId)) {
+							//Change the last Dash into Underscore
+							const regexResult = currentId.replace(
+								regexLastDash,
+								"_",
+							);
+							svgElement.getElementById(`${currentId}`).id =
+								regexResult;
+							listItem.innerHTML = regexResult;
+							clusterId.push({
+								id: count,
+								clusterId: regexText.exec(regexResult)[0],
+								unitId: regexResult,
+							});
+						} else {
+							clusterId.push({
+								id: count,
+								clusterId: regexText.exec(currentId)[0],
+								unitId: currentId,
+							});
+							listItem.innerHTML = currentId;
+						}
+						count++;
+						listItem.style.listStyle = "none";
+						listItem.style.padding = "0.5em 0em";
+						document.getElementById("id-list").append(listItem);
+					});
+				} else if (idFormat == format.dash) {
+					list.forEach((i) => {
+						const currentId = i.id;
+						var listItem = document.createElement("li");
+						// console.log(regexDashUnderscore.test(currentId))
+						if (regexDashUnderscore.test(currentId)) {
+							console.log(regexLastUnderscore.test(currentId));
+							const regexResult = currentId.replace(
+								regexLastUnderscore,
+								"-",
+							);
 
-      // Append the SVG element to the div element
-      var svgContainer = document.getElementById("svg-container");
-	  svgContainer.innerHTML = "";
-      svgContainer.appendChild(svgElement);
-    });
+							svgElement.getElementById(`${currentId}`).id =
+								regexResult;
+							listItem.innerHTML = regexResult;
+							clusterId.push({
+								id: count,
+								clusterId: regexText.exec(regexResult)[0],
+								unitId: regexResult,
+							});
+						} else {
+							listItem.innerHTML = currentId;
+							clusterId.push({
+								id: count,
+								clusterId: regexText.exec(currentId)[0],
+								unitId: currentId,
+							});
+						}
 
-    // Read the file as text
-    reader.readAsText(file);
-  } else {
-    // Display an error message if the file is not an SVG image
-    alert("Please select an SVG image file.");
-  }
-});
+						listItem.style.listStyle = "none";
+						listItem.style.padding = "0.5em 0em";
+						document.getElementById("id-list").append(listItem);
+					});
+				} else if (idFormat == format.none) {
+					list.forEach((i) => {
+						const currentId = i.id;
+						var listItem = document.createElement("li");
 
-	// function getImg(evt){
-    //         var files = evt.target.files;
-    //         var file = files[0];
-    //         console.log(file.name);
-    //     }
+						listItem.innerHTML = currentId;
+
+						clusterId.push({
+							id: count,
+							clusterId: regexText.exec(currentId)[0],
+							unitId: currentId,
+						});
+
+						listItem.style.listStyle = "none";
+						listItem.style.padding = "0.5em 0em";
+						document.getElementById("id-list").append(listItem);
+					});
+				}
+
+				console.log(clusterId);
+
+				// Append the SVG element to the div element
+				var svgContainer = document.getElementById("svg-container");
+				svgContainer.innerHTML = "";
+				svgContainer.appendChild(svgElement);
+			});
+
+			reader.readAsText(file);
+		} else {
+			alert("Please select an SVG image file.");
+		}
+	});
+
+	document.getElementById("hide-toggle").addEventListener("click", (e) => {
+		if (document.getElementById("id-list").style.display == "none") {
+			document.getElementById("id-list").style.display = "block";
+			document.getElementById("hide-toggle").classList.remove("expand");
+		} else {
+			document.getElementById("id-list").style.display = "none";
+			document.getElementById("hide-toggle").classList.add("expand");
+		}
+	});
+
+	document.getElementById("export-csv").addEventListener("click", (e) => {
+		exportCSV();
+	})
+
+	document.getElementById("export-csv-count").addEventListener("click", (e) => {
+		exportCSVId();
+	})
+
+	document.getElementById("export").addEventListener("click", (e) => {
+		exportSVG();
+	})
+
+	// CSV Conversion
+	function exportCSV(){
+		var data = clusterId
+		data.forEach((e) => {
+			delete e.id
+		})
+		if(clusterId.length > 0){
+			// We can create a header row by mapping the object keys
+	var header = Object.keys(data[0])
+		.map((key) => `"${key}"`)
+		.join(",");
+
+	var rows = data.map((obj) =>
+		Object.values(obj)
+			.map((val) => `"${val}"`)
+			.join(","),
+	);
+
+	var csv = [header, ...rows].join("\n");
+	var blob = new Blob([csv], { type: "text/csv" });
+	var link = document.createElement("a");
+	link.href = URL.createObjectURL(blob);
+	link.download = "data.csv";
+	link.click();
+		} else {
+			alert("Import an SVG to start!")
+		}
+	
+	}
+
+	// CSV Conversion
+	function exportCSVId(){
+		var data = clusterId
+		
+		if(clusterId.length > 0){
+			// We can create a header row by mapping the object keys
+	var header = Object.keys(data[0])
+		.map((key) => `"${key}"`)
+		.join(",");
+
+	var rows = data.map((obj) =>
+		Object.values(obj)
+			.map((val) => `"${val}"`)
+			.join(","),
+	);
+
+	var csv = [header, ...rows].join("\n");
+	var blob = new Blob([csv], { type: "text/csv" });
+	var link = document.createElement("a");
+	link.href = URL.createObjectURL(blob);
+	link.download = "data.csv";
+	link.click();
+		} else {
+			alert("Import an SVG to start!")
+		}
+	
+	}
+	//SVG Conversion
+function exportSVG(){
+	var svg = document.querySelector("#svg-container").querySelector('svg');
+	if(svg){
+		var serializer = new XMLSerializer();
+		var svgString = serializer.serializeToString(svg);
+		var blob = new Blob([svgString], {type: "image/svg+xml"});
+		var url = URL.createObjectURL(blob);
+		var link = document.createElement("a");
+		link.href = url;
+		link.download = "mysvg.svg";
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	} else {
+		alert("Import and SVG to start!")
+	}
+	
+}
+	
+	
 </script>
