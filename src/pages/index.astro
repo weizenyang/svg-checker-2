@@ -11,94 +11,101 @@
 		<title>Astro</title>
 	</head>
 	<body>
-		<section class="container">
-			<h3 >1. Choose your SVG ID Formatting</h3>
-		<div class="toggle">
-			<div class="sub-item">
-				<input
-				type="radio"
-				name="data-format"
-				class="formatting"
-				id="underscore"
-				value="underscore"
-				checked="checked"
-			/>Underscore on Last Identifier
+		<!--?xml version="1.0" encoding="UTF-8"?-->
+		<main class="toolsets" style="display: flex">
+			<div class="toolset-section">
+				<section class="container">
+					<h3>1. Choose your SVG ID Formatting</h3>
+					<div class="toggle">
+						<div class="sub-item">
+							<input
+								type="radio"
+								name="data-format"
+								class="formatting"
+								id="underscore"
+								value="underscore"
+								checked="checked"
+							/>Underscore on Last Identifier (NHXX-XX<b>_</b>XX)
+						</div>
+	
+						<div class="sub-item">
+							<input
+								type="radio"
+								name="data-format"
+								class="formatting"
+								value="dash"
+								id="dash"
+							/>Dash on Last Identifier (NHXX-XX<b>-</b>XX)
+						</div>
+						<div class="sub-item">
+							<input
+								type="radio"
+								name="data-format"
+								class="formatting"
+								value="none"
+								id="none"
+								checked="checked"
+							/>None
+						</div>
+					</div>
+				</section>
+	
+				<section class="container">
+					<h3>2. Then, Import SVG file here</h3>
+					<div class="sub-item">
+						<input type="file" id="myFile" name="filename" />
+					</div>
+				</section>
+	
+				
+	
+				<section class="container">
+					<h3>3. Export reformatted files</h3>
+					<div class="sub-item" style="display: flex">
+						<button id="export" style="margin-right: 1em"
+							>Export SVG</button
+						>
+						<button id="export-csv-count" style="margin-right: 1em"
+							>Export CSV with Count</button
+						>
+						<button id="export-csv">Export CSV No Count</button>
+					</div>
+				</section>
 			</div>
-			
-		
-			<div class="sub-item">
-				<input
-			type="radio"
-			name="data-format"
-			class="formatting"
-			value="dash"
-			id="dash"
-		/>Dash on Last Identifier
-			</div>
-			<div class="sub-item">
-				<input
-		type="radio"
-		name="data-format"
-		class="formatting"
-		value="none"
-		id="none"
-		checked="checked"
-	/>None
+			<div id="id-container">
+				<div class="id-list-title-container">
+					<p
+						class="id-list-title"
+						style="padding: 0em 0em; font-weight: bold;"
+					>
+						CTRL + F to look for items
+					</p>
+					<p class="hide-toggle" id="hide-toggle">^</p>
 				</div>
+				<ul style="padding-left: 1em;"class="id-list" id="id-list"></ul>
+			</div>
+		</main>
 		
 
-</div>
+		
+
+		<section class="container">
+			<h3>Viewer</h3>
+			<div class="output" id="svg-container">
+				<p
+					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
+				>
+					No SVG file
+				</p>
+			</div>
+
+			<div id="tag">
+				<h3 id="label">-</h3>
+			</div>
+			<svg id="svg"></svg>
 		</section>
-		
-<section class="container">
-	<h3>2. Import a SVG file here</h3>
-	<div class="sub-item">
-		<input type="file" id="myFile" name="filename" />
-	</div>
-</section>
-	
-
-<div id="id-container">
-	<div class="id-list-title-container">
-		<p class="id-list-title" style="padding: 0em 0em; font-weight: bold;">
-			CTRL + F to look for items
-		</p>
-		<p class="hide-toggle" id="hide-toggle">^</p>
-	</div>
-	<ul class="id-list" id="id-list"></ul>
-</div>
-
-
-
-
-<section class="container">
-	<h3>3. Export</h3>
-<div class="sub-item" style="display: flex">
-	<button id="export" style="margin-right: 1em">Export SVG</button>
-	<button id="export-csv-count" style="margin-right: 1em">Export CSV with Count</button>
-	<button id="export-csv">Export CSV No Count</button>
-</div>
-</section>
-
-<!--?xml version="1.0" encoding="UTF-8"?-->
-<section class="container">
-	<h3>Viewer</h3>
-<div class="output" id="svg-container">
-	<p style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;">No SVG file</p>
-</div>
-	
-<div id="tag">
-	<h3 id="label">-</h3>
-</div>
-<svg id="svg"></svg>
-</section>
-
 	</body>
-
-	
 </html>
-
-
 
 <style>
 	@font-face {
@@ -109,8 +116,17 @@
 		font-family: gabarito, sans-serif;
 	}
 
-	h3{
+	h3 {
 		margin-top: 0.2em;
+	}
+
+	.toolsets{
+		width: 100%;
+	}
+
+	.toolset-section{
+		width: 100%;
+		/* padding: 0.5em; */
 	}
 	#tag {
 		display: flex;
@@ -140,20 +156,22 @@
 	}
 
 	#id-container {
+		margin-top: 0.5em;
 		background-color: #eee;
-		max-height: 300px;
+		max-height: 390px;
 		width: 300px;
-		position: fixed;
+		border-radius: 5px;
+		/* position: fixed; */
 		right: 0%;
 		top: 0%;
 		display: flex;
 		overflow-y: none;
 		list-style: none;
 		flex-direction: column;
-		
+		margin-left: 0.5em;
 	}
 
-	#svg-container{
+	#svg-container {
 		border: solid 1px #00000055;
 		border-radius: 3px;
 	}
@@ -162,21 +180,21 @@
 		display: none;
 	}
 
-	.container{
+	.container {
 		background-color: #eee;
 		margin-top: 0.5em;
 		padding: 0.5em;
 		border-radius: 5px;
 	}
 
-	.sub-item{
+	.sub-item {
 		padding: 0.5em;
 		margin-bottom: 0.1em;
 		background-color: #00000011;
 		border-radius: 3px;
 	}
 
-	.toggle{
+	.toggle {
 		display: flex;
 		flex-direction: column;
 	}
@@ -200,6 +218,7 @@
 		display: flex;
 		justify-content: space-between;
 		padding: 0em 1em;
+		background-color: #00000011;
 	}
 
 	.id-list-title span:hover {
@@ -217,7 +236,7 @@
 
 	var clusterId = [];
 
-	var idFormat = format.underscore; //SVG ID format
+	var idFormat = format.none; //SVG ID format
 
 	var formattingButtons = document.querySelectorAll(".formatting");
 	formattingButtons.forEach((e) => {
@@ -233,23 +252,26 @@
 			idFormat = format.none;
 		}
 	}
-
+	var fileNameGlobal=""
 	var svg = document.getElementById("svg"); // get the SVG element
 	var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
 	var currentSelected = null;
 	document.addEventListener("mousemove", (e) => {
 		// console.log(e.parentNode.nodeName.toLowerCase())
-		if (e.srcElement.parentNode.nodeName.toLowerCase() == "svg" || e.srcElement.nodeName.toLowerCase() == "svg") {
+		if (
+			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.nodeName.toLowerCase() == "svg"
+		) {
 			console.log(e.srcElement.id);
 			if (currentSelected != null) {
 				currentSelected.style.fill = "";
 			}
-			document.getElementById("tag").style.display = 'flex';
+			document.getElementById("tag").style.display = "flex";
 			document.getElementById("label").innerText = e.srcElement.id;
 			currentSelected = e.srcElement;
 			e.srcElement.style.fill = "#f00";
 		} else {
-			document.getElementById("tag").style.display = 'none';
+			document.getElementById("tag").style.display = "none";
 		}
 	});
 
@@ -263,11 +285,14 @@
 	});
 
 	var fileInput = document.getElementById("myFile");
+	var type = ""
+				
 
 	//SVG Uploading
 	fileInput.addEventListener("change", function () {
 		// Get the selected file
 		var file = fileInput.files[0];
+		fileNameGlobal = file.name
 
 		// Check if the file is an SVG image
 		if (file.type === "image/svg+xml") {
@@ -284,7 +309,7 @@
 
 				var list = svgElement.querySelectorAll(`[id]`);
 				document.getElementById("id-list").innerHTML = "";
-				
+
 				//Regex Options
 				const regexLastUnderscore = /_(?=[^_]*$)/g;
 				const regexLastDash = /-(?=[^-]*$)/g;
@@ -327,6 +352,7 @@
 						document.getElementById("id-list").append(listItem);
 					});
 				} else if (idFormat == format.dash) {
+					var count = 0;
 					list.forEach((i) => {
 						const currentId = i.id;
 						var listItem = document.createElement("li");
@@ -354,12 +380,13 @@
 								unitId: currentId,
 							});
 						}
-
+						count++;
 						listItem.style.listStyle = "none";
 						listItem.style.padding = "0.5em 0em";
 						document.getElementById("id-list").append(listItem);
 					});
 				} else if (idFormat == format.none) {
+					var count = 0;
 					list.forEach((i) => {
 						const currentId = i.id;
 						var listItem = document.createElement("li");
@@ -371,7 +398,7 @@
 							clusterId: regexText.exec(currentId)[0],
 							unitId: currentId,
 						});
-
+						count++;
 						listItem.style.listStyle = "none";
 						listItem.style.padding = "0.5em 0em";
 						document.getElementById("id-list").append(listItem);
@@ -384,6 +411,15 @@
 				var svgContainer = document.getElementById("svg-container");
 				svgContainer.innerHTML = "";
 				svgContainer.appendChild(svgElement);
+
+				//Set type for export filename
+				if (idFormat == format.underscore) {
+					type = "underscore"
+				} else if (idFormat == format.dash) {
+					type = "dash"
+				} else if (idFormat == format.none) {
+					type = ""
+				}
 			});
 
 			reader.readAsText(file);
@@ -404,92 +440,92 @@
 
 	document.getElementById("export-csv").addEventListener("click", (e) => {
 		exportCSV();
-	})
+	});
 
-	document.getElementById("export-csv-count").addEventListener("click", (e) => {
-		exportCSVId();
-	})
+	document
+		.getElementById("export-csv-count")
+		.addEventListener("click", (e) => {
+			exportCSVId();
+		});
 
 	document.getElementById("export").addEventListener("click", (e) => {
 		exportSVG();
-	})
+	});
 
 	// CSV Conversion
-	function exportCSV(){
-		var data = clusterId
+	function exportCSV() {
+		const file = fileNameGlobal
+		var data = clusterId;
 		data.forEach((e) => {
-			delete e.id
-		})
-		if(clusterId.length > 0){
+			delete e.id;
+		});
+		if (clusterId.length > 0) {
 			// We can create a header row by mapping the object keys
-	var header = Object.keys(data[0])
-		.map((key) => `"${key}"`)
-		.join(",");
+			var header = Object.keys(data[0])
+				.map((key) => `"${key}"`)
+				.join(",");
 
-	var rows = data.map((obj) =>
-		Object.values(obj)
-			.map((val) => `"${val}"`)
-			.join(","),
-	);
+			var rows = data.map((obj) =>
+				Object.values(obj)
+					.map((val) => `"${val}"`)
+					.join(","),
+			);
 
-	var csv = [header, ...rows].join("\n");
-	var blob = new Blob([csv], { type: "text/csv" });
-	var link = document.createElement("a");
-	link.href = URL.createObjectURL(blob);
-	link.download = "data.csv";
-	link.click();
+			var csv = [header, ...rows].join("\n");
+			var blob = new Blob([csv], { type: "text/csv" });
+			var link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			
+			link.download = file.replace(/\.[^/.]+$/, "") + "_" + type + ".csv";
+			link.click();
 		} else {
-			alert("Import an SVG to start!")
+			alert("Import an SVG to start!");
 		}
-	
 	}
 
 	// CSV Conversion
-	function exportCSVId(){
-		var data = clusterId
-		
-		if(clusterId.length > 0){
+	function exportCSVId() {
+		var data = clusterId;
+		const file = fileNameGlobal
+		if (clusterId.length > 0) {
 			// We can create a header row by mapping the object keys
-	var header = Object.keys(data[0])
-		.map((key) => `"${key}"`)
-		.join(",");
+			var header = Object.keys(data[0])
+				.map((key) => `"${key}"`)
+				.join(",");
 
-	var rows = data.map((obj) =>
-		Object.values(obj)
-			.map((val) => `"${val}"`)
-			.join(","),
-	);
+			var rows = data.map((obj) =>
+				Object.values(obj)
+					.map((val) => `"${val}"`)
+					.join(","),
+			);
 
-	var csv = [header, ...rows].join("\n");
-	var blob = new Blob([csv], { type: "text/csv" });
-	var link = document.createElement("a");
-	link.href = URL.createObjectURL(blob);
-	link.download = "data.csv";
-	link.click();
+			var csv = [header, ...rows].join("\n");
+			var blob = new Blob([csv], { type: "text/csv" });
+			var link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download = file.replace(/\.[^/.]+$/, "") +"_" +type +"_w_Count"+ ".csv";
+			link.click();
 		} else {
-			alert("Import an SVG to start!")
+			alert("Import an SVG to start!");
 		}
-	
 	}
 	//SVG Conversion
-function exportSVG(){
-	var svg = document.querySelector("#svg-container").querySelector('svg');
-	if(svg){
-		var serializer = new XMLSerializer();
-		var svgString = serializer.serializeToString(svg);
-		var blob = new Blob([svgString], {type: "image/svg+xml"});
-		var url = URL.createObjectURL(blob);
-		var link = document.createElement("a");
-		link.href = url;
-		link.download = "mysvg.svg";
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-	} else {
-		alert("Import and SVG to start!")
+	function exportSVG() {
+		const file = fileNameGlobal
+		var svg = document.querySelector("#svg-container").querySelector("svg");
+		if (svg) {
+			var serializer = new XMLSerializer();
+			var svgString = serializer.serializeToString(svg);
+			var blob = new Blob([svgString], { type: "image/svg+xml" });
+			var url = URL.createObjectURL(blob);
+			var link = document.createElement("a");
+			link.href = url;
+			link.download = file.replace(/\.[^/.]+$/, "") +"_" + type + ".svg";
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+		} else {
+			alert("Import and SVG to start!");
+		}
 	}
-	
-}
-	
-	
 </script>
