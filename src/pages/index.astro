@@ -27,7 +27,7 @@
 								checked="checked"
 							/>Underscore on Last Identifier (NHXX-XX<b>_</b>XX)
 						</div>
-	
+
 						<div class="sub-item">
 							<input
 								type="radio"
@@ -49,16 +49,14 @@
 						</div>
 					</div>
 				</section>
-	
+
 				<section class="container">
 					<h3>2. Then, Import SVG file here</h3>
 					<div class="sub-item">
 						<input type="file" id="myFile" name="filename" />
 					</div>
 				</section>
-	
-				
-	
+
 				<section class="container">
 					<h3>3. Export reformatted files</h3>
 					<div class="sub-item" style="display: flex">
@@ -68,7 +66,8 @@
 						<button id="export-csv-count" style="margin-right: 1em"
 							>Export CSV with Count</button
 						>
-						<button id="export-csv">Export CSV No Count</button>
+						<button id="export-csv" style="margin-right: 1em">Export CSV No Count</button>
+						<button id="export-csv-layer">Export CSV w Layer Attributes</button>
 					</div>
 				</section>
 			</div>
@@ -82,12 +81,10 @@
 					</p>
 					<p class="hide-toggle" id="hide-toggle">^</p>
 				</div>
-				<ul style="padding-left: 1em;"class="id-list" id="id-list"></ul>
+				<ul style="padding-left: 1em;" class="id-list" id="id-list">
+				</ul>
 			</div>
 		</main>
-		
-
-		
 
 		<section class="container">
 			<h3>Viewer</h3>
@@ -98,6 +95,10 @@
 					No SVG file
 				</p>
 			</div>
+
+			<button id="flip-x">
+				Flip X
+			</button>
 
 			<div id="tag">
 				<h3 id="label">-</h3>
@@ -120,11 +121,11 @@
 		margin-top: 0.2em;
 	}
 
-	.toolsets{
+	.toolsets {
 		width: 100%;
 	}
 
-	.toolset-section{
+	.toolset-section {
 		width: 100%;
 		/* padding: 0.5em; */
 	}
@@ -234,6 +235,8 @@
 		none,
 	}
 
+	var flipped = false
+
 	var clusterId = [];
 
 	var idFormat = format.none; //SVG ID format
@@ -252,7 +255,7 @@
 			idFormat = format.none;
 		}
 	}
-	var fileNameGlobal=""
+	var fileNameGlobal = "";
 	var svg = document.getElementById("svg"); // get the SVG element
 	var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
 	var currentSelected = null;
@@ -260,7 +263,8 @@
 		// console.log(e.parentNode.nodeName.toLowerCase())
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
-			e.srcElement.nodeName.toLowerCase() == "svg"
+			e.srcElement.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
 			console.log(e.srcElement.id);
 			if (currentSelected != null) {
@@ -272,6 +276,7 @@
 			e.srcElement.style.fill = "#f00";
 		} else {
 			document.getElementById("tag").style.display = "none";
+			// console.log(e.srcElement.parentNode.nodeName);
 		}
 	});
 
@@ -285,14 +290,14 @@
 	});
 
 	var fileInput = document.getElementById("myFile");
-	var type = ""
-				
+	var type = "";
 
 	//SVG Uploading
 	fileInput.addEventListener("change", function () {
+		flipped = false
 		// Get the selected file
 		var file = fileInput.files[0];
-		fileNameGlobal = file.name
+		fileNameGlobal = file.name;
 
 		// Check if the file is an SVG image
 		if (file.type === "image/svg+xml") {
@@ -414,11 +419,11 @@
 
 				//Set type for export filename
 				if (idFormat == format.underscore) {
-					type = "underscore"
+					type = "underscore";
 				} else if (idFormat == format.dash) {
-					type = "dash"
+					type = "dash";
 				} else if (idFormat == format.none) {
-					type = ""
+					type = "";
 				}
 			});
 
@@ -452,9 +457,13 @@
 		exportSVG();
 	});
 
+	document.getElementById("export-csv-layer").addEventListener("click", (e) => {
+		exportFloorNamePosition();
+	});
+
 	// CSV Conversion
 	function exportCSV() {
-		const file = fileNameGlobal
+		const file = fileNameGlobal;
 		var data = clusterId;
 		data.forEach((e) => {
 			delete e.id;
@@ -475,7 +484,7 @@
 			var blob = new Blob([csv], { type: "text/csv" });
 			var link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
-			
+
 			link.download = file.replace(/\.[^/.]+$/, "") + "_" + type + ".csv";
 			link.click();
 		} else {
@@ -486,7 +495,7 @@
 	// CSV Conversion
 	function exportCSVId() {
 		var data = clusterId;
-		const file = fileNameGlobal
+		const file = fileNameGlobal;
 		if (clusterId.length > 0) {
 			// We can create a header row by mapping the object keys
 			var header = Object.keys(data[0])
@@ -503,7 +512,12 @@
 			var blob = new Blob([csv], { type: "text/csv" });
 			var link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
-			link.download = file.replace(/\.[^/.]+$/, "") +"_" +type +"_w_Count"+ ".csv";
+			link.download =
+				file.replace(/\.[^/.]+$/, "") +
+				"_" +
+				type +
+				"_w_Count" +
+				".csv";
 			link.click();
 		} else {
 			alert("Import an SVG to start!");
@@ -511,7 +525,7 @@
 	}
 	//SVG Conversion
 	function exportSVG() {
-		const file = fileNameGlobal
+		const file = fileNameGlobal;
 		var svg = document.querySelector("#svg-container").querySelector("svg");
 		if (svg) {
 			var serializer = new XMLSerializer();
@@ -520,7 +534,7 @@
 			var url = URL.createObjectURL(blob);
 			var link = document.createElement("a");
 			link.href = url;
-			link.download = file.replace(/\.[^/.]+$/, "") +"_" + type + ".svg";
+			link.download = file.replace(/\.[^/.]+$/, "") + "_" + type + ".svg";
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
@@ -528,4 +542,103 @@
 			alert("Import and SVG to start!");
 		}
 	}
+	//SVG Conversion
+	function exportFloorNamePosition() {
+		// console.log(document.querySelector("#svg-container").querySelector("svg").childNodes.length)
+		if(document.querySelector("#svg-container").querySelector("svg")){
+			const parser = new DOMParser();
+		var doc = null
+		doc = document.querySelector("#svg-container").querySelector("svg")
+
+		const layers = Array.from(doc.querySelectorAll("g")).map((layer) => {
+			if(layer.getAttribute("id").toLowerCase() != 'reference'){
+				const id = layer.getAttribute("id").replace('_', "");
+			const children = Array.from(layer.children).map(
+				(child) => {
+					console.log(child)
+					const childId = child.getAttribute("data-name") ? decodeHtml(child.getAttribute("data-name")) : child.getAttribute("id");
+					
+					const x = child.getAttribute("cx");
+					const y = child.getAttribute("cy");
+					return { id: childId, x, y };
+				},
+			);
+			console.log(id, children)
+			return { id, children };
+			}
+			
+		}).filter((layer) => layer !== undefined);
+
+
+		const csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${layer.id},${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		
+		const file = fileNameGlobal;
+		var blob = new Blob([csv], { type: "text/csv" });
+			var link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download =
+				file.replace(/\.[^/.]+$/, "") + (flipped ? "-flipped" : "")
+				".csv";
+			link.click();
+		} else {
+			alert("Import an SVG to start!");
+		}
+		
+	}
+	
+
+	function decodeHtml(html) {
+						var txt = document.createElement("textarea");
+						txt.innerHTML = html;
+						return txt.value;
+					}
+
+	document.getElementById("flip-x").addEventListener("click", (e) => {
+		// var svg = document.querySelector("#svg-container").querySelector("svg");
+		// svg.style.scale = "-1 1"
+		flipped = !flipped
+		
+		var doc = null
+		doc = document.querySelector("#svg-container").querySelector("svg")
+		const width = doc.viewBox.baseVal.width
+		const layers = Array.from(doc.querySelectorAll("g")).map((layer) => {
+			// if(layer.getAttribute("id").toLowerCase() != 'reference'){
+				// const id = layer.getAttribute("id").replace('_', "");
+			const children = Array.from(layer.children).map(
+				(child) => {
+					if(child.tagName == "image"){
+						
+						// child.getAttribute("transform")
+						// child.style.transform = "translate(-100%, 0) scale(-1, 1)"
+						if(!child.hasAttribute("flipped")){
+							child.setAttribute("flipped", "")
+							child.style.transform = 'scaleX(-1) translate(-100%, 0)'
+						} else {
+							child.removeAttribute("flipped")
+							child.style.transform = 'scaleX(1) translate(0, 0)'
+						}
+						
+						
+						console.log(child.style.scale)
+				} else {
+						const x = child.getAttribute("cx");
+					child.setAttribute("cx", width - x)
+					}
+					
+				},
+			);
+			// }
+			
+		})
+
+		
+	});
 </script>
