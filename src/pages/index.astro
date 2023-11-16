@@ -55,6 +55,13 @@
 					<div class="sub-item">
 						<input type="file" id="myFile" name="filename" />
 					</div>
+					<div class="sub-item">
+						<input type="text" id="myClasses" name="filename" style="margin-right: 1em" />
+						<button id="remove" style="margin-right: 1em"
+							>Isolate Data</button
+						>
+					</div>
+					
 				</section>
 
 				<section class="container">
@@ -63,12 +70,16 @@
 						<button id="export" style="margin-right: 1em"
 							>Export SVG</button
 						>
+						<button id="remove" style="margin-right: 1em"
+							>Remove Data</button
+						>
 						<button id="export-csv-count" style="margin-right: 1em"
 							>Export CSV with Count</button
 						>
+						
 						<button id="export-csv" style="margin-right: 1em">Export CSV No Count</button>
-						<button id="export-csv-layer">Export CSV w Layer Attributes</button>
-						<button id="export-csv-layer-2048">Export CSV w Layer Attributes</button>
+						<button id="export-csv-layer">Export CSV w Position</button>
+						<button id="export-csv-layer-2048">Export CSV w Position 2048</button>
 					</div>
 				</section>
 			</div>
@@ -672,6 +683,10 @@
 		exportCSV();
 	});
 
+	document.getElementById("remove").addEventListener("click", (e) => {
+		removeData();
+	});
+
 	document
 		.getElementById("export-csv-count")
 		.addEventListener("click", (e) => {
@@ -809,15 +824,28 @@
 		}).filter((layer) => layer !== undefined);
 
 
-		const csv = layers
+		var csv;
+		if(layers.length < 2){
+			csv = layers
 			.flatMap((layer) =>
 				layer.children.map(
-					(child) => `${layer.id},${child.id},${child.x},${child.y}`,
+					(child) => `${child.id},${child.x},${child.y}`,
 				),
 			)
 			.join("\n");
 
 		console.log(csv);
+		} else {
+			csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${layer.id} ${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		}
 		
 		const file = fileNameGlobal;
 		var blob = new Blob([csv], { type: "text/csv" });
@@ -865,15 +893,29 @@
 		}).filter((layer) => layer !== undefined);
 
 
-		const csv = layers
+		var csv;
+		if(layers.length < 2){
+			csv = layers
 			.flatMap((layer) =>
 				layer.children.map(
-					(child) => `${layer.id},${child.id},${child.x},${child.y}`,
+					(child) => `${child.id},${child.x},${child.y}`,
 				),
 			)
 			.join("\n");
 
 		console.log(csv);
+		} else {
+			csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${layer.id} ${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		}
+		
 		
 		const file = fileNameGlobal;
 		var blob = new Blob([csv], { type: "text/csv" });
@@ -978,4 +1020,223 @@
 
 		
 	});
+
+	function removeData(){
+		const doc = document.querySelector('#svg-container')
+		
+
+// threeBed.forEach((x) => {
+//   console.log(x.getAttribute("style"));
+//   x.setAttribute("class", "cls-8182");
+// });
+
+// threeBedClip.setAttribute("class", threeBed.class);
+// threeBedClip.empty();
+
+// threeBed.setAttribute("fill", "#bddbe6");
+// const twoBed = doc.querySelectorAll(".cls-8281").closest("g");
+// twoBed.setAttribute("fill", "#f2b38c");
+// const oneBed = doc.querySelectorAll(".cls-7986").closest("g");
+// oneBed.setAttribute("fill", "#e8acac");
+// const xml = doc.querySelector("xml").outerHTML;
+const xml = `<?xml version="1.0" encoding="UTF-8"?>`;
+const defs = doc.querySelector("defs");
+const maskParent = document.querySelector('defs')
+const maskChild = maskParent.children
+const maskShape = Array.from(maskChild).map((e) => {
+	
+	// const className = e.classList
+	// console.log(className)
+	const shape = e.children[0]
+	if(shape){
+		if(shape.nodeName == 'polygon' || shape.nodeName == 'path'){
+			const className = shape.classList[0]
+			shape.classList.remove(className)
+			return shape
+		}
+	}
+	
+})
+console.log(maskShape)
+
+console.log(document.styleSheets[1].cssRules)
+// var kvPair = Array.from(document.styleSheets[1].cssRules).map((e)=> {
+// 	// return e.selectorText
+// 	// return e.style.clipPath
+// 	if(e.style.clipPath){
+// 		var str = e.style.clipPath;
+// 		var regex = /#([\w-]+)/; // \w matches any alphanumeric character
+// 		var match = regex.exec(str); // exec returns an array of matches
+// 		var id
+// 		id = "#" + match[1]; // the first capture group is the ID
+// 		return {[e.selectorText.replace(/[-.]/g, "")] : id}
+// 	}
+// })
+
+var kvPair = Object.assign (
+  {},
+  ...Array.from (document.styleSheets [1].cssRules).map ( (e) => {
+    // return e.selectorText
+    // return e.style.clipPath
+    if (e.style.clipPath) {
+      var str = e.style.clipPath;
+      var regex = /#([\w-]+)/; // \w matches any alphanumeric character
+      var match = regex.exec (str); // exec returns an array of matches
+      var id = "#" + match [1]; // the first capture group is the ID
+      return { [e.selectorText.replace ( /[-.]/g, "")] : id };
+    }
+  })
+);
+
+
+
+// kvPair = kvPair.filter(element => {
+//     return element !== undefined;
+// })
+var classes = ["cls-8158", "cls-8167", "cls-8163", "cls-8166", "cls-8165"]
+console.log(kvPair)
+const classValues = document.getElementById("myClasses").value.replace(/\s/g, "")
+if(classValues){
+	classes = classValues.split(',');
+}
+
+var units = []
+if(classes){
+	classes.forEach((e) => {
+	doc.querySelectorAll(`.${e}`).forEach((i) => {
+		console.log(i)
+			const parentClass = String(i.parentElement.classList[0])
+			const refId = kvPair[parentClass.replace( /[-.]/g, "")]
+			console.log(parentClass)
+			const refEl = doc.querySelector("defs").querySelector(refId)
+			var child
+			if(refEl){
+				console.log(refEl)
+				child = refEl.children[0]
+				child.classList.remove(child.classList[0])
+				child.classList.add(e)
+				units.push(child)
+				return child
+			}
+		})
+}
+	
+)
+}
+
+console.log('units')
+console.log(units)
+
+
+
+// const threeBed = Array.from(doc.querySelectorAll(".cls-8182")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			console.log(e)
+// 			const refId = kvPair[parentClass.replace( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-8182')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+
+// 		const twoBed = Array.from(doc.querySelectorAll(".cls-8281")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-8281')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+
+// 		const oneBed = Array.from(doc.querySelectorAll(".cls-7986")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-7986')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+// const style = doc.querySelector("style");
+
+// parent.setAttribute("id", "Layer_1");
+// parent.setAttribute("data-name", "Layer 1");
+// parent.setAttribute("viewBox", "0 0 1684.08 2384.28");
+// parent.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+// parent.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+// defs.append(style);
+
+const output = document.createElementNS("http://www.w3.org/2000/svg", "g");
+// parent.append(oneBed);
+// parent.append(twoBed);
+// threeBed.forEach((e) => {
+// 	parent.appendChild(e);
+// })
+
+// output.append(parent);
+// parent.prepend(xml);
+// save the output as a separate SVG file
+
+var svg = doc.querySelector('svg')
+console.log(svg)
+while (svg.firstChild) {
+  svg.removeChild(svg.firstChild);
+}
+// // const parent = document.createElement("g");
+svg.append(defs);
+units.forEach((e) => {
+	console.log(e)
+	svg.append(e)
+})
+
+// twoBed.forEach((e) => {
+// 	svg.append(e)
+// })
+
+// oneBed.forEach((e) => {
+// 	svg.append(e)
+// })
+
+// maskShape.forEach((e) => {
+// 	svg.append(e)
+// })
+// console.log(doc.querySelector('svg').attributeStyleMap)
+// svg.appendChild(parent)
+	}
+
+// 	function getStyle(className) {
+//     var cssText = "";
+//     var classes = document.styleSheets[0].rules || document.styleSheets[0].cssRules;
+//     for (var x = 0; x < classes.length; x++) {        
+//         if (classes[x].selectorText == className) {
+//             cssText += classes[x].cssText || classes[x].style.cssText;
+//         }         
+//     }
+//     return cssText;
+// }
+
+function getStyleSheet(unique_title) {
+  for (const sheet of document.styleSheets) {
+    if (sheet.title === unique_title) {
+      return sheet;
+    }
+  }
+}
 </script>
