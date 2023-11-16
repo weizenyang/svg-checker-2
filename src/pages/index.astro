@@ -55,6 +55,13 @@
 					<div class="sub-item">
 						<input type="file" id="myFile" name="filename" />
 					</div>
+					<div class="sub-item">
+						<input type="text" id="myClasses" name="filename" style="margin-right: 1em" />
+						<button id="remove" style="margin-right: 1em"
+							>Isolate Data</button
+						>
+					</div>
+					
 				</section>
 
 				<section class="container">
@@ -63,11 +70,16 @@
 						<button id="export" style="margin-right: 1em"
 							>Export SVG</button
 						>
+						<button id="remove" style="margin-right: 1em"
+							>Remove Data</button
+						>
 						<button id="export-csv-count" style="margin-right: 1em"
 							>Export CSV with Count</button
 						>
+						
 						<button id="export-csv" style="margin-right: 1em">Export CSV No Count</button>
-						<button id="export-csv-layer">Export CSV w Layer Attributes</button>
+						<button id="export-csv-layer">Export CSV w Position</button>
+						<button id="export-csv-layer-2048">Export CSV w Position 2048</button>
 					</div>
 				</section>
 			</div>
@@ -88,6 +100,13 @@
 
 		<section class="container">
 			<h3>Viewer</h3>
+			<label for="group" >Group:</label>
+			<input id="group" oninput="this.value = this.value.toUpperCase()" type="text">
+
+			<label for="unit">Unit:</label>
+			<input id="unit" type="text" oninput="this.value = this.value.toUpperCase()">
+			<button id="set-name">Set</button>
+			<button id="set-unit">Apply Units</button>
 			<div class="output" id="svg-container">
 				<p
 					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
@@ -98,6 +117,10 @@
 
 			<button id="flip-x">
 				Flip X
+			</button>
+
+			<button id="flip-y">
+				Flip Y
 			</button>
 
 			<div id="tag">
@@ -188,6 +211,14 @@
 		border-radius: 5px;
 	}
 
+	.selected{
+		fill: #ff0000;
+	}
+
+	.hovered{
+		fill: #ff000066;
+	}
+
 	.sub-item {
 		padding: 0.5em;
 		margin-bottom: 0.1em;
@@ -236,7 +267,7 @@
 	}
 
 	var flipped = false
-
+	var multiSelect = false
 	var clusterId = [];
 
 	var idFormat = format.none; //SVG ID format
@@ -255,11 +286,46 @@
 			idFormat = format.none;
 		}
 	}
+	//Attribute Editor
+	var groupGlobal = []
+
 	var fileNameGlobal = "";
 	var svg = document.getElementById("svg"); // get the SVG element
 	var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
 	var currentSelected = null;
-	document.addEventListener("mousemove", (e) => {
+	document.addEventListener("mouseover", (e) => {
+		// console.log(e.parentNode.nodeName.toLowerCase())
+		if (
+			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.parentNode.nodeName.toLowerCase() == "g" ||
+			!e.srcElement.tagName == "image"
+		) {
+			
+			if (currentSelected != null) {
+				currentSelected.classList.remove("hovered");
+				if(!currentSelected.classList.contains("selected")){
+					currentSelected.style.fill = "";
+				} else {
+					currentSelected.style.fill = "#ff0000";
+				}
+				
+			}
+			document.getElementById("tag").style.display = "flex";
+			document.getElementById("label").innerText = e.srcElement.id;
+			currentSelected = e.srcElement;
+			e.srcElement.classList.add("hovered");
+		} else {
+			document.getElementById("tag").style.display = "none";
+			// console.log(e.srcElement.parentNode.nodeName);
+		}
+
+		document.querySelectorAll(".hovered").forEach((e) => {
+			e.style.fill = "#ff000066";
+		})
+	});
+
+	document.addEventListener("click", (e) => {
 		// console.log(e.parentNode.nodeName.toLowerCase())
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
@@ -267,18 +333,93 @@
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
 			console.log(e.srcElement.id);
-			if (currentSelected != null) {
-				currentSelected.style.fill = "";
-			}
+			// if (currentSelected != null) {
+			// 	currentSelected.classList.add("hovered");
+			// }
 			document.getElementById("tag").style.display = "flex";
 			document.getElementById("label").innerText = e.srcElement.id;
 			currentSelected = e.srcElement;
-			e.srcElement.style.fill = "#f00";
+			
+			const groupName = e.srcElement
+			//Get Attributes
+			if(!multiSelect){
+				groupGlobal = []
+				document.querySelectorAll(".selected").forEach((e) => {
+					// console.log(e.classList)
+					e.classList.remove('selected')
+					// console.log(e.classList)
+					e.style.fill =""
+				})
+				groupGlobal.push(groupName)
+			} else {
+				groupGlobal.push(groupName)
+			}
+			
+			
+			
+			if(groupGlobal.length < 2){
+				
+				if(groupGlobal[0].getAttribute('group-attribute') != ""){
+						document.getElementById("unit").focus()
+					
+					document.getElementById("group").value = groupGlobal[0].getAttribute('group-attribute')
+				} else {
+					document.getElementById("group").focus()
+					document.getElementById("group").value = ""
+				}
+
+				if(groupGlobal[0].getAttribute('unit-attribute') != ""){
+					document.getElementById("unit").value = groupGlobal[0].getAttribute('unit-attribute')
+				} else {
+					document.getElementById("unit").placeholder = "No Attribute"
+					document.getElementById("unit").value = ""
+				}
+				
+			} else {
+				document.getElementById("group").focus()
+				document.getElementById("group").placeholder = "-"
+				document.getElementById("unit").placeholder = "-"
+			}
+				e.srcElement.classList.add("selected")
+
+			// e.srcElement.style.fill = "#ff000055";
 		} else {
 			document.getElementById("tag").style.display = "none";
-			// console.log(e.srcElement.parentNode.nodeName);
 		}
+
+		
+
+		document.querySelectorAll(".selected").forEach((e) => {
+			e.style.fill = "#ff0000";
+		})
 	});
+
+	document.getElementById('set-name').addEventListener("click", (e) => {
+
+		document.querySelectorAll(".selected").forEach((e) => {
+			
+			if(document.querySelectorAll(".selected").length < 2){
+				e.setAttribute("group-attribute", document.getElementById('group').value)
+				e.setAttribute("unit-attribute", document.getElementById('unit').value)
+				if(e.hasAttribute("group-attribute") && e.hasAttribute("unit-attribute")){
+				e.id = e.getAttribute("group-attribute") + "_" + e.getAttribute("unit-attribute")
+			}
+			} else {
+				e.setAttribute("group-attribute", document.getElementById('group').value)
+				e.id = e.getAttribute("group-attribute") + "_" + e.getAttribute("unit-attribute")
+			}
+				
+			
+		})
+
+		
+
+	})
+
+
+	document.getElementById('set-unit').addEventListener("click", (e) => {
+		setUnit()
+	})
 
 	//Tag
 	document.addEventListener("mousemove", (e) => {
@@ -291,6 +432,9 @@
 
 	var fileInput = document.getElementById("myFile");
 	var type = "";
+	fileInput.addEventListener("click", (e)=> {
+		fileInput.value = null;
+	})
 
 	//SVG Uploading
 	fileInput.addEventListener("change", function () {
@@ -320,6 +464,10 @@
 				const regexLastDash = /-(?=[^-]*$)/g;
 				const regexDashUnderscore = /\w+-\w+_\w+/;
 				const regexText = /^[^-]*/;
+				const regexGroupName = /^([A-Z]{2}\d{2}-\d{1,2})/
+				const regexUnitNumber = /(\d{1,3})\D*$/
+
+
 				if (idFormat == format.underscore) {
 					var count = 0;
 					//If Underscore mode
@@ -335,7 +483,19 @@
 								regexLastDash,
 								"_",
 							);
-							svgElement.getElementById(`${currentId}`).id =
+							const selected = svgElement.getElementById(`${currentId}`)
+							const groupMatched = selected.id.match(regexGroupName)
+						const unitMatched = selected.id.match(regexUnitNumber)	
+						if(groupMatched){
+							selected.setAttribute("group-attribute", groupMatched[1])
+						}
+
+						if(unitMatched){
+							selected.setAttribute("unit-attribute", unitMatched[1])
+						}
+							
+							
+							selected.id =
 								regexResult;
 							listItem.innerHTML = regexResult;
 							clusterId.push({
@@ -363,13 +523,22 @@
 						var listItem = document.createElement("li");
 						// console.log(regexDashUnderscore.test(currentId))
 						if (regexDashUnderscore.test(currentId)) {
-							console.log(regexLastUnderscore.test(currentId));
 							const regexResult = currentId.replace(
 								regexLastUnderscore,
 								"-",
 							);
+							
+							const selected = svgElement.getElementById(`${currentId}`)
+							const groupMatched = selected.id.match(regexGroupName)
+							const unitMatched = selected.id.match(regexUnitNumber)	
+							if(groupMatched){
+							selected.setAttribute("group-attribute", groupMatched[1])
+						}
 
-							svgElement.getElementById(`${currentId}`).id =
+						if(unitMatched){
+							selected.setAttribute("unit-attribute", unitMatched[1])
+						}
+							selected.id =
 								regexResult;
 							listItem.innerHTML = regexResult;
 							clusterId.push({
@@ -396,6 +565,17 @@
 						const currentId = i.id;
 						var listItem = document.createElement("li");
 
+						const selected = svgElement.getElementById(`${currentId}`)
+						const groupMatched = selected.id.match(regexGroupName)
+						const unitMatched = selected.id.match(regexUnitNumber)	
+						if(groupMatched){
+							selected.setAttribute("group-attribute", groupMatched[1])
+						}
+
+						if(unitMatched){
+							selected.setAttribute("unit-attribute", unitMatched[1])
+						}
+
 						listItem.innerHTML = currentId;
 
 						clusterId.push({
@@ -410,7 +590,6 @@
 					});
 				}
 
-				console.log(clusterId);
 
 				// Append the SVG element to the div element
 				var svgContainer = document.getElementById("svg-container");
@@ -433,6 +612,63 @@
 		}
 	});
 
+	document.addEventListener('keydown', (e) => {
+		if(e.key == "Escape"){
+			document.querySelectorAll(".selected").forEach((e) => {
+				e.classList.remove("selected")
+				e.style.fill = ""
+				groupGlobal = []
+				document.querySelectorAll("#group").value = "";
+			})
+		}
+
+		if(e.key == "Shift"){
+			multiSelect = true
+		}
+
+		if(e.key == "Enter"){
+			document.querySelector("#set-name").click();
+		}
+
+		if(e.key == "Q"){
+			document.querySelector("#set-unit").click();
+		}
+	})
+
+	function setUnit(){
+
+		for(var i = 0; i < groupGlobal.length; i++){
+			groupGlobal[i].setAttribute('unit-attribute', pad(i+1))
+		}
+	}
+
+	//Add zero to single digit
+	function pad(d) {
+		return (d < 10) ? '0' + d.toString() : d.toString();
+	}
+
+	document.addEventListener('keydown', (e) => {
+		if(e.key == "Escape"){
+			document.querySelectorAll(".selected").forEach((e) => {
+				e.classList.remove("selected")
+				e.style.fill = ""
+				groupGlobal = []
+				document.querySelectorAll("#group").value = "";
+			})
+		}
+
+		if(e.key == "Shift"){
+			multiSelect = true
+		}
+	})
+
+	document.addEventListener('keyup', (e) => {
+
+		if(e.key == "Shift"){
+			multiSelect = false
+		}
+	})
+
 	document.getElementById("hide-toggle").addEventListener("click", (e) => {
 		if (document.getElementById("id-list").style.display == "none") {
 			document.getElementById("id-list").style.display = "block";
@@ -447,6 +683,10 @@
 		exportCSV();
 	});
 
+	document.getElementById("remove").addEventListener("click", (e) => {
+		removeData();
+	});
+
 	document
 		.getElementById("export-csv-count")
 		.addEventListener("click", (e) => {
@@ -459,6 +699,10 @@
 
 	document.getElementById("export-csv-layer").addEventListener("click", (e) => {
 		exportFloorNamePosition();
+	});
+
+	document.getElementById("export-csv-layer-2048").addEventListener("click", (e) => {
+		exportFloorNamePosition2048();
 	});
 
 	// CSV Conversion
@@ -527,6 +771,16 @@
 	function exportSVG() {
 		const file = fileNameGlobal;
 		var svg = document.querySelector("#svg-container").querySelector("svg");
+		document.querySelectorAll("[id]").forEach((e)=>{
+			const str = e.getAttribute('id')
+			e.setAttribute("data-name", str.replace(/\s+/g, '_')) 
+		})
+		document.querySelectorAll("[group-attribute]").forEach((e)=>{
+			e.removeAttribute("group-attribute") 
+		})
+		document.querySelectorAll("[unit-attribute]").forEach((e)=>{
+			e.removeAttribute("unit-attribute")  
+		})
 		if (svg) {
 			var serializer = new XMLSerializer();
 			var svgString = serializer.serializeToString(svg);
@@ -570,15 +824,98 @@
 		}).filter((layer) => layer !== undefined);
 
 
-		const csv = layers
+		var csv;
+		if(layers.length < 2){
+			csv = layers
 			.flatMap((layer) =>
 				layer.children.map(
-					(child) => `${layer.id},${child.id},${child.x},${child.y}`,
+					(child) => `${child.id},${child.x},${child.y}`,
 				),
 			)
 			.join("\n");
 
 		console.log(csv);
+		} else {
+			csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${layer.id} ${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		}
+		
+		const file = fileNameGlobal;
+		var blob = new Blob([csv], { type: "text/csv" });
+			var link = document.createElement("a");
+			link.href = URL.createObjectURL(blob);
+			link.download =
+				file.replace(/\.[^/.]+$/, "") + (flipped ? "-flipped" : "")
+				".csv";
+			link.click();
+		} else {
+			alert("Import an SVG to start!");
+		}
+		
+	}
+
+		//SVG Conversion
+		function exportFloorNamePosition2048() {
+		// console.log(document.querySelector("#svg-container").querySelector("svg").childNodes.length)
+		if(document.querySelector("#svg-container").querySelector("svg")){
+			const parser = new DOMParser();
+		var doc = null
+
+		
+		doc = document.querySelector("#svg-container").querySelector("svg")
+		const height = doc.viewBox.baseVal.height
+		const width = doc.viewBox.baseVal.width
+
+		const layers = Array.from(doc.querySelectorAll("g")).map((layer) => {
+			if(layer.getAttribute("id").toLowerCase() != 'reference'){
+				const id = layer.getAttribute("id").replace('_', "");
+			const children = Array.from(layer.children).map(
+				(child) => {
+					console.log(child)
+					const childId = child.getAttribute("data-name") ? decodeHtml(child.getAttribute("data-name")) : child.getAttribute("id");
+					
+					const x = child.getAttribute("cx") / width * 2048;
+					const y = child.getAttribute("cy") / height * 2048;
+					return { id: childId, x, y };
+				},
+			);
+			console.log(id, children)
+			return { id, children };
+			}
+			
+		}).filter((layer) => layer !== undefined);
+
+
+		var csv;
+		if(layers.length < 2){
+			csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		} else {
+			csv = layers
+			.flatMap((layer) =>
+				layer.children.map(
+					(child) => `${layer.id} ${child.id},${child.x},${child.y}`,
+				),
+			)
+			.join("\n");
+
+		console.log(csv);
+		}
+		
 		
 		const file = fileNameGlobal;
 		var blob = new Blob([csv], { type: "text/csv" });
@@ -600,6 +937,7 @@
 						txt.innerHTML = html;
 						return txt.value;
 					}
+
 
 	document.getElementById("flip-x").addEventListener("click", (e) => {
 		// var svg = document.querySelector("#svg-container").querySelector("svg");
@@ -641,4 +979,264 @@
 
 		
 	});
+
+	document.getElementById("flip-y").addEventListener("click", (e) => {
+		// var svg = document.querySelector("#svg-container").querySelector("svg");
+		// svg.style.scale = "-1 1"
+		flipped = !flipped
+		
+		var doc = null
+		doc = document.querySelector("#svg-container").querySelector("svg")
+		const height = doc.viewBox.baseVal.height
+		const layers = Array.from(doc.querySelectorAll("g")).map((layer) => {
+			// if(layer.getAttribute("id").toLowerCase() != 'reference'){
+				// const id = layer.getAttribute("id").replace('_', "");
+			const children = Array.from(layer.children).map(
+				(child) => {
+					if(child.tagName == "image"){
+						
+						// child.getAttribute("transform")
+						// child.style.transform = "translate(-100%, 0) scale(-1, 1)"
+						if(!child.hasAttribute("flipped")){
+							child.setAttribute("flipped", "")
+							child.style.transform = 'scaleX(-1) translate(-100%, 0)'
+						} else {
+							child.removeAttribute("flipped")
+							child.style.transform = 'scaleX(1) translate(0, 0)'
+						}
+						
+						
+						console.log(child.style.scale)
+				} else {
+						const x = child.getAttribute("cx");
+					child.setAttribute("cy", height - y)
+					}
+					
+				},
+			);
+			// }
+			
+		})
+
+		
+	});
+
+	function removeData(){
+		const doc = document.querySelector('#svg-container')
+		
+
+// threeBed.forEach((x) => {
+//   console.log(x.getAttribute("style"));
+//   x.setAttribute("class", "cls-8182");
+// });
+
+// threeBedClip.setAttribute("class", threeBed.class);
+// threeBedClip.empty();
+
+// threeBed.setAttribute("fill", "#bddbe6");
+// const twoBed = doc.querySelectorAll(".cls-8281").closest("g");
+// twoBed.setAttribute("fill", "#f2b38c");
+// const oneBed = doc.querySelectorAll(".cls-7986").closest("g");
+// oneBed.setAttribute("fill", "#e8acac");
+// const xml = doc.querySelector("xml").outerHTML;
+const xml = `<?xml version="1.0" encoding="UTF-8"?>`;
+const defs = doc.querySelector("defs");
+const maskParent = document.querySelector('defs')
+const maskChild = maskParent.children
+const maskShape = Array.from(maskChild).map((e) => {
+	
+	// const className = e.classList
+	// console.log(className)
+	const shape = e.children[0]
+	if(shape){
+		if(shape.nodeName == 'polygon' || shape.nodeName == 'path'){
+			const className = shape.classList[0]
+			shape.classList.remove(className)
+			return shape
+		}
+	}
+	
+})
+console.log(maskShape)
+
+console.log(document.styleSheets[1].cssRules)
+// var kvPair = Array.from(document.styleSheets[1].cssRules).map((e)=> {
+// 	// return e.selectorText
+// 	// return e.style.clipPath
+// 	if(e.style.clipPath){
+// 		var str = e.style.clipPath;
+// 		var regex = /#([\w-]+)/; // \w matches any alphanumeric character
+// 		var match = regex.exec(str); // exec returns an array of matches
+// 		var id
+// 		id = "#" + match[1]; // the first capture group is the ID
+// 		return {[e.selectorText.replace(/[-.]/g, "")] : id}
+// 	}
+// })
+
+var kvPair = Object.assign (
+  {},
+  ...Array.from (document.styleSheets [1].cssRules).map ( (e) => {
+    // return e.selectorText
+    // return e.style.clipPath
+    if (e.style.clipPath) {
+      var str = e.style.clipPath;
+      var regex = /#([\w-]+)/; // \w matches any alphanumeric character
+      var match = regex.exec (str); // exec returns an array of matches
+      var id = "#" + match [1]; // the first capture group is the ID
+      return { [e.selectorText.replace ( /[-.]/g, "")] : id };
+    }
+  })
+);
+
+
+
+// kvPair = kvPair.filter(element => {
+//     return element !== undefined;
+// })
+var classes = ["cls-8158", "cls-8167", "cls-8163", "cls-8166", "cls-8165"]
+console.log(kvPair)
+const classValues = document.getElementById("myClasses").value.replace(/\s/g, "")
+if(classValues){
+	classes = classValues.split(',');
+}
+
+var units = []
+if(classes){
+	classes.forEach((e) => {
+	doc.querySelectorAll(`.${e}`).forEach((i) => {
+		console.log(i)
+			const parentClass = String(i.parentElement.classList[0])
+			const refId = kvPair[parentClass.replace( /[-.]/g, "")]
+			console.log(parentClass)
+			const refEl = doc.querySelector("defs").querySelector(refId)
+			var child
+			if(refEl){
+				console.log(refEl)
+				child = refEl.children[0]
+				child.classList.remove(child.classList[0])
+				child.classList.add(e)
+				units.push(child)
+				return child
+			}
+		})
+}
+	
+)
+}
+
+console.log('units')
+console.log(units)
+
+
+
+// const threeBed = Array.from(doc.querySelectorAll(".cls-8182")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			console.log(e)
+// 			const refId = kvPair[parentClass.replace( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-8182')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+
+// 		const twoBed = Array.from(doc.querySelectorAll(".cls-8281")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-8281')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+
+// 		const oneBed = Array.from(doc.querySelectorAll(".cls-7986")).map((e) => {
+// 			const parentClass = String(e.parentElement.classList[0])
+// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
+// 			console.log(parentClass)
+// 			const refEl = doc.querySelector("defs").querySelector(refId)
+// 			var child
+// 			if(refEl){
+// 				child = refEl.children[0]
+// 				child.classList.remove(child.classList[0])
+// 				child.classList.add('cls-7986')
+// 				return child
+// 			}
+// 		});
+// 		console.log(threeBed)
+// const style = doc.querySelector("style");
+
+// parent.setAttribute("id", "Layer_1");
+// parent.setAttribute("data-name", "Layer 1");
+// parent.setAttribute("viewBox", "0 0 1684.08 2384.28");
+// parent.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+// parent.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+// defs.append(style);
+
+const output = document.createElementNS("http://www.w3.org/2000/svg", "g");
+// parent.append(oneBed);
+// parent.append(twoBed);
+// threeBed.forEach((e) => {
+// 	parent.appendChild(e);
+// })
+
+// output.append(parent);
+// parent.prepend(xml);
+// save the output as a separate SVG file
+
+var svg = doc.querySelector('svg')
+console.log(svg)
+while (svg.firstChild) {
+  svg.removeChild(svg.firstChild);
+}
+// // const parent = document.createElement("g");
+svg.append(defs);
+units.forEach((e) => {
+	console.log(e)
+	svg.append(e)
+})
+
+// twoBed.forEach((e) => {
+// 	svg.append(e)
+// })
+
+// oneBed.forEach((e) => {
+// 	svg.append(e)
+// })
+
+// maskShape.forEach((e) => {
+// 	svg.append(e)
+// })
+// console.log(doc.querySelector('svg').attributeStyleMap)
+// svg.appendChild(parent)
+	}
+
+// 	function getStyle(className) {
+//     var cssText = "";
+//     var classes = document.styleSheets[0].rules || document.styleSheets[0].cssRules;
+//     for (var x = 0; x < classes.length; x++) {        
+//         if (classes[x].selectorText == className) {
+//             cssText += classes[x].cssText || classes[x].style.cssText;
+//         }         
+//     }
+//     return cssText;
+// }
+
+function getStyleSheet(unique_title) {
+  for (const sheet of document.styleSheets) {
+    if (sheet.title === unique_title) {
+      return sheet;
+    }
+  }
+}
 </script>
