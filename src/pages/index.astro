@@ -59,10 +59,14 @@
 				</section>
 
 				<section class="container">
-					<h3>2. Then, Import SVG file here</h3>
+					<h3>2. Then, Import Files here</h3>
 					<div class="sub-item">
+						<label for="myFile">SVG</label>
 						<input type="file" id="myFile" name="filename" />
+						<label for="myCSVFile">CSV</label>
 						<input type="file" id="myCSVFile" name="filename" />
+						<label for="myCSVFile">Image</label>
+						<input type="file" id="imageFile" name="filename" />
 					</div>
 					<div class="sub-item">
 						<input
@@ -223,6 +227,7 @@
 	#svg-container {
 		border: solid 1px #00000055;
 		border-radius: 3px;
+		position: relative;
 	}
 
 	.hide {
@@ -470,6 +475,7 @@
 
 	var fileInput = document.getElementById("myFile");
 	var csvFileInput = document.getElementById("myCSVFile");
+	var imageInput = document.getElementById("imageFile");
 	var type = "";
 	fileInput.addEventListener("click", (e) => {
 		fileInput.value = null;
@@ -768,7 +774,7 @@
 			})
 			
 			} else {
-				svgContainer.innerHTML = "";
+				// svgContainer.innerHTML = "";
 				const newSVG = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 				newSVG.style.width = "100%"
 				newSVG.style.height = "100%"
@@ -776,6 +782,17 @@
 				newSVG.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink")
 				newSVG.appendChild(g)
 				svgContainer.appendChild(newSVG)
+				if(svgContainer.querySelector('img')){
+					const tempImage = svgContainer.querySelector('img')
+					const svgimg = document.createElementNS('http://www.w3.org/2000/svg','image');
+					svgimg.style.width = "100%"
+					svgimg.style.height = "100%"
+					// svgimg.setAttributeNS('http://www.w3.org/2000/svg','id','testimg2');
+					svgimg.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href',tempImage.src);
+					newSVG.append(svgimg)
+					tempImage.remove()
+
+				}
 			}
 			
 
@@ -809,6 +826,43 @@
 
 		// Read the file as text
 		reader.readAsText(file);
+	});
+
+	imageInput.addEventListener("change", (e) => {
+		// Get the file object
+		var file = e.target.files[0];
+		fileNameGlobal = file.name;
+		document.getElementById("export-file-name").value = file.name
+
+		// Create a new FileReader object
+		var reader = new FileReader();
+
+		// Set the onload function for the FileReader object
+		reader.onload = function (event) {
+			// Get the contents of the file
+			var contents = event.target.result;
+
+			// Split the contents into lines
+			var lines = contents.split("\n");
+			console.log(lines)
+
+			// Create an SVG element
+			var img = document.createElement('img');
+			img.src = contents;
+			// img.style.width = '4096px'
+			// img.style.height = '4096px'
+			// img.style.position = 'absolute'
+			img.style.maxHeight = '100%'
+			img.style.maxWidth = '100%'
+			var svgContainer = document.getElementById("svg-container")
+			// remove all groups except for Reference
+				svgContainer.innerHTML = ""
+				svgContainer.appendChild(img)
+			
+		};
+
+		// Read the file as text
+		reader.readAsDataURL(file);
 	});
 
 	document.addEventListener("keydown", (e) => {
