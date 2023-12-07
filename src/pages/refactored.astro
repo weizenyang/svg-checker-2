@@ -14,8 +14,13 @@
 		<!--?xml version="1.0" encoding="UTF-8"?-->
 		<main class="toolsets" style="display: flex">
 			<div class="toolset-section">
+				
 				<section class="container">
-					<h3>1. Choose your SVG ID Formatting</h3>
+
+						
+						<input class="dropdown" id="custom-formatting" name="formatting" type="checkbox" style="display: none"/>
+						<label for="custom-formatting">Custom SVG ID Formatting <span class="arrow">^</span></label>
+
 					<div class="toggle">
 						<div class="sub-item">
 							<input
@@ -59,21 +64,31 @@
 				</section>
 
 				<section class="container">
-					<h3>2. Then, Import Files here</h3>
+					<!-- <h3>2. Then, Import Files here</h3> -->
+					<!-- <button class="button-style">Import </button> -->
+					<label for="myFile" class="button-style">Import <svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					  >
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
+						<polyline points="17 8 12 3 7 8" stroke-width="2"/>
+						<line x1="12" x2="12" y1="3" y2="15" stroke-width="2"/>
+					  </svg></label>
+					<input type="file" id="myFile" name="filename" style="display:none; "/>
 					<div class="sub-item">
-						<label for="myFile">SVG</label>
-						<input type="file" id="myFile" name="filename" />
-						<label for="myCSVFile">CSV</label>
-						<input type="file" id="myCSVFile" name="filename" />
-						<label for="myCSVFile">Image</label>
-						<input type="file" id="imageFile" name="filename" />
 					</div>
 					<div class="sub-item">
 						<input
 							type="text"
 							id="myClasses"
 							name="filename"
-							style="margin-right: 1em"
+							style="margin-right: 1em;"
 						/>
 						<button id="remove" style="margin-right: 1em"
 							>Isolate Data</button
@@ -82,9 +97,23 @@
 				</section>
 
 				<section class="container">
-					<h3>3. Export reformatted files</h3>
+					<!-- <h3>3. Export reformatted files</h3> -->
+					<button class="button-style">Export <svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					  >
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
+						<polyline points="7 10 12 15 17 10" stroke-width="2"/>
+						<line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
+					  </svg></button>
 					<div class="sub-item" style="display: flex">
-						<button id="export" style="margin-right: 1em"
+						<button id="export" style="margin-right: 1em; "
 							>Export SVG</button
 						>
 						<button id="remove" style="margin-right: 1em"
@@ -108,23 +137,25 @@
 					<label for="export-file-name">File Name: </label>
 					<input type="text" id="export-file-name"/>
 				</section>
-			</div>
-			<div id="id-container">
-				<div class="id-list-title-container">
-					<p
-						class="id-list-title"
-						style="padding: 0em 0em; font-weight: bold;"
-					>
-						CTRL + F to look for items
-					</p>
-					<p class="hide-toggle" id="hide-toggle">^</p>
+
+				<div class="container" id="id-container">
+					<div class="id-list-title-container">
+						<p
+							class="id-list-title"
+							style="padding: 0em 0em; font-weight: bold;"
+						>
+							CTRL + F to look for items
+						</p>
+						<p class="hide-toggle" id="hide-toggle">^</p>
+					</div>
+					<ul style="padding-left: 1em;" class="id-list" id="id-list">
+					</ul>
 				</div>
-				<ul style="padding-left: 1em;" class="id-list" id="id-list">
-				</ul>
 			</div>
+			
 		</main>
 
-		<section class="container">
+		<section class="container editor">
 			<h3>Viewer</h3>
 			<button id="flip-x"> Flip X</button>
 
@@ -168,32 +199,134 @@
 	* {
 		font-family: gabarito, sans-serif;
 	}
+	body{
+		box-sizing: border-box;
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+
+		grid-template-rows: repeat(6, 1fr);
+		gap: 10px;
+		
+		height: 100vh;
+		margin: 0%;
+		padding: 10px;
+	}
+
+	.button-style{
+		display: flex;
+		cursor: pointer;
+		padding: 0.7em;
+		align-items: center;
+		justify-content: center;
+		font-size: large;
+		color: #eee;
+		transition: 0.2s;
+		background-color: #333333;
+	}
+	.button-style:hover{
+		display: flex;
+		cursor: pointer;
+		padding: 0.7em;
+		align-items: center;
+		justify-content: center;
+		font-size: large;
+		color: #eee;
+		
+		background-color: #555555;
+	}
+	.button-style svg{
+		padding-left: 1em
+	}
+
+	.dropdown ~ .toggle{
+		display: none
+	}
+
+	.dropdown:checked ~ .toggle{
+		display: flex;
+		flex-direction: column;
+	}
+
+	.dropdown:checked ~ .toggle{
+		display: flex;
+		flex-direction: column;
+	}
+
+	.dropdown ~ label{
+		display: flex;
+		cursor: pointer;
+		align-items: center;
+		justify-content: space-between;
+		
+	}
+	.dropdown ~ label .arrow{
+		display: flex;
+		cursor: pointer;
+		font-size: 2em;
+		text-align: center;
+		
+		justify-content: center;
+	}
+
+	.dropdown:checked ~ label .arrow{
+		transform: rotate(180deg);
+		
+	}
 
 	h3 {
 		margin-top: 0.2em;
 	}
 
 	.toolsets {
-		width: 100%;
+		max-width: 240px;
+		grid-column: 1/2;
+		grid-row: 1/7;
+	}
+
+	.editor{
+		grid-column: 2/7;
+		grid-row: 1/7;
+	}
+
+	.container {
+		background-color: #eee;
+		padding: 0.5em;
+		border-radius: 5px;
+		-webkit-user-select: none; /* Safari */
+		-ms-user-select: none; /* IE 10 and IE 11 */
+		user-select: none; /* Standard syntax */
 	}
 
 	.toolset-section {
 		width: 100%;
 		/* padding: 0.5em; */
 	}
-	#tag {
+
+	.toolset-section .container{
+		margin-top: 10px;
+	}
+
+	.toolset-section .container:first-child{
+		margin-top: 0px;
+	}
+
+	#tag, #tag *{
 		display: flex;
 		position: fixed;
 		background-color: #cccccccc;
 		padding: 0em 0.5em;
-		text-align: center;
+		text-align: left;
+		line-height: 0.5em;
+		font-family: monospace;
+		font-weight: 100;
 		justify-content: center;
 		min-width: max-content;
 		pointer-events: none;
 		/* transform: translate(-50%); */
-		height: 50px;
+		/* min-height: 50px; */
+		height: fit-content;
 		border-radius: 6px;
-		font-family: sans-serif;
+		/* font-family: sans-serif; */
 	}
 	#label {
 		display: flex;
@@ -209,10 +342,9 @@
 	}
 
 	#id-container {
-		margin-top: 0.5em;
+		/* margin-top: 0.5em; */
 		background-color: #eee;
 		max-height: 390px;
-		width: 300px;
 		border-radius: 5px;
 		/* position: fixed; */
 		right: 0%;
@@ -221,7 +353,7 @@
 		overflow-y: none;
 		list-style: none;
 		flex-direction: column;
-		margin-left: 0.5em;
+		/* margin-left: 0.5em; */
 	}
 
 	#svg-container {
@@ -234,12 +366,7 @@
 		display: none;
 	}
 
-	.container {
-		background-color: #eee;
-		margin-top: 0.5em;
-		padding: 0.5em;
-		border-radius: 5px;
-	}
+
 
 	.selected {
 		fill: #ff0000;
@@ -254,6 +381,12 @@
 		margin-bottom: 0.1em;
 		background-color: #00000011;
 		border-radius: 3px;
+		display: flex;
+		/* flex-direction: column; */
+	}
+
+	.sub-item [type="radio"]{
+		margin-left: 0%;
 	}
 
 	.toggle {
@@ -331,7 +464,7 @@
 		fileNameGlobal = e.target.value
 		console.log(fileNameGlobal)
 	})
-	document.addEventListener("mouseover", (e) => {
+	document.getElementById('svg-container').addEventListener("mouseover", (e) => {
 		// console.log(e.parentNode.nodeName.toLowerCase())
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
@@ -348,7 +481,23 @@
 				}
 			}
 			document.getElementById("tag").style.display = "flex";
-			document.getElementById("label").innerText = e.srcElement.id;
+			document.getElementById("label").innerHTML = "";
+			var label = document.createElement('div')
+			if(e.srcElement.id){
+				var idLabel = document.createElement('p')
+				idLabel.innerText = `ID: ${e.srcElement.id}`
+				idLabel.style.color = "#007700"
+				label.appendChild(idLabel)
+			}
+
+			if(e.srcElement.getAttribute('class')){
+				var classLabel = document.createElement('p')
+				classLabel.innerText = `Class:${e.srcElement.getAttribute('class')}`
+				label.appendChild(classLabel)
+			}
+			
+			
+			document.getElementById("label").append(label)
 			currentSelected = e.srcElement;
 			e.srcElement.classList.add("hovered");
 		} else {
@@ -360,14 +509,14 @@
 			e.style.fill = "#ff000066";
 		});
 	});
-
-	document.addEventListener("click", (e) => {
-		// console.log(e.parentNode.nodeName.toLowerCase())
+	// document..getElementById('svg-container').addEventListener("click",(e))
+	document.getElementById('svg-container').addEventListener("click", (e) => {
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
+
 			console.log(e.srcElement.id);
 			// if (currentSelected != null) {
 			// 	currentSelected.classList.add("hovered");
@@ -480,16 +629,19 @@
 	fileInput.addEventListener("click", (e) => {
 		fileInput.value = null;
 	});
-	csvFileInput.addEventListener("click", (e) => {
-		fileInput.value = null;
-	});
+	// csvFileInput.addEventListener("click", (e) => {
+	// 	fileInput.value = null;
+	// });
+
 
 	//SVG Uploading
 	fileInput.addEventListener("change", function () {
 		flipped = false;
+		
 		// Get the selected file
 		var file = fileInput.files[0];
 		fileNameGlobal = file.name;
+		console.log(file.type)
 		document.getElementById("export-file-name").value = file.name
 
 		// Check if the file is an SVG image
@@ -579,18 +731,12 @@
 						var listItem = document.createElement("li");
 						// console.log(regexDashUnderscore.test(currentId))
 						if (regexDashUnderscore.test(currentId)) {
-							const regexResult = currentId.replace(
-								regexLastUnderscore,
-								"-",
-							);
+							const regexResult = currentId.replace(regexLastUnderscore,"-");
 
-							const selected = svgElement.getElementById(
-								`${currentId}`,
-							);
-							const groupMatched =
-								selected.id.match(regexGroupName);
-							const unitMatched =
-								selected.id.match(regexUnitNumber);
+							const selected = svgElement.getElementById(`${currentId}`);
+							const groupMatched = selected.id.match(regexGroupName);
+							const unitMatched = selected.id.match(regexUnitNumber);
+
 							if (groupMatched) {
 								selected.setAttribute(
 									"group-attribute",
@@ -735,14 +881,42 @@
 			});
 
 			reader.readAsText(file);
-		} else {
-			alert("Please select an SVG image file.");
-		}
-	});
+		} else if (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp"){
+			// Get the file object
+		// var file = e.target.files[0];
+		fileNameGlobal = file.name;
+		document.getElementById("export-file-name").value = file.name
 
-	csvFileInput.addEventListener("change", (e) => {
-		// Get the file object
-		var file = e.target.files[0];
+		// Create a new FileReader object
+		var reader = new FileReader();
+
+		// Set the onload function for the FileReader object
+		reader.onload = function (event) {
+			// Get the contents of the file
+			var contents = event.target.result;
+
+			// Split the contents into lines
+			var lines = contents.split("\n");
+			console.log(lines)
+
+			// Create an SVG element
+			var img = document.createElement('img');
+			img.src = contents;
+			img.style.maxHeight = '100%'
+			img.style.maxWidth = '100%'
+			var svgContainer = document.getElementById("svg-container")
+			// remove all groups except for Reference
+				svgContainer.innerHTML = ""
+				svgContainer.appendChild(img)
+			
+		};
+
+		// Read the file as text
+		reader.readAsDataURL(file);
+		}  else if (file.type === "text/csv"){
+			
+			// Get the file object
+		// var file = e.target.files[0];
 		fileNameGlobal = file.name;
 		document.getElementById("export-file-name").value = file.name
 
@@ -797,7 +971,7 @@
 			
 
 			
-			const labelContainer = document.createElement('div');
+
 			// Loop through the lines and create circles
 			for (var i = 0; i < lines.length; i++) {
 				// Split the line into fields
@@ -808,28 +982,12 @@
 					"http://www.w3.org/2000/svg",
 					"circle",
 				);
-
-				var text = document.createElementNS(
-					"http://www.w3.org/2000/svg",
-					"text",
-				);
-				
-				
 				if(Number(fields[1]) || Number(fields[2])){
 					circle.setAttribute("id", fields[0]);
 					circle.setAttribute("cx", Number(fields[1]).toFixed(4));
 					circle.setAttribute("cy", Number(fields[2]).toFixed(4));
 					circle.setAttribute("r", "30");
-					// const label = document.createElement('p')
-					text.appendChild(document.createTextNode(`${fields[0]}`));
-					text.style.fontSize = '80px'
-					text.style.textAlign = 'center'
-					text.style.textAnchor = 'middle'
-					text.setAttribute('x', `${Number(fields[1]).toFixed(4)}`)
-					text.setAttribute('y', `${Number(fields[2]).toFixed(4)}`)
-
 					g.appendChild(circle);
-					g.appendChild(text)
 				} else {
 					console.error(`${fields[0] ?  fields[0] : `(Nameless), Row ${i + 1}`} does not contain any cx, cy data`)
 				}
@@ -842,44 +1000,16 @@
 
 		// Read the file as text
 		reader.readAsText(file);
+		}
 	});
 
-	imageInput.addEventListener("change", (e) => {
-		// Get the file object
-		var file = e.target.files[0];
-		fileNameGlobal = file.name;
-		document.getElementById("export-file-name").value = file.name
+	// csvFileInput.addEventListener("change", (e) => {
+		
+	// });
 
-		// Create a new FileReader object
-		var reader = new FileReader();
-
-		// Set the onload function for the FileReader object
-		reader.onload = function (event) {
-			// Get the contents of the file
-			var contents = event.target.result;
-
-			// Split the contents into lines
-			var lines = contents.split("\n");
-			console.log(lines)
-
-			// Create an SVG element
-			var img = document.createElement('img');
-			img.src = contents;
-			// img.style.width = '4096px'
-			// img.style.height = '4096px'
-			// img.style.position = 'absolute'
-			img.style.maxHeight = '100%'
-			img.style.maxWidth = '100%'
-			var svgContainer = document.getElementById("svg-container")
-			// remove all groups except for Reference
-				svgContainer.innerHTML = ""
-				svgContainer.appendChild(img)
-			
-		};
-
-		// Read the file as text
-		reader.readAsDataURL(file);
-	});
+	// imageInput.addEventListener("change", (e) => {
+		
+	// });
 
 	document.addEventListener("keydown", (e) => {
 		if (e.key == "Escape") {
