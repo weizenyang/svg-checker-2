@@ -12,6 +12,7 @@
 	</head>
 	<body>
 		<!--?xml version="1.0" encoding="UTF-8"?-->
+		<div>Newer Version Available <a href="/refactored">here</a></div>
 		<main class="toolsets" style="display: flex">
 			<div class="toolset-section">
 				<section class="container">
@@ -304,7 +305,7 @@
 	var clusterId = [];
 
 	var idFormat = format.none; //SVG ID format
-
+	//New Variables 08/12/23
 	var mouseDown = false;
 	var globalSvgContainer = document.getElementById('svg-container');
 	var tempSelected;
@@ -839,7 +840,6 @@
 				newSVG.style.height = "100%"
 				newSVG.setAttribute("viewBox", "0 0 4096 4096")
 				newSVG.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink")
-				// newSVG.appendChild(g)
 				svgContainer.appendChild(newSVG)
 				if(svgContainer.querySelector('img')){
 					const tempImage = svgContainer.querySelector('img')
