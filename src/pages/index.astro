@@ -144,6 +144,8 @@
 			/>
 			<button id="set-name">Set</button>
 			<button id="set-unit">Apply Units</button>
+			<input type="text" id="new-point-name" placeholder="Insert New Point Name"/>
+			<button id="add-point">Add Point</button>
 			<div class="output" id="svg-container">
 				<p
 					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
@@ -303,6 +305,10 @@
 
 	var idFormat = format.none; //SVG ID format
 
+	var mouseDown = false;
+	var globalSvgContainer = document.getElementById('svg-container');
+	var tempSelected;
+
 	var formattingButtons = document.querySelectorAll(".formatting");
 	formattingButtons.forEach((e) => {
 		e.addEventListener("change", (event) => setFormat(event.target.value));
@@ -332,6 +338,7 @@
 		console.log(fileNameGlobal)
 	})
 	document.addEventListener("mouseover", (e) => {
+
 		// console.log(e.parentNode.nodeName.toLowerCase())
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
@@ -361,8 +368,34 @@
 		});
 	});
 
-	document.addEventListener("click", (e) => {
+	document.addEventListener("mouseup", (e) => {
+		mouseDown = false;
+	})
+
+	document.getElementById('add-point').addEventListener('click', (e) => {
+		console.log('adding point')
+		console.log(document.getElementById('new-point-name').value)
+		console.log(document.getElementById('new-point-name').value.length)
+		if(document.getElementById('new-point-name').value.length > 0){
+			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+			circle.setAttribute('cx', '10')
+			circle.setAttribute('cy', '10')
+			circle.setAttribute('r', '30')
+			circle.setAttribute('id', document.getElementById('new-point-name').value)
+			globalSvgContainer.querySelector('svg').querySelector('g').appendChild(circle)
+		} else {
+			alert('Please add a name for the point')
+		}
+		
+	})
+
+	document.addEventListener("mousedown", (e) => {
+		mouseDown = true
 		// console.log(e.parentNode.nodeName.toLowerCase())
+		if (e.srcElement.parentNode.nodeName.toLowerCase() == "g") {
+			tempSelected = e.srcElement;
+		}
+
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
@@ -466,11 +499,31 @@
 
 	//Tag
 	document.addEventListener("mousemove", (e) => {
+
+		//Update Tags
 		document.getElementById("tag").style.left = `${e.x}px`;
 		document.getElementById("tag").style.top = `${e.y}px`;
 		document.getElementById("tag").style.transform = `translate(${
 			(e.clientX / window.innerWidth) * -100
 		}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+
+		
+		//Editing points
+		if(mouseDown){
+			if(tempSelected != null){
+				if(tempSelected.getAttribute('cx') != null && tempSelected.getAttribute('cy') != null){
+					if(globalSvgContainer.querySelector('svg') != null){
+						var pt = globalSvgContainer.querySelector('svg').createSVGPoint();
+						pt.x = e.clientX; pt.y = e.clientY;
+  						const coords = pt.matrixTransform(globalSvgContainer.querySelector('svg').getScreenCTM().inverse())
+						  console.log('Moving')
+						  tempSelected.setAttribute('cx', coords.x)
+						  tempSelected.setAttribute('cy', coords.y)
+					}
+				}
+			}
+			console.log("Mouse Down + Move")
+		}
 	});
 
 	var fileInput = document.getElementById("myFile");
@@ -764,11 +817,17 @@
 				"g",
 			);
 
+			var textG = document.createElementNS(
+				"http://www.w3.org/2000/svg",
+				"g",
+			);
+
 			var svgContainer = document.getElementById("svg-container")
 			// remove all groups except for Reference
+			//To overlay waypoints on top of images
 			if(svgContainer.querySelector('svg')){
 				svgContainer.querySelector('svg').querySelectorAll('g').forEach((e) => {
-				if(e.id != 'Reference'){
+				if(e.id.toLowerCase() != 'reference'){
 					e.remove()
 				}
 			})
@@ -780,7 +839,7 @@
 				newSVG.style.height = "100%"
 				newSVG.setAttribute("viewBox", "0 0 4096 4096")
 				newSVG.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink")
-				newSVG.appendChild(g)
+				// newSVG.appendChild(g)
 				svgContainer.appendChild(newSVG)
 				if(svgContainer.querySelector('img')){
 					const tempImage = svgContainer.querySelector('img')
@@ -829,13 +888,15 @@
 					text.setAttribute('y', `${Number(fields[2]).toFixed(4)}`)
 
 					g.appendChild(circle);
-					g.appendChild(text)
+					textG.appendChild(text)
 				} else {
 					console.error(`${fields[0] ?  fields[0] : `(Nameless), Row ${i + 1}`} does not contain any cx, cy data`)
 				}
 				
 				
 			}
+			textG.setAttribute('id', 'reference')
+			svgContainer.querySelector('svg').appendChild(textG);
 			svgContainer.querySelector('svg').appendChild(g);
 			
 		};

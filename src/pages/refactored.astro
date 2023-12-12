@@ -16,8 +16,6 @@
 			<div class="toolset-section">
 				
 				<section class="container">
-
-						
 						<input class="dropdown" id="custom-formatting" name="formatting" type="checkbox" style="display: none"/>
 						<label for="custom-formatting">Custom SVG ID Formatting <span class="arrow">^</span></label>
 
@@ -80,25 +78,86 @@
 						<polyline points="17 8 12 3 7 8" stroke-width="2"/>
 						<line x1="12" x2="12" y1="3" y2="15" stroke-width="2"/>
 					  </svg></label>
-					<input type="file" id="myFile" name="filename" style="display:none; "/>
-					<div class="sub-item">
+					<input type="file" class="input-style" id="myFile" name="filename" style="display:none; "/>
+					
+				</section>
+
+				
+
+				<section class="container" >
+					
+					<div class="sub-item" style="display: flex; flex-direction: column; margin-bottom: 10px;">
+						<p style="padding: 0 0px 10px 0em; margin: 0px;">Edit:</p>
+						<div class="button-gap" style="display: flex; width: 100%;">
+							<button id="flip-x"> Flip X</button>
+							<button id="flip-y"> Flip Y</button>
+						</div>
 					</div>
-					<div class="sub-item">
+
+					<div class="sub-item" style="display: flex; flex-direction: row; padding: 0px; margin-bottom: 10px">
 						<input
 							type="text"
 							id="myClasses"
 							name="filename"
-							style="margin-right: 1em;"
+							style="border: 0px; border-right: 1px solid #00000022;"
+							class="input-style"
+							placeholder="Class Selector (cls-1,cls-2,...)"
 						/>
-						<button id="remove" style="margin-right: 1em"
-							>Isolate Data</button
+						<button id="remove"
+							style="padding: 0.3em 0.5em; border-radius: 0px;">Isolate Item</button
 						>
 					</div>
+
+					<div class="sub-item" style="display: flex; flex-direction: column; margin-bottom: 10px;">
+						<!-- <label for="group">Group:</label> -->
+						<input
+							id="group"
+							oninput="this.value = this.value.toUpperCase()"
+							type="text"
+							placeholder="Group"
+							style="margin-bottom: 10px;"
+							class="input-style"
+						/>
+			
+						<!-- <label for="unit">Unit:</label> -->
+						<input
+							id="unit"
+							type="text"
+							oninput="this.value = this.value.toUpperCase()"
+							placeholder="Unit"
+							class="input-style"
+						/>
+						<div class="button-gap" style="display: flex; margin-top: 10px;">
+							<button id="set-name">Set</button>
+							<button id="set-unit">Apply Units</button>
+						</div>
+					</div>
+
+					<div class="sub-item" style="display: flex; flex-direction: column;">
+
+						<input
+							id="item-id"
+							type="text"
+							oninput="this.value = this.value.toUpperCase()"
+							placeholder="ID"
+							style="margin-top: 10px;"
+							class="input-style"
+						/>
+
+						<div class="button-gap" style="display: flex; margin-top: 10px;">
+							<button id="set-id">Set</button>
+						</div>
+						
+						
+					</div>
+
 				</section>
 
 				<section class="container">
+					
 					<!-- <h3>3. Export reformatted files</h3> -->
-					<button class="button-style">Export <svg
+					<!-- <button class="button-style">Export 
+						<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="24"
 						height="24"
@@ -111,31 +170,47 @@
 						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
 						<polyline points="7 10 12 15 17 10" stroke-width="2"/>
 						<line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
-					  </svg></button>
-					<div class="sub-item" style="display: flex">
-						<button id="export" style="margin-right: 1em; "
-							>Export SVG</button
-						>
-						<button id="remove" style="margin-right: 1em"
-							>Remove Data</button
-						>
-						<button id="export-csv-count" style="margin-right: 1em"
-							>Export CSV with Count</button
-						>
+					  </svg></button> -->
 
-						<button id="export-csv" style="margin-right: 1em"
-							>Export CSV No Count</button
-						>
-						<button id="export-csv-layer" style="margin-right: 1em"
-							>Export CSV w Position</button
-						>
-						<button id="export-csv-layer-2048" style="margin-right: 1em"
-							>Export CSV w Position 2048</button
-						>
+					  <!-- <label for="export-file-name">File Name: </label> -->
+					<input type="text" placeholder="File Name" class="input-style" id="export-file-name" style="margin-bottom: 10px"/>
+					<!-- <div class="sub-item" style="display: flex; flex-direction: column; position: relative">
+
 						
-					</div>
-					<label for="export-file-name">File Name: </label>
-					<input type="text" id="export-file-name"/>
+					</div> -->
+					<button id="export" class="button-style" style="margin-bottom: 10px"
+					>Export SVG <svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="24"
+					height="24"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				  >
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
+					<polyline points="7 10 12 15 17 10" stroke-width="2"/>
+					<line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
+				  </svg></button
+				>
+				<!-- <button id="remove" class="button-style" style="margin-right: 1em"
+					>Remove Data</button
+				> -->
+				<!-- <button id="export-csv-count" class="button-style" style="margin-right: 1em"
+					>Export CSV with Count</button
+				> -->
+
+				<!-- <button id="export-csv" class="button-style" style="margin-right: 1em"
+					>Export CSV No Count</button
+				> -->
+				<button id="export-csv-layer" class="button-style" style="margin-bottom: 10px"
+					>Export CSV <span style="font-size: 12px; padding: 0.2em; color: #333; background-color: #ccc; border-radius: 3px; margin-left: 8px">4096px</span>
+					</button
+				>
+				<button id="export-csv-layer-2048" class="button-style"
+					>Export CSV <span style="font-size: 12px; padding: 0.2em; color: #333; background-color: #ccc; border-radius: 3px; margin-left: 8px">2048px</span></button
+				>
 				</section>
 
 				<div class="container" id="id-container">
@@ -157,29 +232,12 @@
 
 		<section class="container editor">
 			<h3>Viewer</h3>
-			<button id="flip-x"> Flip X</button>
 
-			<button id="flip-y"> Flip Y</button>
-			<label for="group">Group:</label>
-			<input
-				id="group"
-				oninput="this.value = this.value.toUpperCase()"
-				type="text"
-			/>
-
-			<label for="unit">Unit:</label>
-			<input
-				id="unit"
-				type="text"
-				oninput="this.value = this.value.toUpperCase()"
-			/>
-			<button id="set-name">Set</button>
-			<button id="set-unit">Apply Units</button>
 			<div class="output" id="svg-container">
 				<p
 					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
 				>
-					No SVG file
+					Import SVG file
 				</p>
 			</div>
 
@@ -199,6 +257,24 @@
 	* {
 		font-family: gabarito, sans-serif;
 	}
+
+	button{
+		all: unset;
+		
+		width: 100%;
+		display: flex;
+		margin: 0px;
+		font-size: 12px;
+		padding: 0.3em;
+		cursor: pointer;
+		border-radius: 4px;
+		background-color: #FFF;
+	}
+
+	button:hover{
+		background-color: #ccc;
+	}
+
 	body{
 		box-sizing: border-box;
 		display: grid;
@@ -215,13 +291,16 @@
 	.button-style{
 		display: flex;
 		cursor: pointer;
+		box-sizing: border-box;
 		padding: 0.7em;
+		width: 100%;
 		align-items: center;
 		justify-content: center;
 		font-size: large;
 		color: #eee;
 		transition: 0.2s;
 		background-color: #333333;
+		border-radius: 4px;
 	}
 	.button-style:hover{
 		display: flex;
@@ -237,6 +316,38 @@
 	.button-style svg{
 		padding-left: 1em
 	}
+
+	.button-gap :first-child{
+		margin: 0em 0.2em;
+		margin-left: 0em;
+		text-align: center;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.button-gap :last-child{
+		margin: 0em 0.2em;
+		margin-right: 0em;
+		text-align: center;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.button-gap button{
+		border: 1px solid #00000022;
+		background-color: #333333;
+		color: #eee;
+		margin: 0em 0.2em;
+		text-align: center;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.button-gap button:hover{
+		background-color: #888888;
+	}
+
+	
 
 	.dropdown ~ .toggle{
 		display: none
@@ -278,8 +389,8 @@
 	}
 
 	.toolsets {
-		max-width: 240px;
-		grid-column: 1/2;
+		width: 100%;
+		grid-column: 1 / 1;
 		grid-row: 1/7;
 	}
 
@@ -289,16 +400,37 @@
 	}
 
 	.container {
-		background-color: #eee;
+		box-sizing: border-box;
+		/* background-color: #0000000c; */
+		border: 0.3px solid #00000022;
 		padding: 0.5em;
+		width: 100%;
+		display: flex;
+		flex-direction: column;
 		border-radius: 5px;
 		-webkit-user-select: none; /* Safari */
 		-ms-user-select: none; /* IE 10 and IE 11 */
 		user-select: none; /* Standard syntax */
 	}
 
+	.input-style{
+		all: unset;
+		border: 0px solid;
+		border-radius: 3px;
+		/* background-color: #00000011; */
+		transition: box-shadow 0.2s;
+		border: solid 0.5px #ddd;
+		padding: 0.3em;
+	}
+
+	.input-style:focus{
+		box-shadow: inset 0px 0px 100px #fff;
+		border: solid 1px;
+	}
+
 	.toolset-section {
 		width: 100%;
+
 		/* padding: 0.5em; */
 	}
 
@@ -368,7 +500,7 @@
 
 
 
-	.selected {
+	.svg-tool-selected {
 		fill: #ff0000;
 	}
 
@@ -379,7 +511,8 @@
 	.sub-item {
 		padding: 0.5em;
 		margin-bottom: 0.1em;
-		background-color: #00000011;
+		/* background-color: #00000011; */
+		border: 1px solid #00000022;
 		border-radius: 3px;
 		display: flex;
 		/* flex-direction: column; */
@@ -433,8 +566,12 @@
 	var flipped = false;
 	var multiSelect = false;
 	var clusterId = [];
-
+	
 	var idFormat = format.none; //SVG ID format
+
+	var mouseDown = false;
+	var globalSvgContainer = document.getElementById('svg-container');
+	var tempSelected;
 
 	var formattingButtons = document.querySelectorAll(".formatting");
 	formattingButtons.forEach((e) => {
@@ -474,7 +611,7 @@
 		) {
 			if (currentSelected != null) {
 				currentSelected.classList.remove("hovered");
-				if (!currentSelected.classList.contains("selected")) {
+				if (!currentSelected.classList.contains("svg-tool-selected")) {
 					currentSelected.style.fill = "";
 				} else {
 					currentSelected.style.fill = "#ff0000";
@@ -492,7 +629,7 @@
 
 			if(e.srcElement.getAttribute('class')){
 				var classLabel = document.createElement('p')
-				classLabel.innerText = `Class:${e.srcElement.getAttribute('class')}`
+				classLabel.innerText = `Class: ${e.srcElement.getAttribute('class')}`
 				label.appendChild(classLabel)
 			}
 			
@@ -529,9 +666,190 @@
 			//Get Attributes
 			if (!multiSelect) {
 				groupGlobal = [];
-				document.querySelectorAll(".selected").forEach((e) => {
+				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					// console.log(e.classList)
-					e.classList.remove("selected");
+					e.classList.remove("svg-tool-selected");
+					// console.log(e.classList)
+					e.style.fill = "";
+				});
+				groupGlobal.push(groupName);
+			} else {
+				groupGlobal.push(groupName);
+			}
+
+			if (groupGlobal.length < 2) {
+				if (groupGlobal[0].getAttribute("group-attribute") != "") {
+					document.getElementById("unit").focus();
+
+					document.getElementById("group").value =
+						groupGlobal[0].getAttribute("group-attribute");
+				} else {
+					document.getElementById("group").focus();
+					document.getElementById("group").value = "";
+				}
+
+				if (groupGlobal[0].getAttribute("unit-attribute") != "") {
+					document.getElementById("unit").value =
+						groupGlobal[0].getAttribute("unit-attribute");
+				} else {
+					document.getElementById("unit").placeholder =
+						"No Attribute";
+					document.getElementById("unit").value = "";
+				}
+
+				if (groupGlobal[0].getAttribute("id") != "") {
+					document.getElementById("item-id").value =
+						groupGlobal[0].getAttribute("id");
+				} else {
+					document.getElementById("item-id").placeholder =
+						"No Attribute";
+					document.getElementById("item-id").value = "";
+				}
+			} else {
+				document.getElementById("group").focus();
+				document.getElementById("group").placeholder = "Group";
+				document.getElementById("unit").placeholder = "Unit";
+				document.getElementById("item-id").placeholder = "ID";
+			}
+			e.srcElement.classList.add("svg-tool-selected");
+
+			// e.srcElement.style.fill = "#ff000055";
+		} else {
+			document.getElementById("tag").style.display = "none";
+		}
+
+		document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+			e.style.fill = "#ff0000";
+		});
+	});
+
+	document.getElementById("set-name").addEventListener("click", (e) => {
+		document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+			if (document.querySelectorAll(".svg-tool-selected").length < 2) {
+				e.setAttribute(
+					"group-attribute",
+					document.getElementById("group").value,
+				);
+				e.setAttribute(
+					"unit-attribute",
+					document.getElementById("unit").value,
+				);
+				if (
+					e.hasAttribute("group-attribute") &&
+					e.hasAttribute("unit-attribute")
+				) {
+					e.id =
+						e.getAttribute("group-attribute") +
+						"_" +
+						e.getAttribute("unit-attribute");
+				}
+			} else {
+				e.setAttribute(
+					"group-attribute",
+					document.getElementById("group").value,
+				);
+				e.id =
+					e.getAttribute("group-attribute") +
+					"_" +
+					e.getAttribute("unit-attribute");
+			}
+		});
+	});
+
+	document.getElementById("set-id").addEventListener("click", (e) => {
+		document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+			if (document.querySelectorAll(".svg-tool-selected").length < 2) {
+				e.setAttribute(
+					"id",
+					document.getElementById("item-id").value,
+				);
+			} else {
+				e.setAttribute(
+					"id",
+					document.getElementById("item-id").value,
+				);
+			}
+		});
+	});
+
+	document.getElementById("set-unit").addEventListener("click", (e) => {
+		setUnit();
+	});
+
+	//Tag
+	document.addEventListener("mousemove", (e) => {
+		document.getElementById("tag").style.left = `${e.x}px`;
+		document.getElementById("tag").style.top = `${e.y}px`;
+		document.getElementById("tag").style.transform = `translate(${
+			(e.clientX / window.innerWidth) * -100
+		}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+	});
+
+	var fileInput = document.getElementById("myFile");
+	var csvFileInput = document.getElementById("myCSVFile");
+	var imageInput = document.getElementById("imageFile");
+	var type = "";
+	fileInput.addEventListener("click", (e) => {
+		fileInput.value = null;
+	});
+
+		//Tag
+		document.addEventListener("mousemove", (e) => {
+
+			//Update Tags
+			document.getElementById("tag").style.left = `${e.x}px`;
+			document.getElementById("tag").style.top = `${e.y}px`;
+			document.getElementById("tag").style.transform = `translate(${
+				(e.clientX / window.innerWidth) * -100
+			}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+
+
+			//Editing points
+			if(mouseDown){
+				if(tempSelected != null){
+					if(tempSelected.getAttribute('cx') != null && tempSelected.getAttribute('cy') != null){
+						if(globalSvgContainer.querySelector('svg') != null){
+							var pt = globalSvgContainer.querySelector('svg').createSVGPoint();
+							pt.x = e.clientX; pt.y = e.clientY;
+							const coords = pt.matrixTransform(globalSvgContainer.querySelector('svg').getScreenCTM().inverse())
+							console.log('Moving')
+							tempSelected.setAttribute('cx', coords.x)
+							tempSelected.setAttribute('cy', coords.y)
+						}
+					}
+				}
+				console.log("Mouse Down + Move")
+			}
+		});
+
+	//Move SVG with CX and CY
+	document.addEventListener("mousedown", (e) => {
+		mouseDown = true
+		// console.log(e.parentNode.nodeName.toLowerCase())
+		if (e.srcElement.parentNode.nodeName.toLowerCase() == "g") {
+			tempSelected = e.srcElement;
+		}
+
+		if (
+			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.nodeName.toLowerCase() == "svg" ||
+			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
+		) {
+			console.log(e.srcElement.id);
+			// if (currentSelected != null) {
+			// 	currentSelected.classList.add("hovered");
+			// }
+			document.getElementById("tag").style.display = "flex";
+			document.getElementById("label").innerText = e.srcElement.id;
+			currentSelected = e.srcElement;
+
+			const groupName = e.srcElement;
+			//Get Attributes
+			if (!multiSelect) {
+				groupGlobal = [];
+				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+					// console.log(e.classList)
+					e.classList.remove("svg-tool-selected");
 					// console.log(e.classList)
 					e.style.fill = "";
 				});
@@ -564,7 +882,7 @@
 				document.getElementById("group").placeholder = "-";
 				document.getElementById("unit").placeholder = "-";
 			}
-			e.srcElement.classList.add("selected");
+			e.srcElement.classList.add("svg-tool-selected");
 
 			// e.srcElement.style.fill = "#ff000055";
 		} else {
@@ -576,62 +894,188 @@
 		});
 	});
 
-	document.getElementById("set-name").addEventListener("click", (e) => {
-		document.querySelectorAll(".selected").forEach((e) => {
-			if (document.querySelectorAll(".selected").length < 2) {
-				e.setAttribute(
-					"group-attribute",
-					document.getElementById("group").value,
-				);
-				e.setAttribute(
-					"unit-attribute",
-					document.getElementById("unit").value,
-				);
-				if (
-					e.hasAttribute("group-attribute") &&
-					e.hasAttribute("unit-attribute")
-				) {
-					e.id =
-						e.getAttribute("group-attribute") +
-						"_" +
-						e.getAttribute("unit-attribute");
-				}
-			} else {
-				e.setAttribute(
-					"group-attribute",
-					document.getElementById("group").value,
-				);
-				e.id =
-					e.getAttribute("group-attribute") +
-					"_" +
-					e.getAttribute("unit-attribute");
-			}
-		});
+	document.addEventListener("mouseup", (e) => {
+		mouseDown = false;
+	})
+
+	function handleFileChange(file) {
+    flipped = false;
+	var count = 0;
+
+    const processSVG = (svgElement) => {
+        const list = svgElement.querySelectorAll(`[id]`);
+        document.getElementById("id-list").innerHTML = "";
+
+        const processIdList = (idFormat) => {
+            const regexLastUnderscore = /_(?=[^_]*$)/g;
+            const regexLastDash = /-(?=[^-]*$)/g;
+            const regexDashUnderscore = /\w+-\w+_\w+/;
+            const regexText = /^[^-]*/;
+            const regexGroupName = /^([A-Z]{2}\d{2}-\d{1,2})/;
+            const regexUnitNumber = /(\d{1,3})\D*$/;
+			
+
+            const handleId = (currentId) => {
+                const listItem = document.createElement("li");
+				
+                const regexResult = idFormat === format.fullUnderscore
+                    ? currentId.replaceAll("-", "_")
+                    : !regexDashUnderscore.test(currentId)
+                        ? currentId.replace(regexLastDash, "_")
+                        : currentId;
+
+                const selected = svgElement.getElementById(`${currentId}`);
+                const groupMatched = selected.id.match(regexGroupName);
+                const unitMatched = selected.id.match(regexUnitNumber);
+
+                if (groupMatched) {
+                    selected.setAttribute("group-attribute", groupMatched[1]);
+                }
+
+                if (unitMatched) {
+                    selected.setAttribute("unit-attribute", unitMatched[1]);
+                }
+
+                selected.id = regexResult;
+                listItem.innerHTML = regexResult;
+                clusterId.push({
+                    id: count,
+                    clusterId: regexText.exec(regexResult)[0],
+                    unitId: regexResult,
+                });
+
+                count++;
+                listItem.style.listStyle = "none";
+                listItem.style.padding = "0.5em 0em";
+                document.getElementById("id-list").append(listItem);
+            };
+
+            list.forEach((i) => {
+                const currentId = i.id;
+
+                if (idFormat === format.underscore) {
+                    handleId(currentId);
+                } else if (idFormat === format.dash) {
+                    handleId(regexDashUnderscore.test(currentId)
+                        ? currentId.replace(regexLastUnderscore, "-")
+                        : currentId);
+                } else if (idFormat === format.none || idFormat === format.fullUnderscore) {
+                    handleId(currentId);
+                }
+            });
+        };
+
+        processIdList(idFormat);
+
+        // Append the SVG element to the div element
+        const svgContainer = document.getElementById("svg-container");
+        svgContainer.innerHTML = "";
+        svgContainer.appendChild(svgElement);
+
+        // Set type for export filename
+        type = idFormat === format.underscore
+            ? "underscore"
+            : idFormat === format.dash
+                ? "dash"
+                : "";
+    };
+
+    if (file.type === "image/svg+xml") {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            const svgString = reader.result;
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+            const svgElement = svgDoc.documentElement;
+            processSVG(svgElement);
+        });
+        reader.readAsText(file);
+    } else if (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp") {
+        fileNameGlobal = file.name;
+        document.getElementById("export-file-name").value = fileNameGlobal;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const contents = event.target.result;
+            const img = document.createElement('img');
+            img.src = contents;
+            img.style.maxHeight = '100%';
+            img.style.maxWidth = '100%';
+            const svgContainer = document.getElementById("svg-container");
+            svgContainer.innerHTML = "";
+            svgContainer.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+    } else if (file.type === "text/csv") {
+        fileNameGlobal = file.name;
+        document.getElementById("export-file-name").value = fileNameGlobal;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const contents = event.target.result;
+            const lines = contents.split("\n");
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            const svgContainer = document.getElementById("svg-container");
+
+            if (svgContainer.querySelector('svg')) {
+                svgContainer.querySelector('svg').querySelectorAll('g').forEach((e) => {
+                    if (e.id !== 'Reference') {
+                        e.remove();
+                    }
+                });
+            } else {
+                const newSVG = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                newSVG.style.width = "100%";
+                newSVG.style.height = "100%";
+                newSVG.setAttribute("viewBox", "0 0 4096 4096");
+                newSVG.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+                newSVG.appendChild(g);
+                svgContainer.appendChild(newSVG);
+
+                if (svgContainer.querySelector('img')) {
+                    const tempImage = svgContainer.querySelector('img');
+                    const svgimg = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                    svgimg.style.width = "100%";
+                    svgimg.style.height = "100%";
+                    svgimg.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', tempImage.src);
+                    newSVG.append(svgimg);
+                    tempImage.remove();
+                }
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+                const fields = lines[i].split(",");
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+
+                if (Number(fields[1]) || Number(fields[2])) {
+                    circle.setAttribute("id", fields[0]);
+                    circle.setAttribute("cx", Number(fields[1]).toFixed(4));
+                    circle.setAttribute("cy", Number(fields[2]).toFixed(4));
+                    circle.setAttribute("r", "30");
+                    g.appendChild(circle);
+                } else {
+                    console.error(`${fields[0] ? fields[0] : `(Nameless), Row ${i + 1}`} does not contain any cx, cy data`);
+                }
+            }
+
+            svgContainer.querySelector('svg').appendChild(g);
+        };
+        reader.readAsText(file);
+    }
+};
+
+	fileInput.addEventListener("change", () => {
+		handleFileChange(fileInput.files[0]);
 	});
 
-	document.getElementById("set-unit").addEventListener("click", (e) => {
-		setUnit();
+
+	document.body.addEventListener("dragover", (e) => {
+		event.preventDefault(); // Prevent the default behavior
 	});
 
-	//Tag
-	document.addEventListener("mousemove", (e) => {
-		document.getElementById("tag").style.left = `${e.x}px`;
-		document.getElementById("tag").style.top = `${e.y}px`;
-		document.getElementById("tag").style.transform = `translate(${
-			(e.clientX / window.innerWidth) * -100
-		}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+	document.body.addEventListener("drop", (e) => {
+		e.preventDefault();
+		console.log(e.dataTransfer.files[0])
+		handleFileChange(e.dataTransfer.files[0]);
 	});
-
-	var fileInput = document.getElementById("myFile");
-	var csvFileInput = document.getElementById("myCSVFile");
-	var imageInput = document.getElementById("imageFile");
-	var type = "";
-	fileInput.addEventListener("click", (e) => {
-		fileInput.value = null;
-	});
-	// csvFileInput.addEventListener("click", (e) => {
-	// 	fileInput.value = null;
-	// });
 
 
 	//SVG Uploading
@@ -1013,8 +1457,8 @@
 
 	document.addEventListener("keydown", (e) => {
 		if (e.key == "Escape") {
-			document.querySelectorAll(".selected").forEach((e) => {
-				e.classList.remove("selected");
+			document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+				e.classList.remove("svg-tool-selected");
 				e.style.fill = "";
 				groupGlobal = [];
 				document.querySelectorAll("#group").value = "";
@@ -1047,8 +1491,8 @@
 
 	document.addEventListener("keydown", (e) => {
 		if (e.key == "Escape") {
-			document.querySelectorAll(".selected").forEach((e) => {
-				e.classList.remove("selected");
+			document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+				e.classList.remove("svg-tool-selected");
 				e.style.fill = "";
 				groupGlobal = [];
 				document.querySelectorAll("#group").value = "";
@@ -1076,19 +1520,19 @@
 		}
 	});
 
-	document.getElementById("export-csv").addEventListener("click", (e) => {
-		exportCSV();
-	});
+	// document.getElementById("export-csv").addEventListener("click", (e) => {
+	// 	exportCSV();
+	// });
 
 	document.getElementById("remove").addEventListener("click", (e) => {
 		removeData();
 	});
 
-	document
-		.getElementById("export-csv-count")
-		.addEventListener("click", (e) => {
-			exportCSVId();
-		});
+	// document
+	// 	.getElementById("export-csv-count")
+	// 	.addEventListener("click", (e) => {
+	// 		exportCSVId();
+	// 	});
 
 	document.getElementById("export").addEventListener("click", (e) => {
 		exportSVG();
