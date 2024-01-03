@@ -629,6 +629,7 @@
 
 	var mouseDown = false;
 	var globalSvgContainer = document.getElementById('svg-container');
+	var mouseInContainer = false;
 	var tempSelected;
 
 	var formattingButtons = document.querySelectorAll(".formatting");
@@ -659,14 +660,25 @@
 		fileNameGlobal = e.target.value
 		console.log(fileNameGlobal)
 	})
+	document.addEventListener("mouseover", (e) => {
+		//Set global var MouseInContainer
+		mouseInContainer = false;
+		if (
+			e.srcElement.parentNode.id.toLowerCase() == "svg-container" ||
+			e.srcElement.id.toLowerCase() == "svg"
+		){
+			mouseInContainer = true;
+		}
+	})
 	document.getElementById('svg-container').addEventListener("mouseover", (e) => {
-		// console.log(e.parentNode.nodeName.toLowerCase())
+
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g" ||
 			!e.srcElement.tagName == "image"
 		) {
+
 			if (currentSelected != null) {
 				currentSelected.classList.remove("hovered");
 				if (!currentSelected.classList.contains("svg-tool-selected")) {
@@ -697,6 +709,7 @@
 			e.srcElement.classList.add("hovered");
 		} else {
 			document.getElementById("tag").style.display = "none";
+			mouseInContainer = false;
 			// console.log(e.srcElement.parentNode.nodeName);
 		}
 
@@ -842,11 +855,11 @@
 
 	//Tag
 	document.addEventListener("mousemove", (e) => {
-		document.getElementById("tag").style.left = `${e.x}px`;
-		document.getElementById("tag").style.top = `${e.y}px`;
-		document.getElementById("tag").style.transform = `translate(${
-			(e.clientX / window.innerWidth) * -100
-		}%, ${(e.clientY / window.innerHeight) * -150}%)`;
+			document.getElementById("tag").style.left = `${e.x}px`;
+			document.getElementById("tag").style.top = `${e.y}px`;
+			document.getElementById("tag").style.transform = `translate(${
+				(e.clientX / window.innerWidth) * -100
+			}%, ${(e.clientY / window.innerHeight) * -150}%)`;
 	});
 
 	var fileInput = document.getElementById("myFile");
@@ -867,9 +880,8 @@
 				(e.clientX / window.innerWidth) * -100
 			}%, ${(e.clientY / window.innerHeight) * -150}%)`;
 
-
 			//Editing points
-			if(mouseDown){
+			if(mouseDown && mouseInContainer){
 				if(tempSelected != null){
 					if(tempSelected.getAttribute('cx') != null && tempSelected.getAttribute('cy') != null){
 						if(globalSvgContainer.querySelector('svg') != null){
