@@ -11,7 +11,23 @@
 		<script src="/x-frame-bypass.js" type="module"></script>
 		<title>Astro</title>
 	</head>
-	<body>
-        <iframe style="width: 100%; height: 100%;" is="x-frame-bypass" src="https://saleskiosk.aldar.com/"></iframe>
+	<body style="margin: 0px;">
+        <iframe id="theIframe" style="width: 100%; height: 100vh; margin: 0px;" is="x-frame-bypass-2" src="https://saleskiosk.aldar.com/?state=abu_dhabi&lang=en&vr=VR01&theme=dark">
+		</iframe>
     </body>
 </html>
+
+<script>
+	const iframe = document.getElementById('theIframe');
+		iframe.contentWindow.addEventListener('message', (event) => {
+				event.origin = "https://saleskiosk.aldar.com"
+				console.log(event)
+			// if (event.origin === 'http://localhost:4321') {
+			// 	console.log('Message received:', event.data);
+			// }
+			});
+	
+	iframe.contentWindow.postMessage('Your message', 'https://saleskiosk.aldar.com');
+
+	console.log("Posted")
+</script>

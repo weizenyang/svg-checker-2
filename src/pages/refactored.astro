@@ -718,7 +718,7 @@
 		});
 	});
 	// document..getElementById('svg-container').addEventListener("click",(e))
-	document.getElementById('svg-container').addEventListener("click", (e) => {
+	document.getElementById('svg-container').addEventListener("mousedown", (e) => {
 		if (
 			e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
@@ -743,9 +743,16 @@
 					// console.log(e.classList)
 					e.style.fill = "";
 				});
+
 				groupGlobal.push(groupName);
+				console.log(groupGlobal);
 			} else {
-				groupGlobal.push(groupName);
+				if(!groupName.classList.contains("hovered") && groupName.classList.contains("svg-tool-selected")){
+					groupGlobal.push(groupName);
+				} else if (groupGlobal.length <= 1){
+					groupGlobal.push(groupName);
+				}
+				console.log(groupGlobal);
 			}
 
 			if (groupGlobal.length < 2) {
@@ -1603,7 +1610,8 @@
 
 	function setUnit() {
 		for (var i = 0; i < groupGlobal.length; i++) {
-			groupGlobal[i].setAttribute("unit-attribute", pad(i + 1));
+			console.log(i);
+			groupGlobal[i].setAttribute("unit-attribute", pad(i+1));
 		}
 	}
 
