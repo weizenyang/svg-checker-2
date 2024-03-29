@@ -1613,6 +1613,37 @@
 			console.log(i);
 			groupGlobal[i].setAttribute("unit-attribute", pad(i+1));
 		}
+
+		document.querySelectorAll(".svg-tool-selected").forEach((e) => {
+			if (document.querySelectorAll(".svg-tool-selected").length < 2) {
+				e.setAttribute(
+					"group-attribute",
+					document.getElementById("group").value,
+				);
+				e.setAttribute(
+					"unit-attribute",
+					document.getElementById("unit").value,
+				);
+				if (
+					e.hasAttribute("group-attribute") &&
+					e.hasAttribute("unit-attribute")
+				) {
+					e.id =
+						e.getAttribute("group-attribute") +
+						"_" +
+						e.getAttribute("unit-attribute");
+				}
+			} else {
+				e.setAttribute(
+					"group-attribute",
+					document.getElementById("group").value,
+				);
+				e.id =
+					e.getAttribute("group-attribute") +
+					"_" +
+					e.getAttribute("unit-attribute");
+			}
+		});
 	}
 
 	//Add zero to single digit
