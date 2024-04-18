@@ -660,16 +660,18 @@
 		fileNameGlobal = e.target.value
 		console.log(fileNameGlobal)
 	})
-	document.addEventListener("mouseover", (e) => {
+
+	//Check if SVG Container is active
+	document.getElementById("svg-container").addEventListener("mouseover", (e) => {
+		//Set global var MouseInContainer
+		mouseInContainer = true;
+	})
+
+	document.getElementById("svg-container").addEventListener("mouseout", (e) => {
 		//Set global var MouseInContainer
 		mouseInContainer = false;
-		if (
-			e.srcElement.parentNode.id.toLowerCase() == "svg-container" ||
-			e.srcElement.id.toLowerCase() == "svg"
-		){
-			mouseInContainer = true;
-		}
 	})
+
 	document.getElementById('svg-container').addEventListener("mouseover", (e) => {
 
 		if (
@@ -699,7 +701,20 @@
 
 			if(e.srcElement.getAttribute('class')){
 				var classLabel = document.createElement('p')
-				classLabel.innerText = `Class: ${e.srcElement.getAttribute('class')}`
+				var tempClassList = Object.assign({}, e.srcElement.classList);
+				tempClassList = Object.keys(tempClassList).filter(item => tempClassList[item] !== "svg-tool-selected");
+				if(tempClassList.length > 0){
+					var tempString = "";
+					tempClassList.forEach(classname => {
+						if(tempString == ""){
+							tempString = classname
+						} else {
+							tempString += " " + classname;
+						}
+					});
+					classLabel.innerText = `Class: ${tempClassList}`
+				}
+				
 				label.appendChild(classLabel)
 			}
 			
@@ -724,7 +739,7 @@
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
-			
+			mouseDown = true;
 			// if (currentSelected != null) {
 			// 	currentSelected.classList.add("hovered");
 			// }
@@ -885,10 +900,11 @@
 			document.getElementById("tag").style.transform = `translate(${
 				(e.clientX / window.innerWidth) * -100
 			}%, ${(e.clientY / window.innerHeight) * -150}%)`;
-			
 			//Editing points
 			if(mouseDown && mouseInContainer){
+				
 				if(tempSelected != null){
+					console.log("tempSelected is not null");
 					if(tempSelected.getAttribute('cx') != null && tempSelected.getAttribute('cy') != null){
 						if(globalSvgContainer.querySelector('svg') != null){
 							var pt = globalSvgContainer.querySelector('svg').createSVGPoint();
@@ -921,7 +937,7 @@
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
-			console.log(e.srcElement.id);
+			console.log(e.srcElement.parentNode);
 			// if (currentSelected != null) {
 			// 	currentSelected.classList.add("hovered");
 			// }
