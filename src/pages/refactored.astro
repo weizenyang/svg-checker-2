@@ -724,8 +724,7 @@
 			e.srcElement.nodeName.toLowerCase() == "svg" ||
 			e.srcElement.parentNode.nodeName.toLowerCase() == "g"
 		) {
-
-			console.log(e.srcElement.id);
+			
 			// if (currentSelected != null) {
 			// 	currentSelected.classList.add("hovered");
 			// }
@@ -886,7 +885,7 @@
 			document.getElementById("tag").style.transform = `translate(${
 				(e.clientX / window.innerWidth) * -100
 			}%, ${(e.clientY / window.innerHeight) * -150}%)`;
-
+			
 			//Editing points
 			if(mouseDown && mouseInContainer){
 				if(tempSelected != null){
@@ -908,9 +907,13 @@
 	//Move SVG with CX and CY
 	document.addEventListener("mousedown", (e) => {
 		mouseDown = true
-		// console.log(e.parentNode.nodeName.toLowerCase())
+		
+		//Checks if it's a primitive element, otherwise put in a null, 
+		//If TempSelected is not cleared, it will get wrongfully selected and moved during MouseDown
 		if (e.srcElement.parentNode.nodeName.toLowerCase() == "g") {
 			tempSelected = e.srcElement;
+		} else {
+			tempSelected = null;
 		}
 
 		if (
