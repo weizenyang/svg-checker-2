@@ -1,0 +1,156 @@
+---
+
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Three.js - Three Sides of a Cube</title>
+	</head>
+	<body id="drop-zone">
+        <button id="log-scene">
+            Log Scene
+        </button>
+	</body>
+</html>
+
+<script>
+	import * as THREE from '../scripts/three';
+	import { OrbitControls } from '../scripts/three/examples/jsm/controls/OrbitControls.js';
+	import { GLTFLoader } from '../scripts/three/examples/jsm/loaders/GLTFLoader.js';
+    import { FBXLoader } from '../scripts/three/examples/jsm/loaders/FBXLoader'
+    import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
+
+	const scene = new THREE.Scene();
+	const camera = new THREE.PerspectiveCamera(
+		75,
+		window.innerWidth / window.innerHeight,
+		0.1,
+		1000,
+	);
+
+	const renderer = new THREE.WebGLRenderer({ antialias: true });
+	renderer.setSize(window.innerWidth, window.innerHeight);
+	document.body.appendChild(renderer.domElement);
+
+	// const cube = new THREE.Mesh(geometry, materials);
+	// scene.add(cube);
+
+	camera.position.z = 0;
+
+	function animate() {
+		requestAnimationFrame(animate);
+
+		renderer.render(scene, camera);
+	}
+
+	const orbitalControls = new OrbitControls(camera, renderer.domElement);
+    
+	animate();
+
+
+
+    function handleDrop(event) {
+        event.preventDefault();
+        const items = event.dataTransfer.items;
+
+        // Check if a single item is dropped
+        if (items.length === 1) {
+            const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
+
+            if (entry) {
+            if (entry.isDirectory) {
+                const reader = entry.createReader();
+                traverseDirectory(reader); // Recursive function for subfolders and FBX files
+            } else {
+                console.error('Please drop a folder containing FBX files.');
+            }
+            } else {
+            console.error('Dropped item could not be accessed.');
+            }
+        } else {
+            console.error('Please drop only one item.');
+        }
+    }
+
+    function loadFBXFile(arrayBuffer){
+        const loader = new FBXLoader();
+        const item = loader.parse(arrayBuffer, '')
+        scene.add(item)
+        
+    }
+
+    function loadGLBFile(arrayBuffer){
+        const loader = new GLTFLoader();
+        const item = loader.parse(arrayBuffer, '')
+        scene.add(item)
+        orbitalControls.target = item.position
+    }
+    
+
+    function traverseDirectory(reader) {
+      reader.readEntries((entries) => {
+        console.log(entries);
+        const fbxFiles = [];
+        const glbFiles = [];
+        entries.forEach((entry) => {
+          if (entry.isFile && entry.name.endsWith('.fbx')) {
+            fbxFiles.push(entry);
+            entry.file((file) => {
+                const reader = new FileReader();
+                reader.readAsArrayBuffer(file);
+                reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                    loadFBXFile(arrayBuffer)
+                };
+                console.log("fbx")
+            });
+            
+          } else if (entry.isFile && entry.name.endsWith('.glb')) {
+            glbFiles.push(entry);
+            entry.file((file) => {
+                const reader = new FileReader();
+                reader.readAsArrayBuffer(file);
+                reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                    loadGLBFile(arrayBuffer)
+                };
+                console.log("glb")
+            });
+            
+          } else if (entry.isDirectory) {
+            const subReader = entry.createReader();
+            traverseDirectory(subReader); // Recursive call
+          }
+        });
+
+        // Process the list of FBX files after reading all entries
+        console.log('Found FBX files:', fbxFiles);
+      });
+    }
+        const logScene = document.getElementById('log-scene');
+        logScene.addEventListener('click', (e)=>{
+            console.log(scene)
+        })
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('drop', handleDrop);
+        document.body.addEventListener("dragover", (e) => {
+            event.preventDefault();
+        });
+
+
+</script>
+
+<style>
+    html{
+        min-height: 100vh;
+        margin: 0%;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0%;
+    }
+</style>
