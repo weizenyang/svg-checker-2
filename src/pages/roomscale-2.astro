@@ -1,0 +1,339 @@
+---
+
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Three.js - Three Sides of a Cube</title>
+	</head>
+	<body id="drop-zone">
+        <div class="ui-area">
+            <button id="log-scene">
+                Log Scene
+            </button>
+        </div>
+        <div class="item-cards-group">
+            
+        </div>
+        <div id="tag">
+            <h3 id="label">-</h3>
+        </div>
+	</body>
+</html>
+
+<style is:inline>
+    html{
+        min-height: 100vh;
+        width: 100%;
+        margin: 0%;
+    }
+
+    body {
+        /* min-height: 100vh;
+        width: 100%;
+        margin: 0%; */
+        max-width: 100vw;
+        display: flex;
+        flex-wrap: wrap;
+        min-height: 90vh;
+        margin: 0%;
+    }
+
+    .ui-area{
+        position: fixed;
+        height: min-content;
+    }
+
+    .item-cards-group{
+        display: flex;
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+
+    .item-group{
+        padding: 0.5em;
+        max-width: min-content;
+        max-height: min-content;
+        background-color: #3333;
+        border-radius: 0.5em;
+    }
+
+    #tag, #tag *{
+		display: flex;
+		position: fixed;
+		background-color: #cccccccc;
+		padding: 0em 0.5em;
+		text-align: left;
+		line-height: 0.5em;
+		font-family: monospace;
+		font-weight: 100;
+		justify-content: center;
+		min-width: max-content;
+		pointer-events: none;
+		/* transform: translate(-50%); */
+		/* min-height: 50px; */
+		height: fit-content;
+		border-radius: 6px;
+		/* font-family: sans-serif; */
+	}
+	#label {
+		display: flex;
+		text-align: center;
+		justify-content: center;
+		margin: 0%;
+		height: 100%;
+		font-family: sans-serif;
+	}
+</style>
+
+<script>
+	import * as THREE from '../scripts/three';
+	import { OrbitControls } from '../scripts/three/examples/jsm/controls/OrbitControls.js';
+	import { GLTFLoader } from '../scripts/three/examples/jsm/loaders/GLTFLoader.js';
+    import { FBXLoader } from '../scripts/three/examples/jsm/loaders/FBXLoader'
+    import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
+
+    var allRenderers = []
+    var allScenes = []
+    var allCameras = []
+    var allControls = []
+    var allCanvas = []
+
+    const fileFormat = 
+    {
+        GLB: "glb",
+        FBX: "fbx"
+    }
+    var fileCount = 0;
+
+    function handleDrop(event) {
+        event.preventDefault();
+        const items = event.dataTransfer.items;
+
+        // Check if a single item is dropped
+        if (items.length === 1) {
+            const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
+
+            if (entry) {
+            if (entry.isDirectory) {
+                const reader = entry.createReader();
+                traverseDirectory(reader); // Recursive function for subfolders and FBX files
+            } else {
+                console.error('Please drop a folder containing FBX files.');
+            }
+            } else {
+            console.error('Dropped item could not be accessed.');
+            }
+        } else {
+            console.error('Please drop only one item.');
+        }
+    }
+    
+
+    function traverseDirectory(reader) {
+      reader.readEntries((entries) => {
+        console.log(entries);
+        const fbxFiles = [];
+        const glbFiles = [];
+        for(var i = 0; i < entries.length; i++){
+            var entry = entries[i]
+          if (entry.isFile && entry.name.endsWith('.fbx')) {
+            fbxFiles.push(entry);
+            entry.file((file) => {
+                fileCount++;
+                const tempCount = fileCount
+                const reader = new FileReader();
+                reader.readAsArrayBuffer(file);
+                reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                createRenderer(`item-${tempCount}`, fileFormat.FBX, arrayBuffer)
+                };
+                console.log("fbx")
+            });
+            
+          } else if (entry.isFile && entry.name.endsWith('.glb')) {
+            glbFiles.push(entry);
+            entry.file((file) => {
+                fileCount++;
+                const tempCount = fileCount
+                const reader = new FileReader();
+                reader.readAsArrayBuffer(file);
+                reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                createRenderer(`item-${tempCount}`, fileFormat.GLB, arrayBuffer)
+                };
+                console.log("glb")
+            });
+            
+          } else if (entry.isDirectory) {
+            const subReader = entry.createReader();
+            traverseDirectory(subReader); // Recursive call
+          }
+
+        }
+        // Process the list of FBX files after reading all entries
+        console.log('Found FBX files:', fbxFiles);
+      });
+      
+    }
+        const logScene = document.getElementById('log-scene');
+        logScene.addEventListener('click', (e)=>{
+            console.log(allScenes)
+            console.log(allCanvas)
+        })
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('drop', handleDrop);
+        document.body.addEventListener("dragover", (e) => {
+            event.preventDefault();
+        });
+
+        function createRenderer(itemId, fileType, arrayBuffer){
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+	        renderer.setSize(300, 200);
+
+            allRenderers.push(renderer)
+            const canvas = document.createElement('canvas');
+            canvas.style.width = '300px';
+            canvas.style.height = '200px';
+            allCanvas.push(canvas)
+            renderer.domElement = canvas;
+
+	        // document.body.appendChild(renderer.domElement);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(
+                75,
+                300 / 200,
+                0.1,
+                1000,
+            )
+
+            const directionalLight = new THREE.DirectionalLight( 0xffffff, 1.0 );
+            scene.add(directionalLight);
+
+            const light = new THREE.AmbientLight( 0x404040 ); // soft white light
+            scene.add( light );
+
+            camera.position.x = -1;
+            camera.position.y = 0;
+            camera.position.z = -1;
+
+            const parser = new DOMParser();
+            const group = document.querySelector(".item-cards-group")
+            const cardDiv = document.createElement('div');
+            cardDiv.classList.add('item-group'); // Add class "item-group"
+            cardDiv.id = itemId;
+            group.appendChild(cardDiv);
+            document.getElementById(`${itemId}`).appendChild(canvas)
+
+
+            const orbitalControls = new OrbitControls(camera, renderer.domElement);
+            orbitalControls.keys = {
+                LEFT: 'ArrowLeft', //left arrow
+                UP: 'ArrowUp', // up arrow
+                RIGHT: 'ArrowRight', // right arrow
+                BOTTOM: 'ArrowDown' // down arrow
+            }
+            allControls.push(orbitalControls)
+
+            //GLB - FBX Classifier
+            if(fileType == fileFormat.GLB) {
+                const loader = new GLTFLoader();
+                const item = loader.parse(arrayBuffer, '')
+                scene.add(item)
+                allScenes.push(scene)
+            } else if(fileType == fileFormat.FBX){
+                const loader = new FBXLoader();
+                const item = loader.parse(arrayBuffer, '')
+                scene.add(item)
+                allScenes.push(scene)
+            }
+
+            allCameras.push(camera)
+        }
+        
+            function animate() {
+                
+                if(allRenderers.length > 0){
+                    for(var i = 0; i < 5; i++){
+                        
+                        //allControls[i].update()
+                        
+                        if(allRenderers[i] != undefined){
+                            allRenderers[i].render(allScenes[i], allCameras[i]);
+                        }
+                        
+                    }
+                }
+                
+                requestAnimationFrame(animate);
+            }
+
+            animate()
+
+            document.getElementById('svg-container').addEventListener("mouseover", (e) => {
+
+if (
+    e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
+    e.srcElement.nodeName.toLowerCase() == "svg" ||
+    e.srcElement.parentNode.nodeName.toLowerCase() == "g" ||
+    !e.srcElement.tagName == "image"
+) {
+
+    if (currentSelected != null) {
+        currentSelected.classList.remove("hovered");
+        if (!currentSelected.classList.contains("svg-tool-selected")) {
+            currentSelected.style.fill = "";
+        } else {
+            currentSelected.style.fill = "#ff0000";
+        }
+    }
+    document.getElementById("tag").style.display = "flex";
+    document.getElementById("label").innerHTML = "";
+    var label = document.createElement('div')
+    if(e.srcElement.id){
+        var idLabel = document.createElement('p')
+        idLabel.innerText = `ID: ${e.srcElement.id}`
+        idLabel.style.color = "#007700"
+        label.appendChild(idLabel)
+    }
+
+    if(e.srcElement.getAttribute('class')){
+        var classLabel = document.createElement('p')
+        var tempClassList = Object.assign({}, e.srcElement.classList);
+        tempClassList = Object.keys(tempClassList).filter(item => tempClassList[item] !== "svg-tool-selected");
+        if(tempClassList.length > 0){
+            var tempString = "";
+            tempClassList.forEach(classname => {
+                if(tempString == ""){
+                    tempString = classname
+                } else {
+                    tempString += " " + classname;
+                }
+            });
+            classLabel.innerText = `Class: ${tempClassList}`
+        }
+        
+        label.appendChild(classLabel)
+    }
+    
+    
+    document.getElementById("label").append(label)
+    currentSelected = e.srcElement;
+    e.srcElement.classList.add("hovered");
+} else {
+    document.getElementById("tag").style.display = "none";
+    mouseInContainer = false;
+    // console.log(e.srcElement.parentNode.nodeName);
+}
+
+document.querySelectorAll(".hovered").forEach((e) => {
+    e.style.fill = "#ff000066";
+});
+});
+
+</script>
+

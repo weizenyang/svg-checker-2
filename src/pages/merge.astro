@@ -1,0 +1,57 @@
+---
+
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Three.js - Three Sides of a Cube</title>
+	</head>
+	<body id="drop-zone">
+        <button id="log-scene">
+            Log Scene
+        </button>
+	</body>
+</html>
+
+<script>
+    function mergeImages(img1Url, img2Url, outputId) {
+        const canvas = document.getElementById(outputId);
+        const ctx = canvas.getContext('2d');
+
+        const img1 = new Image();
+        img1.onload = function() {
+            const img2 = new Image();
+            img2.onload = function() {
+            // Set canvas dimensions based on image sizes and layout
+            canvas.width = Math.max(img1.width, img2.width);
+            canvas.height = img1.height + img2.height;
+
+            // Draw first image
+            ctx.drawImage(img1, 0, 0);
+
+            // Draw second image below the first
+            ctx.drawImage(img2, 0, img1.height);
+
+            // Get data URL of the merged image (optional)
+            const mergedImageUrl = canvas.toDataURL();
+            };
+            img2.src = img2Url;
+        };
+        img1.src = img1Url;
+        }
+</script>
+
+<style>
+    html{
+        min-height: 100vh;
+        margin: 0%;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0%;
+    }
+</style>
