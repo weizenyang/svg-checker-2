@@ -1,0 +1,41 @@
+.item-list{
+    list-style: none;
+    padding: 0.5em;
+    background-color: #ffffff44;
+    border-radius: 5px;
+    max-height: 400px;
+    max-width: 160px;
+    overflow-y: scroll;
+}
+
+.item-list-item{
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    padding: 0.5em;
+    background-color: #ccc;
+    border-radius: 5px;
+    min-width: 100px;
+    max-width: 150px;
+    min-height: 20px;
+    text-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.main-text{
+    font-family: sans-serif;
+    font-size: medium;
+    margin: 0%;
+}
+
+.secondary-text{
+    font-family: sans-serif;
+    font-size: x-small;
+    text-wrap: wrap;
+    max-width: 150px;
+    margin: 0%;
+}
+
+.matched-csv{
+    margin: 0px;
+}

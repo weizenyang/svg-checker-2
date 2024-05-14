@@ -1,125 +1,122 @@
 ---
-
+import ObjectList from "../components/object-list.tsx";
 ---
 
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Three.js - Three Sides of a Cube</title>
-	</head>
-	<body id="drop-zone">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Three.js - Three Sides of a Cube</title>
+    </head>
+    <body id="drop-zone">
         <div class="ui-area">
-            <button id="log-scene">
-                Log Scene
-            </button>
-            <button id="x-flip">
-                X-Axis
-            </button>
-            <button id="y-flip">
-                Y-Axis
-            </button>
-            <button id="z-flip">
-                Z-Axis
-            </button>
-
-            <button id="y-up">
-                Y-Up Toggle
-            </button>
+            <button id="log-scene"> Log Scene </button>
+            <button id="x-flip"> X-Axis </button>
+            <button id="y-flip"> Y-Axis </button>
+            <button id="z-flip"> Z-Axis </button>
+            <button id="y-up"> Y-Up Toggle </button>
+            <ObjectList client:load />
         </div>
         <div id="tag">
             <h3 id="label">-</h3>
         </div>
-	</body>
+    </body>
 </html>
 
 <script>
-	import * as THREE from '../scripts/three';
-	import { OrbitControls } from '../scripts/three/examples/jsm/controls/OrbitControls.js';
-	import { GLTFLoader } from '../scripts/three/examples/jsm/loaders/GLTFLoader.js';
-    import { FBXLoader } from '../scripts/three/examples/jsm/loaders/FBXLoader'
-    import { FirstPersonControls } from 'three/addons/controls/FirstPersonControls.js';
-    
-	const scene = new THREE.Scene();
+    import * as THREE from "../scripts/three";
+    import { OrbitControls } from "../scripts/three/examples/jsm/controls/OrbitControls.js";
+    import { GLTFLoader } from "../scripts/three/examples/jsm/loaders/GLTFLoader.js";
+    import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
+    import { FirstPersonControls } from "three/addons/controls/FirstPersonControls.js";
 
-	const renderer = new THREE.WebGLRenderer({ antialias: true });
-	renderer.setSize(window.innerWidth, window.innerHeight);
-	document.body.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
     //Manipulatable Group
     var m_Group;
 
     //Axis
-    const axesHelper = new THREE.AxesHelper( 5 );
-    scene.add( axesHelper );
+    const axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
 
     //Lights
-    const directionalLight = new THREE.DirectionalLight( 0xffffff, 1.0 );
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     scene.add(directionalLight);
 
-    const light = new THREE.AmbientLight( 0x404040 );
-    scene.add( light );
+    const light = new THREE.AmbientLight(0x404040);
+    scene.add(light);
 
     //Camera
     const camera = new THREE.PerspectiveCamera(
-		75,
-		window.innerWidth / window.innerHeight,
-		0.1,
-		1000,
-	);
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000,
+    );
     camera.position.x = -210.41;
     camera.position.y = 1.31;
-	camera.position.z = 0;
+    camera.position.z = 0;
 
     //Mouse Raycaster
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
-    function onPointerMove( event ) {
-        pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-        pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
-
+    function onPointerMove(event) {
+        pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
     }
 
-    window.addEventListener( 'pointermove', onPointerMove );
+    window.addEventListener("pointermove", onPointerMove);
 
     //Controls
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
 
     //Action!!
-	function animate() {
-        raycaster.setFromCamera( pointer, camera );
-        const intersects = raycaster.intersectObjects( scene.children );
+    function animate() {
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(scene.children);
         var label = document.getElementById("label");
-        label.innerHTML = ""
+        label.innerHTML = "";
 
         //Default Tag State
         document.getElementById("tag").style.display = "none";
         if (intersects.length > 0) {
-                document.getElementById("tag").style.display = "flex";
-                var idLabel = document.createElement('p')
-                idLabel.innerText = `ID: ${intersects[0].object.name}`
-                idLabel.style.color = "#007700"
-                label.append(idLabel)
+            document.getElementById("tag").style.display = "flex";
+            var idLabel = document.createElement("p");
+            let positionObjects = intersects.filter(
+                (item) => item.object.cameraPos,
+            );
+
+            if (positionObjects.length > 0) {
+                idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
+                idLabel.style.color = "#007700";
+                label.append(idLabel);
+            }
         }
 
-        
-		requestAnimationFrame(animate);
+        requestAnimationFrame(animate);
         orbitalControls.update();
-		renderer.render(scene, camera);
-	}
-	animate();
+        renderer.render(scene, camera);
+    }
+    animate();
 
-    	//Tag
-        document.addEventListener("mousemove", (e) => {
-            document.getElementById("tag").style.left = `${e.x}px`;
-            document.getElementById("tag").style.top = `${e.y}px`;
-            document.getElementById("tag").style.transform = `translate(${
-                (e.clientX / window.innerWidth) * -100
-            }%, ${(e.clientY / window.innerHeight) * -150}%)`;
-        });
+    //Tag
+    document.addEventListener("mousemove", (e) => {
+        document.getElementById("tag").style.left = `${e.x}px`;
+        document.getElementById("tag").style.top = `${e.y}px`;
+        document.getElementById("tag").style.transform = `translate(${
+            (e.clientX / window.innerWidth) * -100
+        }%, ${(e.clientY / window.innerHeight) * -150}%)`;
+    });
 
+    const fbxFiles = [];
+    const glbFiles = [];
+    const csvGroups = [];
 
     //File Drop
     function handleDrop(event) {
@@ -132,155 +129,257 @@
             const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
             const file = files[0];
             if (entry && file.type != "text/csv") {
-            if (entry.isDirectory) {
-                console.log(file)
-                const reader = entry.createReader();
-                traverseDirectory(reader); // Recursive function for subfolders and FBX files
-            } else {
-                console.error('Please drop a folder containing FBX files.');
-            }
-            } else if (file.type === "text/csv" || file.name.endsWith('.csv')){  
+                if (entry.isDirectory) {
+                    enumerateDirectoryWithManyFiles(entry);
+                } else {
+                    console.error("Please drop a folder containing FBX files.");
+                }
+            } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    processCSVData(e.target.result);
-                }
-                
-                reader.readAsText(files[0])
+                    processCSVData(e.target.result, file.name);
+                };
+                reader.readAsText(files[0]);
             } else {
-            console.error('Dropped item could not be accessed.');
+                console.error("Dropped item could not be accessed.");
             }
         } else {
-            console.error('Please drop only one item.');
+            console.error("Please drop only one item.");
         }
     }
 
-    //Traverse File Tree
-    function traverseDirectory(reader) {
-      reader.readEntries((entries) => {
-        var objectCount = 0
-        console.log(entries);
-        const fbxFiles = [];
-        const glbFiles = [];
-        entries.forEach((entry) => {
-          if (entry.isFile && entry.name.endsWith('.fbx')) {
-            fbxFiles.push(entry);
-            entry.file((file) => {
-                objectCount++
-                const tempCount = objectCount
-                const reader = new FileReader();
-                reader.readAsArrayBuffer(file);
-                reader.onload = (event) => {
-                const arrayBuffer = event.target.result;
-                    const loader = new FBXLoader();
-                    const item = loader.parse(arrayBuffer, '')
-                    scene.add(item)
-                    
-                };
-                console.log("fbx")
-            });
-            
-          } else if (entry.isFile && entry.name.endsWith('.glb')) {
-            glbFiles.push(entry);
-            entry.file((file) => {
-                objectCount++
-                const tempCount = objectCount
-                const reader = new FileReader();
-                reader.readAsArrayBuffer(file);
-                reader.onload = (event) => {
-                const arrayBuffer = event.target.result;
-                    // loadGLBFile(arrayBuffer)
-                    const loader = new GLTFLoader();
-                    const item = loader.parse(arrayBuffer, '')
-                    scene.add(item)
+    async function enumerateDirectoryWithManyFiles(directoryEntry) {
+        //Workaround because readEntries only reads 100 files
+        let reader = directoryEntry.createReader();
+        let resultEntries = [];
 
-                };
-                console.log("glb")
-            });
-            
-          } else if (entry.isDirectory) {
-            const subReader = entry.createReader();
-            traverseDirectory(subReader); // Recursive call
-          }
+        let read = async function () {
+            let entries = await traverseDirectoryAsync(reader);
+            if (entries.length > 0) {
+                resultEntries = resultEntries.concat(entries);
+                await read();
+            }
+        };
+
+        await read();
+        return resultEntries;
+    }
+
+    function getGrandparent(entry) {
+        return new Promise((resolve, reject) => {
+            entry.getParent(
+                (parent) => {
+                    parent.getParent(
+                        (grandparent) => {
+                            resolve(grandparent.name);
+                        },
+                        (error) => {
+                            reject(error);
+                        },
+                    );
+                },
+                (error) => {
+                    reject(error);
+                },
+            );
         });
-
-        // Process the list of FBX files after reading all entries
-        console.log('Found FBX files:', fbxFiles);
-      });
     }
-        const logScene = document.getElementById('log-scene');
-        logScene.addEventListener('click', (e)=>{
-            console.log(scene)
-        })
-        const dropZone = document.getElementById('drop-zone');
-        dropZone.addEventListener('drop', handleDrop);
-        document.body.addEventListener("dragover", (e) => {
-            event.preventDefault();
+    //Traverse File Tree Workaround because readEntries only reads 100 files
+    function traverseDirectoryAsync(reader) {
+        return new Promise((resolve, reject) => {
+            reader.readEntries(
+                (entries) => {
+                    var objectCount = 0;
+
+                    entries.forEach((entry) => {
+                        if (entry.isFile && entry.name.endsWith(".fbx")) {
+                            entry.file((file) => {
+                                objectCount++;
+                                const tempCount = objectCount;
+                                const reader = new FileReader();
+                                reader.readAsArrayBuffer(file);
+                                reader.onload = (event) => {
+                                    const arrayBuffer = event.target.result;
+                                    const loader = new FBXLoader();
+                                    const item = loader.parse(arrayBuffer, "");
+                                    var currentObject;
+                                    getGrandparent(entry)
+                                        .then((grandparentName) => {
+                                            item.unitName = grandparentName;
+                                            item.name = entry.name;
+                                            currentObject = {
+                                                fileName: entry.name,
+                                                unitName: grandparentName,
+                                            };
+                                            fbxFiles.push(currentObject);
+
+                                            const fileUploadEvent =
+                                                new CustomEvent("file-upload", {
+                                                    detail: currentObject,
+                                                });
+                                            window.dispatchEvent(
+                                                fileUploadEvent,
+                                            );
+                                        })
+                                        .catch((error) =>
+                                            console.error(
+                                                "Error fetching grandparent:",
+                                                error,
+                                            ),
+                                        );
+
+                                    scene.add(item);
+                                };
+                            });
+                        } else if (
+                            entry.isFile &&
+                            entry.name.endsWith(".glb")
+                        ) {
+                            glbFiles.push(entry);
+                            entry.file((file) => {
+                                objectCount++;
+                                const tempCount = objectCount;
+                                const reader = new FileReader();
+                                reader.readAsArrayBuffer(file);
+                                reader.onload = (event) => {
+                                    const arrayBuffer = event.target.result;
+                                    const loader = new GLTFLoader();
+                                    const item = loader.parse(arrayBuffer, "");
+                                    item.name = entry.name;
+                                    glbFiles.push(item.name);
+                                    scene.add(item);
+                                };
+                            });
+                        } else if (
+                            entry.isFile &&
+                            entry.name.endsWith(".csv")
+                        ) {
+                            entry.file((file) => {
+                                const reader = new FileReader();
+                                reader.onload = (e) => {
+                                    processCSVData(e.target.result, file.name);
+                                };
+                                reader.readAsText(file);
+                            });
+                        } else if (entry.isDirectory) {
+                            const subReader = entry.createReader();
+                            traverseDirectoryAsync(subReader); // Recursive call
+                        }
+                    });
+                    resolve(entries);
+                },
+                (error) => reject(error),
+            );
         });
-
-        function createSphere(name, position, rotation) {
-            const geometry = new THREE.SphereGeometry(0.5, 32, 16); // Sphere radius set to 1, adjust as needed
-            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
-            const sphere = new THREE.Mesh(geometry, material);
-
-            // Set position
-            sphere.position.set(position.x, position.y, position.z);
-
-            // Set rotation using Euler angles, converting degrees to radians
-            sphere.rotation.set(THREE.MathUtils.degToRad(rotation.x + 180),
-                                THREE.MathUtils.degToRad(rotation.y),
-                                THREE.MathUtils.degToRad(rotation.z));
-
-            sphere.name = name
-
-            return sphere;
-        }
-
-// Function to process CSV data and create spheres
-function processCSVData(csvText) {
-    const lines = csvText.split('\n'); // Split CSV text into lines
-    // Skip the first line if it contains headers, and process the rest
-    
-    const group = new THREE.Group();
-
-    for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].split(',');
-        if (row.length >= 7) {
-            const name = row[0];
-            const position = { x: parseFloat(row[1]), y: parseFloat(row[2]), z: parseFloat(row[3]) };
-            const rotation = { x: parseFloat(row[4]), y: parseFloat(row[5]), z: parseFloat(row[6]) };
-            position.y = position.y * -1;
-            const sphere = createSphere(name, position, rotation);
-            group.add(sphere);
-        }
-
-        scene.add(group)
-        m_Group = group
     }
-}
 
-document.getElementById("x-flip").addEventListener("click", (e) => {
-    m_Group.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0) , THREE.MathUtils.degToRad(180))
-})
+    const logScene = document.getElementById("log-scene");
+    logScene.addEventListener("click", (e) => {
+        console.log(scene);
+    });
+    const dropZone = document.getElementById("drop-zone");
+    dropZone.addEventListener("drop", handleDrop);
+    document.body.addEventListener("dragover", (e) => {
+        event.preventDefault();
+    });
 
-document.getElementById("y-flip").addEventListener("click", (e) => {
-    m_Group.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0) , THREE.MathUtils.degToRad(180))
-})
+    function createSphere(name, position, rotation) {
+        const geometry = new THREE.SphereGeometry(0.5, 32, 16); // Sphere radius set to 1, adjust as needed
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
+        const sphere = new THREE.Mesh(geometry, material);
 
-document.getElementById("z-flip").addEventListener("click", (e) => {
-    m_Group.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1) , THREE.MathUtils.degToRad(180))
-})
+        // Set position
+        sphere.position.set(position.x, position.y, position.z);
 
-document.getElementById("y-up").addEventListener("click", (e) => {
-    m_Group.children.forEach((e) => {
-        const initYPos = e.position.y;
-        e.position.y = -initYPos;
-    })
-})
+        // Set rotation using Euler angles, converting degrees to radians
+        sphere.rotation.set(
+            THREE.MathUtils.degToRad(rotation.x + 180),
+            THREE.MathUtils.degToRad(rotation.y),
+            THREE.MathUtils.degToRad(rotation.z),
+        );
 
+        sphere.name = name;
+
+        return sphere;
+    }
+
+    // Function to process CSV data and create spheres
+    function processCSVData(csvText, name?) {
+        const lines = csvText.split("\n"); // Split CSV text into lines
+        // Skip the first line if it contains headers, and process the rest
+
+        const group = new THREE.Group();
+
+        for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(",");
+            if (row.length >= 7) {
+                const name = row[0];
+                const position = {
+                    x: parseFloat(row[1]),
+                    y: parseFloat(row[2]),
+                    z: parseFloat(row[3]),
+                };
+                const rotation = {
+                    x: parseFloat(row[4]),
+                    y: parseFloat(row[5]),
+                    z: parseFloat(row[6]),
+                };
+                position.y = position.y * -1;
+                const sphere = createSphere(name, position, rotation);
+                sphere.cameraPos = true;
+                
+                group.add(sphere);
+            }
+
+            if(name){
+                group.name = name;
+                group.userData.simplifiedName = name.replace(/\D/g, "");
+            }
+            scene.add(group);
+            m_Group = group;
+        }
+        csvGroups.push(group)
+
+            const csvUploadEvent = new CustomEvent('file-upload-csv', {
+                detail: {
+                    simplifiedName: group.userData.simplifiedName,
+                    name: group.name
+                },
+            })
+            window.dispatchEvent(csvUploadEvent)
+    }
+
+    document.getElementById("x-flip").addEventListener("click", (e) => {
+        m_Group.rotateOnWorldAxis(
+            new THREE.Vector3(1, 0, 0),
+            THREE.MathUtils.degToRad(180),
+        );
+    });
+
+    document.getElementById("y-flip").addEventListener("click", (e) => {
+        m_Group.rotateOnWorldAxis(
+            new THREE.Vector3(0, 1, 0),
+            THREE.MathUtils.degToRad(180),
+        );
+    });
+
+    document.getElementById("z-flip").addEventListener("click", (e) => {
+        m_Group.rotateOnWorldAxis(
+            new THREE.Vector3(0, 0, 1),
+            THREE.MathUtils.degToRad(180),
+        );
+    });
+
+    document.getElementById("y-up").addEventListener("click", (e) => {
+        m_Group.children.forEach((e) => {
+            const initYPos = e.position.y;
+            e.position.y = -initYPos;
+        });
+    });
 </script>
 
 <style>
-    html{
+    html {
         min-height: 100vh;
         width: 100%;
         margin: 0%;
@@ -297,35 +396,36 @@ document.getElementById("y-up").addEventListener("click", (e) => {
         margin: 0%;
     }
 
-    .ui-area{
+    .ui-area {
         position: fixed;
         height: min-content;
     }
 
-    #tag, #tag *{
-		display: flex;
-		position: fixed;
-		background-color: #cccccccc;
-		padding: 0em 0.5em;
-		text-align: left;
-		line-height: 0.5em;
-		font-family: monospace;
-		font-weight: 100;
-		justify-content: center;
-		min-width: max-content;
-		pointer-events: none;
-		/* transform: translate(-50%); */
-		/* min-height: 50px; */
-		height: fit-content;
-		border-radius: 6px;
-		/* font-family: sans-serif; */
-	}
-	#label {
-		display: flex;
-		text-align: center;
-		justify-content: center;
-		margin: 0%;
-		height: 100%;
-		font-family: sans-serif;
-	}
+    #tag,
+    #tag * {
+        display: flex;
+        position: fixed;
+        background-color: #cccccccc;
+        padding: 0em 0.5em;
+        text-align: left;
+        line-height: 0.5em;
+        font-family: monospace;
+        font-weight: 100;
+        justify-content: center;
+        min-width: max-content;
+        pointer-events: none;
+        /* transform: translate(-50%); */
+        /* min-height: 50px; */
+        height: fit-content;
+        border-radius: 6px;
+        /* font-family: sans-serif; */
+    }
+    #label {
+        display: flex;
+        text-align: center;
+        justify-content: center;
+        margin: 0%;
+        height: 100%;
+        font-family: sans-serif;
+    }
 </style>

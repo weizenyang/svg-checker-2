@@ -2,34 +2,32 @@ import sharp from 'sharp'
 import fs from 'fs'
 
 async function mergeImages(image1, image2, outputFile) {
-try {
-    const metadata1 = await sharp(image1).metadata();
-    const metadata2 = await sharp(image2).metadata();
+  try {
+      const metadata1 = await sharp(image1).metadata();
+      const metadata2 = await sharp(image2).metadata();
 
-    const width = Math.max(metadata1.width, metadata2.width);
-    const height = metadata1.height;
+      const width = Math.max(metadata1.width, metadata2.width);
+      const height = metadata1.height;
 
-    const mergedImage = await sharp({
-    create: {
-        width,
-        height,
-        channels: metadata1.channels,
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-    },
-    })
-    .composite([
-        { input: image1, top: 0, left: 0},
-        { input: image2, top: 0, left: 0, blend: 'over' }, // Add 'blend: 'over''
-      ])
-    .toFile(outputFile);
+      const mergedImage = await sharp({
+      create: {
+          width,
+          height,
+          channels: metadata1.channels,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+      })
+      .composite([
+          { input: image1, top: 0, left: 0},
+          { input: image2, top: 0, left: 0, blend: 'over' }, // Add 'blend: 'over''
+        ])
+      .toFile(outputFile);
 
-    console.log(`Merged images into: ${outputFile}`);
-} catch (error) {
-    console.error('Error merging images:', error);
+      console.log(`Merged images into: ${outputFile}`);
+  } catch (error) {
+      console.error('Error merging images:', error);
+  }
 }
-}
-
-
 
 // Replace with your image paths and desired output filename
 const image1Path = 'path/to/image1.jpg';
@@ -76,14 +74,14 @@ function getCharacterMatchPercentage(string1, string2) {
   var matchingDimensionNames = [];
 
   //Standard Dimensions
-  const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard Beige Background Dimensions/4k"
-  const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Standard/4096"
-  const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard/Standard Beige Background Doorway/4k"
+  // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard Beige Background Dimensions/4k"
+  // const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Standard/4096"
+  // const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard/Standard Beige Background Doorway/4k"
   
   // //Townhouse Dimensions
-  // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Dimensions"
-  // const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Townhouse"
-  // const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse/Townhouse Beige Background Doorway"
+  const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Dimensions"
+  const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Townhouse"
+  const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse/Townhouse Beige Background Doorway"
 
   //Townhouse Car
   // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Cars"
@@ -117,8 +115,6 @@ function getCharacterMatchPercentage(string1, string2) {
         })
     }
 
-
-
     for(let i = 0; i < baseAssetNames.length; i++){
         const outputFilePath = outputFolderPath+ "/" + baseAssetNames[i].split(".")[0] + "." + baseAssetNames[i].split(".")[1] 
         const dimensionsFilePath = dimensionsFolderPath + "/" + matchingDimensionNames[i] 
@@ -126,9 +122,6 @@ function getCharacterMatchPercentage(string1, string2) {
         mergeImages(baseFilePath, dimensionsFilePath, outputFilePath)
         console.log(baseAssetNames[i] + " " + matchingDimensionNames[i])
     }
-
-
-
 
 // const percentageMatch = getCharacterMatchPercentage(string1, string2);
 

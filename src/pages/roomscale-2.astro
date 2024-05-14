@@ -148,8 +148,8 @@
                 const reader = new FileReader();
                 reader.readAsArrayBuffer(file);
                 reader.onload = (event) => {
-                const arrayBuffer = event.target.result;
-                createRenderer(`item-${tempCount}`, fileFormat.FBX, arrayBuffer)
+                    const arrayBuffer = event.target.result;
+                    createRenderer(`item-${tempCount}`, fileFormat.FBX, arrayBuffer)
                 };
                 console.log("fbx")
             });
@@ -273,67 +273,6 @@
             }
 
             animate()
-
-            document.getElementById('svg-container').addEventListener("mouseover", (e) => {
-
-if (
-    e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
-    e.srcElement.nodeName.toLowerCase() == "svg" ||
-    e.srcElement.parentNode.nodeName.toLowerCase() == "g" ||
-    !e.srcElement.tagName == "image"
-) {
-
-    if (currentSelected != null) {
-        currentSelected.classList.remove("hovered");
-        if (!currentSelected.classList.contains("svg-tool-selected")) {
-            currentSelected.style.fill = "";
-        } else {
-            currentSelected.style.fill = "#ff0000";
-        }
-    }
-    document.getElementById("tag").style.display = "flex";
-    document.getElementById("label").innerHTML = "";
-    var label = document.createElement('div')
-    if(e.srcElement.id){
-        var idLabel = document.createElement('p')
-        idLabel.innerText = `ID: ${e.srcElement.id}`
-        idLabel.style.color = "#007700"
-        label.appendChild(idLabel)
-    }
-
-    if(e.srcElement.getAttribute('class')){
-        var classLabel = document.createElement('p')
-        var tempClassList = Object.assign({}, e.srcElement.classList);
-        tempClassList = Object.keys(tempClassList).filter(item => tempClassList[item] !== "svg-tool-selected");
-        if(tempClassList.length > 0){
-            var tempString = "";
-            tempClassList.forEach(classname => {
-                if(tempString == ""){
-                    tempString = classname
-                } else {
-                    tempString += " " + classname;
-                }
-            });
-            classLabel.innerText = `Class: ${tempClassList}`
-        }
-        
-        label.appendChild(classLabel)
-    }
-    
-    
-    document.getElementById("label").append(label)
-    currentSelected = e.srcElement;
-    e.srcElement.classList.add("hovered");
-} else {
-    document.getElementById("tag").style.display = "none";
-    mouseInContainer = false;
-    // console.log(e.srcElement.parentNode.nodeName);
-}
-
-document.querySelectorAll(".hovered").forEach((e) => {
-    e.style.fill = "#ff000066";
-});
-});
 
 </script>
 
