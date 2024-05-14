@@ -117,6 +117,7 @@ import ObjectList from "../components/object-list.tsx";
     const fbxFiles = [];
     const glbFiles = [];
     const csvGroups = [];
+    const simplifiedNamesId = [];
 
     //File Drop
     function handleDrop(event) {
@@ -211,6 +212,7 @@ import ObjectList from "../components/object-list.tsx";
                                                 fileName: entry.name,
                                                 unitName: grandparentName,
                                             };
+                                            simplifiedNamesId.push({id: item.id, simplifiedName: grandparentName})
                                             fbxFiles.push(currentObject);
 
                                             const fileUploadEvent =
@@ -246,6 +248,7 @@ import ObjectList from "../components/object-list.tsx";
                                     const loader = new GLTFLoader();
                                     const item = loader.parse(arrayBuffer, "");
                                     item.name = entry.name;
+                                    simplifiedNamesId.push({id: item.id, simplifiedName: entry.name.replace(/\D/g, "")})
                                     glbFiles.push(item.name);
                                     scene.add(item);
                                 };
@@ -376,6 +379,15 @@ import ObjectList from "../components/object-list.tsx";
             e.position.y = -initYPos;
         });
     });
+
+    window.addEventListener('object-switch', (e) => {
+        simplifiedNamesId.forEach((e) => {
+            scene.getObjectById(e.id).visible = false;
+        })
+        const object = simplifiedNamesId.find(x => x.simplifiedName === e.detail)
+        scene.getObjectById(object.id).visible = true;
+        console.log(scene.getObjectById(object.id))
+    })
 </script>
 
 <style>

@@ -25,18 +25,21 @@ const ObjectList: React.FC<ObjectListProps> = (props) => {
 
     return () => {
       window.removeEventListener('file-upload', handleFileUpload as EventListener);
+      window.removeEventListener('file-upload-csv', handleCSVFileUpload as EventListener);
     };
   }, []); // Empty dependency array means this effect runs only once on mount
+
+  const switchEvent = (e) => {
+    window.dispatchEvent(new CustomEvent('object-switch', { detail: e }))}
 
   return (
     <ul className="item-list">
     {eventData.map((data, index) => {
         const matchedCsv = csvEventData.find(csvData => csvData.simplifiedName === data.unitName);
         return (
-          <li className="item-list-item" key={`item-${index}`}>
-            <p className="main-text">{data.unitName}</p>
+          <li className="item-list-item" key={`item-${index}`} onClick={() => switchEvent(data.unitName)}>
+            <p className="main-text">{data.unitName} <span className="matched-csv">{matchedCsv ? matchedCsv.name : ""}</span></p>
             <p className="secondary-text">{data.fileName}</p>
-            <p className="matched-csv">{matchedCsv ? matchedCsv.name : "none"}</p>
           </li>
         );
       })}
