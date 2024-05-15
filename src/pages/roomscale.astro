@@ -29,7 +29,6 @@ import ObjectList from "../components/object-list.tsx";
     import { OrbitControls } from "../scripts/three/examples/jsm/controls/OrbitControls.js";
     import { GLTFLoader } from "../scripts/three/examples/jsm/loaders/GLTFLoader.js";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
-    import { FirstPersonControls } from "three/addons/controls/FirstPersonControls.js";
 
     const scene = new THREE.Scene();
 
@@ -89,10 +88,11 @@ import ObjectList from "../components/object-list.tsx";
             document.getElementById("tag").style.display = "flex";
             var idLabel = document.createElement("p");
             let positionObjects = intersects.filter(
-                (item) => item.object.cameraPos,
+                (item) => item.object.cameraPos && item.object.parent.visible
             );
 
             if (positionObjects.length > 0) {
+                console.log(positionObjects[0])
                 idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
                 idLabel.style.color = "#007700";
                 label.append(idLabel);
@@ -212,7 +212,9 @@ import ObjectList from "../components/object-list.tsx";
                                                 fileName: entry.name,
                                                 unitName: grandparentName,
                                             };
-                                            simplifiedNamesId.push({id: item.id, simplifiedName: grandparentName})
+                                            const csvObject = csvGroups.find(x => x.userData.simplifiedName === grandParent);
+                                            var newObject = {uuid: item.uuid, simplifiedName: grandparentName, csvObject: csvObject ? csvObject : ""}
+                                            simplifiedNamesId.push(newObject)
                                             fbxFiles.push(currentObject);
 
                                             const fileUploadEvent =
@@ -248,7 +250,7 @@ import ObjectList from "../components/object-list.tsx";
                                     const loader = new GLTFLoader();
                                     const item = loader.parse(arrayBuffer, "");
                                     item.name = entry.name;
-                                    simplifiedNamesId.push({id: item.id, simplifiedName: entry.name.replace(/\D/g, "")})
+                                    simplifiedNamesId.push({uuid: item.uuid, simplifiedName: entry.name.replace(/\D/g, "")})
                                     glbFiles.push(item.name);
                                     scene.add(item);
                                 };
@@ -306,6 +308,51 @@ import ObjectList from "../components/object-list.tsx";
         return sphere;
     }
 
+    // Function to create a CSV from sphere groups and trigger download
+function createCSVFromSphereGroups(csvGroups) {
+    let csvContent = ""; // CSV header
+
+    csvGroups.forEach(group => {
+        group.children.forEach(child => {
+            if (child instanceof THREE.Mesh) { // Ensure child is a mesh (sphere)
+                const name = child.name;
+                const position = child.position;
+                const rotation = child.rotation;
+                csvContent += `${name},${position.x},${-position.y},${position.z},${rotation.x},${rotation.y},${rotation.z}\n`;
+            }
+        });
+        
+        // Create a downloadable CSV file
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${group.name.split(".")[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+}
+
+function convertFBXtoGLB(position, rotation) {
+    // Assuming FBX is Y-up and GLB is Z-up
+    // Convert position
+    const convertedPosition = {
+        x: position.x,
+        y: position.z,
+        z: -position.y,
+    };
+
+    // Convert rotation (assuming Euler angles)
+    const convertedRotation = {
+        x: rotation.x,
+        y: rotation.z,
+        z: -rotation.y,
+    };
+
+    return { position: convertedPosition, rotation: convertedRotation };
+}
+
     // Function to process CSV data and create spheres
     function processCSVData(csvText, name?) {
         const lines = csvText.split("\n"); // Split CSV text into lines
@@ -327,7 +374,8 @@ import ObjectList from "../components/object-list.tsx";
                     y: parseFloat(row[5]),
                     z: parseFloat(row[6]),
                 };
-                position.y = position.y * -1;
+                // position.y = position.y * -1;
+                // const { position: convertedPosition, rotation: convertedRotation } = convertFBXtoGLB(position, rotation);
                 const sphere = createSphere(name, position, rotation);
                 sphere.cameraPos = true;
                 
@@ -342,6 +390,18 @@ import ObjectList from "../components/object-list.tsx";
             m_Group = group;
         }
         csvGroups.push(group)
+
+        //Update main object references
+        if(simplifiedNamesId.length > 0){
+            simplifiedNamesId.forEach((e) => {
+                if(e.simplifiedName == name.replace(/\D/g, "")){
+                    e.csvObject = group.uuid;
+                } else {
+                    group.remove()
+                }
+            })
+        }
+        
 
             const csvUploadEvent = new CustomEvent('file-upload-csv', {
                 detail: {
@@ -380,14 +440,51 @@ import ObjectList from "../components/object-list.tsx";
         });
     });
 
-    window.addEventListener('object-switch', (e) => {
-        simplifiedNamesId.forEach((e) => {
-            scene.getObjectById(e.id).visible = false;
-        })
-        const object = simplifiedNamesId.find(x => x.simplifiedName === e.detail)
-        scene.getObjectById(object.id).visible = true;
-        console.log(scene.getObjectById(object.id))
+    window.addEventListener('export-csv', (e) => {
+        createCSVFromSphereGroups([m_Group]);
     })
+
+    window.addEventListener('object-switch', (e) => {
+        csvGroups.forEach((e) => {
+            e.visible = false
+        })
+        fbxFiles.forEach((e) => {
+            e.visible = false
+        })
+        simplifiedNamesId.forEach((i) => {
+            if(i.simplifiedName == e.detail){
+                console.log(i.csvObject)
+                scene.getObjectByProperty('uuid', i.uuid).visible = true;
+            if(i.csvObject){
+                const csvObj = scene.getObjectByProperty('uuid', i.csvObject);
+                csvObj.visible = true;
+                csvObj.children.forEach((j) => {
+                    j.visible = true
+                })
+                m_Group = scene.getObjectByProperty('uuid', i.csvObject);
+            }
+
+            } else {
+                
+                    scene.getObjectByProperty('uuid', i.uuid).visible = false;
+                    if(i.csvObject){
+                        const csvObj = scene.getObjectByProperty('uuid', i.csvObject);
+                        csvObj.visible = false;
+                        csvObj.children.forEach((j) => {
+                            j.visible = false;
+                        })
+                    }
+            } 
+        })
+    })
+
+    window.addEventListener( 'resize', onWindowResize, false );
+
+    function onWindowResize(){
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
 </script>
 
 <style>

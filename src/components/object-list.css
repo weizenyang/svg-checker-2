@@ -1,3 +1,5 @@
+
+
 .item-list{
     list-style: none;
     padding: 0.5em;
@@ -9,6 +11,7 @@
 }
 
 .item-list-item{
+    all: unset;
     display: flex;
     flex-direction: column;
     list-style: none;
@@ -16,14 +19,34 @@
     background-color: #ccc;
     border-radius: 5px;
     min-width: 100px;
-    max-width: 160px;
+    max-width: 120px;
     width: min-content;
     min-height: 20px;
     text-wrap: wrap;
+    border-width: 2px;
+    cursor: pointer;
+    
+}
+
+.item-list-item *{
+    pointer-events: none;
+}
+
+.item-list-item-wrapper{
+    all: unset;
+    display: flex;
     margin-bottom: 10px;
 }
 
+.selected{
+    background-color: #888;
+}
+
 .item-list-item:hover{
+    background-color: #aaa;
+}
+
+.item-list-item:focus{
     background-color: #888;
 }
 
@@ -55,4 +78,25 @@
     margin: auto;
     margin-right: 0px;
     border-radius: 5px;
+}
+
+.export-csv {
+    display: none;
+    visibility: hidden;
+    font-family: sans-serif;
+}
+
+
+.selected + .export-csv {
+    background-color: #00aa77;
+    display: flex;
+    font-size: small;
+    padding: 0.2em;
+    margin-left: 0.2em;
+    cursor: pointer;
+    border-radius: 5px;
+    align-items: center;
+    justify-content: center;
+    visibility: visible;
+    
 }
