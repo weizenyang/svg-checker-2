@@ -10,14 +10,23 @@ import ObjectList from "../components/object-list.tsx";
         <title>Three.js - Three Sides of a Cube</title>
     </head>
     <body id="drop-zone">
-        <div class="ui-area">
+        <div class="ui-area" id="ui-area">
             <button id="log-scene"> Log Scene </button>
             <button id="x-flip"> X-Axis </button>
             <button id="y-flip"> Y-Axis </button>
             <button id="z-flip"> Z-Axis </button>
             <button id="y-up"> Y-Up Toggle </button>
+            <input type="checkbox" id="center-csv" name="center-csv">
+            <label for="center-csv">Center</label>
+            <input type="range" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
+            <label for="scale-slider">Scale</label>
             <ObjectList client:load />
+            <button id="export-all-fbx">Export All To GLB</button>
         </div>
+
+        <div class="notification-panel" id="notification-panel">
+        </div>
+        
         <div id="tag">
             <h3 id="label">-</h3>
         </div>
@@ -29,6 +38,7 @@ import ObjectList from "../components/object-list.tsx";
     import { OrbitControls } from "../scripts/three/examples/jsm/controls/OrbitControls.js";
     import { GLTFLoader } from "../scripts/three/examples/jsm/loaders/GLTFLoader.js";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
+    import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
 
     const scene = new THREE.Scene();
 
@@ -86,7 +96,10 @@ import ObjectList from "../components/object-list.tsx";
         document.getElementById("tag").style.display = "none";
         if (intersects.length > 0) {
             document.getElementById("tag").style.display = "flex";
+            document.getElementById("tag").style.flexDirection = "column";
+            
             var idLabel = document.createElement("p");
+            var detailLabel = document.createElement("p");
             let positionObjects = intersects.filter(
                 (item) => item.object.cameraPos && item.object.parent.visible
             );
@@ -96,6 +109,10 @@ import ObjectList from "../components/object-list.tsx";
                 idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
                 idLabel.style.color = "#007700";
                 label.append(idLabel);
+
+                detailLabel.innerText = `Pos: ${positionObjects[0].object.position.x} ${positionObjects[0].object.position.y} ${positionObjects[0].object.position.z}`;
+                detailLabel.style.color = "#007700";
+                label.append(detailLabel);
             }
         }
 
@@ -278,6 +295,63 @@ import ObjectList from "../components/object-list.tsx";
         });
     }
 
+// Function to export a Three.js object to a GLB file
+function exportToGLB(object, filename) {
+    const exporter = new GLTFExporter();
+    exporter.parse(
+        object,
+        (result) => {
+            let blob;
+            if (result instanceof ArrayBuffer) {
+                blob = new Blob([result], { type: 'application/octet-stream' });
+            } else if (typeof result === 'object') {
+                blob = new Blob([JSON.stringify(result)], { type: 'application/json' });
+            } else {
+                console.error('Unexpected result type:', result);
+                return;
+            }
+
+            saveBlob(blob, filename);
+        },
+        (error) => {
+            console.error('An error occurred during the GLB export', error);
+        },
+        { binary: true } // Options object with binary set to true
+    );
+}
+
+// Function to save the Blob as a file
+function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.style.display = 'none';
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+
+    // Clean up
+    setTimeout(() => {
+        URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+    }, 100);
+}
+
+// Function to export all FBX files in fbxFiles array
+function exportAllFBXFilesToGLB() {
+    fbxFiles.forEach((fbxFile, index) => {
+        const object = scene.getObjectByName(fbxFile.fileName);
+        if (object) {
+            const filename = `${fbxFile.fileName.split('.')[0]}.glb`;
+            exportToGLB(object, filename);
+        }
+    });
+}
+
+// Add an event listener to the export button
+const exportButton = document.getElementById("export-all-fbx");
+exportButton.addEventListener("click", exportAllFBXFilesToGLB);
+
     const logScene = document.getElementById("log-scene");
     logScene.addEventListener("click", (e) => {
         console.log(scene);
@@ -316,9 +390,14 @@ function createCSVFromSphereGroups(csvGroups) {
         group.children.forEach(child => {
             if (child instanceof THREE.Mesh) { // Ensure child is a mesh (sphere)
                 const name = child.name;
-                const position = child.position;
-                const rotation = child.rotation;
-                csvContent += `${name},${position.x},${-position.y},${position.z},${rotation.x},${rotation.y},${rotation.z}\n`;
+                const worldPosition = new THREE.Vector3()
+                const worldQuaternion = new THREE.Quaternion()
+                const worldEuler = new THREE.Euler();
+                const position = child.getWorldPosition(worldPosition);
+                const rotation = child.getWorldQuaternion(worldQuaternion);
+                worldEuler.setFromQuaternion(worldQuaternion);
+                
+                csvContent += `${name},${worldPosition.x},${-worldPosition.y},${worldPosition.z},${worldEuler.x},${worldEuler.y},${worldEuler.z}\n`;
             }
         });
         
@@ -332,6 +411,72 @@ function createCSVFromSphereGroups(csvGroups) {
         a.click();
         document.body.removeChild(a);
     });
+}
+
+//Calculate center of all CSV points
+function calculateGroupCenter(group) {
+    const positions = group.children.map(child => child.position);
+    const totalPositions = positions.length;
+
+    if (totalPositions === 0) return null;
+
+    const sum = positions.reduce((acc, pos) => {
+        acc.x += pos.x;
+        acc.y += pos.y;
+        acc.z += pos.z;
+        return acc;
+    }, { x: 0, y: 0, z: 0 });
+
+    return {
+        x: sum.x / totalPositions,
+        y: sum.y / totalPositions,
+        z: sum.z / totalPositions,
+    };
+}
+
+function translateGroupToOrigin(group) {
+    const center = calculateGroupCenter(group);
+    group.initPosition = new THREE.Vector3(-center.x, -center.y, -center.z)
+    if (!center) return;
+
+    group.position.set(-center.x, -center.y, -center.z);
+}
+
+function alert(type, message){
+    var el = document.createElement('div')
+    el.style.background = "#ffffff88"
+    el.style.padding = "20px"
+    el.style.borderRadius = "15px"
+    el.classList.add('notification')
+    var text = document.createElement('p')
+    if(type == "error"){
+        el.classList.add('alert-error')
+    } else if(type == "notify"){
+        el.classList.add('alert-notify')
+    }
+    text.innerText = message;
+    text.style.margin = "0px"
+    el.appendChild(text);
+    
+    document.getElementById('notification-panel').appendChild(el)
+
+    setTimeout((e) => {
+        el.remove()
+    }, 2000)
+}
+
+// Function to scale each point relative to the center point of the group
+function scaleGroupRelativeToCenter(group, scaleFactor) {
+    
+    m_Group.scale.set(scaleFactor, scaleFactor, scaleFactor)
+    if(!m_Group.initPosition){
+        m_Group.initPosition = new THREE.Vector3(m_Group.position.x, m_Group.position.y, m_Group.position.z)
+    }
+    m_Group.position.set(m_Group.initPosition.x * scaleFactor, m_Group.initPosition.y * 1, m_Group.initPosition.z * scaleFactor)
+    var center = group.position
+     group.children.forEach(child => {
+         child.scale.set(1 / scaleFactor, 1 / scaleFactor, 1 / scaleFactor)
+     });
 }
 
 function convertFBXtoGLB(position, rotation) {
@@ -352,6 +497,8 @@ function convertFBXtoGLB(position, rotation) {
 
     return { position: convertedPosition, rotation: convertedRotation };
 }
+
+
 
     // Function to process CSV data and create spheres
     function processCSVData(csvText, name?) {
@@ -412,6 +559,12 @@ function convertFBXtoGLB(position, rotation) {
             window.dispatchEvent(csvUploadEvent)
     }
 
+    document.getElementById("ui-area").addEventListener("click", (e) => {
+        if(!m_Group){
+            alert('error', 'Please Import some CSV files to use these features')
+        }
+    });
+
     document.getElementById("x-flip").addEventListener("click", (e) => {
         m_Group.rotateOnWorldAxis(
             new THREE.Vector3(1, 0, 0),
@@ -438,6 +591,21 @@ function convertFBXtoGLB(position, rotation) {
             const initYPos = e.position.y;
             e.position.y = -initYPos;
         });
+    });
+
+    document.getElementById("center-csv").addEventListener("change", (e) => {
+        if(e.target.checked){
+            calculateGroupCenter(m_Group)
+            translateGroupToOrigin(m_Group)
+            alert('notify', 'csv-centered')
+        } else {
+            m_Group.position.set(0, 0, 0)
+            alert('notify', 'csv-centered')
+        }
+    });
+
+    document.getElementById("scale-slider").addEventListener("input", (e) => {
+        scaleGroupRelativeToCenter(m_Group, e.target.value)
     });
 
     window.addEventListener('export-csv', (e) => {
@@ -508,6 +676,22 @@ function convertFBXtoGLB(position, rotation) {
     .ui-area {
         position: fixed;
         height: min-content;
+    }
+
+    .notification-panel{
+        position: fixed;
+        display: flex;
+        flex-direction: column;
+        right: 0%;
+        width: 250px;
+        grid-column: auto;
+        gap: 10px;
+    }
+
+    .notification{
+        padding: 0.5em;
+        background-color: azure;
+
     }
 
     #tag,

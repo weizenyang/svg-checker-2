@@ -1002,11 +1002,12 @@
 
 	document.getElementById('add-point').addEventListener('click', (e) => {
 		console.log('adding point')
-		console.log(document.getElementById('item-id').value)
-		console.log(document.getElementById('item-id').value.length)
+		//console.log(document.getElementById('item-id').value)
+		//console.log(document.getElementById('item-id').value.length)
 
 		// const layers = globalSvgContainer.querySelector('svg').querySelectorAll('g')
 		// Get all layers in the SVG
+		svg = document.getElementById("svg");
 		const layers = Array.from(svg.children);
 
 		// Find the layer with the most circle elements
@@ -1027,14 +1028,54 @@
 			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
 			circle.setAttribute('cx', '10')
 			circle.setAttribute('cy', '10')
-			circle.setAttribute('r', '30')
+			circle.setAttribute('r', '5')
 			circle.setAttribute('id', document.getElementById('item-id').value)
 			if(layerWithMostCircles){
 				layerWithMostCircles.appendChild(circle)
 				console.log(layerWithMostCircles)
 			} else {
-				globalSvgContainer.querySelector('svg').querySelector('g').appendChild(circle)
-				console.log(globalSvgContainer.querySelector('svg').querySelector('g'))
+				try{
+					if(globalSvgContainer.querySelector('svg').querySelector('g')){
+						globalSvgContainer.querySelector('svg').querySelector('g').appendChild(circle)
+					}
+				} catch (e) {
+					console.log(e)
+					var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+					svg.id = "svg"
+					svg.setAttribute("width", "2048");
+					svg.setAttribute("height", "2048");
+
+					var imageElement = globalSvgContainer.querySelector('img'); // Adjust the selector as needed to target the correct image element
+
+					// If the image element exists, move it into the <g> element
+					if (imageElement) {
+						// Create a new image element in the SVG namespace
+						var svgImageElement = document.createElementNS("http://www.w3.org/2000/svg", "image");
+						
+						// Set the href attribute to the source of the existing image
+						svgImageElement.setAttributeNS("http://www.w3.org/1999/xlink", "href", imageElement.src);
+						
+						// Set the position and size of the image within the SVG
+						svgImageElement.setAttribute("x", "0");
+						svgImageElement.setAttribute("y", "0");
+						svgImageElement.setAttribute("width", "2048");
+						svgImageElement.setAttribute("height", "2048");
+						
+						// Append the SVG image element to the <g> element
+						svg.appendChild(svgImageElement);
+						
+						// Optionally, remove the original image element from the document
+						imageElement.parentNode.removeChild(imageElement);
+					}
+
+					const gElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
+					gElement.appendChild(circle)
+					svg.appendChild(gElement)
+					globalSvgContainer.appendChild(svg)
+
+				}
+					
+				
 			}
 			
 		} else {

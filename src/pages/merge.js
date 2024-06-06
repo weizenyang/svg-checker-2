@@ -74,14 +74,14 @@ function getCharacterMatchPercentage(string1, string2) {
   var matchingDimensionNames = [];
 
   //Standard Dimensions
-  // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard Beige Background Dimensions/4k"
-  // const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Standard/4096"
-  // const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard/Standard Beige Background Doorway/4k"
+  const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard Beige Background Dimensions/4k"
+  const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Standard/4096"
+  const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Standard/Standard Beige Background Doorway/4k"
   
   // //Townhouse Dimensions
-  const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Dimensions"
-  const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Townhouse"
-  const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse/Townhouse Beige Background Doorway"
+  // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Dimensions"
+  // const dimensionsFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Dimensions/Townhouse"
+  // const baseFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse/Townhouse Beige Background Doorway"
 
   //Townhouse Car
   // const outputFolderPath = "/Users/EdmundWei/Downloads/Premium 8K - Beige/Townhouse Beige Background Cars"
