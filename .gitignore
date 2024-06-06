@@ -21,4 +21,4 @@ pnpm-debug.log*
 .DS_Store
 
 # specific files
-src/pages/merge.js
+src/scripts/merge.js
