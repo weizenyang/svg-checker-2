@@ -16,9 +16,11 @@
     "@types/react": "^18.3.2",
     "@types/react-dom": "^18.3.0",
     "astro": "^3.3.0",
+    "buffer": "^6.0.3",
     "puppeteer": "^21.7.0",
     "react": "^19.0.0-beta",
     "react-dom": "^19.0.0-beta",
+    "tailwind": "^4.0.0",
     "three": "^0.164.1",
     "typescript": "^5.4.5"
   }

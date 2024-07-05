@@ -225,6 +225,13 @@
 				<!-- <button id="export-csv" class="button-style" style="margin-right: 1em"
 					>Export CSV No Count</button
 				> -->
+				<div class="">
+					<input type="checkbox" id="yx-flip" name="yx-flip" value="true">
+					<label for="yx-flip"> Y/X Flip</label>
+				</div>
+
+				
+
 				<button id="export-csv-layer" class="button-style" style="margin-bottom: 10px"
 					>Export CSV <span style="font-size: 12px; padding: 0.2em; color: #333; background-color: #ccc; border-radius: 3px; margin-left: 8px">4096px</span>
 					</button
@@ -626,11 +633,11 @@
 	var clusterId = [];
 	
 	var idFormat = format.none; //SVG ID format
-
 	var mouseDown = false;
 	var globalSvgContainer = document.getElementById('svg-container');
 	var mouseInContainer = false;
 	var tempSelected;
+	var flipYX = false;
 
 	var formattingButtons = document.querySelectorAll(".formatting");
 	formattingButtons.forEach((e) => {
@@ -732,6 +739,11 @@
 			e.style.fill = "#ff000066";
 		});
 	});
+
+	document.getElementById("yx-flip").addEventListener("change", (e) => {
+		flipYX = e.target.checked;
+	})
+
 	// document..getElementById('svg-container').addEventListener("click",(e))
 	document.getElementById('svg-container').addEventListener("mousedown", (e) => {
 		if (
@@ -1235,8 +1247,8 @@
 
                 if (Number(fields[1]) || Number(fields[2])) {
                     circle.setAttribute("id", fields[0]);
-                    circle.setAttribute("cx", Number(fields[1]).toFixed(4));
-                    circle.setAttribute("cy", Number(fields[2]).toFixed(4));
+                    circle.setAttribute("cx", Number(fields[2]).toFixed(4));
+                    circle.setAttribute("cy", Number(fields[1]).toFixed(4));
                     circle.setAttribute("r", "30");
                     g.appendChild(circle);
                 } else {
@@ -1618,8 +1630,8 @@
 				);
 				if(Number(fields[1]) || Number(fields[2])){
 					circle.setAttribute("id", fields[0]);
-					circle.setAttribute("cx", Number(fields[1]).toFixed(4));
-					circle.setAttribute("cy", Number(fields[2]).toFixed(4));
+					circle.setAttribute("cx", Number(fields[2]).toFixed(4));
+					circle.setAttribute("cy", Number(fields[1]).toFixed(4));
 					circle.setAttribute("r", "30");
 					g.appendChild(circle);
 				} else {
@@ -1794,38 +1806,6 @@
 			alert("Import an SVG to start!");
 		}
 	}
-
-	// CSV Conversion
-	function exportCSVId() {
-		var data = clusterId;
-		const file = fileNameGlobal;
-		if (clusterId.length > 0) {
-			// We can create a header row by mapping the object keys
-			var header = Object.keys(data[0])
-				.map((key) => `"${key}"`)
-				.join(",");
-
-			var rows = data.map((obj) =>
-				Object.values(obj)
-					.map((val) => `"${val}"`)
-					.join(","),
-			);
-
-			var csv = [header, ...rows].join("\n");
-			var blob = new Blob([csv], { type: "text/csv" });
-			var link = document.createElement("a");
-			link.href = URL.createObjectURL(blob);
-			link.download =
-				file.replace(/\.[^/.]+$/, "") +
-				"_" +
-				type +
-				"_w_Count" +
-				".csv";
-			link.click();
-		} else {
-			alert("Import an SVG to start!");
-		}
-	}
 	//SVG Conversion
 	function exportSVG() {
 		const file = fileNameGlobal;
@@ -1914,17 +1894,37 @@
 
 			var csv;
 			if (layers.length < 2) {
-				csv = layers
+				if(flipYX){
+					csv = layers
+					.flatMap((layer) =>
+						layer.children.map(
+							(child) => `${child.id},${child.y},${child.x}`,
+						),
+					)
+					.join("\n");
+				} else {
+					csv = layers
 					.flatMap((layer) =>
 						layer.children.map(
 							(child) => `${child.id},${child.x},${child.y}`,
 						),
 					)
 					.join("\n");
+				}
 
-				console.log(csv);
+
 			} else {
-				csv = layers
+				if(flipYX){
+					csv = layers
+					.flatMap((layer) =>
+						layer.children.map(
+							(child) =>
+								`${layer.id} ${child.id},${child.y},${child.x}`,
+						),
+					)
+					.join("\n");
+				} else {
+					csv = layers
 					.flatMap((layer) =>
 						layer.children.map(
 							(child) =>
@@ -1932,8 +1932,8 @@
 						),
 					)
 					.join("\n");
+				}
 
-				console.log(csv);
 			}
 
 			const file = fileNameGlobal;
@@ -1988,17 +1988,37 @@
 
 			var csv;
 			if (layers.length < 2) {
-				csv = layers
+				if(flipYX){
+					csv = layers
+					.flatMap((layer) =>
+						layer.children.map(
+							(child) => `${child.id},${child.y},${child.x}`,
+						),
+					)
+					.join("\n");
+				} else {
+					csv = layers
 					.flatMap((layer) =>
 						layer.children.map(
 							(child) => `${child.id},${child.x},${child.y}`,
 						),
 					)
 					.join("\n");
+				}
 
-				console.log(csv);
+
 			} else {
-				csv = layers
+				if(flipYX){
+					csv = layers
+					.flatMap((layer) =>
+						layer.children.map(
+							(child) =>
+								`${layer.id} ${child.id},${child.y},${child.x}`,
+						),
+					)
+					.join("\n");
+				} else {
+					csv = layers
 					.flatMap((layer) =>
 						layer.children.map(
 							(child) =>
@@ -2006,9 +2026,11 @@
 						),
 					)
 					.join("\n");
+				}
 
-				console.log(csv);
 			}
+
+			console.log(csv);
 
 			const file = fileNameGlobal;
 			var blob = new Blob([csv], { type: "text/csv" });

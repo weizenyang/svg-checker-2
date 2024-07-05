@@ -39,10 +39,17 @@ import ObjectList from "../components/object-list.tsx";
     import { GLTFLoader } from "../scripts/three/examples/jsm/loaders/GLTFLoader.js";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
+    
 
     const scene = new THREE.Scene();
+    var imageArray = []
+    var VRRef = []
+    var VRSpheres = []
+    var objects = []
+    var markers = []
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.autoClear=false;
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
@@ -80,13 +87,115 @@ import ObjectList from "../components/object-list.tsx";
         pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
     }
 
+    function showWireframe(scene, boolean) {
+        scene.traverse((object) => {
+            if (object.isMesh && object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach((material) => {
+                        material.wireframe = boolean;
+                        material.needsUpdate = true;
+                    });
+                } else {
+                    object.material.wireframe = boolean;
+                    object.material.needsUpdate = true;
+                }
+            }
+        });
+    }
+
+    function moveTo(event) {
+        const intersects = raycaster.intersectObjects(scene.children);
+        let objectPosition = intersects.filter(
+                (item) => item.object.cameraPos && item.object.parent.visible
+            );
+        let spheresSpawned = VRRef.map((e) => e.uuid)
+        console.log(spheresSpawned)
+        if(!spheresSpawned.includes(objectPosition[0].object.uuid)){
+            if (intersects.length > 0) {
+            if (objectPosition.length > 0) {
+                camera.position.x = objectPosition[0].object.position.x
+                camera.position.y = objectPosition[0].object.position.y
+                camera.position.z = objectPosition[0].object.position.z
+                console.log(objectPosition[0].object.name)
+                // camera.rotation.x = objectPosition[0].object.rotation.x
+                // camera.rotation.y = objectPosition[0].object.rotation.y
+                // camera.rotation.z = objectPosition[0].object.rotation.z
+
+                // Load 360 texture
+                if(imageArray.length > 0){
+                    imageArray.forEach((e) => {
+                        const targetImage = e.name.includes(objectPosition[0].object.name) && !VRRef.includes(objectPosition[0].object.name) ? e.image : null
+                        if (targetImage){
+                            
+                            const textureLoader = new THREE.TextureLoader();
+                            console.log(e.image)
+                            // convert binary data to base64 encoded string
+                            // const base64Image = new Buffer.from(targetImage).toString('base64');
+
+                            // // Get image file extension
+                            // const ext = e.name.split('.').pop();
+
+                            // // complete data URI
+                            // const uri = `data:image/${ext};base64,${base64Image}`;
+                            textureLoader.load(e.image, function(texture) {
+                                console.log("Loading texture:", targetImage);
+                                
+                                // Create geometry and material for the sphere
+                                const geometry = new THREE.SphereGeometry(1, 60, 40);
+                                geometry.scale(-1, 1, 1); // Invert the sphere to view from inside
+                                const material = new THREE.MeshBasicMaterial({ map: texture });
+                                
+                                // Create the sphere mesh
+                                const sphere = new THREE.Mesh(geometry, material);
+                                
+                                // Set the sphere's position to match the object's position
+                                sphere.position.copy(objectPosition[0].object.position);
+                                sphere.rotation.copy(objectPosition[0].object.rotation);
+                                sphere.renderOrder = 100
+                                
+                                
+                                // Add the sphere to the scene
+                                scene.add(sphere);
+                                VRRef.push(objectPosition[0].object.name)
+                                VRSpheres.push(sphere)
+                                console.log(VRRef)
+                                console.log("Sphere added at position:", sphere.position);
+                            });
+                        }
+                    
+
+                    })
+                }
+
+
+                showWireframe(scene, true);
+                VRSpheres.forEach((e) => {
+                    showWireframe(e, false);
+                })
+            }
+            
+
+        } else {
+            showWireframe(scene, false);
+        }
+        }
+
+
+
+    }
+
     window.addEventListener("pointermove", onPointerMove);
+
+    window.addEventListener("click", moveTo);
+
+    
 
     //Controls
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
 
     //Action!!
     function animate() {
+        
         raycaster.setFromCamera(pointer, camera);
         const intersects = raycaster.intersectObjects(scene.children);
         var label = document.getElementById("label");
@@ -117,8 +226,26 @@ import ObjectList from "../components/object-list.tsx";
         }
 
         requestAnimationFrame(animate);
+        renderer.clear();
         orbitalControls.update();
+        VRSpheres.forEach((e) => {
+            
+            renderer.render(e, camera);
+        })
+        renderer.clearDepth();
         renderer.render(scene, camera);
+
+        objects.forEach((e) => {
+            renderer.clearDepth();
+            renderer.render(e, camera);
+        })
+        markers.forEach((e) => {
+            renderer.clearDepth();
+            renderer.render(e, camera);
+        })
+        
+
+
     }
     animate();
 
@@ -142,28 +269,125 @@ import ObjectList from "../components/object-list.tsx";
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
 
+        // for (const item of items) {
+        //         const entry = item.webkitGetAsEntry();
+        //         if (entry.isDirectory) {
+        //             readDirectory(entry);
+        //         } else {
+        //             alert('Please drop a folder.');
+        //         }
+        //     }
+        
+
         // Check if a single item is dropped
         if (items.length === 1) {
             const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
             const file = files[0];
-            if (entry && file.type != "text/csv") {
-                if (entry.isDirectory) {
+            console.log(items)
+            if (entry.isDirectory) {
                     enumerateDirectoryWithManyFiles(entry);
-                } else {
-                    console.error("Please drop a folder containing FBX files.");
-                }
             } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     processCSVData(e.target.result, file.name);
                 };
                 reader.readAsText(files[0]);
+            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const arrayBuffer = event.target.result;
+                    const loader = new GLTFLoader();
+                    loader.parse(arrayBuffer, "", (gltf) => {
+                        applyLitMaterialToGLTF(gltf.scene);
+                        gltf.scene.name = file.name;
+                        objects.push(gltf.scene)
+                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        scene.add(gltf.scene);
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        } else if (files.length === 1) {
+            const file = files[0];
+            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    processCSVData(e.target.result, file.name);
+                };
+                reader.readAsText(files[0]);
+            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const arrayBuffer = event.target.result;
+                    const loader = new GLTFLoader();
+                    loader.parse(arrayBuffer, "", (gltf) => {
+                        applyLitMaterialToGLTF(gltf.scene);
+                        gltf.scene.name = file.name;
+                        objects.push(gltf.scene)
+                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        scene.add(gltf.scene);
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                console.error("Dropped item could not be accessed.");
+            }
+        } else if (files.length > 1) {
+            const file = files[0];
+            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    processCSVData(e.target.result, file.name);
+                };
+                reader.readAsText(files[0]);
+            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const arrayBuffer = event.target.result;
+                    const loader = new GLTFLoader();
+                    loader.parse(arrayBuffer, "", (gltf) => {
+                        applyLitMaterialToGLTF(gltf.scene);
+                        gltf.scene.name = file.name;
+                        objects.push(gltf.scene)
+                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        scene.add(gltf.scene);
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.type === "image/jpg" || file.name.endsWith(".jpg")) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const arrayBuffer = event.target.result;
+                    const loader = new GLTFLoader();
+                    loader.parse(arrayBuffer, "", (gltf) => {
+                        applyLitMaterialToGLTF(gltf.scene);
+                        gltf.scene.name = file.name;
+                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        scene.add(gltf.scene);
+                    });
+                };
+                reader.readAsDataURL(file);
             } else {
                 console.error("Dropped item could not be accessed.");
             }
         } else {
-            console.error("Please drop only one item.");
+            // console.log(items)
+            // console.error("Please drop only one item.");
         }
+    }
+
+    function applyLitMaterialToGLTF(gltfScene) {
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x00ff00, // Set your desired color
+            wireframe: false, // Default to wireframe off
+        });
+
+        gltfScene.traverse((child) => {
+            if (child.isMesh) {
+                child.material = material;
+                child.material.wireframe = false; // Ensure wireframe is initially false
+            }
+        });
     }
 
     async function enumerateDirectoryWithManyFiles(directoryEntry) {
@@ -208,7 +432,6 @@ import ObjectList from "../components/object-list.tsx";
             reader.readEntries(
                 (entries) => {
                     var objectCount = 0;
-                    console.log(entries)
 
                     entries.forEach((entry) => {
                         if (entry.isFile && entry.name.endsWith(".fbx")) {
@@ -283,6 +506,17 @@ import ObjectList from "../components/object-list.tsx";
                                     processCSVData(e.target.result, file.name);
                                 };
                                 reader.readAsText(file);
+                            });
+                        } else if (
+                            entry.isFile &&
+                            entry.name.endsWith(".jpg")
+                        ) {
+                            entry.file((file) => {
+                                const reader = new FileReader();
+                                reader.onload = (e) => {
+                                    processVRImage(e.target.result, file.name);
+                                };
+                                reader.readAsDataURL(file);
                             });
                         } else if (entry.isDirectory) {
                             const subReader = entry.createReader();
@@ -373,14 +607,35 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
         // Set rotation using Euler angles, converting degrees to radians
         sphere.rotation.set(
-            THREE.MathUtils.degToRad(rotation.x + 180),
             THREE.MathUtils.degToRad(rotation.y),
+            THREE.MathUtils.degToRad(rotation.x),
             THREE.MathUtils.degToRad(rotation.z),
         );
 
         sphere.name = name;
 
         return sphere;
+    }
+
+    function createCone(name, position, rotation) {
+        const geometry = new THREE.ConeGeometry(0.5, 1, 32); // Cone with radius 0.5 and height 1
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
+        const cone = new THREE.Mesh(geometry, material);
+
+        // Set position
+        cone.position.set(position.x, position.y, position.z);
+
+        // Set rotation using Euler angles, converting degrees to radians
+        cone.rotation.set(
+            THREE.MathUtils.degToRad(rotation.x),
+            THREE.MathUtils.degToRad(rotation.y),
+            THREE.MathUtils.degToRad(rotation.z),
+        );
+        console.log(cone.rotation)
+        cone.renderOrder = 0
+        cone.name = name;
+        markers.push(cone)
+        return cone;
     }
 
     // Function to create a CSV from sphere groups and trigger download
@@ -522,12 +777,17 @@ function convertFBXtoGLB(position, rotation) {
                     y: parseFloat(row[5]),
                     z: parseFloat(row[6]),
                 };
+                console.log(rotation)
                 // position.y = position.y * -1;
                 // const { position: convertedPosition, rotation: convertedRotation } = convertFBXtoGLB(position, rotation);
-                const sphere = createSphere(name, position, rotation);
-                sphere.cameraPos = true;
+                // const sphere = createSphere(name, position, rotation);
+                // sphere.cameraPos = true;
                 
-                group.add(sphere);
+                // group.add(sphere);
+                const cone = createCone(name, position, rotation);
+                cone.cameraPos = true;
+                
+                group.add(cone);
             }
 
             if(name){
@@ -558,6 +818,11 @@ function convertFBXtoGLB(position, rotation) {
                 },
             })
             window.dispatchEvent(csvUploadEvent)
+    }
+
+    function processVRImage(data, name?) {
+        const thisImage = {name: name, image: data}
+        imageArray.push(thisImage)
     }
 
     document.getElementById("ui-area").addEventListener("click", (e) => {
