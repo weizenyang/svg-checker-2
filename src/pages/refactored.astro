@@ -100,7 +100,7 @@
 						</div>
 					</div>
 
-					<div class="sub-item" style="display: flex; flex-direction: row; padding: 0px; margin-bottom: 10px">
+					<!-- <div class="sub-item" style="display: flex; flex-direction: row; padding: 0px; margin-bottom: 10px">
 						<input
 							type="text"
 							id="myClasses"
@@ -113,6 +113,15 @@
 						<button id="remove"
 							style="padding: 0.3em 0.5em; border-radius: 0px;">Isolate Item</button
 						>
+					</div> -->
+
+					<div class="sub-item hidden" id="show-floors" style="display: flex; flex-direction: column; margin-bottom: 10px;">
+						<p style="padding: 0 0px 10px 0em; margin: 0px;">Floors:</p>
+						<!-- <div>
+							<input type="checkbox" id="floor-1" checked>
+							<label>Floor 1</label>
+						</div> -->
+
 					</div>
 
 					<div class="sub-item" style="display: flex; flex-direction: column; margin-bottom: 10px;">
@@ -574,6 +583,10 @@
 		margin-top: 0px;
 	}
 
+	.hidden{
+		display: none !important;
+	}
+
 	#tag, #tag *{
 		display: flex;
 		position: fixed;
@@ -715,6 +728,8 @@
 	let anchorPoint = { x: 0, y: 0 };
 	let typing = false;
 
+	let globalFloors = []
+
 
 	//Tutorial
 	const dialog = document.querySelector("dialog");
@@ -825,6 +840,13 @@
 				}
 				
 				label.appendChild(classLabel)
+			}
+
+			if(e.target.getAttribute('data-floor')){
+				var floorLabel = document.createElement('p')
+				floorLabel.innerText = `Floor: ${e.srcElement.getAttribute('data-floor')}`
+				floorLabel.style.color = "#007700"
+				label.appendChild(floorLabel)
 			}
 			
 			
@@ -1320,11 +1342,90 @@ function scaleElement(element, scaleFactor, anchor) {
 		
 	})
 
+	function spawnCircle(id, cx, cy, data){
+		const g = globalSvgContainer.querySelector('g')
+		const circle = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle"
+        );
+		circle.setAttribute("id", id);
+        circle.setAttribute("cx", cx);
+        circle.setAttribute("cy", cy);
+        circle.setAttribute("r", "30");
+		data.forEach((e) => {
+			circle.setAttribute(e.field, e.value)
+		})
+        g.appendChild(circle);
 
+		return circle
+	}
+
+	const scaleBoundingBoxToFit = (svgElement) => {
+        const circles = svgElement.querySelectorAll('circle');
+        if (circles.length === 0) return;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+        circles.forEach(circle => {
+            const cx = parseFloat(circle.getAttribute('cx'));
+            const cy = parseFloat(circle.getAttribute('cy'));
+            const r = parseFloat(circle.getAttribute('r'));
+
+            if (cx - r < minX) minX = cx - r;
+            if (cx + r > maxX) maxX = cx + r;
+            if (cy - r < minY) minY = cy - r;
+            if (cy + r > maxY) maxY = cy + r;
+        });
+
+        const bboxWidth = maxX - minX;
+        const bboxHeight = maxY - minY;
+
+        const viewBox = svgElement.viewBox.baseVal;
+        const svgWidth = viewBox.width;
+        const svgHeight = viewBox.height;
+
+        const margin = 0.2; // 1/5 margin
+
+        const maxAllowedWidth = svgWidth * (1 - margin);
+        const maxAllowedHeight = svgHeight * (1 - margin);
+
+        const widthScale = maxAllowedWidth / bboxWidth;
+        const heightScale = maxAllowedHeight / bboxHeight;
+
+        const scale = Math.min(widthScale, heightScale, 1); // Scale down if necessary
+
+        // Calculate the offset to center the scaled bounding box
+        const offsetX = (svgWidth - bboxWidth * scale) / 2 - minX * scale;
+        const offsetY = (svgHeight - bboxHeight * scale) / 2 - minY * scale;
+
+        // Apply scaling and translation to each circle
+        circles.forEach(circle => {
+            const cx = parseFloat(circle.getAttribute('cx'));
+            const cy = parseFloat(circle.getAttribute('cy'));
+
+            const newCx = cx * scale + offsetX;
+            const newCy = cy * scale + offsetY;
+
+            circle.setAttribute('cx', newCx.toFixed(4));
+            circle.setAttribute('cy', newCy.toFixed(4));
+            circle.setAttribute('r', 30);
+        });
+    };
 
 	function handleFileChange(file) {
     flipped = false;
     var count = 0;
+	globalFloors = []
+	
+	//Refresh show floors section
+	const floorSection = document.getElementById("show-floors")
+	floorSection.querySelectorAll('div').forEach((e) => {
+		e.remove()
+	})
+	if(!floorSection.classList.contains("hidden")){
+		floorSection.classList.add('hidden')
+	}
+
 	if(document.getElementById("showLabelsDiv")){
 		document.getElementById("showLabelsDiv").remove()
 	}
@@ -1472,7 +1573,7 @@ function scaleElement(element, scaleFactor, anchor) {
                     const fields = line.split(",");
 					
                     const [name, x, y, z] = fields;
-					const cleanedName = name.split("_")[1];
+					const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`;
 					scaleToFit = true
 					
                     return `${cleanedName},${-y},${-x}`; // Swap x and y
@@ -1480,7 +1581,7 @@ function scaleElement(element, scaleFactor, anchor) {
 
             }
 			
-			transformedLines
+
 
             const g = document.createElementNS(
                 "http://www.w3.org/2000/svg",
@@ -1538,11 +1639,20 @@ function scaleElement(element, scaleFactor, anchor) {
                 );
 
                 if (Number(fields[1]) || Number(fields[2])) {
-                    circle.setAttribute("id", fields[0]);
-                    circle.setAttribute("cx", Number(fields[2]).toFixed(4));
-                    circle.setAttribute("cy", Number(fields[1]).toFixed(4));
-                    circle.setAttribute("r", "30");
-                    g.appendChild(circle);
+					const floor = fields[0].includes('~') ? fields[0].split("~")[0] : null
+					const name = fields[0].includes('~') ? fields[0].split("~")[1] : fields[0]
+
+					const data = []
+					if(floor){
+						// circle.setAttribute("data-floor", floor)
+						const floorData = {field: "data-floor", value: floor}
+						data.push(floorData)
+						globalFloors.push({"floor" : floor, "circle": spawnCircle(name, Number(fields[2]).toFixed(4), Number(fields[1]).toFixed(4), data)})
+					} else {
+						spawnCircle(name, Number(fields[2]).toFixed(4), Number(fields[1]).toFixed(4), data)
+					}
+					
+
                 } else {
                     console.error(
                         `${
@@ -1552,6 +1662,7 @@ function scaleElement(element, scaleFactor, anchor) {
                 }
             }
 
+			//Add Toggle Label Checkbox
             svgContainer.querySelector("svg").appendChild(g);
 			const showLabelsDiv = document.createElement('div')
 			showLabelsDiv.id = "showLabelsDiv"
@@ -1577,7 +1688,79 @@ function scaleElement(element, scaleFactor, anchor) {
 				}
 			})
 
-			// spawnLabel(g)
+			//Dynamically add Floors section
+			var floorNumbers = []
+			console.log(globalFloors)
+			globalFloors.forEach((e) => {
+				if(!floorNumbers.includes(e.floor)){
+					floorNumbers.push(e.floor)
+				}
+			})
+
+			if(floorNumbers.length > 0){
+				const floorSection = document.getElementById("show-floors")
+				if(floorSection.classList.contains('hidden')){
+					floorSection.classList.remove('hidden')
+				}
+
+				const checkboxesId = []
+
+				floorNumbers.forEach((e) => {
+					const div = document.createElement('div')
+					const checkbox = document.createElement('input')
+					const label = document.createElement('label')
+					
+					label.innerText = `Floor ${e}`
+					label.htmlFor = `floor-${e}-checkbox`
+					checkbox.type = 'checkbox'
+					checkbox.checked = true
+					checkbox.id = `floor-${e}-checkbox`
+
+					checkboxesId.push(`floor-${e}-checkbox`)
+					div.appendChild(checkbox)
+					div.appendChild(label)
+
+					checkbox.addEventListener('change', (e) => {
+						const g = globalSvgContainer.querySelector('g')
+						const selectedFloor = e.target.id.split("-")[1]
+						if(!e.target.checked){
+							globalFloors = globalFloors.filter(i => i.floor !== selectedFloor);
+
+						const allCircles = g.querySelectorAll('circle')
+						const filteredCircles = Array.from(allCircles).filter((e) => 
+							e.getAttribute('data-floor').includes(selectedFloor)
+						)
+						filteredCircles.forEach((e) => {
+							globalFloors.push({floor: e.getAttribute('data-floor'), circle: e})
+						})
+						g.querySelectorAll('circle').forEach((e) => {
+							globalFloors.push({floor: e.getAttribute('data-floor'), circle: e})
+							e.remove()
+						})
+						}
+
+
+						checkboxesId.forEach((i) => {
+							if(document.getElementById(i).checked){
+								const floor = i.split("-")[1]
+								console.log("Floor" + floor)
+								
+								const selectedFloorCircles = globalFloors.filter((e) => e.floor.includes(floor))
+								selectedFloorCircles.forEach((e) => {
+									g.appendChild(e.circle)
+								})
+								console.log(selectedFloorCircles)
+							}
+
+						})
+
+
+					})
+
+					floorSection.appendChild(div)
+				})
+				
+			}
 
             // Scale bounding box to fit within the SVG frame
 			if(scaleToFit){
@@ -2024,6 +2207,10 @@ function scaleElement(element, scaleFactor, anchor) {
 
 		if (e.key == "q") {
 			document.querySelector("#set-unit").click();
+		}
+
+		if (e.key == "Delete") {
+			document.querySelector("#delete-point").click();
 		}
 
 		if (event.key === "ArrowLeft") {
@@ -2654,58 +2841,6 @@ function scaleElement(element, scaleFactor, anchor) {
 		console.log(document.getElementById('showLabelsToggle').checked)
 		document.getElementById('showLabelsToggle').checked = false
 	}
-
-	const scaleBoundingBoxToFit = (svgElement) => {
-        const circles = svgElement.querySelectorAll('circle');
-        if (circles.length === 0) return;
-
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-        circles.forEach(circle => {
-            const cx = parseFloat(circle.getAttribute('cx'));
-            const cy = parseFloat(circle.getAttribute('cy'));
-            const r = parseFloat(circle.getAttribute('r'));
-
-            if (cx - r < minX) minX = cx - r;
-            if (cx + r > maxX) maxX = cx + r;
-            if (cy - r < minY) minY = cy - r;
-            if (cy + r > maxY) maxY = cy + r;
-        });
-
-        const bboxWidth = maxX - minX;
-        const bboxHeight = maxY - minY;
-
-        const viewBox = svgElement.viewBox.baseVal;
-        const svgWidth = viewBox.width;
-        const svgHeight = viewBox.height;
-
-        const margin = 0.2; // 1/5 margin
-
-        const maxAllowedWidth = svgWidth * (1 - margin);
-        const maxAllowedHeight = svgHeight * (1 - margin);
-
-        const widthScale = maxAllowedWidth / bboxWidth;
-        const heightScale = maxAllowedHeight / bboxHeight;
-
-        const scale = Math.min(widthScale, heightScale, 1); // Scale down if necessary
-
-        // Calculate the offset to center the scaled bounding box
-        const offsetX = (svgWidth - bboxWidth * scale) / 2 - minX * scale;
-        const offsetY = (svgHeight - bboxHeight * scale) / 2 - minY * scale;
-
-        // Apply scaling and translation to each circle
-        circles.forEach(circle => {
-            const cx = parseFloat(circle.getAttribute('cx'));
-            const cy = parseFloat(circle.getAttribute('cy'));
-
-            const newCx = cx * scale + offsetX;
-            const newCy = cy * scale + offsetY;
-
-            circle.setAttribute('cx', newCx.toFixed(4));
-            circle.setAttribute('cy', newCy.toFixed(4));
-            circle.setAttribute('r', 30);
-        });
-    };
 
 	function removeData() {
 		const doc = document.querySelector("#svg-container");
