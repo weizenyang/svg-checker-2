@@ -1343,6 +1343,15 @@ function scaleElement(element, scaleFactor, anchor) {
 	})
 
 	function spawnCircle(id, cx, cy, data){
+			//Create g if not created
+			if(globalSvgContainer.querySelector('g') == null){
+				const gInstance = document.createElementNS(
+					"http://www.w3.org/2000/svg",
+					"g"
+				);
+				globalSvgContainer.querySelector('svg').appendChild(gInstance)
+			}
+
 		const g = globalSvgContainer.querySelector('g')
 		const circle = document.createElementNS(
             "http://www.w3.org/2000/svg",
@@ -1356,6 +1365,7 @@ function scaleElement(element, scaleFactor, anchor) {
 			circle.setAttribute(e.field, e.value)
 		})
         g.appendChild(circle);
+		console.log(g)
 
 		return circle
 	}
@@ -1633,10 +1643,6 @@ function scaleElement(element, scaleFactor, anchor) {
 
             for (let i = 0; i < transformedLines.length; i++) {
                 const fields = transformedLines[i].split(",");
-                const circle = document.createElementNS(
-                    "http://www.w3.org/2000/svg",
-                    "circle"
-                );
 
                 if (Number(fields[1]) || Number(fields[2])) {
 					const floor = fields[0].includes('~') ? fields[0].split("~")[0] : null
@@ -1734,7 +1740,6 @@ function scaleElement(element, scaleFactor, anchor) {
 							globalFloors.push({floor: e.getAttribute('data-floor'), circle: e})
 						})
 						g.querySelectorAll('circle').forEach((e) => {
-							globalFloors.push({floor: e.getAttribute('data-floor'), circle: e})
 							e.remove()
 						})
 						}
@@ -2383,9 +2388,9 @@ function scaleElement(element, scaleFactor, anchor) {
 	// 	exportCSV();
 	// });
 
-	document.getElementById("remove").addEventListener("click", (e) => {
-		removeData();
-	});
+	// document.getElementById("remove").addEventListener("click", (e) => {
+	// 	removeData();
+	// });
 
 	// document
 	// 	.getElementById("export-csv-count")
