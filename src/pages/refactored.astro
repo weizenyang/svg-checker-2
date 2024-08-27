@@ -166,29 +166,8 @@
 
 				<section class="container">
 					
-					<!-- <h3>3. Export reformatted files</h3> -->
-					<!-- <button class="button-style">Export 
-						<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="24"
-						height="24"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					  >
-						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
-						<polyline points="7 10 12 15 17 10" stroke-width="2"/>
-						<line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
-					  </svg></button> -->
-
-					  <!-- <label for="export-file-name">File Name: </label> -->
 					<input type="text" placeholder="File Name" class="input-style" id="export-file-name" style="margin-bottom: 10px"/>
-					<!-- <div class="sub-item" style="display: flex; flex-direction: column; position: relative">
 
-						
-					</div> -->
 					<button id="export" class="button-style" style="margin-bottom: 10px"
 					>Export SVG <svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -1493,7 +1472,7 @@ function scaleElement(element, scaleFactor, anchor) {
                     const fields = line.split(",");
 					
                     const [name, x, y, z] = fields;
-					const cleanedName = name.replace(/^0_/, "").split("_")[0];
+					const cleanedName = name.split("_")[1];
 					scaleToFit = true
 					
                     return `${cleanedName},${-y},${-x}`; // Swap x and y
@@ -2730,28 +2709,11 @@ function scaleElement(element, scaleFactor, anchor) {
 
 	function removeData() {
 		const doc = document.querySelector("#svg-container");
-
-		// threeBed.forEach((x) => {
-		//   console.log(x.getAttribute("style"));
-		//   x.setAttribute("class", "cls-8182");
-		// });
-
-		// threeBedClip.setAttribute("class", threeBed.class);
-		// threeBedClip.empty();
-
-		// threeBed.setAttribute("fill", "#bddbe6");
-		// const twoBed = doc.querySelectorAll(".cls-8281").closest("g");
-		// twoBed.setAttribute("fill", "#f2b38c");
-		// const oneBed = doc.querySelectorAll(".cls-7986").closest("g");
-		// oneBed.setAttribute("fill", "#e8acac");
-		// const xml = doc.querySelector("xml").outerHTML;
 		const xml = `<?xml version="1.0" encoding="UTF-8"?>`;
 		const defs = doc.querySelector("defs");
 		const maskParent = document.querySelector("defs");
 		const maskChild = maskParent.children;
 		const maskShape = Array.from(maskChild).map((e) => {
-			// const className = e.classList
-			// console.log(className)
 			const shape = e.children[0];
 			if (shape) {
 				if (shape.nodeName == "polygon" || shape.nodeName == "path") {
@@ -2761,21 +2723,6 @@ function scaleElement(element, scaleFactor, anchor) {
 				}
 			}
 		});
-		// console.log(maskShape);
-
-		// console.log(document.styleSheets[1].cssRules);
-		// var kvPair = Array.from(document.styleSheets[1].cssRules).map((e)=> {
-		// 	// return e.selectorText
-		// 	// return e.style.clipPath
-		// 	if(e.style.clipPath){
-		// 		var str = e.style.clipPath;
-		// 		var regex = /#([\w-]+)/; // \w matches any alphanumeric character
-		// 		var match = regex.exec(str); // exec returns an array of matches
-		// 		var id
-		// 		id = "#" + match[1]; // the first capture group is the ID
-		// 		return {[e.selectorText.replace(/[-.]/g, "")] : id}
-		// 	}
-		// })
 
 		var kvPair = Object.assign(
 			{},
@@ -2837,73 +2784,10 @@ function scaleElement(element, scaleFactor, anchor) {
 		console.log("units");
 		console.log(units);
 
-		// const threeBed = Array.from(doc.querySelectorAll(".cls-8182")).map((e) => {
-		// 			const parentClass = String(e.parentElement.classList[0])
-		// 			console.log(e)
-		// 			const refId = kvPair[parentClass.replace( /[-.]/g, "")]
-		// 			console.log(parentClass)
-		// 			const refEl = doc.querySelector("defs").querySelector(refId)
-		// 			var child
-		// 			if(refEl){
-		// 				child = refEl.children[0]
-		// 				child.classList.remove(child.classList[0])
-		// 				child.classList.add('cls-8182')
-		// 				return child
-		// 			}
-		// 		});
-		// 		console.log(threeBed)
-
-		// 		const twoBed = Array.from(doc.querySelectorAll(".cls-8281")).map((e) => {
-		// 			const parentClass = String(e.parentElement.classList[0])
-		// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
-		// 			console.log(parentClass)
-		// 			const refEl = doc.querySelector("defs").querySelector(refId)
-		// 			var child
-		// 			if(refEl){
-		// 				child = refEl.children[0]
-		// 				child.classList.remove(child.classList[0])
-		// 				child.classList.add('cls-8281')
-		// 				return child
-		// 			}
-		// 		});
-		// 		console.log(threeBed)
-
-		// 		const oneBed = Array.from(doc.querySelectorAll(".cls-7986")).map((e) => {
-		// 			const parentClass = String(e.parentElement.classList[0])
-		// 			const refId = kvPair[parentClass.replace ( /[-.]/g, "")]
-		// 			console.log(parentClass)
-		// 			const refEl = doc.querySelector("defs").querySelector(refId)
-		// 			var child
-		// 			if(refEl){
-		// 				child = refEl.children[0]
-		// 				child.classList.remove(child.classList[0])
-		// 				child.classList.add('cls-7986')
-		// 				return child
-		// 			}
-		// 		});
-		// 		console.log(threeBed)
-		// const style = doc.querySelector("style");
-
-		// parent.setAttribute("id", "Layer_1");
-		// parent.setAttribute("data-name", "Layer 1");
-		// parent.setAttribute("viewBox", "0 0 1684.08 2384.28");
-		// parent.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-		// parent.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-		// defs.append(style);
-
 		const output = document.createElementNS(
 			"http://www.w3.org/2000/svg",
 			"g",
 		);
-		// parent.append(oneBed);
-		// parent.append(twoBed);
-		// threeBed.forEach((e) => {
-		// 	parent.appendChild(e);
-		// })
-
-		// output.append(parent);
-		// parent.prepend(xml);
-		// save the output as a separate SVG file
 
 		var svg = doc.querySelector("svg");
 		console.log(svg);
@@ -2917,31 +2801,10 @@ function scaleElement(element, scaleFactor, anchor) {
 			svg.append(e);
 		});
 
-		// twoBed.forEach((e) => {
-		// 	svg.append(e)
-		// })
 
-		// oneBed.forEach((e) => {
-		// 	svg.append(e)
-		// })
-
-		// maskShape.forEach((e) => {
-		// 	svg.append(e)
-		// })
-		// console.log(doc.querySelector('svg').attributeStyleMap)
-		// svg.appendChild(parent)
 	}
 
-	// 	function getStyle(className) {
-	//     var cssText = "";
-	//     var classes = document.styleSheets[0].rules || document.styleSheets[0].cssRules;
-	//     for (var x = 0; x < classes.length; x++) {
-	//         if (classes[x].selectorText == className) {
-	//             cssText += classes[x].cssText || classes[x].style.cssText;
-	//         }
-	//     }
-	//     return cssText;
-	// }
+
 
 	function getStyleSheet(unique_title) {
 		for (const sheet of document.styleSheets) {
