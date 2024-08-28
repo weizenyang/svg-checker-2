@@ -43,11 +43,11 @@ import ObjectList from "../components/object-list.tsx";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
 
                 // Initialize the GLTFLoader
-                const loader = new GLTFLoader();
+        const loader = new GLTFLoader();
         const dracoLoader = new DRACOLoader();
             // Set the path to the Draco decoder
-            dracoLoader.setDecoderConfig({ type: 'js' });
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/libs/draco/');
+            // dracoLoader.setDecoderConfig({ type: 'js' });
+            dracoLoader.setDecoderPath('/draco/decoder/');
             dracoLoader.preload()
             loader.setDRACOLoader(dracoLoader);
     
@@ -83,7 +83,7 @@ import ObjectList from "../components/object-list.tsx";
         75,
         window.innerWidth / window.innerHeight,
         0.1,
-        1000,
+        5000,
     );
     camera.position.x = -210.41;
     camera.position.y = 1.31;
@@ -99,19 +99,19 @@ import ObjectList from "../components/object-list.tsx";
     }
 
     function showWireframe(scene, boolean) {
-        scene.traverse((object) => {
-            if (object.isMesh && object.material) {
-                if (Array.isArray(object.material)) {
-                    object.material.forEach((material) => {
-                        material.wireframe = boolean;
-                        material.needsUpdate = true;
-                    });
-                } else {
-                    object.material.wireframe = boolean;
-                    object.material.needsUpdate = true;
-                }
-            }
-        });
+        // scene.traverse((object) => {
+        //     if (object.isMesh && object.material) {
+        //         if (Array.isArray(object.material)) {
+        //             object.material.forEach((material) => {
+        //                 material.wireframe = boolean;
+        //                 material.needsUpdate = true;
+        //             });
+        //         } else {
+        //             object.material.wireframe = boolean;
+        //             object.material.needsUpdate = true;
+        //         }
+        //     }
+        // });
     }
 
     function moveTo(event) {
@@ -332,6 +332,7 @@ import ObjectList from "../components/object-list.tsx";
         loader.parse(arrayBuffer, '', (gltf) => {
             applyLitMaterialToGLTF(gltf.scene);
             gltf.scene.name = file.name;
+            gltf.scene.scale.set(100, 100, 100)
             objects.push(gltf.scene);
             simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
             scene.add(gltf.scene);
@@ -354,10 +355,11 @@ import ObjectList from "../components/object-list.tsx";
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const arrayBuffer = event.target.result;
-                    const loader = new GLTFLoader();
+                    // const loader = new GLTFLoader();
                     loader.parse(arrayBuffer, "", (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
+                        gltf.scene.scale.set(100, 100, 100)
                         objects.push(gltf.scene)
                         simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
                         scene.add(gltf.scene);
@@ -409,18 +411,19 @@ import ObjectList from "../components/object-list.tsx";
             // console.log(items)
             // console.error("Please drop only one item.");
         }
+
     }
 
     function applyLitMaterialToGLTF(gltfScene) {
         const material = new THREE.MeshStandardMaterial({
             color: 0x00ff00, // Set your desired color
-            wireframe: false, // Default to wireframe off
+            wireframe: true, // Default to wireframe off
         });
 
         gltfScene.traverse((child) => {
             if (child.isMesh) {
                 child.material = material;
-                child.material.wireframe = false; // Ensure wireframe is initially false
+                child.material.wireframe = true; // Ensure wireframe is initially false
             }
         });
     }
@@ -804,13 +807,13 @@ function convertFBXtoGLB(position, rotation) {
                 const name = row[0];
                 const position = {
                     x: parseFloat(row[1]),
-                    y: parseFloat(row[2]),
-                    z: parseFloat(row[3]),
+                    y: parseFloat(row[3]),
+                    z: -parseFloat(row[2]),
                 };
                 const rotation = {
                     x: parseFloat(row[4]),
-                    y: parseFloat(row[5]),
-                    z: parseFloat(row[6]),
+                    y: parseFloat(row[6]),
+                    z: -parseFloat(row[5]),
                 };
                 console.log(rotation)
                 // position.y = position.y * -1;
