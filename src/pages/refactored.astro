@@ -1343,14 +1343,6 @@ function scaleElement(element, scaleFactor, anchor) {
 	})
 
 	function spawnCircle(id, cx, cy, data){
-			//Create g if not created
-			if(globalSvgContainer.querySelector('g') == null){
-				const gInstance = document.createElementNS(
-					"http://www.w3.org/2000/svg",
-					"g"
-				);
-				globalSvgContainer.querySelector('svg').appendChild(gInstance)
-			}
 
 		const g = globalSvgContainer.querySelector('g')
 		const circle = document.createElementNS(
@@ -1365,7 +1357,6 @@ function scaleElement(element, scaleFactor, anchor) {
 			circle.setAttribute(e.field, e.value)
 		})
         g.appendChild(circle);
-		console.log(g)
 
 		return circle
 	}
@@ -1426,6 +1417,7 @@ function scaleElement(element, scaleFactor, anchor) {
     flipped = false;
     var count = 0;
 	globalFloors = []
+	
 	
 	//Refresh show floors section
 	const floorSection = document.getElementById("show-floors")
@@ -1541,10 +1533,8 @@ function scaleElement(element, scaleFactor, anchor) {
         });
         reader.readAsText(file);
     } else if (
-        file.type === "image/jpeg" ||
-        file.type === "image/png" ||
-        file.type === "image/webp"
-    ) {
+        file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp") {
+
         fileNameGlobal = file.name;
         document.getElementById("export-file-name").value = fileNameGlobal;
         const reader = new FileReader();
@@ -1565,7 +1555,9 @@ function scaleElement(element, scaleFactor, anchor) {
 				e.remove()
 			})
 		}
+
         fileNameGlobal = file.name;
+
         document.getElementById("export-file-name").value = fileNameGlobal;
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -1590,25 +1582,27 @@ function scaleElement(element, scaleFactor, anchor) {
                 });
 
             }
-			
 
-
-            const g = document.createElementNS(
-                "http://www.w3.org/2000/svg",
-                "g"
-            );
+            var gInstance = document.createElementNS("http://www.w3.org/2000/svg", "g");
+			gInstance.setAttribute('id', "g-instance")
             const svgContainer = document.getElementById("svg-container");
-
-            if (svgContainer.querySelector("svg")) {
+			
+            if (svgContainer.querySelector("svg")) { //If SVG already exists
                 svgContainer
                     .querySelector("svg")
                     .querySelectorAll("g")
-                    .forEach((e) => {
-                        if (e.id !== "Reference") {
-                            e.remove();
+                    .forEach((g) => {
+                        if (g.id !== "Reference") {
+                            g.remove();
+							console.log(g)
+							console.log("^ removed")
                         }
                     });
+
+				// gInstance = svgContainer.querySelector("svg").querySelector("g")
+
             } else {
+				// Create new SVG if it's not present
                 const newSVG = document.createElementNS(
                     "http://www.w3.org/2000/svg",
                     "svg"
@@ -1620,7 +1614,7 @@ function scaleElement(element, scaleFactor, anchor) {
                     "xmlns:xlink",
                     "http://www.w3.org/1999/xlink"
                 );
-                newSVG.appendChild(g);
+                newSVG.appendChild(gInstance);
                 svgContainer.appendChild(newSVG);
 
                 if (svgContainer.querySelector("img")) {
@@ -1641,6 +1635,8 @@ function scaleElement(element, scaleFactor, anchor) {
                 }
             }
 
+			svgContainer.querySelector("svg").appendChild(gInstance); //Add g into the svg
+
             for (let i = 0; i < transformedLines.length; i++) {
                 const fields = transformedLines[i].split(",");
 
@@ -1655,7 +1651,7 @@ function scaleElement(element, scaleFactor, anchor) {
 						data.push(floorData)
 						globalFloors.push({"floor" : floor, "circle": spawnCircle(name, Number(fields[2]).toFixed(4), Number(fields[1]).toFixed(4), data)})
 					} else {
-						spawnCircle(name, Number(fields[2]).toFixed(4), Number(fields[1]).toFixed(4), data)
+						console.log(spawnCircle(name, Number(fields[2]).toFixed(4), Number(fields[1]).toFixed(4), data))
 					}
 					
 
@@ -1669,7 +1665,6 @@ function scaleElement(element, scaleFactor, anchor) {
             }
 
 			//Add Toggle Label Checkbox
-            svgContainer.querySelector("svg").appendChild(g);
 			const showLabelsDiv = document.createElement('div')
 			showLabelsDiv.id = "showLabelsDiv"
 			const showLabelsToggle = document.createElement('input')
@@ -1688,20 +1683,27 @@ function scaleElement(element, scaleFactor, anchor) {
 
 			showLabelsToggle.addEventListener('change', (e) => {
 				if(e.target.checked){
-					spawnLabel(g)
+					spawnLabel(gInstance)
 				} else {
 					killLabels()
 				}
 			})
 
+			//Floor section
 			//Dynamically add Floors section
 			var floorNumbers = []
-			console.log(globalFloors)
+			const labelDivInstance = document.getElementById('labelDiv')
+			if(labelDivInstance){
+				labelDivInstance.remove()
+			}
 			globalFloors.forEach((e) => {
 				if(!floorNumbers.includes(e.floor)){
 					floorNumbers.push(e.floor)
 				}
 			})
+
+			console.log(floorNumbers)
+			console.log(globalFloors)
 
 			if(floorNumbers.length > 0){
 				const floorSection = document.getElementById("show-floors")
@@ -2759,6 +2761,7 @@ function scaleElement(element, scaleFactor, anchor) {
 
 	function spawnLabel(group){
 		var circles = [];
+		console.log("Group")
 		console.log(group)
 		if(group.length > 1){
 
@@ -2835,16 +2838,23 @@ function scaleElement(element, scaleFactor, anchor) {
 			pNormal.style.display = 'block';
 			pHover.style.display = 'none';
 			});
-			labelDiv.appendChild(div)
 
+			labelDiv.appendChild(div)
 			svgContainer.appendChild(labelDiv)
 		})
+
+		console.log(labelDiv)
 	}
 
 	function killLabels() {
-		document.getElementById('labelDiv').remove()
-		console.log(document.getElementById('showLabelsToggle').checked)
-		document.getElementById('showLabelsToggle').checked = false
+		if(document.getElementById('labelDiv')){
+			document.getElementById('labelDiv').remove()
+			console.log(document.getElementById('showLabelsToggle').checked)
+			document.getElementById('showLabelsToggle').checked = false
+		} else {
+			console.log("labelDiv not found")
+		}
+
 	}
 
 	function removeData() {

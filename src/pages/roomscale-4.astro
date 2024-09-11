@@ -135,7 +135,7 @@ import ObjectList from "../components/object-list.tsx";
                 // Load 360 texture
                 if(imageArray.length > 0){
                     imageArray.forEach((e) => {
-                        const targetImage = e.name.includes(objectPosition[0].object.name) && !VRRef.includes(objectPosition[0].object.name) ? e.image : null
+                        const targetImage = e.name.includes(objectPosition[0].object.name.toLowerCase()) && !VRRef.includes(objectPosition[0].object.name.toLowerCase()) ? e.image : null
                         if (targetImage){
                             
                             const textureLoader = new THREE.TextureLoader();
@@ -273,6 +273,7 @@ import ObjectList from "../components/object-list.tsx";
     const glbFiles = [];
     const csvGroups = [];
     const simplifiedNamesId = [];
+    const images = []
 
 
 
@@ -281,16 +282,6 @@ import ObjectList from "../components/object-list.tsx";
         event.preventDefault();
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
-
-        // for (const item of items) {
-        //         const entry = item.webkitGetAsEntry();
-        //         if (entry.isDirectory) {
-        //             readDirectory(entry);
-        //         } else {
-        //             alert('Please drop a folder.');
-        //         }
-        //     }
-        
 
         // Check if a single item is dropped
         if (items.length === 1) {
@@ -306,43 +297,40 @@ import ObjectList from "../components/object-list.tsx";
                 };
                 reader.readAsText(files[0]);
             } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-        const arrayBuffer = event.target.result;
-        
-        // Create a new DataView to read the binary data
-        const dataView = new DataView(arrayBuffer);
-        const decoder = new TextDecoder('utf-8');
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const arrayBuffer = event.target.result;
+                    
+                    // Create a new DataView to read the binary data
+                    const dataView = new DataView(arrayBuffer);
+                    const decoder = new TextDecoder('utf-8');
 
-        // Read the length of the JSON chunk
-        const jsonChunkLength = dataView.getUint32(12, true);
+                    // Read the length of the JSON chunk
+                    const jsonChunkLength = dataView.getUint32(12, true);
 
-        // Read the JSON chunk itself
-        const jsonChunk = new Uint8Array(arrayBuffer, 20, jsonChunkLength);
-        const jsonText = decoder.decode(jsonChunk);
-        const json = JSON.parse(jsonText);
+                    // Read the JSON chunk itself
+                    const jsonChunk = new Uint8Array(arrayBuffer, 20, jsonChunkLength);
+                    const jsonText = decoder.decode(jsonChunk);
+                    const json = JSON.parse(jsonText);
 
-        // Check for DRACO compression
-        const usesDraco = json.extensionsUsed && json.extensionsUsed.includes('KHR_draco_mesh_compression');
-        
-
-
-
-        // Parse and load the model
-        loader.parse(arrayBuffer, '', (gltf) => {
-            applyLitMaterialToGLTF(gltf.scene);
-            gltf.scene.name = file.name;
-            gltf.scene.scale.set(100, 100, 100)
-            objects.push(gltf.scene);
-            simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
-            scene.add(gltf.scene);
-            console.log('Model loaded successfully:', gltf.scene);
-        }, (error) => {
-            console.error('An error occurred while loading the model:', error);
-        });
-    };
-    reader.readAsArrayBuffer(file);
-}
+                    // Check for DRACO compression
+                    const usesDraco = json.extensionsUsed && json.extensionsUsed.includes('KHR_draco_mesh_compression');
+                    
+                    // Parse and load the model
+                    loader.parse(arrayBuffer, '', (gltf) => {
+                        applyLitMaterialToGLTF(gltf.scene);
+                        gltf.scene.name = file.name;
+                        gltf.scene.scale.set(100, 100, 100)
+                        objects.push(gltf.scene);
+                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        scene.add(gltf.scene);
+                        console.log('Model loaded successfully:', gltf.scene);
+                    }, (error) => {
+                        console.error('An error occurred while loading the model:', error);
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
         } else if (files.length === 1) {
             const file = files[0];
             if (file.type === "text/csv" || file.name.endsWith(".csv")) {
@@ -392,18 +380,18 @@ import ObjectList from "../components/object-list.tsx";
                 };
                 reader.readAsArrayBuffer(file);
             } else if (file.type === "image/jpg" || file.name.endsWith(".jpg")) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
-                    const loader = new GLTFLoader();
-                    loader.parse(arrayBuffer, "", (gltf) => {
-                        applyLitMaterialToGLTF(gltf.scene);
-                        gltf.scene.name = file.name;
-                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
-                        scene.add(gltf.scene);
-                    });
-                };
-                reader.readAsDataURL(file);
+                Array.from(files).forEach((i) => {
+                    
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const arrayBuffer = event.target.result;
+                        imageArray.push({name: i.name, image: arrayBuffer})
+                        console.log(imageArray)
+                    };
+                    reader.readAsDataURL(i);
+                })
+
             } else {
                 console.error("Dropped item could not be accessed.");
             }
@@ -665,13 +653,13 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
         // Set rotation using Euler angles, converting degrees to radians
         cone.rotation.set(
-            THREE.MathUtils.degToRad(rotation.x),
-            THREE.MathUtils.degToRad(rotation.y),
+            THREE.MathUtils.degToRad(0),
             THREE.MathUtils.degToRad(rotation.z),
+            THREE.MathUtils.degToRad(0),
         );
         console.log(cone.rotation)
         cone.renderOrder = 0
-        cone.name = name;
+        cone.name = name
         markers.push(cone)
         return cone;
     }
@@ -811,9 +799,9 @@ function convertFBXtoGLB(position, rotation) {
                     z: -parseFloat(row[2]),
                 };
                 const rotation = {
-                    x: parseFloat(row[4]),
+                    x: parseFloat(0),
                     y: parseFloat(row[6]),
-                    z: -parseFloat(row[5]),
+                    z: parseFloat(0),
                 };
                 console.log(rotation)
                 // position.y = position.y * -1;
