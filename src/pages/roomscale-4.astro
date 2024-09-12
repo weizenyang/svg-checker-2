@@ -199,6 +199,14 @@ import ObjectList from "../components/object-list.tsx";
 
     window.addEventListener("click", moveTo);
 
+    document.addEventListener("keydown", (e) => {
+        if(e.key == "ArrowLeft"){
+            camera.rotateX(THREE.MathUtils.degToRad(-2.5))
+        } else if(e.key == "ArrowRight"){
+            camera.rotateX(THREE.MathUtils.degToRad(2.5))
+        }
+    })
+
     
 
     //Controls
