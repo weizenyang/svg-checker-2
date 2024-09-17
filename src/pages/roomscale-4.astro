@@ -251,7 +251,7 @@ import ObjectList from "../components/object-list.tsx";
                 label.append(idLabel);
 
                 idLabel.innerText += ` \nPos: ${positionObjects[0].object.position.x} ${positionObjects[0].object.position.y} ${positionObjects[0].object.position.z}`;
-                idLabel.innerText += ` \nRot: ${(positionObjects[0].object.rotation.x - 270).toFixed(4)} ${positionObjects[0].object.rotation.y.toFixed(4)} ${positionObjects[0].object.rotation.z.toFixed(4)}`;
+                idLabel.innerText += ` \nRot: ${(THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.x)).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.y.toFixed(4))} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.z.toFixed(4))}`;
                 detailLabel.style.color = "#007700";
                 label.append(detailLabel);
             }
