@@ -163,7 +163,7 @@ import ObjectList from "../components/object-list.tsx";
                                 
                                 // Set the sphere's position to match the object's position
                                 sphere.position.copy(objectPosition[0].object.position);
-                                // sphere.rotation.copy(objectPosition[0].object.rotation);
+                                sphere.rotation.copy(new THREE.Vector3(0, objectPosition[0].object.rotation.z, 0));
                                 sphere.renderOrder = 100
                                 
                                 
