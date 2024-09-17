@@ -672,9 +672,9 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
         // Set rotation using Euler angles, converting degrees to radians
         cone.rotation.set(
+            THREE.MathUtils.degToRad(270),
             THREE.MathUtils.degToRad(0),
             THREE.MathUtils.degToRad(rotation.z),
-            THREE.MathUtils.degToRad(0),
         );
         console.log(cone.rotation)
         cone.renderOrder = 0
@@ -818,9 +818,9 @@ function convertFBXtoGLB(position, rotation) {
                     z: -parseFloat(row[2]),
                 };
                 const rotation = {
-                    x: parseFloat(0),
+                    x: parseFloat(row[4]),
                     y: parseFloat(row[6]),
-                    z: parseFloat(0),
+                    z: parseFloat(row[5]),
                 };
                 console.log(rotation)
                 // position.y = position.y * -1;
