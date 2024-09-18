@@ -436,7 +436,7 @@ animate();
                     loader.parse(arrayBuffer, '', (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
-                        gltf.scene.scale.set(100, 100, 100)
+                        gltf.scene.scale.set(10, 10, 10)
                         objects.push(gltf.scene);
                         simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
                         scene.add(gltf.scene);
