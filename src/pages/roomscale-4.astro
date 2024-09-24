@@ -886,7 +886,7 @@ function convertFBXtoGLB(position, rotation) {
 
         const group = new THREE.Group();
 
-        for (let i = 1; i < lines.length; i++) {
+        for (let i = 0; i < lines.length; i++) {
             const row = lines[i].split(",");
             if (row.length >= 7) {
                 const name = row[0];
