@@ -3,299 +3,128 @@
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Floorplan CSV Editor</title>
+</head>
+<body class="min-h-screen p-2 grid grid-cols-6 gap-2 font-sans">
+    <!-- Drag Drop Prompt -->
+    <div class="fixed hidden inset-0 bg-black bg-opacity-40 z-50 text-white justify-center items-center transition-opacity duration-200" id="drag-drop-prompt">
+        <div class="flex justify-center items-center h-full w-full">
+            <h1 class="text-4xl">Drag and Drop Here</h1>
+        </div>
+    </div>
 
-		<div class="drag-drop-prompt">
-			<div class="animated-border">
-				<h1>Drag and Drop Here</h1>
-			</div>
-		</div>
+    <!-- Main Content -->
+    <main class="flex">
+        <div class="flex flex-col">
+            <!-- Custom SVG ID Formatting -->
+            <section class="mb-4">
+                <input id="custom-formatting" type="checkbox" class="hidden" />
+                <label for="custom-formatting" class="flex items-center cursor-pointer">
+                    Custom SVG ID Formatting
+                    <span class="ml-2">^</span>
+                </label>
+                <div class="flex flex-col space-y-2 mt-2">
+                    <div class="flex items-center space-x-2">
+                        <input type="radio" name="data-format" id="underscore" value="underscore" class="mr-2" /> 
+                        <label for="underscore">Underscore on Last Identifier (NHXX-XX<b>_</b>XX)</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="radio" name="data-format" id="dash" value="dash" class="mr-2" /> 
+                        <label for="dash">Dash on Last Identifier (NHXX-XX<b>-</b>XX)</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="radio" name="data-format" id="none" value="none" checked class="mr-2" /> 
+                        <label for="none">None</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="radio" name="data-format" id="fullUnderscore" value="fullUnderscore" class="mr-2" /> 
+                        <label for="fullUnderscore">Full Underscore</label>
+                    </div>
+                </div>
+            </section>
 
+            <!-- Import File Section -->
+            <section class="mb-4">
+                <label for="myFile" class="flex items-center justify-center p-3 w-full bg-gray-800 text-white cursor-pointer rounded-md">
+                    Import
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" class="ml-2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </label>
+                <input type="file" id="myFile" class="hidden" />
+            </section>
 
-		<main class="toolsets" style="display: flex">
-			<div class="toolset-section">
-				<section class="container">
-						<input class="dropdown" id="custom-formatting" name="formatting" type="checkbox" style="display: none"/>
-						<label for="custom-formatting">Custom SVG ID Formatting <span class="arrow">^</span></label>
+            <!-- Flip Buttons -->
+            <section class="mb-4">
+                <p class="mb-2">Edit:</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="flip-x" class="px-3 py-2 bg-gray-800 text-white rounded-md">Flip X</button>
+                    <button id="flip-y" class="px-3 py-2 bg-gray-800 text-white rounded-md">Flip Y</button>
+                </div>
+            </section>
 
-					<div class="toggle">
-						<div class="sub-item">
-							<input
-								type="radio"
-								name="data-format"
-								class="formatting"
-								id="underscore"
-								value="underscore"
-							/>Underscore on Last Identifier (NHXX-XX<b>_</b>XX)
-						</div>
+            <!-- Group & Unit Section -->
+            <section class="mb-4">
+                <input id="group" type="text" class="w-full p-2 mb-2 border border-gray-300 rounded-md" placeholder="Group" />
+                <input id="unit" type="text" class="w-full p-2 mb-2 border border-gray-300 rounded-md" placeholder="Unit" />
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="set-name" class="px-3 py-2 bg-gray-800 text-white rounded-md">Set</button>
+                    <button id="set-unit" class="px-3 py-2 bg-gray-800 text-white rounded-md">Apply Units</button>
+                </div>
+            </section>
 
-						<div class="sub-item">
-							<input
-								type="radio"
-								name="data-format"
-								class="formatting"
-								value="dash"
-								id="dash"
-							/>Dash on Last Identifier (NHXX-XX<b>-</b>XX)
-						</div>
-						<div class="sub-item">
-							<input
-								type="radio"
-								name="data-format"
-								class="formatting"
-								value="none"
-								id="none"
-								checked="checked"
-							/>None
-						</div>
-						<div class="sub-item">
-							<input
-								type="radio"
-								name="data-format"
-								class="formatting"
-								value="fullUnderscore"
-								id="fullUnderscore"
-							/>Full Underscore
-						</div>
-					</div>
-				</section>
+            <!-- Point Properties Section -->
+            <section class="mb-4">
+                <p class="mb-2">Point Properties:</p>
+                <input id="item-id" type="text" class="w-full p-2 mb-2 border border-gray-300 rounded-md" placeholder="ID" />
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="set-id" class="px-3 py-2 bg-gray-800 text-white rounded-md">Set</button>
+                    <button id="add-point" class="px-3 py-2 bg-gray-800 text-white rounded-md">Add Point</button>
+                    <button id="delete-point" class="px-3 py-2 bg-gray-800 text-white rounded-md">Delete</button>
+                </div>
+            </section>
 
-				<section class="container">
-					<!-- <h3>2. Then, Import Files here</h3> -->
-					<!-- <button class="button-style">Import </button> -->
-					<label for="myFile" class="button-style">Import <svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="24"
-						height="24"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					  >
-						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
-						<polyline points="17 8 12 3 7 8" stroke-width="2"/>
-						<line x1="12" x2="12" y1="3" y2="15" stroke-width="2"/>
-					  </svg></label>
-					<input type="file" class="input-style" id="myFile" name="filename" style="display:none; "/>
-					
-				</section>
+            <!-- Export Section -->
+            <section class="mb-4">
+                <input type="text" id="export-file-name" class="w-full p-2 mb-2 border border-gray-300 rounded-md" placeholder="File Name" />
+                <button id="export" class="w-full p-3 bg-gray-800 text-white rounded-md flex items-center justify-center mb-2">
+                    Export SVG
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" class="ml-2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+                <div class="flex items-center space-x-2 mb-4">
+                    <input type="checkbox" id="yx-flip" class="mr-2" checked /> 
+                    <label for="yx-flip">Y/X Flip</label>
+                </div>
+                <button id="export-csv-layer" class="w-full p-3 bg-gray-800 text-white rounded-md flex items-center justify-between mb-2">
+                    Export CSV <span class="ml-2">4096px</span>
+                </button>
+                <button id="export-csv-layer-2048" class="w-full p-3 bg-gray-800 text-white rounded-md flex items-center justify-between">
+                    Export CSV <span class="ml-2">2048px</span>
+                </button>
+            </section>
 
-				
-
-				<section class="container" >
-					
-					<div class="sub-item" style="display: flex; flex-direction: column; margin-bottom: 10px;">
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">Edit:</p>
-						<div class="button-gap" style="display: flex; width: 100%;">
-							<button id="flip-x"> Flip X</button>
-							<button id="flip-y"> Flip Y</button>
-						</div>
-					</div>
-
-					<div class="sub-item hidden" id="show-floors" style="display: flex; flex-direction: column; margin-bottom: 10px;">
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">Floors:</p>
-
-					</div>
-
-					<div class="sub-item" style="display: flex; flex-direction: column; margin-bottom: 10px;">
-						<input
-							id="group"
-							type="text"
-							placeholder="Group"
-							oninput="this.value = this.value.toUpperCase()"
-							style="margin-bottom: 10px;"
-							class="input-style"
-						/>
-
-						<input
-							id="unit"
-							type="text"
-							oninput="this.value = this.value.toUpperCase()"
-							placeholder="Unit"
-							class="input-style"
-						/>
-						<div class="button-gap" style="display: flex; margin-top: 10px;">
-							<button id="set-name">Set</button>
-							<button id="set-unit">Apply Units</button>
-						</div>
-					</div>
-					
-
-					<div class="sub-item" style="display: flex; flex-direction: column;">
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">Point Properties:</p>
-						<input
-							id="item-id"
-							type="text"
-							placeholder="ID"
-							style="margin-top: 10px;"
-							class="input-style"
-						/>
-
-						<div class="button-gap" style="display: flex; margin-top: 10px;">
-							<button id="set-id">Set</button>
-						</div>
-						<div class="button-gap" style="display: flex; margin-top: 10px;">
-							<button id="add-point">Add Point</button>
-						</div>
-						<div class="button-gap" style="display: flex; margin-top: 10px;">
-							<button id="delete-point">Delete</button>
-						</div>
-
-					</div>
-
-				</section>
-
-				<section class="container">
-					
-					<input type="text" placeholder="File Name" class="input-style" id="export-file-name" style="margin-bottom: 10px"/>
-
-					<button id="export" class="button-style" style="margin-bottom: 10px"
-					>Export SVG <svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="24"
-					height="24"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				  >
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
-					<polyline points="7 10 12 15 17 10" stroke-width="2"/>
-					<line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
-				  </svg></button
-				>
-				<div class="">
-					<input type="checkbox" id="yx-flip" name="yx-flip" value="true" checked>
-					<label for="yx-flip"> Y/X Flip</label>
-				</div>
-
-				
-
-				<button id="export-csv-layer" class="button-style" style="margin-bottom: 10px"
-					>Export CSV <span style="margin-left: 8px" class="boxed">4096px</span>
-					</button
-				>
-				<button id="export-csv-layer-2048" class="button-style"
-					>Export CSV <span style="margin-left: 8px" class="boxed">2048px</span></button
-				>
-				</section>
-
-				<dialog>
-					<button autofocus>Close</button>
-					<div style="">
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Left</span> 
-							</div>
-							<p>Select</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Left</span> + Drag
-							</div>
-							 
-							<p>Move</p>
-						</div>
-
-						
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Right</span> | <span class="boxed">Middle</span> + Drag
-							</div>
-							<p>Scale</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">ESC</span>
-							</div>
-							
-							<p>Cancel</p>
-						</div>
-						<div class="row">
-							<div>
-								<span class="boxed">CTRL</span> + <span class="boxed">A</span>
-							</div>
-							
-							<p>Select All</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">SHIFT</span> + <span class="boxed">Mouse Left</span>
-							</div>
-							
-							<p>Select Multiple</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">←</span> / <span class="boxed">→</span>
-							</div>
-							
-							<p>Rotate -45 / +45</p>
-						</div>
-						<div class="row">
-							<div>
-								<span class="boxed">L</span>
-							</div>
-							
-							<p>Toggle Labels</p>
-						</div>
-				</dialog>
-				<button class="button-style hollow" style="margin-top: 10px">
-					<svg fill="#000000" height="30px" width="30px" version="1.1" id="Capa_1" style="margin-right: 10px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 324.952 324.952" xml:space="preserve"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M323.195,33.502c-2.342-2.344-6.143-2.344-8.484,0c-20.718,20.718-31.436,18.955-43.851,16.909 c-13.984-2.301-29.752-4.876-56.232,19.795c-15.643-15.121-36.605-23.45-59.216-23.45c-25.451,0-50.795,10.747-69.532,29.485 L85.1,77.02c-0.003,0.003-0.008,0.005-0.011,0.009c-0.003,0.004-0.006,0.008-0.009,0.011l-55.644,55.643 c-37.173,37.172-39.447,95.383-5.069,129.761l6.349,6.349c15.744,15.745,37.135,24.416,60.231,24.416 c25.45,0,50.793-10.747,69.53-29.485l55.643-55.643c0.003-0.003,0.008-0.005,0.011-0.009c0.003-0.004,0.006-0.008,0.009-0.011 l0.78-0.78c36.759-36.758,39.368-94.071,6.184-128.587c21.929-20.368,33.549-18.461,45.807-16.442 c13.692,2.251,29.21,4.81,54.284-20.266C325.538,39.643,325.538,35.844,323.195,33.502z M206.061,78.615l-26.668,26.668 c-3.842-2.324-8.255-3.566-12.86-3.566c-6.655,0-12.911,2.591-17.617,7.297l-11.679,11.68l-39.318-39.32 c16.071-14.421,36.762-22.617,57.493-22.617C174.774,58.756,192.689,65.807,206.061,78.615z M152.126,159.297 c-2.44,2.439-5.684,3.783-9.133,3.783c-3.449,0-6.692-1.343-9.131-3.781c-2.438-2.439-3.781-5.682-3.781-9.131 s1.344-6.692,3.783-9.132l23.536-23.538c2.439-2.438,5.682-3.781,9.132-3.781c3.449,0,6.692,1.343,9.131,3.781 c2.439,2.439,3.782,5.682,3.782,9.132c0,3.448-1.343,6.691-3.781,9.13L152.126,159.297z M151.992,255.239 c-16.504,16.504-38.754,25.97-61.045,25.97c-19.892,0-38.268-7.423-51.746-20.9l-6.349-6.349 c-29.699-29.7-27.425-80.298,5.068-112.792l51.41-51.41l39.42,39.421l-3.372,3.372c-4.706,4.705-7.298,10.962-7.298,17.616 c-0.001,6.654,2.59,12.911,7.296,17.617c4.705,4.705,10.962,7.296,17.616,7.296c6.654,0,12.911-2.592,17.617-7.298l3.373-3.373 l39.42,39.42L151.992,255.239z M211.788,195.245l-39.32-39.32l11.681-11.68c4.706-4.705,7.297-10.961,7.297-17.616 c0-4.605-1.243-9.019-3.567-12.86l26.665-26.667C242.091,115.858,240.675,163.118,211.788,195.245z"></path></g></svg> 
-					Keymappings
-				</button>
-
-				<div class="container" id="id-container">
-					<div class="id-list-title-container">
-						<p
-							class="id-list-title"
-							style="padding: 0em 0em; font-weight: bold;"
-						>
-							CTRL + F to look for items
-						</p>
-						<p class="hide-toggle" id="hide-toggle">^</p>
-					</div>
-					<ul style="padding-left: 1em;" class="id-list" id="id-list">
-					</ul>
-				</div>
-			</div>
-			
-		</main>
-
-		<section class="container editor">
-			<div id="editor-button-container" style="display: flex; flex-direction: row; justify-content: space-between;">
-				<h3>Viewer</h3>
-			</div>
-			
-
-			<div class="output" id="svg-container">
-				<p
-					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
-				>
-					Import SVG file
-				</p>
-			</div>
-
-			<div id="tag">
-				<h3 id="label">-</h3>
-			</div>
-			<svg id="svg" height="0px"></svg>
-		</section>
-	</body>
+            <!-- Key Mappings -->
+            <button class="w-full p-3 bg-transparent border border-gray-800 text-gray-800 rounded-md flex items-center justify-center mt-4">
+                <svg fill="#000" width="30" height="30" class="mr-2" viewBox="0 0 324.952 324.952" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M323.195,33.502c-2.342-2.344-6.143-2.344-8.484,0c-20.718,20.718-31.436,18.955-43.851,16.909 c-13.984-2.301-29.752-4.876-56.232,19.795c-15.643-15.121-36.605-23.45-59.216-23.45c-25.451,0-50.795,10.747-69.532,29.485 L85.1,77.02l-55.644,55.643c-37.173,37.172-39.447,95.383-5.069,129.761l6.09,6.091l-18.031,18.032 c-3.317,3.317-3.317,8.708,0,12.025c1.659,1.659,3.835,2.488,6.012,2.488c2.178,0,4.354-0.829,6.013-2.488l18.031-18.032 l6.091,6.091c17.197,17.196,40.838,26.794,65.484,26.794c26.198,0,51.348-11.255,68.8-30.848l19.453-19.453 c18.737-18.737,29.484-44.081,29.484-69.532c0-22.61-8.329-43.572-23.45-59.216c24.672-26.481,22.096-42.249,19.795-56.232 c-2.046-12.415-3.808-23.132,16.91-43.851C325.539,39.645,325.539,35.846,323.195,33.502z"/>
+                </svg>
+                Key Mappings
+            </button>
+        </div>
+    </main>
+</body>
 </html>
+
 
 <style>
 	@font-face {
@@ -370,7 +199,7 @@
 		background-color: #555555;
 	}
 	.button-style svg{
-		padding-left: 5px;
+		padding-left: 1em
 	}
 
 	.row{
@@ -1495,7 +1324,12 @@ function scaleElement(element, scaleFactor, anchor) {
                 : idFormat === format.dash
                 ? "dash"
                 : "";
+
+        // Scale bounding box to fit within the SVG frame
+        // scaleBoundingBoxToFit(svgElement);
     };
+
+
 
     if (file.type === "image/svg+xml") {
         const reader = new FileReader();

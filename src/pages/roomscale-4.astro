@@ -12,11 +12,11 @@ import ObjectList from "../components/object-list.tsx";
     </head>
     <body id="drop-zone">
         <div class="ui-area" id="ui-area">
-            <button id="log-scene"> Log Scene </button>
-            <button id="x-flip"> X-Axis </button>
-            <button id="y-flip"> Y-Axis </button>
-            <button id="z-flip"> Z-Axis </button>
-            <button id="y-up"> Y-Up Toggle </button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="log-scene"> Log Scene </button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="x-flip"> X-Axis </button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="y-flip"> Y-Axis </button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="z-flip"> Z-Axis </button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="y-up"> Y-Up Toggle </button>
             <input type="checkbox" id="center-csv" name="center-csv">
             <label for="center-csv">Center</label>
             <input type="range" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
@@ -24,11 +24,19 @@ import ObjectList from "../components/object-list.tsx";
             <input type="range" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
             <label for="scale-slider">Scale</label>
             <ObjectList client:load />
-            <button id="export-all-fbx">Export All To GLB</button>
+            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="export-all-fbx">Export All To GLB</button>
+            <div class="rounded-md bg-slate-400 max-w-52 p-5">
+                <h2>Floors:</h2>
+                <div class="flex flex-col" id="show-floors">
+                    <p>Import a Camera CSV to start</p>
+                </div>
+            </div>
+
         </div>
 
-        <div class="notification-panel" id="notification-panel">
-        </div>
+        <div class="notification-panel" id="notification-panel"></div>
+
+        
         
         <div id="tag">
             <h3 id="label">-</h3>
@@ -52,7 +60,12 @@ import ObjectList from "../components/object-list.tsx";
             dracoLoader.setDecoderPath('/draco/decoder/');
             dracoLoader.preload()
             loader.setDRACOLoader(dracoLoader);
-    
+        
+        var arrowAsset
+        loader.load("/Arrow.glb", (e) => {  // Preload Arrow asset
+            console.log("Arrow asset loaded")
+            arrowAsset = e
+        })
 
     const scene = new THREE.Scene();
     var imageArray = []
@@ -114,6 +127,82 @@ import ObjectList from "../components/object-list.tsx";
         //         }
         //     }
         // });
+    }
+
+    function handleFloors(){
+        //Floor section
+			//Dynamically add Floors section
+			var floorNumbers = []
+			const labelDivInstance = document.getElementById('labelDiv')
+			if(labelDivInstance){
+				labelDivInstance.remove()
+			}
+			globalFloors.forEach((e) => {
+                console.log("Pushing " + e.floor)
+				if(!floorNumbers.includes(e.floor)){
+					floorNumbers.push(e.floor)
+				}
+			})
+
+			console.log(floorNumbers)
+			console.log(globalFloors)
+
+			if(floorNumbers.length > 0){
+				const floorSection = document.getElementById("show-floors")
+                console.log(floorSection)
+				if(floorSection.classList.contains('hidden')){
+					floorSection.classList.remove('hidden')
+				}
+                const listChild = floorSection.getElementsByTagName('*')
+                console.log(listChild)
+                if(listChild.length > 0){
+                    Array.from(listChild).forEach(element => {
+                        element.remove()
+                    });
+                }
+
+				const checkboxesId = []
+
+				floorNumbers.forEach((e) => {
+					const div = document.createElement('div')
+					const checkbox = document.createElement('input')
+					const label = document.createElement('label')
+					
+					label.innerText = `Floor ${e}`
+					label.htmlFor = `floor-${e}-checkbox`
+					checkbox.type = 'checkbox'
+					checkbox.checked = true
+					checkbox.id = `floor-${e}-checkbox`
+
+					checkboxesId.push(`floor-${e}-checkbox`)
+					div.appendChild(checkbox)
+					div.appendChild(label)
+
+					checkbox.addEventListener('change', (e) => {
+						// const g = globalSvgContainer.querySelector('g')
+						const selectedFloor = e.target.id.split("-")[1]
+                        const selectedMarkers = globalFloors.filter(i => i.floor == selectedFloor);
+
+						if(e.target.checked){
+                            // markers.forEach((e) => {
+                            //     e.visible = false
+                            // })
+                            selectedMarkers.forEach((e) => {
+                                e.arrow.visible = true
+                            })
+						} else {
+                            selectedMarkers.forEach((e) => {
+                                e.arrow.visible = false
+                            })
+                        }
+
+
+					})
+
+					floorSection.appendChild(div)
+				})
+				
+			}
     }
 
     function moveTo(event) {
@@ -390,6 +479,7 @@ animate();
     const csvGroups = [];
     const simplifiedNamesId = [];
     const images = []
+    let globalFloors = []
 
 
 
@@ -398,6 +488,7 @@ animate();
         event.preventDefault();
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
+        globalFloors = []
 
         // Check if a single item is dropped
         if (items.length === 1) {
@@ -745,20 +836,55 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
         const cone = new THREE.Mesh(geometry, material);
 
+
         // Set position
-        cone.position.set(position.x, position.y, position.z);
+        cone.position.set(0, 0, 0);
 
         // Set rotation using Euler angles, converting degrees to radians
         cone.rotation.set(
-            THREE.MathUtils.degToRad(rotation.x),
-            THREE.MathUtils.degToRad(rotation.y),
-            THREE.MathUtils.degToRad(rotation.z - 90),
+            THREE.MathUtils.degToRad(0),
+            THREE.MathUtils.degToRad(90),
+            THREE.MathUtils.degToRad(90),
         );
+        cone.updateMatrix();
+        cone.geometry.applyMatrix4( cone.matrix ); //to bake rotation to cone
+        cone.position.set(position.x, position.y, position.z);
+        cone.rotation.set( 0, THREE.MathUtils.degToRad(rotation.z), 0 );
+        cone.scale.set( 1, 1, 1 );
+        cone.updateMatrix();
         console.log(cone.rotation)
         cone.renderOrder = 0
         cone.name = name
         markers.push(cone)
         return cone;
+    }
+
+    function createArrow(name, position, rotation) {
+        // const geometry = new THREE.ConeGeometry(20, 40, 32); // Cone with radius 0.5 and height 1
+        // const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
+        // const arrow = new THREE.Mesh(geometry, material);
+        if(arrowAsset.scene.children.length > 0){
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const arrowGeometry = arrowAsset.geometry
+            const arrow = new THREE.Mesh(arrowGeometry, material);
+
+            // Set position
+            arrow.position.set(position.x, position.y, position.z);
+
+            // Set rotation using Euler angles, converting degrees to radians
+            arrow.rotation.set(
+                THREE.MathUtils.degToRad(rotation.x),
+                THREE.MathUtils.degToRad(rotation.y),
+                THREE.MathUtils.degToRad(rotation.z - 90),
+            );
+
+            arrow.scale.set(100, 100, 100)
+            arrow.renderOrder = 0
+            arrow.name = name
+            markers.push(arrow)
+            return arrow;
+        }
+
     }
 
     // Function to create a CSV from sphere groups and trigger download
@@ -897,20 +1023,25 @@ function convertFBXtoGLB(position, rotation) {
                 };
                 const rotation = {
                     x: parseFloat(row[4]),
-                    y: parseFloat(row[6]),
-                    z: -parseFloat(row[5]),
+                    y: parseFloat(row[5]),
+                    z: parseFloat(row[6]),
                 };
-                console.log(rotation)
                 // position.y = position.y * -1;
                 // const { position: convertedPosition, rotation: convertedRotation } = convertFBXtoGLB(position, rotation);
                 // const sphere = createSphere(name, position, rotation);
                 // sphere.cameraPos = true;
                 
                 // group.add(sphere);
-                const cone = createCone(name, position, rotation);
-                cone.cameraPos = true;
+                const floor = name.includes('_') ? name.split("_")[0] : name //Get Floor Number
+                const arrow = createCone(name, position, rotation);
+                arrow.cameraPos = true;
+                arrow.floor = floor
                 
-                group.add(cone);
+                globalFloors.push({"floor" : floor, "arrow": arrow}) //Push obj to globalFloors
+                
+                group.add(arrow);
+                console.log(arrow)
+                
             }
 
             if(name){
@@ -921,6 +1052,7 @@ function convertFBXtoGLB(position, rotation) {
             m_Group = group;
         }
         csvGroups.push(group)
+        handleFloors()
 
         //Update main object references
         if(simplifiedNamesId.length > 0){
