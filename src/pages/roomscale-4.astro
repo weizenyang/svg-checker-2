@@ -11,27 +11,84 @@ import ObjectList from "../components/object-list.tsx";
         <title>Three.js - Three Sides of a Cube</title>
     </head>
     <body id="drop-zone">
-        <div class="ui-area" id="ui-area">
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="log-scene"> Log Scene </button>
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="x-flip"> X-Axis </button>
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="y-flip"> Y-Axis </button>
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="z-flip"> Z-Axis </button>
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="y-up"> Y-Up Toggle </button>
-            <input type="checkbox" id="center-csv" name="center-csv">
-            <label for="center-csv">Center</label>
-            <input type="range" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
-            <label for="scale-slider">Cone Size</label>
-            <input type="range" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
-            <label for="scale-slider">Scale</label>
-            <ObjectList client:load />
-            <button class="bg-slate-300 p-1 pt-0 pb-0 rounded-sm" id="export-all-fbx">Export All To GLB</button>
-            <div class="rounded-md bg-slate-300 max-w-52 p-5 pl-2 pr-2 m-3">
+        <div class="ui-area transition-all bg-zinc-100 p-3 rounded-sm" id="ui-area">
+            <button class="bg-zinc-300 text-lime-600 font-mono p-0.5 rounded-md w-full drop-shadow-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="log-scene">... Log Scene ...</button>
+
+            <div class="flex space-x-1 mt-3">
+                <p class="font-medium">Flip:</p>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip"> X-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-flip"> Y-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="z-flip"> Z-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-up"> -Y Coords </button>
+            </div>
+
+            
+            <div class="rounded-md bg-white max-w-60 p-3 mt-3 space-y-2">
+                <div>
+                    <label for="center-csv">Center</label>
+                    <input type="checkbox" id="center-csv" name="center-csv">
+                </div>
+                <div>
+                    <label for="scale-slider">Cone Size</label>
+                    <input type="range" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
+                </div>
+                <div>
+                    <label for="scale-slider">Scale</label>
+                    <input type="range" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
+                </div>
+            </div>
+
+            
+            <!-- <ObjectList client:load /> -->
+
+            <button id="export-all-fbx" class="flex bg-zinc-600 text-white p-3 mt-3 rounded-md" style="margin-bottom: 10px">
+                Export All To GLB
+                <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                class="ml-2 rotate-180"
+            >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
+                <polyline points="7 10 12 15 17 10" stroke-width="2"/>
+                <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
+            </svg></button
+            >
+
+            <div class="rounded-md bg-zinc-300 max-w-52 p-5 pl-2 pr-2 mt-3">
                 <h2 class="font-bold">Floors:</h2>
                 <div class="flex flex-col" id="show-floors">
                     <p>Import a Camera CSV to start</p>
                 </div>
             </div>
 
+        </div>
+
+        <div class="fixed right-0 h-42 w-40 bg-neutral-100" id="gizmo">
+            <button id="camera-top" class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                Top
+            </button>
+            <div class="flex">            
+                <button id="camera-left" class="bg-zinc-300 p-5 pr-1 pl-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                    L
+                </button>
+                <div class="h-36 w-44" id="orthoView"></div>
+                <button id="camera-right" class="bg-zinc-300 p-5 pl-1 pr-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                    R
+                </button>
+            </div>
+
+            <button id="camera-bottom" class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                Bottom
+            </button>
+            <!-- <button class="bg-zinc-300 p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                Orthographic
+            </button> -->
         </div>
 
         <div class="notification-panel" id="notification-panel"></div>
@@ -79,6 +136,12 @@ import ObjectList from "../components/object-list.tsx";
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    const orthoRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    orthoRenderer.autoClear=false;
+    const orthoView = document.getElementById("orthoView")
+    orthoRenderer.setSize(orthoView.clientWidth, orthoView.clientHeight);
+    document.getElementById("orthoView").appendChild(orthoRenderer.domElement);
+
     //Manipulatable Group
     var m_Group;
 
@@ -104,9 +167,23 @@ import ObjectList from "../components/object-list.tsx";
     camera.position.y = 1.31;
     camera.position.z = 0;
 
-    //Mouse Raycaster
+    const orthoCamera = new THREE.OrthographicCamera(
+        orthoView.clientWidth / -2,
+        orthoView.clientWidth / 2,
+        orthoView.clientHeight / 2,
+        orthoView.clientHeight / -2,
+        0.1,
+        80000,
+    );
+    orthoCamera.position.x = -210.41;
+    orthoCamera.position.y = 1.31;
+    orthoCamera.position.z= 0;
+    //Mouse Raycaster Perspective 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
+    //Mouse Raycaster Orthographic
+    const orthoRaycaster = new THREE.Raycaster();
+    const orthoPointer = new THREE.Vector2();
 
     function onPointerMove(event) {
         pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -179,7 +256,7 @@ import ObjectList from "../components/object-list.tsx";
 					checkboxesId.push(`floor-${e}-checkbox`)
 					div.appendChild(checkbox)
 					div.appendChild(label)
-                    div.setAttribute("class", "p-2 bg-slate-100 rounded-sm mt-1")
+                    div.setAttribute("class", "p-2 bg-zinc-100 rounded-sm mt-1")
                     
 
 					checkbox.addEventListener('change', (e) => {
@@ -226,10 +303,6 @@ import ObjectList from "../components/object-list.tsx";
                 console.log(objectPosition[0].object.name)
                 console.log(camera.rotation)
                 camera.rotation.set(THREE.MathUtils.degToRad(rotation.x), THREE.MathUtils.degToRad(rotation.y), THREE.MathUtils.degToRad(rotation.z))
-                
-                // camera.rotation.x = objectPosition[0].object.rotation.x
-                // camera.rotation.y = objectPosition[0].object.rotation.y
-                // camera.rotation.z = objectPosition[0].object.rotation.z
 
                 // Load 360 texture
                 if(imageArray.length > 0){
@@ -239,14 +312,7 @@ import ObjectList from "../components/object-list.tsx";
                             
                             const textureLoader = new THREE.TextureLoader();
                             console.log(e.image)
-                            // convert binary data to base64 encoded string
-                            // const base64Image = new Buffer.from(targetImage).toString('base64');
 
-                            // // Get image file extension
-                            // const ext = e.name.split('.').pop();
-
-                            // // complete data URI
-                            // const uri = `data:image/${ext};base64,${base64Image}`;
                             textureLoader.load(e.image, function(texture) {
                                 console.log("Loading texture:", targetImage);
                                 
@@ -273,12 +339,8 @@ import ObjectList from "../components/object-list.tsx";
                                 console.log("Sphere added at position:", sphere.position);
                             });
                         }
-                    
-
                     })
                 }
-
-
                 showWireframe(scene, true);
                 VRSpheres.forEach((e) => {
                     showWireframe(e, false);
@@ -317,7 +379,10 @@ import ObjectList from "../components/object-list.tsx";
     })
 
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
-orbitalControls.enableKeys = false; // Disable built-in key controls to handle custom controls
+    orbitalControls.enableKeys = false;
+
+    // const orbitalControlsOrtho = new OrbitControls(orthoCamera, orthoRenderer.domElement);
+    // orbitalControlsOrtho.enabled = false;
 
 // Variables for keyboard control
 const keyState = {};
@@ -335,17 +400,19 @@ window.addEventListener('keyup', (event) => {
 const rotationSpeed = 0.02;
 const movementSpeed = 0.5;
 
-// Action!!
 function animate() {
     // Update raycaster for object intersections
     raycaster.setFromCamera(pointer, camera);
     const intersects = raycaster.intersectObjects(scene.children);
+
+    orthoRaycaster.setFromCamera(orthoPointer, orthoCamera);
+    const orthoIntersects = orthoRaycaster.intersectObjects(scene.children);
     var label = document.getElementById("label");
     label.innerHTML = "";
 
     // Default Tag State
     document.getElementById("tag").style.display = "none";
-    if (intersects.length > 0) {
+    if (intersects.length > 0 && orthoIntersects.length > 0) {
         document.getElementById("tag").style.display = "flex";
         document.getElementById("tag").style.flexDirection = "column";
 
@@ -354,6 +421,12 @@ function animate() {
         let positionObjects = intersects.filter(
             (item) => item.object.cameraPos && item.object.parent.visible
         );
+
+        let orthoPositionObjects = orthoIntersects.filter(
+            (item) => item.object.cameraPos && item.object.parent.visible
+        );
+
+        // positionObjects = orthoPositionObjects
 
         if (positionObjects.length > 0) {
             console.log(positionObjects[0]);
@@ -385,7 +458,16 @@ function animate() {
 
     // Ensure camera target is updated correctly after manual rotation
     orbitalControls.update();
-
+    orthoCamera.position.copy(camera.position)
+    orthoCamera.rotation.copy(camera.rotation)
+    console.log(orthoCamera.zoom)
+    orthoCamera.zoom = 100 / orbitalControls.getDistance()
+    orthoCamera.updateProjectionMatrix()
+    // orthoCamera.left = (orthoView.clientWidth / -2) * orbitalControls.getDistance()
+    // orthoCamera.right = (orthoView.clientWidth / 2) * orbitalControls.getDistance()
+    // orthoCamera.top = (orthoView.clientHeight / 2) * orbitalControls.getDistance()
+    // orthoCamera.bottom = (orthoView.clientHeight / -2) * orbitalControls.getDistance()
+    
     requestAnimationFrame(animate);
 
     // Render loop
@@ -400,74 +482,37 @@ function animate() {
         renderer.clearDepth();
         renderer.render(e, camera);
     });
+
     markers.forEach((e) => {
         renderer.clearDepth();
         renderer.render(e, camera);
     });
+
+    // Render loop for orthographic camera
+        orthoRenderer.clear();
+    VRSpheres.forEach((e) => {
+        orthoRenderer.render(e, orthoCamera);
+    });
+    orthoRenderer.clearDepth();
+    orthoRenderer.render(scene, orthoCamera);
+
+    objects.forEach((e) => {
+        orthoRenderer.clearDepth();
+        orthoRenderer.render(e, orthoCamera);
+    });
+
+    markers.forEach((e) => {
+        orthoRenderer.clearDepth();
+        orthoRenderer.render(e, orthoCamera);
+    });
+
+    // console.log(orbitalControls.getDistance())
+
+    // console.log(camera.position)
+    // console.log(camera.rotation)
 }
 
 animate();  
-
-    // //Controls
-    // const orbitalControls = new OrbitControls(camera, renderer.domElement);
-
-    // //Action!!
-    // function animate() {
-        
-    //     raycaster.setFromCamera(pointer, camera);
-    //     const intersects = raycaster.intersectObjects(scene.children);
-    //     var label = document.getElementById("label");
-    //     label.innerHTML = "";
-
-    //     //Default Tag State
-    //     document.getElementById("tag").style.display = "none";
-    //     if (intersects.length > 0) {
-    //         document.getElementById("tag").style.display = "flex";
-    //         document.getElementById("tag").style.flexDirection = "column";
-            
-    //         var idLabel = document.createElement("p");
-    //         var detailLabel = document.createElement("p");
-    //         let positionObjects = intersects.filter(
-    //             (item) => item.object.cameraPos && item.object.parent.visible
-    //         );
-
-    //         if (positionObjects.length > 0) {
-    //             console.log(positionObjects[0])
-    //             idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
-    //             idLabel.style.color = "#007700";
-    //             idLabel.style.lineHeight = "1em"
-    //             label.append(idLabel);
-
-    //             idLabel.innerText += ` \nPos: ${positionObjects[0].object.position.x} ${positionObjects[0].object.position.y} ${positionObjects[0].object.position.z}`;
-    //             idLabel.innerText += ` \nRot: ${(THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.x)).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.y.toFixed(4))} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.z.toFixed(4))}`;
-    //             detailLabel.style.color = "#007700";
-    //             label.append(detailLabel);
-    //         }
-    //     }
-
-    //     requestAnimationFrame(animate);
-    //     renderer.clear();
-    //     orbitalControls.update();
-    //     VRSpheres.forEach((e) => {
-            
-    //         renderer.render(e, camera);
-    //     })
-    //     renderer.clearDepth();
-    //     renderer.render(scene, camera);
-
-    //     objects.forEach((e) => {
-    //         renderer.clearDepth();
-    //         renderer.render(e, camera);
-    //     })
-    //     markers.forEach((e) => {
-    //         renderer.clearDepth();
-    //         renderer.render(e, camera);
-    //     })
-        
-
-
-    // }
-    // animate();
 
     //Tag
     document.addEventListener("mousemove", (e) => {
@@ -864,34 +909,6 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
         return cone;
     }
 
-    function createArrow(name, position, rotation) {
-        // const geometry = new THREE.ConeGeometry(20, 40, 32); // Cone with radius 0.5 and height 1
-        // const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
-        // const arrow = new THREE.Mesh(geometry, material);
-        if(arrowAsset.scene.children.length > 0){
-            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const arrowGeometry = arrowAsset.geometry
-            const arrow = new THREE.Mesh(arrowGeometry, material);
-
-            // Set position
-            arrow.position.set(position.x, position.y, position.z);
-
-            // Set rotation using Euler angles, converting degrees to radians
-            arrow.rotation.set(
-                THREE.MathUtils.degToRad(rotation.x),
-                THREE.MathUtils.degToRad(rotation.y),
-                THREE.MathUtils.degToRad(rotation.z - 90),
-            );
-
-            arrow.scale.set(100, 100, 100)
-            arrow.renderOrder = 0
-            arrow.name = name
-            markers.push(arrow)
-            return arrow;
-        }
-
-    }
-
     // Function to create a CSV from sphere groups and trigger download
 function createCSVFromSphereGroups(csvGroups) {
     let csvContent = ""; // CSV header
@@ -1031,12 +1048,6 @@ function convertFBXtoGLB(position, rotation) {
                     y: parseFloat(row[5]),
                     z: parseFloat(row[6]),
                 };
-                // position.y = position.y * -1;
-                // const { position: convertedPosition, rotation: convertedRotation } = convertFBXtoGLB(position, rotation);
-                // const sphere = createSphere(name, position, rotation);
-                // sphere.cameraPos = true;
-                
-                // group.add(sphere);
                 const floor = name.includes('_') ? name.split("_")[0] : name //Get Floor Number
                 const arrow = createCone(name, position, rotation);
                 arrow.cameraPos = true;
@@ -1069,8 +1080,6 @@ function convertFBXtoGLB(position, rotation) {
                 }
             })
         }
-        
-
             const csvUploadEvent = new CustomEvent('file-upload-csv', {
                 detail: {
                     simplifiedName: group.userData.simplifiedName,
@@ -1180,7 +1189,28 @@ function convertFBXtoGLB(position, rotation) {
         })
     })
 
-    window.addEventListener( 'resize', onWindowResize, false );
+    //Gizmo controls
+    document.getElementById("camera-top").addEventListener("click", (e) => {
+        camera.position.set(0, 400, 0)
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
+    })
+
+    document.getElementById("camera-bottom").addEventListener("click", (e) => {
+        camera.position.set(0, -400, 0)
+        camera.setRotationFromEuler(new THREE.Euler(0, 180, 0))
+    })
+
+    document.getElementById("camera-left").addEventListener("click", (e) => {
+        camera.position.set(-200, 0, 0)
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
+    })
+
+    document.getElementById("camera-right").addEventListener("click", (e) => {
+        camera.position.set(200, 0, 0)
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
+    })
+
+    window.addEventListener('resize', onWindowResize, false );
 
     function onWindowResize(){
         camera.aspect = window.innerWidth / window.innerHeight;
