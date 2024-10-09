@@ -1068,7 +1068,6 @@
 			flipYX = e.target.checked;
 		});
 
-		// document..getElementById('svg-container').addEventListener("click",(e))
 		document
 			.getElementById("svg-container")
 			.addEventListener("mousedown", (e) => {
@@ -1297,6 +1296,7 @@
 			tag.style.transform = `translate(0%, -40px)`;
 
 			if (mouseDown && mouseInContainer) {
+				spawnLabel()
 				const svgElement = globalSvgContainer.querySelector("svg");
 				if (svgElement != null) {
 					// Calculate sensitivity based on SVG resolution and size
@@ -1858,10 +1858,10 @@
 							const fields = line.split(",");
 
 							const [name, x, y, z] = fields;
-							const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`;
+							const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`; //Curly line for easier text separation 
 							scaleToFit = true;
 
-							return `${cleanedName},${-y},${-x}`; // Swap x and y
+							return `${cleanedName},${-y},${-x},${name}`; // Swap x and y
 						});
 					}
 
@@ -1926,9 +1926,17 @@
 								const floorData = {
 									field: "data-floor",
 									value: floor,
-								}; //Floor data to become custom HTML attribute
+								};
 								data.push(floorData);
-								globalFloors.push({
+							}
+
+							const fullName = { // Custom attribute to be used as unique identifier for functions
+								field: "data-fullname",
+								value: fields[3]
+							}
+							data.push(fullName)
+
+							globalFloors.push({
 									floor: floor,
 									circle: spawnCircle(
 										name,
@@ -1937,16 +1945,6 @@
 										data,
 									),
 								});
-							} else {
-								console.log(
-									spawnCircle(
-										name,
-										Number(fields[2]).toFixed(4),
-										Number(fields[1]).toFixed(4),
-										data,
-									),
-								);
-							}
 						} else {
 							console.error(
 								`${
@@ -1979,7 +1977,7 @@
 
 					showLabelsToggle.addEventListener("change", (e) => {
 						if (e.target.checked) {
-							spawnLabel(gInstance);
+							spawnLabel();
 						} else {
 							killLabels();
 						}
@@ -2028,6 +2026,7 @@
 
 							checkbox.addEventListener("change", (e) => {
 								toggleFloors(aggregatePoints)
+								spawnLabel()
 							});
 
 							floorSection.appendChild(div);
@@ -2061,6 +2060,7 @@
 					aggregateOptionsCheckbox.addEventListener("change", (e) => {
 						aggregatePoints = e.target.checked;
 						toggleFloors(aggregatePoints)
+						spawnLabel()
 					});
 
 					// Scale bounding box to fit within the SVG frame
@@ -2196,6 +2196,10 @@
 				document.querySelector("delete-point").click();
 			}
 		});
+
+		window.addEventListener('resize', (e) => {
+			spawnLabel()
+		})
 
 		function setUnit() {
 			for (var i = 0; i < groupGlobal.length; i++) {
@@ -2814,103 +2818,122 @@
 			);
 		});
 
-		function spawnLabel(group) {
-			var circles = [];
-			console.log("Group");
-			console.log(group);
-			if (group.length > 1) {
-			} else if (group instanceof SVGGElement) {
-				circles = [].slice.call(group.getElementsByTagName("circle"));
+		function spawnLabel() {
+			killLabels(true)
+			if(document.getElementById("showLabelsToggle")){
+				if(document.getElementById("showLabelsToggle").checked){
+					var circles = [];
+					const group = globalSvgContainer.querySelector('svg').querySelector('g')
+					console.log(globalSvgContainer.querySelector('svg').querySelector('g'))
+					if (group.length > 1) {
+					} else if (group instanceof SVGGElement) {
+						circles = [].slice.call(group.getElementsByTagName("circle"));
+					}
+					console.log(circles);
+
+					const svgContainer = document.getElementById("svg-container");
+					const { scaleX, scaleY } = calculateSensitivity(
+						globalSvgContainer.querySelector("svg"),
+					);
+					const { width } = globalSvgContainer
+						.querySelector("svg")
+						.getBoundingClientRect();
+					const labelDiv = document.createElement("div");
+					labelDiv.setAttribute("id", "labelDiv");
+					labelDiv.style.width = "4096px";
+					labelDiv.style.height = "4096px";
+					labelDiv.style.position = "absolute";
+					labelDiv.style.transform = `scale(${1 / scaleX})`;
+					labelDiv.style.left = `-${2048 - 4096 / scaleY / 2}px`;
+					labelDiv.style.top = `-${2048 - 4096 / scaleY / 2}px`;
+					labelDiv.style.pointerEvents = "none"
+
+					const createParagraph = (className, text, display) => {
+						const p = document.createElement("p");
+						Object.assign(p.style, {
+							color: "white",
+							margin: "0",
+							pointerEvents: 'none',
+							lineHeight: '1.5em',
+							display,
+						});
+						p.className = className;
+						p.textContent = text;
+						return p;
+					};
+
+					const createDiv = (e) => {
+						const div = document.createElement("div");
+						div.setAttribute("data-fullname", e.getAttribute("data-fullname"))
+						Object.assign(div.style, {
+							position: "absolute",
+							left: `${e.getAttribute("cx")}px`,
+							top: `${e.getAttribute("cy")}px`,
+							transform: "translate(-50%, 1%)",
+							backgroundColor: "rgba(0, 0, 0, 0.5)",
+							border: "2px solid rgba(255, 255, 255, 0.1)",
+							padding: "4px 24px",
+							borderRadius: "0.75rem",
+							marginBottom: "0.25rem",
+							zIndex: "10",
+							backdropFilter: "blur(10px)",
+							pointerEvents: "none",
+							cursor: "pointer",
+							textAlign: "center",
+							fontSize: "2.25rem",
+						});
+
+						const idText = e.id.replace(/([A-Z0-9])/g, " $1").trim();
+						div.appendChild(
+							createParagraph("text-normal", idText, "block"),
+						);
+						div.appendChild(createParagraph("text-hover", idText, "none"));
+
+						div.onmouseover = () => toggleHover(div, true);
+						div.onmouseout = () => toggleHover(div, false);
+						// div.onmousedown = (e) => {
+						// 	console.log(e.target)
+						// 	console.log(document.querySelector(`[data-fullname="${e.target.getAttribute("data-fullname")}"]`))
+						// 	tempSelected = document.querySelector(`[data-fullname="${e.target.getAttribute("data-fullname")}"]`)
+						// 	multiSelect = false
+						// 	console.log(tempSelected)
+
+						// }
+						// div.onclick = () => killLabels(false);
+						return div;
+					};
+
+					const toggleHover = (div, isHovered) => {
+						div.style.borderColor = isHovered
+							? "rgba(255, 255, 255, 1)"
+							: "rgba(255, 255, 255, 0.1)";
+						div.querySelector(".text-normal").style.display = isHovered
+							? "none"
+							: "block";
+						div.querySelector(".text-hover").style.display = isHovered
+							? "block"
+							: "none";
+					};
+
+					circles.forEach((e) => {
+						const div = createDiv(e);
+						labelDiv.appendChild(div);
+						svgContainer.appendChild(labelDiv)
+					});
+				}
 			}
-			console.log(circles);
 
-			const svgContainer = document.getElementById("svg-container");
-			const { scaleX, scaleY } = calculateSensitivity(
-				globalSvgContainer.querySelector("svg"),
-			);
-			const { width } = globalSvgContainer
-				.querySelector("svg")
-				.getBoundingClientRect();
-			const labelDiv = document.createElement("div");
-			labelDiv.setAttribute("id", "labelDiv");
-			labelDiv.style.width = "4096px";
-			labelDiv.style.height = "4096px";
-			labelDiv.style.position = "absolute";
-			labelDiv.style.transform = `scale(${1 / scaleX})`;
-			labelDiv.style.left = `-${2048 - 4096 / scaleY / 2}px`;
-			labelDiv.style.top = `-${2048 - 4096 / scaleY / 2}px`;
-
-			const createParagraph = (className, text, display) => {
-				const p = document.createElement("p");
-				Object.assign(p.style, {
-					color: "white",
-					margin: "0",
-					display,
-				});
-				p.className = className;
-				p.textContent = text;
-				return p;
-			};
-
-			const createDiv = (e) => {
-				const div = document.createElement("div");
-				Object.assign(div.style, {
-					position: "absolute",
-					left: `${e.getAttribute("cx")}px`,
-					top: `${e.getAttribute("cy")}px`,
-					transform: "translate(-50%, 1%)",
-					backgroundColor: "rgba(0, 0, 0, 0.5)",
-					border: "2px solid rgba(255, 255, 255, 0.1)",
-					padding: "8px 16px",
-					borderRadius: "0.75rem",
-					marginBottom: "0.25rem",
-					zIndex: "10",
-					backdropFilter: "blur(10px)",
-					cursor: "pointer",
-					textAlign: "center",
-					fontSize: "2.25rem",
-				});
-
-				const idText = e.id.replace(/([A-Z0-9])/g, " $1").trim();
-				div.appendChild(
-					createParagraph("text-normal", idText, "block"),
-				);
-				div.appendChild(createParagraph("text-hover", idText, "none"));
-
-				div.onmouseover = () => toggleHover(div, true);
-				div.onmouseout = () => toggleHover(div, false);
-				div.onclick = killLabels;
-				return div;
-			};
-
-			const toggleHover = (div, isHovered) => {
-				div.style.borderColor = isHovered
-					? "rgba(255, 255, 255, 1)"
-					: "rgba(255, 255, 255, 0.1)";
-				div.querySelector(".text-normal").style.display = isHovered
-					? "none"
-					: "block";
-				div.querySelector(".text-hover").style.display = isHovered
-					? "block"
-					: "none";
-			};
-
-			circles.forEach((e) => {
-				const div = createDiv(e);
-				labelDiv.appendChild(div);
-				svgContainer.appendChild(labelDiv)
-			});
-
-			console.log(labelDiv);
 		}
 
-		function killLabels() {
+		function killLabels(toggleChecked?) {
 			if (document.getElementById("labelDiv")) {
 				document.getElementById("labelDiv").remove();
-				console.log(
-					document.getElementById("showLabelsToggle").checked,
-				);
-				document.getElementById("showLabelsToggle").checked = false;
+				if(!toggleChecked){
+					document.getElementById("showLabelsToggle").checked = false;
+				} else {
+					console.log("toggleChecked true, retaining checked state")
+				}
+				
 			} else {
 				console.log("labelDiv not found");
 			}
