@@ -12,7 +12,7 @@ import ObjectList from "../components/object-list.tsx";
     </head>
     <body id="drop-zone">
         <div class="ui-area transition-all bg-zinc-100 p-3 rounded-sm" id="ui-area">
-            <a href="/" class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg">
+            <a href="/" class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg">
                 <div class="align-center content-center">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
@@ -25,10 +25,10 @@ import ObjectList from "../components/object-list.tsx";
             
             <div class="flex space-x-1 mt-3">
                 <p class="font-medium">Flip:</p>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip"> X-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-flip"> Y-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="z-flip"> Z-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-up"> -Y Coords </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip"> X-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-flip"> Y-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="z-flip"> Z-Axis </button>
+                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-up"> -Y Coords </button>
             </div>
 
             
@@ -39,18 +39,18 @@ import ObjectList from "../components/object-list.tsx";
                 </div>
                 <div>
                     <label for="scale-slider">Cone Size</label>
-                    <input type="range" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
+                    <input type="range" class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
                 </div>
                 <div>
                     <label for="scale-slider">Scale</label>
-                    <input type="range" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
+                    <input type="range" class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
                 </div>
             </div>
 
             
             <!-- <ObjectList client:load /> -->
 
-            <button id="export-all-fbx" class="flex bg-zinc-600 text-white p-3 mt-3 rounded-md" style="margin-bottom: 10px">
+            <button id="export-all-fbx" class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-3 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400" style="margin-bottom: 10px">
                 Export All To GLB
                 <svg
                 xmlns="http://www.w3.org/2000/svg"
