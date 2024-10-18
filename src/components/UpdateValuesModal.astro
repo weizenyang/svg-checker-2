@@ -1,0 +1,305 @@
+<dialog id="updateValuesDialog" class="m-auto z-50 bg-[#00000077]">
+    <form method="dialog" class="m-auto z-100">
+        <div class="flex flex-row justify-between bg-[#ffffffee]">
+            <div class="flex flex-col p-2 bg-transparent">
+                <p>Not in Editor:</p>
+                <p id="notInEditor" class="text-sm max-w-[360px]">-</p>
+            </div>
+            <div class="flex flex-row items-center">
+                <label for="addToEditor"> Add to editor </label>
+                <input
+                    type="checkbox"
+                    id="addToEditor"
+                    class="ml-2 mr-2"
+                    checked
+                />
+            </div>
+        </div>
+
+        <div class="w-[500px] h-[500px] bg-white">
+            <button class="close absolute" id="updateValuesDialogClose"
+                >&times;</button
+            >
+            <div id="domList" class="h-full overflow-y-scroll"></div>
+        </div>
+        <button
+            id="replaceButton"
+            class="w-full bg-slate-700 hover:bg-slate-900 text-white text-center p-2 rounded-sm"
+        >
+            Replace
+        </button>
+    </form>
+</dialog>
+
+<script>
+    import {
+        currentValuesList,
+        updateValuesList,
+        updateValuesModal,
+        circlesToSpawn
+    } from "../store.js";
+    import lunr from "lunr";
+
+    var localList = [];
+    const thisDialog = document.getElementById("updateValuesDialog");
+    thisDialog.addEventListener("click", function (event) {
+        // dialog.close()
+        event.preventDefault();
+        // updateValuesModal.set(false)
+    });
+
+    document
+        .getElementById("updateValuesDialogClose")
+        .addEventListener("click", (e) => {
+            updateValuesModal.set(false);
+        });
+
+    updateValuesModal.subscribe((open) => {
+        console.log(open);
+        if (open && !thisDialog.getAttribute("open")) {
+            console.log("Open modal");
+            thisDialog.showModal();
+        } else {
+            console.log("Close modal");
+            thisDialog.close();
+        }
+    });
+
+    currentValuesList.listen((list) => {
+        const extractedNamesFromFile = updateValuesList.get().map((e) => {
+            if(e) {
+                return e.name;
+            }
+
+        });
+        console.log("extractedNamesFromFile");
+        console.log(extractedNamesFromFile);
+        const extractedNamesFromEditor = currentValuesList.get().map((e) => {
+            if(e.getAttribute("id") != "undefined") {
+                return { name: e.getAttribute("id"), circle: e };
+            }
+            
+        });
+        console.log(extractedNamesFromEditor);
+        // const index = lunr(function () {
+        //     this.field('name');
+        //     extractedNamesFromFile.forEach(field => this.add({name: field.name}));
+        // });
+
+        // console.log(index)
+
+        // extractedNamesFromEditor.forEach((name) => {
+        //     const result = index.search(name);
+        //     console.log(result)
+        // })
+        function levenshteinDistance(str1, str2) {
+            const len1 = str1.length;
+            const len2 = str2.length;
+
+            const matrix = [];
+
+            // Initialize the matrix
+            for (let i = 0; i <= len1; i++) {
+                matrix[i] = [i];
+            }
+            for (let j = 0; j <= len2; j++) {
+                matrix[0][j] = j;
+            }
+
+            // Fill in the matrix
+            for (let i = 1; i <= len1; i++) {
+                for (let j = 1; j <= len2; j++) {
+                    if (str1[i - 1] === str2[j - 1]) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j] + 1, // Deletion
+                            matrix[i][j - 1] + 1, // Insertion
+                            matrix[i - 1][j - 1] + 1, // Substitution
+                        );
+                    }
+                }
+            }
+
+            return matrix[len1][len2];
+        }
+
+        function similarity(str1, str2) {
+            if (str1 && str2) {
+                const maxLength = Math.max(str1.length, str2.length);
+
+                if (maxLength === 0) {
+                    return 1; // If both strings are empty, they are 100% similar
+                }
+
+                const distance = levenshteinDistance(str1, str2);
+                return (maxLength - distance) / maxLength;
+            }
+        }
+
+        function findClosestMatches(array1, array2WithIdentifiers) {
+            const matches = array2WithIdentifiers.map((str2Obj) => {
+                if (str2Obj.name && typeof str2Obj.name !== "undefined") {
+                    let bestMatch = "";
+                    let minDistance = Infinity;
+                    let highestSimilarity = -1;
+                    let circle = str2Obj.circle;
+
+                    // First, check for substring match in array1
+                    const substrMatch = array1.find(
+                        (str1) =>
+                            str2Obj.name.includes(str1) ||
+                            str1.includes(str2Obj.name),
+                    );
+
+                    if (substrMatch) {
+                        bestMatch = substrMatch; // Prioritize substring match
+                    } else {
+                        // If no substring match, calculate Levenshtein distance
+                        array1.forEach((str1) => {
+                            if (str1 && typeof str1 !== "undefined") {
+                                const distance = levenshteinDistance(
+                                    str1.toLowerCase(),
+                                    str2Obj.name.toLowerCase(),
+                                );
+                                const simScore = similarity(str1, str2Obj.name);
+
+                                if (simScore && distance < minDistance) {
+                                    minDistance = distance;
+                                    bestMatch = str1;
+                                    highestSimilarity = simScore;
+                                }
+                            }
+                        });
+                    }
+
+                    return {
+                        string: str2Obj.name,
+                        bestMatch: bestMatch,
+                        circle: circle,
+                        similarity: highestSimilarity,
+                    };
+                }
+            });
+
+            return matches;
+        }
+
+        // Example usage:
+        const array1 = extractedNamesFromFile.filter((e) => { 
+            if (e){
+                return e
+            }
+        });
+        const array2 = extractedNamesFromEditor.filter((e) => { 
+            if (e){
+                return e
+            }
+        });
+        
+
+        const closestMatches = findClosestMatches(array1, array2);
+
+        localList = closestMatches;
+        localList.filter((e) => {
+            e != null || typeof e != undefined;
+        });
+        const uniqueBestMatches = [
+            ...new Set(
+                array1.map((e) => {
+                    if (e) {
+                        return e;
+                    }
+                }),
+            ),
+        ];
+
+        localList.map((e, id) => {
+            if (e) {
+                const domList = document.getElementById("domList");
+                const checkbox = document.createElement("input");
+                const label = document.createElement("label");
+                const div = document.createElement("div");
+
+                checkbox.type = "checkbox";
+                checkbox.checked = true;
+                checkbox.id = `ref-${id}`;
+                checkbox.style.margin = "0px 10px";
+
+                // Create a dropdown for the bestMatch
+                const select = document.createElement("select");
+                select.style.backgroundColor = "#00000022";
+                select.id = `ref2-${id}`;
+                select.addEventListener("change", (e) => {
+                    const index = e.target.id.split("-")[1];
+                    localList[index].bestMatch = e.target.value;
+                    updateUnused()
+                });
+                uniqueBestMatches.forEach((match) => {
+                    const option = document.createElement("option");
+                    option.value = match;
+                    option.innerText = match;
+                    if (match === e.bestMatch) {
+                        option.selected = true; // Set the default selection to current bestMatch
+                    }
+                    select.appendChild(option);
+                });
+
+                label.innerText = `${e.string} -> `;
+                div.style.margin = "5px 10px";
+                div.style.borderBottom = "1px";
+                div.style.borderColor = "#00000077";
+                div.style.borderStyle = "solid";
+                div.append(checkbox);
+                div.append(label);
+                div.append(select); // Append the dropdown
+                domList.append(div);
+                updateUnused()
+            }
+        });
+
+        function updateUnused(){
+            var localUnusedLabels = [...uniqueBestMatches] //Initialise full array to be subtracted
+            console.log(localUnusedLabels)
+            console.log(uniqueBestMatches)
+            document.getElementById("domList").querySelectorAll("input").forEach((e) => {
+                const id = e.id.split("-")[1];
+                console.log(localList[id].bestMatch)
+                if(localUnusedLabels.includes(localList[id].bestMatch)){
+                    localUnusedLabels.splice(localUnusedLabels.indexOf(localList[id].bestMatch), 1)
+                };
+            });
+
+            document.getElementById("notInEditor").innerText = [...localUnusedLabels].join(", ")
+
+            return localUnusedLabels
+        }
+
+
+
+        //Replace ID once selected
+        document
+            .getElementById("replaceButton")
+            .addEventListener("click", (e) => {
+                document
+                    .getElementById("domList")
+                    .querySelectorAll("input")
+                    .forEach((e) => {
+                        if(e.checked){
+                            const id = e.id.split("-")[1];
+                            localList[id].circle.id = localList[id].bestMatch;
+                        }
+
+                    });
+
+                if(document.getElementById("addToEditor").checked){
+                    const unusedLabels = updateUnused()
+                    circlesToSpawn.set(unusedLabels)
+
+
+                }
+
+                updateValuesModal.set(false);
+            });
+    });
+</script>

@@ -1,4 +1,5 @@
 ---
+import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 
 ---
 
@@ -16,7 +17,7 @@
 				<h1>Drag and Drop Here</h1>
 			</div>
 		</div>
-
+		<UpdateValuesModal/>
 		<main class="toolsets" style="display: flex">
 			<div class="toolset-section">
 				<a href="/" class="flex w-fit border-2 pl-2 pr-2 p-1 mb-2 text-center rounded-md content-center hover:bg-neutral-100">
@@ -117,6 +118,39 @@
 						name="filename"
 						style="display:none; "
 					/>
+					<label for="updateValues" class="flex bg-[#ffffff] hover:bg-[#dddddd] items-center justify-center border border-neutral-700 rounded-[4px] p-0.5 mt-1.5 text-sm text-[#333333] align-center cursor-pointer"
+					>Update Names
+					<svg class="ml-1"
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						>
+						<path
+							d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+							stroke-width="2"></path>
+						<polyline points="17 8 12 3 7 8" stroke-width="2"
+						></polyline>
+						<line
+							x1="12"
+							x2="12"
+							y1="3"
+							y2="15"
+							stroke-width="2"></line>
+					</svg></label
+				>
+				<input
+					type="file"
+					class="input-style"
+					id="updateValues"
+					name="filename"
+					accept="text/csv"
+					style="display:none"
+				/>
 				</section>
 
 				<section class="container">
@@ -344,7 +378,7 @@
 					</ul>
 				</div>
 
-				<dialog>
+				<dialog id="tutorial">
 					<button
 						class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
 						autofocus>Close</button
@@ -878,6 +912,9 @@
 	</style>
 
 	<script>
+
+		import { transform } from 'typescript';
+import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn } from '../store.js';
 		enum format {
 			underscore,
 			dash,
@@ -909,9 +946,9 @@
 		let checkboxesId = [];
 
 		//Tutorial
-		const dialog = document.querySelector("dialog");
+		const dialog = document.querySelector("#tutorial");
 		const showTutorial = document.querySelector("#showTutorial");
-		const closeButton = document.querySelector("dialog button");
+		const closeButton = document.querySelector("#tutorial button");
 
 		// "Show the dialog" button opens the dialog modally
 		showTutorial.addEventListener("click", () => {
@@ -1336,7 +1373,7 @@
 						);
 					}
 
-					console.log("Mouse Down + Move");
+					// console.log("Mouse Down + Move");
 				}
 			} else if (rightMouseDown && mouseInContainer) {
 				const svgElement = globalSvgContainer.querySelector("svg");
@@ -1574,61 +1611,18 @@
 			return circle;
 		}
 
-		const scaleBoundingBoxToFitSVG = (svgElement) => {
-			const circles = svgElement.querySelectorAll("circle");
-			if (circles.length === 0) return;
+		//Listen to the UpdateValeusModal for circle spawn updates
+		circlesToSpawn.listen((circles) => {
+			console.log("New Circles!")
+			const spacing = 2000 / circles.length
+			circles.map((e, id) => {
+				console.log(circles)
+				spawnCircle(e, (id * spacing) + 40, 70, [])
+			})
+			spawnLabel()
+		})
 
-			let minX = Infinity,
-				maxX = -Infinity,
-				minY = Infinity,
-				maxY = -Infinity;
-
-			circles.forEach((circle) => {
-				const cx = parseFloat(circle.getAttribute("cx"));
-				const cy = parseFloat(circle.getAttribute("cy"));
-				const r = parseFloat(circle.getAttribute("r"));
-
-				if (cx - r < minX) minX = cx - r;
-				if (cx + r > maxX) maxX = cx + r;
-				if (cy - r < minY) minY = cy - r;
-				if (cy + r > maxY) maxY = cy + r;
-			});
-
-			const bboxWidth = maxX - minX;
-			const bboxHeight = maxY - minY;
-
-			const viewBox = svgElement.viewBox.baseVal;
-			const svgWidth = viewBox.width;
-			const svgHeight = viewBox.height;
-
-			const margin = 0.2; // 1/5 margin
-
-			const maxAllowedWidth = svgWidth * (1 - margin);
-			const maxAllowedHeight = svgHeight * (1 - margin);
-
-			const widthScale = maxAllowedWidth / bboxWidth;
-			const heightScale = maxAllowedHeight / bboxHeight;
-
-			const scale = Math.min(widthScale, heightScale, 1); // Scale down if necessary
-
-			// Calculate the offset to center the scaled bounding box
-			const offsetX = (svgWidth - bboxWidth * scale) / 2 - minX * scale;
-			const offsetY = (svgHeight - bboxHeight * scale) / 2 - minY * scale;
-
-			// Apply scaling and translation to each circle
-			circles.forEach((circle) => {
-				const cx = parseFloat(circle.getAttribute("cx"));
-				const cy = parseFloat(circle.getAttribute("cy"));
-
-				const newCx = cx * scale + offsetX;
-				const newCy = cy * scale + offsetY;
-
-				circle.setAttribute("cx", newCx.toFixed(4));
-				circle.setAttribute("cy", newCy.toFixed(4));
-				circle.setAttribute("r", 30);
-			});
-		};
-
+		//Scale from center / scale from bounding box
 		const scaleBoundingBoxToFitInstance = (svgElement, elArray) => {
 			const circles = elArray;
 			if (circles.length === 0) return;
@@ -1682,6 +1676,8 @@
 				circle.setAttribute("cy", newCy.toFixed(4));
 				circle.setAttribute("r", 30);
 			});
+
+			spawnLabel()
 		};
 
 		function handleFileChange(file) {
@@ -1833,24 +1829,17 @@
 				};
 				reader.readAsDataURL(file);
 			} else if (file.type === "text/csv") {
-				if (
-					document
-						.getElementById("svg-container")
-						.getElementsByTagName("p").length > 0
-				) {
+				if (document.getElementById("svg-container").getElementsByTagName("p").length > 0) 
+				{
 					Array.from(
-						document
-							.getElementById("svg-container")
-							.getElementsByTagName("p"),
-					).forEach((e) => {
+						document.getElementById("svg-container").getElementsByTagName("p"),).forEach((e) => {
 						e.remove();
 					});
 				}
 
 				fileNameGlobal = file.name;
 
-				document.getElementById("export-file-name").value =
-					fileNameGlobal;
+				document.getElementById("export-file-name").value = fileNameGlobal;
 				const reader = new FileReader();
 				reader.onload = (event) => {
 					const contents = event.target.result;
@@ -2091,10 +2080,39 @@
 			handleFileChange(fileInput.files[0]);
 		});
 
+		document.getElementById("updateValues").addEventListener('click', (e) => {
+			updateValuesList.set([])
+			currentValuesList.set([])
+			updateValuesModal.set(false)
+			console.log("UpdateValues clicked")
+		})
+
+		document.getElementById("updateValues").addEventListener("change", () => {
+			updateValues(document.getElementById("updateValues").files[0])
+		});
+
+		var animationTimeout;
 		document.body.addEventListener("dragover", (e) => {
 			event.preventDefault(); // Prevent the default behavior
 			document.querySelector(".drag-drop-prompt").classList.add("appear");
+			if(animationTimeout != null){
+				clearTimeout(animationTimeout)
+				animationTimeout = setTimeout((e) => {
+					document.querySelector(".drag-drop-prompt").classList.remove("appear");
+				}, 500)
+			} else {
+				animationTimeout = setTimeout((e) => {
+					document.querySelector(".drag-drop-prompt").classList.remove("appear");
+				}, 500)
+			}
+
 		});
+
+		document.body.addEventListener("dragend", (e) => {
+			event.preventDefault(); // Prevent the default behavior
+			document.querySelector(".drag-drop-prompt").classList.remove("appear");
+		});
+
 
 		document.body.addEventListener("drop", (e) => {
 			e.preventDefault();
@@ -2127,7 +2145,7 @@
 		});
 
 		document.addEventListener("keydown", (e) => {
-			console.log(e);
+			
 			if (e.key == "Escape") {
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.classList.remove("svg-tool-selected");
@@ -2203,7 +2221,11 @@
 
 			if (e.key == "Delete") {
 				document.querySelector("delete-point").click();
+				spawnLabel()
 			}
+
+			spawnLabel()
+			
 		});
 
 		window.addEventListener('resize', (e) => {
@@ -2788,6 +2810,7 @@
 					// }
 				},
 			);
+			spawnLabel()
 		});
 
 		document.getElementById("flip-y").addEventListener("click", (e) => {
@@ -2825,6 +2848,7 @@
 					// }
 				},
 			);
+			spawnLabel()
 		});
 
 		function spawnLabel() {
@@ -2834,7 +2858,7 @@
 					var circles = [];
 					const group = globalSvgContainer.querySelector('svg').querySelector('g')
 					console.log(globalSvgContainer.querySelector('svg').querySelector('g'))
-					if (group.length > 1) {
+					if (!group) {
 					} else if (group instanceof SVGGElement) {
 						circles = [].slice.call(group.getElementsByTagName("circle"));
 					}
@@ -2887,7 +2911,7 @@
 							zIndex: "10",
 							backdropFilter: "blur(10px)",
 							pointerEvents: "none",
-							cursor: "pointer",
+							cursor: "pointer", 
 							textAlign: "center",
 							fontSize: "2.25rem",
 						});
@@ -2900,15 +2924,6 @@
 
 						div.onmouseover = () => toggleHover(div, true);
 						div.onmouseout = () => toggleHover(div, false);
-						// div.onmousedown = (e) => {
-						// 	console.log(e.target)
-						// 	console.log(document.querySelector(`[data-fullname="${e.target.getAttribute("data-fullname")}"]`))
-						// 	tempSelected = document.querySelector(`[data-fullname="${e.target.getAttribute("data-fullname")}"]`)
-						// 	multiSelect = false
-						// 	console.log(tempSelected)
-
-						// }
-						// div.onclick = () => killLabels(false);
 						return div;
 					};
 
@@ -2940,12 +2955,68 @@
 				if(!toggleChecked){
 					document.getElementById("showLabelsToggle").checked = false;
 				} else {
-					console.log("toggleChecked true, retaining checked state")
+					// console.log("toggleChecked true, retaining checked state")
 				}
 				
 			} else {
-				console.log("labelDiv not found");
+				// console.log("labelDiv not found");
 			}
+		}
+
+		function updateStates(circles, transformedLines, group){
+					if (!group) {
+					} else if (group instanceof SVGGElement) {
+						console.log("Is group")
+						var thisCircles = [].slice.call(group.getElementsByTagName("circle"));
+
+						updateValuesModal.set(true)
+						console.log("Set updateValuesModal")
+						updateValuesList.set(transformedLines)
+						currentValuesList.set(thisCircles)
+					}
+				}
+
+		function updateValues(file){
+			
+			var circles = [];
+			const group = globalSvgContainer.querySelector('svg').querySelector('g')
+			console.log(group)
+
+			const reader = new FileReader();
+			reader.onload = (event) => {
+					const contents = event.target.result;
+					const lines = contents.trim().split("\n");
+
+					// Check the number of columns and decide to transform
+					const firstLineFields = lines[0].split(",");
+					let transformedLines = lines;
+
+					if (firstLineFields.length > 3) { //Camera CSV
+						transformedLines = lines.map((line) => {
+							const fields = line.split(",");
+							const [name, x, y, z] = fields; 
+							const cleanedName = name.split("_")[1] ? name.split("_")[1] : undefined
+							if(cleanedName){
+								return {"name": cleanedName, "x": -y, "y": -x}; // Swap x and y
+							}
+							
+						});
+						updateStates(circles, transformedLines, group)
+					} else { //Floorplan CSV
+						transformedLines = lines.map((line) => {
+							const fields = line.split(",");
+							const [name, x, y] = fields;
+							const cleanedName = name.split("_")[1] ? name.split("_")[1] : undefined
+							if(cleanedName){
+								return {"name": cleanedName, "x": x, "y": y}; // Swap x and y
+							}
+						});
+						updateStates(circles, transformedLines, group)
+					}
+					spawnLabel()
+				}
+				reader.readAsText(file);
+
 		}
 
 		function removeData() {
