@@ -10,7 +10,7 @@ import ObjectList from "../components/object-list.tsx";
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Three.js - Three Sides of a Cube</title>
     </head>
-    <body id="drop-zone">
+    <body id="drop-zone" class="overflow-hidden">
         <div class="ui-area transition-all bg-zinc-100 p-3 rounded-sm" id="ui-area">
             <a href="/" class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg">
                 <div class="align-center content-center">
@@ -36,6 +36,10 @@ import ObjectList from "../components/object-list.tsx";
                 <div>
                     <label for="center-csv">Center</label>
                     <input type="checkbox" id="center-csv" name="center-csv">
+                </div>
+                <div>
+                    <label for="show-labels">Show Labels</label>
+                    <input type="checkbox" id="show-labels" name="show-labels" checked>
                 </div>
                 <div>
                     <label for="scale-slider">Cone Size</label>
@@ -76,6 +80,8 @@ import ObjectList from "../components/object-list.tsx";
                 </div>
             </div>
 
+
+
         </div>
 
         <div class="fixed right-0 h-42 w-40 bg-neutral-100" id="gizmo">
@@ -104,10 +110,11 @@ import ObjectList from "../components/object-list.tsx";
 
         
         
-        <div id="tag">
+        <div id="tag" class="z-[101]">
             <h3 id="label">-</h3>
         </div>
     </body>
+    <div id="marker-label-container" class="overflow-hidden pointer-events-none z-[100]"></div>
 </html>
 
 <script>
@@ -139,6 +146,7 @@ import ObjectList from "../components/object-list.tsx";
     var VRSpheres = []
     var objects = []
     var markers = []
+    let labelContainer;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.autoClear=false;
@@ -274,9 +282,6 @@ import ObjectList from "../components/object-list.tsx";
                         const selectedMarkers = globalFloors.filter(i => i.floor == selectedFloor);
 
 						if(e.target.checked){
-                            // markers.forEach((e) => {
-                            //     e.visible = false
-                            // })
                             selectedMarkers.forEach((e) => {
                                 e.arrow.visible = true
                             })
@@ -286,6 +291,7 @@ import ObjectList from "../components/object-list.tsx";
                             })
                         }
 
+                        createLabels()
 
 					})
 
@@ -438,7 +444,6 @@ function animate() {
         // positionObjects = orthoPositionObjects
 
         if (positionObjects.length > 0) {
-            console.log(positionObjects[0]);
             idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
             idLabel.style.color = "#007700";
             idLabel.style.lineHeight = "1em";
@@ -469,7 +474,6 @@ function animate() {
     orbitalControls.update();
     orthoCamera.position.copy(camera.position)
     orthoCamera.rotation.copy(camera.rotation)
-    console.log(orthoCamera.zoom)
     orthoCamera.zoom = 100 / orbitalControls.getDistance()
     orthoCamera.updateProjectionMatrix()
     // orthoCamera.left = (orthoView.clientWidth / -2) * orbitalControls.getDistance()
@@ -496,6 +500,8 @@ function animate() {
         renderer.clearDepth();
         renderer.render(e, camera);
     });
+
+    updateLabelPositions();
 
     // Render loop for orthographic camera
         orthoRenderer.clear();
@@ -917,8 +923,76 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
         markers.push(cone)
         return cone;
     }
+    var showMarkerNames = false
 
-    // Function to create a CSV from sphere groups and trigger download
+// Create a label div for each marker
+function createLabels() {
+    document.getElementById("marker-label-container").innerHTML = "";
+    var copiedMarkers;
+    copiedMarkers = markers.filter(e => e.visible)
+    copiedMarkers.forEach(marker => {
+        const labelDiv = document.createElement('div');
+        labelDiv.style.backgroundColor = "#444444"
+        labelDiv.style.padding = "2px 5px"
+        labelDiv.style.borderRadius = "6px"
+        labelDiv.className = 'marker-label';
+        labelDiv.innerText = marker.name;
+        
+        // Style the label
+        labelDiv.style.position = 'absolute';
+        labelDiv.style.color = 'white';
+        labelDiv.style.fontSize = '10px';
+        
+        document.getElementById("marker-label-container").appendChild(labelDiv);
+        marker.userData.label = labelDiv; // Store the label in userData
+    });
+}
+
+// Function to update label positions on the screen
+function updateLabelPositions() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const widthHalf = width / 2;
+    const heightHalf = height / 2;
+
+    const distances = markers.map(marker => camera.position.distanceTo(marker.position));
+    const minDistance = Math.min(...distances);
+    const maxDistance = Math.max(...distances);
+    const distanceRange = maxDistance - minDistance || 1;
+
+    // Sort markers by distance from the camera (closest markers first)
+    const sortedMarkers = markers.sort((a, b) => {
+        const distanceA = camera.position.distanceTo(a.position);
+        const distanceB = camera.position.distanceTo(b.position);
+        return distanceA - distanceB;
+    }).filter(e => e.visible)
+
+    sortedMarkers.map((marker, i) => {
+        console.log(marker)
+        const labelDiv = marker.userData.label;
+        if (!labelDiv) return;
+
+        // Get the 3D position of the marker and project it to 2D
+        const vector = new THREE.Vector3();
+        vector.setFromMatrixPosition(marker.matrixWorld).project(camera);
+
+        // Convert to 2D screen space
+        const x = (vector.x * widthHalf) + widthHalf;
+        const y = -(vector.y * heightHalf) + heightHalf;
+
+        // Update label position and visibility based on camera view
+        labelDiv.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+        labelDiv.style.display = (vector.z > -1 && vector.z < 1) ? 'block' : 'none';
+
+        // Calculate distance and adjust opacity based on the relative distance
+        const distance = camera.position.distanceTo(marker.position);
+        const normalizedDistance = (distance - minDistance + 1) / distanceRange;
+        const minOpacity = 0.2;
+        labelDiv.style.opacity = minOpacity + (1 - minOpacity) * (1 - normalizedDistance) ** (maxDistance / minDistance);
+        labelDiv.style.zIndex = 1000 - Math.floor(distance); // Higher z-index for closer markers
+    });
+}
+
 function createCSVFromSphereGroups(csvGroups) {
     let csvContent = ""; // CSV header
 
@@ -1076,6 +1150,7 @@ function convertFBXtoGLB(position, rotation) {
             scene.add(group);
             m_Group = group;
         }
+        createLabels();
         csvGroups.push(group)
         handleFloors()
 
@@ -1148,6 +1223,15 @@ function convertFBXtoGLB(position, rotation) {
         }
     });
 
+    document.getElementById("show-labels").addEventListener("change", (e) => {
+        createLabels()
+        if(e.target.checked){
+            document.getElementById("marker-label-container").style.display = "block"
+        } else {
+            document.getElementById("marker-label-container").style.display = "none"
+        }
+    });
+
     document.getElementById("scale-slider").addEventListener("input", (e) => {
         scaleGroupRelativeToCenter(m_Group, e.target.value)
     });
@@ -1198,6 +1282,8 @@ function convertFBXtoGLB(position, rotation) {
         })
     })
 
+    
+
     //Gizmo controls
     document.getElementById("camera-top").addEventListener("click", (e) => {
         camera.position.set(0, 400, 0)
@@ -1222,6 +1308,7 @@ function convertFBXtoGLB(position, rotation) {
     window.addEventListener('resize', onWindowResize, false );
 
     function onWindowResize(){
+
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize( window.innerWidth, window.innerHeight );
