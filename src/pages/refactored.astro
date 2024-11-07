@@ -1832,6 +1832,11 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 				svgContainer.innerHTML = "";
 				svgContainer.appendChild(svgElement);
 
+				if(imageList.length > 0){
+					previewBackplate(previewBackplate(document.getElementById("svg-container").querySelector("svg")))
+				}
+				
+
 				// Set type for export filename
 				type =
 					idFormat === format.underscore
