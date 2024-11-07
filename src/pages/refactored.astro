@@ -2007,6 +2007,8 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 
 					svgContainer.querySelector("svg").appendChild(gInstance); //Add g into the svg
 
+
+					//Floors
 					for (let i = 0; i < transformedLines.length; i++) {
 						const fields = transformedLines[i].split(",");
 
@@ -2038,8 +2040,8 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 								floor: floor,
 								circle: spawnCircle(
 									name,
-									Number(fields[2]).toFixed(4),
-									Number(fields[1]).toFixed(4),
+									Number(fields[flipYX ? 2 : 1]).toFixed(4),
+									Number(fields[flipYX ? 1 : 2]).toFixed(4),
 									data,
 								),
 							});
