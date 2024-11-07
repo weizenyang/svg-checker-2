@@ -1,6 +1,5 @@
 ---
-import UpdateValuesModal from "../components/UpdateValuesModal.astro"
-
+import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 ---
 
 <html lang="en">
@@ -17,17 +16,31 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 				<h1>Drag and Drop Here</h1>
 			</div>
 		</div>
-		<UpdateValuesModal/>
+		<UpdateValuesModal />
 		<main class="toolsets" style="display: flex">
 			<div class="toolset-section">
-				<a href="/" class="flex w-fit border-2 pl-2 pr-2 p-1 mb-2 text-center rounded-md content-center hover:bg-neutral-100">
+				<a
+					href="/"
+					class="flex w-fit border-2 pl-2 pr-2 p-1 mb-2 text-center rounded-md content-center hover:bg-neutral-100"
+				>
 					<div class="align-center content-center">
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-						  </svg>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="size-5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+							></path>
+						</svg>
 					</div>
-					
-					<p class="ml-2 ">Home</p>
+
+					<p class="ml-2">Home</p>
 				</a>
 				<section class="container">
 					<input
@@ -118,9 +131,12 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 						name="filename"
 						style="display:none; "
 					/>
-					<label for="updateValues" class="flex bg-[#ffffff] hover:bg-[#dddddd] items-center justify-center border border-neutral-700 rounded-[4px] p-0.5 mt-1.5 text-sm text-[#333333] align-center cursor-pointer"
-					>Update Names
-					<svg class="ml-1"
+					<label
+						for="updateValues"
+						class="flex bg-[#ffffff] hover:bg-[#dddddd] items-center justify-center border border-neutral-700 rounded-[4px] p-0.5 mt-1.5 text-sm text-[#333333] align-center cursor-pointer"
+						>Update Names
+						<svg
+							class="ml-1"
 							xmlns="http://www.w3.org/2000/svg"
 							width="16"
 							height="16"
@@ -130,27 +146,27 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 							strokeLinecap="round"
 							strokeLinejoin="round"
 						>
-						<path
-							d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-							stroke-width="2"></path>
-						<polyline points="17 8 12 3 7 8" stroke-width="2"
-						></polyline>
-						<line
-							x1="12"
-							x2="12"
-							y1="3"
-							y2="15"
-							stroke-width="2"></line>
-					</svg></label
-				>
-				<input
-					type="file"
-					class="input-style"
-					id="updateValues"
-					name="filename"
-					accept="text/csv"
-					style="display:none"
-				/>
+							<path
+								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+								stroke-width="2"></path>
+							<polyline points="17 8 12 3 7 8" stroke-width="2"
+							></polyline>
+							<line
+								x1="12"
+								x2="12"
+								y1="3"
+								y2="15"
+								stroke-width="2"></line>
+						</svg></label
+					>
+					<input
+						type="file"
+						class="input-style"
+						id="updateValues"
+						name="filename"
+						accept="text/csv"
+						style="display:none"
+					/>
 				</section>
 
 				<section class="container">
@@ -455,7 +471,34 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 				</dialog>
 			</div>
 		</main>
+
 		<section class="container editor grid">
+			<div id="image-list-container" class="hidden flex-col">
+				<label for="check-floorplans-button" class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end">
+					Check Floorplans
+				</label>
+				<input
+					type="file"
+					class="input-style"
+					id="check-floorplans-button"
+					accept="image/jpeg, image/png, image/webp"
+					name="filename"
+					multiple
+					style="display:none; "
+				/>
+				<div
+					id="image-carousel-container"
+					class="hidden flex-col p-2 bg-neutral-100 rounded-sm"
+				>
+					<p class="text-sm mb-2">Image List</p>
+					<ul
+						class="flex flex-row max-h-20 w-full space-x-2 overflow-x-scroll overflow-y-hidden"
+						id="image-list-carousel"
+					>
+					</ul>
+				</div>
+			</div>
+
 			<div
 				id="editor-button-container"
 				style="display: flex; flex-direction: row; justify-content: space-between;"
@@ -912,9 +955,13 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro"
 	</style>
 
 	<script>
-
-		import { transform } from 'typescript';
-import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn } from '../store.js';
+		import { transform } from "typescript";
+		import {
+			currentValuesList,
+			updateValuesList,
+			updateValuesModal,
+			circlesToSpawn,
+		} from "../store.js";
 		enum format {
 			underscore,
 			dash,
@@ -1288,12 +1335,11 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 		document.addEventListener("mousemove", (e) => {
 			document.getElementById("tag").style.left = `${e.x}px`;
 			document.getElementById("tag").style.top = `${e.y}px`;
-			document.getElementById("tag").style.transform = `translate(0%, 150%)`;
+			document.getElementById("tag").style.transform =
+				`translate(0%, 150%)`;
 		});
 
 		var fileInput = document.getElementById("myFile");
-		var csvFileInput = document.getElementById("myCSVFile");
-		var imageInput = document.getElementById("imageFile");
 		var type = "";
 		fileInput.addEventListener("click", (e) => {
 			fileInput.value = null;
@@ -1342,7 +1388,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 			tag.style.transform = `translate(0%, -40px)`;
 
 			if (mouseDown && mouseInContainer) {
-				spawnLabel()
+				spawnLabel();
 				const svgElement = globalSvgContainer.querySelector("svg");
 				if (svgElement != null) {
 					// Calculate sensitivity based on SVG resolution and size
@@ -1438,7 +1484,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 				// 	currentSelected.classList.add("hovered");
 				// }
 				document.getElementById("tag").style.display = "flex";
-				document.getElementById("tag").classList.add("leading-loose")
+				document.getElementById("tag").classList.add("leading-loose");
 				document.getElementById("label").innerText = e.srcElement.id;
 				currentSelected = e.srcElement;
 
@@ -1613,14 +1659,14 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 		//Listen to the UpdateValeusModal for circle spawn updates
 		circlesToSpawn.listen((circles) => {
-			console.log("New Circles!")
-			const spacing = 2000 / circles.length
+			console.log("New Circles!");
+			const spacing = 2000 / circles.length;
 			circles.map((e, id) => {
-				console.log(circles)
-				spawnCircle(e, (id * spacing) + 40, 70, [])
-			})
-			spawnLabel()
-		})
+				console.log(circles);
+				spawnCircle(e, id * spacing + 40, 70, []);
+			});
+			spawnLabel();
+		});
 
 		//Scale from center / scale from bounding box
 		const scaleBoundingBoxToFitInstance = (svgElement, elArray) => {
@@ -1677,7 +1723,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 				circle.setAttribute("r", 30);
 			});
 
-			spawnLabel()
+			spawnLabel();
 		};
 
 		function handleFileChange(file) {
@@ -1701,6 +1747,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 			const processSVG = (svgElement) => {
 				const list = svgElement.querySelectorAll(`[id]`);
+				svgElement.setAttribute("data-csv-editor", "svg");
 				document.getElementById("id-list").innerHTML = "";
 
 				const processIdList = (idFormat) => {
@@ -1805,6 +1852,21 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					);
 					const svgElement = svgDoc.documentElement;
 					processSVG(svgElement);
+					if (
+						document
+							.getElementById("image-list-container")
+							.classList.contains("hidden")
+					) {
+						document
+							.getElementById("image-list-container")
+							.classList.remove("hidden");
+						document
+							.getElementById("image-list-container")
+							.classList.add("flex");
+						document
+							.getElementById("check-floorplans-button")
+							.addEventListener("change", uploadImages);
+					}
 				});
 				reader.readAsText(file);
 			} else if (
@@ -1822,24 +1884,56 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					img.src = contents;
 					img.style.maxHeight = "100%";
 					img.style.maxWidth = "100%";
+					img.style.borderRadius = "5px"
 					const svgContainer =
 						document.getElementById("svg-container");
-					svgContainer.innerHTML = "";
-					svgContainer.appendChild(img);
+					const internalSVG = svgContainer.querySelector(
+						"svg[data-csv-editor='svg']",
+					);
+
+					if (internalSVG) {
+						const svgImage = document.createElementNS(
+							"http://www.w3.org/2000/svg",
+							"image",
+						);
+						const svgViewbox = internalSVG
+							.getAttribute("viewBox")
+							.split(" ");
+						svgImage.setAttributeNS(null, "href", contents);
+						svgImage.setAttributeNS(null, "x", "0");
+						svgImage.setAttributeNS(null, "y", "0");
+						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
+						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
+
+						internalSVG.insertBefore(
+							svgImage,
+							internalSVG.firstChild,
+						);
+					} else {
+						svgContainer.innerHTML = "";
+						svgContainer.appendChild(img);
+					}
 				};
 				reader.readAsDataURL(file);
 			} else if (file.type === "text/csv") {
-				if (document.getElementById("svg-container").getElementsByTagName("p").length > 0) 
-				{
+				if (
+					document
+						.getElementById("svg-container")
+						.getElementsByTagName("p").length > 0
+				) {
 					Array.from(
-						document.getElementById("svg-container").getElementsByTagName("p"),).forEach((e) => {
+						document
+							.getElementById("svg-container")
+							.getElementsByTagName("p"),
+					).forEach((e) => {
 						e.remove();
 					});
 				}
 
 				fileNameGlobal = file.name;
 
-				document.getElementById("export-file-name").value = fileNameGlobal;
+				document.getElementById("export-file-name").value =
+					fileNameGlobal;
 				const reader = new FileReader();
 				reader.onload = (event) => {
 					const contents = event.target.result;
@@ -1856,7 +1950,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 							const fields = line.split(",");
 
 							const [name, x, y, z] = fields;
-							const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`; //Curly line for easier text separation 
+							const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`; //Curly line for easier text separation
 							scaleToFit = true;
 
 							return `${cleanedName},${-y},${-x},${name}`; // Swap x and y
@@ -1928,21 +2022,22 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 								data.push(floorData);
 							}
 
-							const fullName = { // Custom attribute to be used as unique identifier for functions
+							const fullName = {
+								// Custom attribute to be used as unique identifier for functions
 								field: "data-fullname",
-								value: fields[3]
-							}
-							data.push(fullName)
+								value: fields[3],
+							};
+							data.push(fullName);
 
 							globalFloors.push({
-									floor: floor,
-									circle: spawnCircle(
-										name,
-										Number(fields[2]).toFixed(4),
-										Number(fields[1]).toFixed(4),
-										data,
-									),
-								});
+								floor: floor,
+								circle: spawnCircle(
+									name,
+									Number(fields[2]).toFixed(4),
+									Number(fields[1]).toFixed(4),
+									data,
+								),
+							});
 						} else {
 							console.error(
 								`${
@@ -2023,8 +2118,8 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 							div.appendChild(label);
 
 							checkbox.addEventListener("change", (e) => {
-								toggleFloors(aggregatePoints)
-								spawnLabel()
+								toggleFloors(aggregatePoints);
+								spawnLabel();
 							});
 
 							floorSection.appendChild(div);
@@ -2032,16 +2127,20 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					}
 
 					//globalFloorsAggregated contains average positioned circle of multicamera points
-					const globalFloorsCopy = Object.assign(globalFloors)
-					globalFloorsAggregated = getAveragedCircles(globalFloorsCopy);
+					const globalFloorsCopy = Object.assign(globalFloors);
+					globalFloorsAggregated =
+						getAveragedCircles(globalFloorsCopy);
 
-					if(document.getElementById('aggregate-points-parent')){
-						document.getElementById('aggregate-points-parent').remove()
+					if (document.getElementById("aggregate-points-parent")) {
+						document
+							.getElementById("aggregate-points-parent")
+							.remove();
 					}
 					const editOptions = document.getElementById("edit-options");
 					const div = document.createElement("div");
-					div.id = "aggregate-points-parent"
-					const aggregateOptionsCheckbox = document.createElement("input");
+					div.id = "aggregate-points-parent";
+					const aggregateOptionsCheckbox =
+						document.createElement("input");
 					const label = document.createElement("label");
 					div.classList.add("col-span-2");
 					div.classList.add("mt-2");
@@ -2057,17 +2156,24 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 					aggregateOptionsCheckbox.addEventListener("change", (e) => {
 						aggregatePoints = e.target.checked;
-						toggleFloors(aggregatePoints)
-						spawnLabel()
+						toggleFloors(aggregatePoints);
+						spawnLabel();
 					});
 
 					// Scale bounding box to fit within the SVG frame
 					if (scaleToFit) {
-						const globalCircle = globalFloors.map(item => item.circle)
-						const globalAggregateCircle = globalFloorsAggregated.map(item => item.circle)
-						const totalCircles = [...globalCircle, ...globalAggregateCircle]
+						const globalCircle = globalFloors.map(
+							(item) => item.circle,
+						);
+						const globalAggregateCircle =
+							globalFloorsAggregated.map((item) => item.circle);
+						const totalCircles = [
+							...globalCircle,
+							...globalAggregateCircle,
+						];
 						scaleBoundingBoxToFitInstance(
-							svgContainer.querySelector("svg"), totalCircles
+							svgContainer.querySelector("svg"),
+							totalCircles,
 						);
 					}
 					// scaleBoundingBoxToFit(svgContainer.querySelector("svg"));
@@ -2076,43 +2182,160 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 			}
 		}
 
+		const imageList = [];
+
+		function uploadImages(e) {
+			const files = Array.from(e.target.files);
+
+			const readFile = (file) => {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = (data) =>
+						resolve({ name: file.name, data: data.target.result });
+					reader.onerror = (error) => reject(error);
+					reader.readAsDataURL(file);
+				});
+			};
+
+			if (
+				document
+					.getElementById("image-carousel-container")
+					.classList.contains("hidden")
+			) {
+				document
+					.getElementById("image-carousel-container")
+					.classList.remove("hidden");
+				document
+					.getElementById("image-carousel-container")
+					.classList.add("flex");
+			}
+
+			Promise.all(Array.from(files).map(readFile))
+				.then((results) => {
+					imageList.splice(0, imageList.length)
+					imageList.push(...results);
+					const imageListCarousel = document.getElementById("image-list-carousel");
+					imageListCarousel.innerHTML = "";
+					imageList.forEach((image) => {
+						const listItem = document.createElement("li");
+						listItem.style.height = "100%"
+						const imageElement = document.createElement("img");
+						imageElement.src = image.data;
+						imageElement.style.height = "60px"
+						// imageElement.setAttribute("data-name", image.name)
+						listItem.appendChild(imageElement);
+						imageListCarousel.appendChild(listItem);
+					});
+					previewBackplate(document.getElementById("svg-container").querySelector("svg"))
+				})
+				.catch((error) =>
+					console.error("Error loading images:", error),
+				);
+		}
+
+		function previewBackplate(parentSVG) {
+			const listeners = [];
+			listeners.forEach((e) => {
+				removeEventListener("hover", e);
+			});
+
+			let previewerInstance = document.getElementById("image-previewer");
+			if (!previewerInstance) {
+				const newPreviewer = document.createElement("div");
+				const previewerImg = document.createElement("img");
+				const previewerText = document.createElement("p");
+				newPreviewer.id = "image-previewer-container";
+				newPreviewer.style.padding = "5px";
+				newPreviewer.style.position = "fixed";
+				newPreviewer.style.display = "flex";
+				newPreviewer.style.flexDirection = "flex-column";
+				newPreviewer.style.backgroundColor = "#cccccccc";
+				newPreviewer.style.borderRadius = "10px";
+				newPreviewer.style.alignContent = "align-center";
+				newPreviewer.style.justifyContent = "justify-center";
+				newPreviewer.style.justifyItems = "justify-center";
+				newPreviewer.style.transform = "translate(-50%, -113%)";
+				newPreviewer.style.width = "310px"
+				previewerImg.id = "image-previewer-image";
+				previewerImg.style.width = "300px"
+				previewerImg.style.marginBottom = "10px";
+				newPreviewer.appendChild(previewerImg);
+				previewerText.id = "image-previewer-text";
+				previewerText.style.fontSize = "12px"
+				newPreviewer.appendChild(previewerText);
+				document.querySelector("body").appendChild(newPreviewer)
+			}
+
+			parentSVG.querySelectorAll("path").forEach((path) => {
+				const listener = path.addEventListener("mouseover", (e) => {
+					document.getElementById("image-previewer-container").style.display = "block"
+					const selectedImage = imageList.filter(image =>
+						image.name.split("_").join("").split("-").join("").includes(e.target.id.split("_").join("").split("-").join("")))[0];
+					if (selectedImage) {
+						// console.log(selectedImage)
+						document.getElementById("image-previewer-image").src = selectedImage.data;
+						document.getElementById("image-previewer-text").innerHTML = selectedImage.name;
+					}
+				});
+
+				const listener2 = path.addEventListener("mouseout", (e) => {
+					document.getElementById("image-previewer-container").style.display = "none"
+				});
+
+				listeners.push(listener);
+				listeners.push(listener2);
+			});
+			globalSvgContainer.addEventListener("mousemove", (e) => {
+				document.getElementById("image-previewer-container").style.left = `${e.clientX}px`
+				document.getElementById("image-previewer-container").style.top = `${e.clientY}px`
+			})
+		}
+
 		fileInput.addEventListener("change", () => {
 			handleFileChange(fileInput.files[0]);
 		});
 
-		document.getElementById("updateValues").addEventListener('click', (e) => {
-			updateValuesList.set([])
-			currentValuesList.set([])
-			updateValuesModal.set(false)
-			console.log("UpdateValues clicked")
-		})
+		document
+			.getElementById("updateValues")
+			.addEventListener("click", (e) => {
+				updateValuesList.set([]);
+				currentValuesList.set([]);
+				updateValuesModal.set(false);
+				console.log("UpdateValues clicked");
+			});
 
-		document.getElementById("updateValues").addEventListener("change", () => {
-			updateValues(document.getElementById("updateValues").files[0])
-		});
+		document
+			.getElementById("updateValues")
+			.addEventListener("change", () => {
+				updateValues(document.getElementById("updateValues").files[0]);
+			});
 
 		var animationTimeout;
 		document.body.addEventListener("dragover", (e) => {
 			event.preventDefault(); // Prevent the default behavior
 			document.querySelector(".drag-drop-prompt").classList.add("appear");
-			if(animationTimeout != null){
-				clearTimeout(animationTimeout)
+			if (animationTimeout != null) {
+				clearTimeout(animationTimeout);
 				animationTimeout = setTimeout((e) => {
-					document.querySelector(".drag-drop-prompt").classList.remove("appear");
-				}, 500)
+					document
+						.querySelector(".drag-drop-prompt")
+						.classList.remove("appear");
+				}, 500);
 			} else {
 				animationTimeout = setTimeout((e) => {
-					document.querySelector(".drag-drop-prompt").classList.remove("appear");
-				}, 500)
+					document
+						.querySelector(".drag-drop-prompt")
+						.classList.remove("appear");
+				}, 500);
 			}
-
 		});
 
 		document.body.addEventListener("dragend", (e) => {
 			event.preventDefault(); // Prevent the default behavior
-			document.querySelector(".drag-drop-prompt").classList.remove("appear");
+			document
+				.querySelector(".drag-drop-prompt")
+				.classList.remove("appear");
 		});
-
 
 		document.body.addEventListener("drop", (e) => {
 			e.preventDefault();
@@ -2145,7 +2368,6 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 		});
 
 		document.addEventListener("keydown", (e) => {
-			
 			if (e.key == "Escape") {
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.classList.remove("svg-tool-selected");
@@ -2221,16 +2443,15 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 			if (e.key == "Delete") {
 				document.querySelector("delete-point").click();
-				spawnLabel()
+				spawnLabel();
 			}
 
-			spawnLabel()
-			
+			spawnLabel();
 		});
 
-		window.addEventListener('resize', (e) => {
-			spawnLabel()
-		})
+		window.addEventListener("resize", (e) => {
+			spawnLabel();
+		});
 
 		function setUnit() {
 			for (var i = 0; i < groupGlobal.length; i++) {
@@ -2323,17 +2544,16 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 		}
 
 		function getAveragedCircles(data) {
-			console.log("data")
-			console.log(data)
+			console.log("data");
+			console.log(data);
 			const grouped = {};
 			data.forEach((item) => {
-				
 				const { floor, circle } = item;
-				console.log(circle.attributes[1].textContent)
+				console.log(circle.attributes[1].textContent);
 				const idLocal = circle.getAttribute("id");
 				const cxLocal = parseFloat(circle.attributes[1].value);
 				const cyLocal = parseFloat(circle.attributes[2].value);
-				console.log({floor, circle, cxLocal, cyLocal})
+				console.log({ floor, circle, cxLocal, cyLocal });
 
 				// Grouping by floor and id
 				if (!grouped[floor]) {
@@ -2354,7 +2574,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 				grouped[floor][idLocal].count += 1;
 			});
 
-			console.log(grouped)
+			console.log(grouped);
 
 			const averagedCircles = [];
 
@@ -2384,48 +2604,54 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 		function toggleFloors(aggregated) {
 			const globalG = globalSvgContainer.querySelector("g");
-			const localFloors = globalFloors
-			const localFloorsAggregated = globalFloorsAggregated
+			const localFloors = globalFloors;
+			const localFloorsAggregated = globalFloorsAggregated;
 
 			checkboxesId.forEach((i) => {
 				const floor = i.split("-")[1];
-				if(aggregated){
-					console.log(globalFloorsAggregated)
-					localFloors.forEach((e) => { e.circle.remove() })
-					const selectedFloorCirclesAggregated = localFloorsAggregated.filter((e) => e.floor.includes(floor));
-					
+				if (aggregated) {
+					console.log(globalFloorsAggregated);
+					localFloors.forEach((e) => {
+						e.circle.remove();
+					});
+					const selectedFloorCirclesAggregated =
+						localFloorsAggregated.filter((e) =>
+							e.floor.includes(floor),
+						);
+
 					if (document.getElementById(i).checked) {
-					
 						selectedFloorCirclesAggregated.forEach((e) => {
 							globalG.appendChild(e.circle);
 						});
-						console.log({"Added" : selectedFloorCirclesAggregated});
+						console.log({ Added: selectedFloorCirclesAggregated });
 					} else {
-
 						selectedFloorCirclesAggregated.forEach((e) => {
-							e.circle.remove()
+							e.circle.remove();
 						});
-						console.log({"Removed" : selectedFloorCirclesAggregated});
+						console.log({
+							Removed: selectedFloorCirclesAggregated,
+						});
 					}
 				} else {
-					localFloorsAggregated.forEach((e) => { e.circle.remove() })
-					const selectedFloorCircles = localFloors.filter((e) => e.floor.includes(floor));
+					localFloorsAggregated.forEach((e) => {
+						e.circle.remove();
+					});
+					const selectedFloorCircles = localFloors.filter((e) =>
+						e.floor.includes(floor),
+					);
 
 					if (document.getElementById(i).checked) {
-
 						selectedFloorCircles.forEach((e) => {
 							globalG.appendChild(e.circle);
 						});
-						console.log({"Added" : selectedFloorCircles});
+						console.log({ Added: selectedFloorCircles });
 					} else {
-
 						selectedFloorCircles.forEach((e) => {
-							e.circle.remove()
+							e.circle.remove();
 						});
-						console.log({"Removed" : selectedFloorCircles});
+						console.log({ Removed: selectedFloorCircles });
 					}
 				}
-
 			});
 		}
 
@@ -2810,7 +3036,7 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					// }
 				},
 			);
-			spawnLabel()
+			spawnLabel();
 		});
 
 		document.getElementById("flip-y").addEventListener("click", (e) => {
@@ -2848,23 +3074,32 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					// }
 				},
 			);
-			spawnLabel()
+			spawnLabel();
 		});
 
 		function spawnLabel() {
-			killLabels(true)
-			if(document.getElementById("showLabelsToggle")){
-				if(document.getElementById("showLabelsToggle").checked){
+			killLabels(true);
+			if (document.getElementById("showLabelsToggle")) {
+				if (document.getElementById("showLabelsToggle").checked) {
 					var circles = [];
-					const group = globalSvgContainer.querySelector('svg').querySelector('g')
-					console.log(globalSvgContainer.querySelector('svg').querySelector('g'))
+					const group = globalSvgContainer
+						.querySelector("svg")
+						.querySelector("g");
+					console.log(
+						globalSvgContainer
+							.querySelector("svg")
+							.querySelector("g"),
+					);
 					if (!group) {
 					} else if (group instanceof SVGGElement) {
-						circles = [].slice.call(group.getElementsByTagName("circle"));
+						circles = [].slice.call(
+							group.getElementsByTagName("circle"),
+						);
 					}
 					console.log(circles);
 
-					const svgContainer = document.getElementById("svg-container");
+					const svgContainer =
+						document.getElementById("svg-container");
 					const { scaleX, scaleY } = calculateSensitivity(
 						globalSvgContainer.querySelector("svg"),
 					);
@@ -2879,15 +3114,15 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 					labelDiv.style.transform = `scale(${1 / scaleX})`;
 					labelDiv.style.left = `-${2048 - 4096 / scaleY / 2}px`;
 					labelDiv.style.top = `-${2048 - 4096 / scaleY / 2}px`;
-					labelDiv.style.pointerEvents = "none"
+					labelDiv.style.pointerEvents = "none";
 
 					const createParagraph = (className, text, display) => {
 						const p = document.createElement("p");
 						Object.assign(p.style, {
 							color: "white",
 							margin: "0",
-							pointerEvents: 'none',
-							lineHeight: '1.5em',
+							pointerEvents: "none",
+							lineHeight: "1.5em",
 							display,
 						});
 						p.className = className;
@@ -2897,7 +3132,10 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 
 					const createDiv = (e) => {
 						const div = document.createElement("div");
-						div.setAttribute("data-fullname", e.getAttribute("data-fullname"))
+						div.setAttribute(
+							"data-fullname",
+							e.getAttribute("data-fullname"),
+						);
 						Object.assign(div.style, {
 							position: "absolute",
 							left: `${e.getAttribute("cx")}px`,
@@ -2911,16 +3149,20 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 							zIndex: "10",
 							backdropFilter: "blur(10px)",
 							pointerEvents: "none",
-							cursor: "pointer", 
+							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
 						});
 
-						const idText = e.id.replace(/([A-Z0-9])/g, " $1").trim();
+						const idText = e.id
+							.replace(/([A-Z0-9])/g, " $1")
+							.trim();
 						div.appendChild(
 							createParagraph("text-normal", idText, "block"),
 						);
-						div.appendChild(createParagraph("text-hover", idText, "none"));
+						div.appendChild(
+							createParagraph("text-hover", idText, "none"),
+						);
 
 						div.onmouseover = () => toggleHover(div, true);
 						div.onmouseout = () => toggleHover(div, false);
@@ -2931,92 +3173,95 @@ import { currentValuesList, updateValuesList, updateValuesModal, circlesToSpawn 
 						div.style.borderColor = isHovered
 							? "rgba(255, 255, 255, 1)"
 							: "rgba(255, 255, 255, 0.1)";
-						div.querySelector(".text-normal").style.display = isHovered
-							? "none"
-							: "block";
-						div.querySelector(".text-hover").style.display = isHovered
-							? "block"
-							: "none";
+						div.querySelector(".text-normal").style.display =
+							isHovered ? "none" : "block";
+						div.querySelector(".text-hover").style.display =
+							isHovered ? "block" : "none";
 					};
 
 					circles.forEach((e) => {
 						const div = createDiv(e);
 						labelDiv.appendChild(div);
-						svgContainer.appendChild(labelDiv)
+						svgContainer.appendChild(labelDiv);
 					});
 				}
 			}
-
 		}
 
 		function killLabels(toggleChecked?) {
 			if (document.getElementById("labelDiv")) {
 				document.getElementById("labelDiv").remove();
-				if(!toggleChecked){
+				if (!toggleChecked) {
 					document.getElementById("showLabelsToggle").checked = false;
 				} else {
 					// console.log("toggleChecked true, retaining checked state")
 				}
-				
 			} else {
 				// console.log("labelDiv not found");
 			}
 		}
 
-		function updateStates(circles, transformedLines, group){
-					if (!group) {
-					} else if (group instanceof SVGGElement) {
-						console.log("Is group")
-						var thisCircles = [].slice.call(group.getElementsByTagName("circle"));
+		function updateStates(circles, transformedLines, group) {
+			if (!group) {
+			} else if (group instanceof SVGGElement) {
+				console.log("Is group");
+				var thisCircles = [].slice.call(
+					group.getElementsByTagName("circle"),
+				);
 
-						updateValuesModal.set(true)
-						console.log("Set updateValuesModal")
-						updateValuesList.set(transformedLines)
-						currentValuesList.set(thisCircles)
-					}
-				}
+				updateValuesModal.set(true);
+				console.log("Set updateValuesModal");
+				updateValuesList.set(transformedLines);
+				currentValuesList.set(thisCircles);
+			}
+		}
 
-		function updateValues(file){
-			
+		function updateValues(file) {
 			var circles = [];
-			const group = globalSvgContainer.querySelector('svg').querySelector('g')
-			console.log(group)
+			const group = globalSvgContainer
+				.querySelector("svg")
+				.querySelector("g");
+			console.log(group);
 
 			const reader = new FileReader();
 			reader.onload = (event) => {
-					const contents = event.target.result;
-					const lines = contents.trim().split("\n");
+				const contents = event.target.result;
+				const lines = contents.trim().split("\n");
 
-					// Check the number of columns and decide to transform
-					const firstLineFields = lines[0].split(",");
-					let transformedLines = lines;
+				// Check the number of columns and decide to transform
+				const firstLineFields = lines[0].split(",");
+				let transformedLines = lines;
 
-					if (firstLineFields.length > 3) { //Camera CSV
-						transformedLines = lines.map((line) => {
-							const fields = line.split(",");
-							const [name, x, y, z] = fields; 
-							const cleanedName = name.split("_")[1] ? name.split("_")[1] : undefined
-							if(cleanedName){
-								return {"name": cleanedName, "x": -y, "y": -x}; // Swap x and y
-							}
-							
-						});
-						updateStates(circles, transformedLines, group)
-					} else { //Floorplan CSV
-						transformedLines = lines.map((line) => {
-							const fields = line.split(",");
-							const [name, x, y] = fields;
-							const cleanedName = name.split("_")[1] ? name.split("_")[1] : undefined
-							if(cleanedName){
-								return {"name": cleanedName, "x": x, "y": y}; // Swap x and y
-							}
-						});
-						updateStates(circles, transformedLines, group)
-					}
-					spawnLabel()
+				if (firstLineFields.length > 3) {
+					//Camera CSV
+					transformedLines = lines.map((line) => {
+						const fields = line.split(",");
+						const [name, x, y, z] = fields;
+						const cleanedName = name.split("_")[1]
+							? name.split("_")[1]
+							: undefined;
+						if (cleanedName) {
+							return { name: cleanedName, x: -y, y: -x }; // Swap x and y
+						}
+					});
+					updateStates(circles, transformedLines, group);
+				} else {
+					//Floorplan CSV
+					transformedLines = lines.map((line) => {
+						const fields = line.split(",");
+						const [name, x, y] = fields;
+						const cleanedName = name.split("_")[1]
+							? name.split("_")[1]
+							: undefined;
+						if (cleanedName) {
+							return { name: cleanedName, x: x, y: y }; // Swap x and y
+						}
+					});
+					updateStates(circles, transformedLines, group);
 				}
-				reader.readAsText(file);
-
+				spawnLabel();
+			};
+			reader.readAsText(file);
 		}
 
 		function removeData() {
