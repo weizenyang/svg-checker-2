@@ -2282,6 +2282,9 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 						// console.log(selectedImage)
 						document.getElementById("image-previewer-image").src = selectedImage.data;
 						document.getElementById("image-previewer-text").innerHTML = selectedImage.name;
+					} else {
+						document.getElementById("image-previewer-image").src = "";
+						document.getElementById("image-previewer-text").innerHTML = "";
 					}
 				});
 
