@@ -1,5 +1,7 @@
 ---
 import UpdateValuesModal from "../components/UpdateValuesModal.astro";
+import Tutorial from "../components/Tutorial.astro"
+import '../styles.css';
 ---
 
 <html lang="en">
@@ -350,35 +352,8 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 					>
 				</section>
 
-				<button
-					id="showTutorial"
-					class="w-full p-3 bg-transparent border border-gray-800 text-gray-800 rounded-md flex items-center justify-center mt-4 hover:bg-neutral-200"
-					style="margin-top: 10px"
-				>
-					<svg
-						fill="#000000"
-						height="30px"
-						width="30px"
-						version="1.1"
-						id="Capa_1"
-						style="margin-right: 10px"
-						xmlns="http://www.w3.org/2000/svg"
-						xmlns:xlink="http://www.w3.org/1999/xlink"
-						viewBox="0 0 324.952 324.952"
-						xml:space="preserve"
-						><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g
-							id="SVGRepo_tracerCarrier"
-							stroke-linecap="round"
-							stroke-linejoin="round"></g><g
-							id="SVGRepo_iconCarrier"
-						>
-							<path
-								d="M323.195,33.502c-2.342-2.344-6.143-2.344-8.484,0c-20.718,20.718-31.436,18.955-43.851,16.909 c-13.984-2.301-29.752-4.876-56.232,19.795c-15.643-15.121-36.605-23.45-59.216-23.45c-25.451,0-50.795,10.747-69.532,29.485 L85.1,77.02c-0.003,0.003-0.008,0.005-0.011,0.009c-0.003,0.004-0.006,0.008-0.009,0.011l-55.644,55.643 c-37.173,37.172-39.447,95.383-5.069,129.761l6.349,6.349c15.744,15.745,37.135,24.416,60.231,24.416 c25.45,0,50.793-10.747,69.53-29.485l55.643-55.643c0.003-0.003,0.008-0.005,0.011-0.009c0.003-0.004,0.006-0.008,0.009-0.011 l0.78-0.78c36.759-36.758,39.368-94.071,6.184-128.587c21.929-20.368,33.549-18.461,45.807-16.442 c13.692,2.251,29.21,4.81,54.284-20.266C325.538,39.643,325.538,35.844,323.195,33.502z M206.061,78.615l-26.668,26.668 c-3.842-2.324-8.255-3.566-12.86-3.566c-6.655,0-12.911,2.591-17.617,7.297l-11.679,11.68l-39.318-39.32 c16.071-14.421,36.762-22.617,57.493-22.617C174.774,58.756,192.689,65.807,206.061,78.615z M152.126,159.297 c-2.44,2.439-5.684,3.783-9.133,3.783c-3.449,0-6.692-1.343-9.131-3.781c-2.438-2.439-3.781-5.682-3.781-9.131 s1.344-6.692,3.783-9.132l23.536-23.538c2.439-2.438,5.682-3.781,9.132-3.781c3.449,0,6.692,1.343,9.131,3.781 c2.439,2.439,3.782,5.682,3.782,9.132c0,3.448-1.343,6.691-3.781,9.13L152.126,159.297z M151.992,255.239 c-16.504,16.504-38.754,25.97-61.045,25.97c-19.892,0-38.268-7.423-51.746-20.9l-6.349-6.349 c-29.699-29.7-27.425-80.298,5.068-112.792l51.41-51.41l39.42,39.421l-3.372,3.372c-4.706,4.705-7.298,10.962-7.298,17.616 c-0.001,6.654,2.59,12.911,7.296,17.617c4.705,4.705,10.962,7.296,17.616,7.296c6.654,0,12.911-2.592,17.617-7.298l3.373-3.373 l39.42,39.42L151.992,255.239z M211.788,195.245l-39.32-39.32l11.681-11.68c4.706-4.705,7.297-10.961,7.297-17.616 c0-4.605-1.243-9.019-3.567-12.86l26.665-26.667C242.091,115.858,240.675,163.118,211.788,195.245z"
-							></path></g
-						></svg
-					>
-					Keymappings
-				</button>
+				<Tutorial x="some data" id="tutorial"/>
+
 
 				<div class="container" id="id-container">
 					<div class="id-list-title-container">
@@ -393,82 +368,6 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 					<ul style="padding-left: 1em;" class="id-list" id="id-list">
 					</ul>
 				</div>
-
-				<dialog id="tutorial">
-					<button
-						class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-						autofocus>Close</button
-					>
-					<div style="">
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Left</span>
-							</div>
-							<p>Select</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Left</span> + Drag
-							</div>
-
-							<p>Move</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">Mouse Right</span> | <span
-									class="boxed">Middle</span
-								> + Drag
-							</div>
-							<p>Scale</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">ESC</span>
-							</div>
-
-							<p>Cancel</p>
-						</div>
-						<div class="row">
-							<div>
-								<span class="boxed">CTRL</span> + <span
-									class="boxed">A</span
-								>
-							</div>
-
-							<p>Select All</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">SHIFT</span> + <span
-									class="boxed">Mouse Left</span
-								>
-							</div>
-
-							<p>Select Multiple</p>
-						</div>
-
-						<div class="row">
-							<div>
-								<span class="boxed">←</span> / <span
-									class="boxed">→</span
-								>
-							</div>
-
-							<p>Rotate -45 / +45</p>
-						</div>
-						<div class="row">
-							<div>
-								<span class="boxed">L</span>
-							</div>
-
-							<p>Toggle Labels</p>
-						</div>
-					</div>
-				</dialog>
 			</div>
 		</main>
 
@@ -519,442 +418,14 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 			</div>
 			<svg id="svg" height="0px"></svg>
 		</section>
+
+		
+
 	</body>
 
-	<style>
-		@font-face {
-			font-family: "gabarito";
-			src: url("/Gabarito-VariableFont_wght.ttf");
-		}
-		* {
-			font-family: gabarito, sans-serif;
-		}
-
-		/* button{
-		all: unset;
-		
-		width: 100%;
-		display: flex;
-		margin: 0px;
-		font-size: 12px;
-		padding: 0.3em;
-		cursor: pointer;
-		border-radius: 4px;
-		background-color: #FFF;
-	}
-
-	button:hover{
-		background-color: #ccc;
-	} */
-
-		body {
-			box-sizing: border-box;
-			display: grid;
-			grid-template-columns: repeat(6, 1fr);
-
-			grid-template-rows: repeat(6, 1fr);
-			gap: 10px;
-
-			min-height: 100vh;
-			margin: 0%;
-			padding: 10px;
-		}
-
-		.boxed {
-			font-size: 12px;
-			padding: 0.2em;
-			color: #333;
-			background-color: #ccc;
-			border-radius: 3px;
-		}
-
-		.button-style {
-			display: flex;
-			cursor: pointer;
-			box-sizing: border-box;
-			padding: 0.7em;
-			width: 100%;
-			align-items: center;
-			justify-content: center;
-			font-size: large;
-			color: #eee;
-			transition: 0.2s;
-			background-color: #333333;
-			border-radius: 4px;
-		}
-		.button-style:hover {
-			display: flex;
-			cursor: pointer;
-			padding: 0.7em;
-			align-items: center;
-			justify-content: center;
-			font-size: large;
-			color: #eee;
-
-			background-color: #555555;
-		}
-		.button-style svg {
-			padding-left: 5px;
-		}
-
-		.row {
-			display: flex;
-			flex-direction: row;
-			padding: 0.5em;
-		}
-
-		.row :first-child {
-			width: 210px;
-			align-items: flex-end;
-		}
-
-		.row p {
-			margin: 0%;
-		}
-
-		.hollow {
-			display: flex;
-			cursor: pointer;
-			box-sizing: border-box;
-			padding: 0.7em;
-			width: 100%;
-			color: #333333;
-			background-color: #33333300;
-			border: solid 1px #333333;
-		}
-
-		.button-gap :first-child {
-			margin: 0em 0.2em;
-			margin-left: 0em;
-			text-align: center;
-			align-items: center;
-			justify-content: center;
-		}
-
-		.button-gap :last-child {
-			margin: 0em 0.2em;
-			margin-right: 0em;
-			text-align: center;
-			align-items: center;
-			justify-content: center;
-		}
-
-		.button-gap button {
-			border: 1px solid #00000022;
-			background-color: #333333;
-			color: #eee;
-			margin: 0em 0.2em;
-			text-align: center;
-			align-items: center;
-			justify-content: center;
-		}
-
-		.button-gap button:hover {
-			background-color: #888888;
-		}
-
-		.drag-drop-prompt {
-			position: fixed;
-			display: none;
-			opacity: 0;
-			width: calc(100% - 25px);
-			height: calc(100% - 25px);
-			margin-right: 1em;
-			margin-bottom: 1em;
-			background-color: #00000055;
-			z-index: 10000000;
-			color: #eee;
-			transition: opacity 0.2;
-		}
-
-		.drag-drop-prompt.appear {
-			display: flex;
-			opacity: 1;
-		}
-
-		.animated-border {
-			position: relative;
-			width: 100%;
-			height: 100%;
-			background-image: repeating-linear-gradient(
-					0deg,
-					#333333,
-					#333333 10px,
-					transparent 10px,
-					transparent 20px,
-					#333333 20px
-				),
-				repeating-linear-gradient(
-					90deg,
-					#333333,
-					#333333 10px,
-					transparent 10px,
-					transparent 20px,
-					#333333 20px
-				),
-				repeating-linear-gradient(
-					180deg,
-					#333333,
-					#333333 10px,
-					transparent 10px,
-					transparent 20px,
-					#333333 20px
-				),
-				repeating-linear-gradient(
-					270deg,
-					#333333,
-					#333333 10px,
-					transparent 10px,
-					transparent 20px,
-					#333333 20px
-				);
-			background-size:
-				3px calc(100% + 20px),
-				calc(100% + 20px) 3px,
-				3px calc(100% + 20px),
-				calc(100% + 20px) 3px;
-			background-position:
-				0 0,
-				0 0,
-				100% 0,
-				0 100%;
-			background-repeat: no-repeat;
-			animation: borderAnimation 1s infinite linear;
-			display: flex;
-			align-items: center;
-			text-align: center;
-			justify-content: center;
-		}
-
-		@keyframes borderAnimation {
-			from {
-				background-position:
-					0 0,
-					-20px 0,
-					100% -20px,
-					0 100%;
-			}
-			to {
-				background-position:
-					0 -20px,
-					0 0,
-					100% 0,
-					-20px 100%;
-			}
-		}
-
-		.dropdown ~ .toggle {
-			display: none;
-		}
-
-		.dropdown:checked ~ .toggle {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.dropdown:checked ~ .toggle {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.dropdown ~ label {
-			display: flex;
-			cursor: pointer;
-			align-items: center;
-			justify-content: space-between;
-		}
-		.dropdown ~ label .arrow {
-			display: flex;
-			cursor: pointer;
-			font-size: 2em;
-			text-align: center;
-
-			justify-content: center;
-		}
-
-		.dropdown:checked ~ label .arrow {
-			transform: rotate(180deg);
-		}
-
-		h3 {
-			margin-top: 0.2em;
-		}
-
-		.toolsets {
-			width: 100%;
-			grid-column: 1 / 1;
-			grid-row: 1/7;
-		}
-
-		.editor {
-			grid-column: 2/7;
-			grid-row: 1/7;
-			height: 100vh;
-			position: sticky;
-		}
-
-		.container {
-			box-sizing: border-box;
-			/* background-color: #0000000c; */
-			border: 0.3px solid #00000022;
-			padding: 0.5em;
-			width: auto;
-			display: flex;
-			flex-direction: column;
-			border-radius: 5px;
-			-webkit-user-select: none; /* Safari */
-			-ms-user-select: none; /* IE 10 and IE 11 */
-			user-select: none; /* Standard syntax */
-		}
-
-		.input-style {
-			all: unset;
-			border: 0px solid;
-			border-radius: 3px;
-			/* background-color: #00000011; */
-			transition: box-shadow 0.2s;
-			border: solid 0.5px #ddd;
-			padding: 0.3em;
-		}
-
-		.input-style:focus {
-			box-shadow: inset 0px 0px 100px #fff;
-			border: solid 1px;
-		}
-
-		.toolset-section {
-			width: 100%;
-
-			/* padding: 0.5em; */
-		}
-
-		.toolset-section .container {
-			margin-top: 10px;
-		}
-
-		.toolset-section .container:first-child {
-			margin-top: 0px;
-		}
-
-		.hidden {
-			display: none !important;
-		}
-
-		#tag,
-		#tag * {
-			display: flex;
-			position: fixed;
-			background-color: #cccccccc;
-			padding: 0em 1em;
-			text-align: left;
-			line-height: 0.5em;
-			font-family: monospace;
-			font-weight: 100;
-			justify-content: center;
-			min-width: max-content;
-			pointer-events: none;
-			/* transform: translate(-50%); */
-			/* min-height: 50px; */
-			height: fit-content;
-			border-radius: 6px;
-			/* font-family: sans-serif; */
-		}
-		#label {
-			display: flex;
-			text-align: center;
-			justify-content: center;
-			margin: 0%;
-			height: 100%;
-			font-family: sans-serif;
-		}
-
-		.output {
-			pointer-events: fill;
-		}
-
-		#id-container {
-			/* margin-top: 0.5em; */
-			background-color: #eee;
-			max-height: 390px;
-			border-radius: 5px;
-			/* position: fixed; */
-			right: 0%;
-			top: 0%;
-			display: flex;
-			overflow-y: none;
-			list-style: none;
-			flex-direction: column;
-			/* margin-left: 0.5em; */
-		}
-
-		#svg-container {
-			border: solid 1px #00000055;
-			border-radius: 3px;
-			position: relative;
-			max-height: 91vh;
-			max-width: 91vh;
-		}
-
-		.hide {
-			display: none;
-		}
-
-		.svg-tool-selected {
-			fill: #ff0000;
-		}
-
-		.hovered {
-			fill: #ff000066;
-		}
-
-		.sub-item {
-			padding: 0.5em;
-			margin-bottom: 0.1em;
-			/* background-color: #00000011; */
-			border: 1px solid #00000022;
-			border-radius: 3px;
-			display: flex;
-			/* flex-direction: column; */
-		}
-
-		.sub-item [type="radio"] {
-			margin-left: 0%;
-		}
-
-		.toggle {
-			display: flex;
-			flex-direction: column;
-		}
-
-		.expand {
-			transform: rotate(180deg);
-		}
-
-		.hide-toggle:hover {
-			cursor: pointer;
-			text-decoration: underline;
-		}
-
-		.id-list {
-			margin: 0%;
-			overflow-y: scroll;
-			min-height: 50px;
-		}
-
-		.id-list-title-container {
-			display: flex;
-			justify-content: space-between;
-			padding: 0em 1em;
-			background-color: #00000011;
-		}
-
-		.id-list-title span:hover {
-			cursor: pointer;
-			text-decoration: underline;
-		}
-	</style>
-
 	<script>
+		// import { onMount } from 'astro/client';
+		// import * as svgOp from "./svg-scripts/svg-operations"
 		import { transform } from "typescript";
 		import {
 			currentValuesList,
@@ -992,26 +463,6 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 		let aggregatePoints = false;
 		let checkboxesId = [];
 
-		//Tutorial
-		const dialog = document.querySelector("#tutorial");
-		const showTutorial = document.querySelector("#showTutorial");
-		const closeButton = document.querySelector("#tutorial button");
-
-		// "Show the dialog" button opens the dialog modally
-		showTutorial.addEventListener("click", () => {
-			dialog.showModal();
-		});
-
-		// "Close" button closes the dialog
-		closeButton.addEventListener("click", () => {
-			dialog.close();
-		});
-
-		// "Close" button closes the dialog
-		dialog.addEventListener("click", () => {
-			dialog.close();
-		});
-
 		var formattingButtons = document.querySelectorAll(".formatting");
 		formattingButtons.forEach((e) => {
 			e.addEventListener("change", (event) =>
@@ -1030,6 +481,7 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 				idFormat = format.fullUnderscore;
 			}
 		}
+
 		//Attribute Editor
 		var groupGlobal = [];
 
@@ -1038,6 +490,11 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 		var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
 		var currentSelected = null;
 
+	
+
+		// "Show the dialog" button opens the dialog modally
+
+		//New code to interface with SVG
 		document
 			.getElementById("export-file-name")
 			.addEventListener("input", (e) => {
@@ -1577,7 +1034,6 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 		});
 
 		document.getElementById("add-point").addEventListener("click", (e) => {
-			console.log("adding point");
 
 			svg = document.getElementById("svg");
 			const layers = Array.from(svg.children);
@@ -1596,44 +1052,56 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 			});
 
 			if (document.getElementById("item-id").value.length > 0) {
-				const circle = document.createElementNS(
-					"http://www.w3.org/2000/svg",
-					"circle",
-				);
-				circle.setAttribute("cx", "30");
-				circle.setAttribute("cy", "30");
-				circle.setAttribute("r", "30");
-				circle.setAttribute(
-					"id",
-					document.getElementById("item-id").value,
-				);
-				if (layerWithMostCircles) {
-					layerWithMostCircles.appendChild(circle);
-					console.log(layerWithMostCircles);
-				} else {
-					try {
-						if (
-							globalSvgContainer
-								.querySelector("svg")
-								.querySelector("g")
-						) {
-							globalSvgContainer
-								.querySelector("svg")
-								.querySelector("g")
-								.appendChild(circle);
-						}
-					} catch (e) {
-						const newSVG = createNewSVG();
+				console.log(document.getElementById("item-id").value)
+				const values = document.getElementById("item-id").value.split(",")
+				values.map((e, i) => {
+					console.log(e)
+					const circle = document.createElementNS(
+						"http://www.w3.org/2000/svg",
+						"circle",
+					);
+					circle.setAttribute("cx", `${30 * i}`);
+					circle.setAttribute("cy", "30");
+					circle.setAttribute("r", "30");
+					circle.setAttribute("id", e);
+					if (layerWithMostCircles) {
+						layerWithMostCircles.appendChild(circle);
+						console.log(layerWithMostCircles);
+					} else {
+						try {
+							if (
+								globalSvgContainer.querySelector("svg").querySelector("g")) {
+								globalSvgContainer.querySelector("svg").querySelector("g").appendChild(circle);
+							} else {
+								let svgInstance = globalSvgContainer.querySelector("svg")
 
-						const gElement = document.createElementNS(
-							"http://www.w3.org/2000/svg",
-							"g",
-						);
-						gElement.appendChild(circle);
-						newSVG.appendChild(gElement);
-						globalSvgContainer.appendChild(newSVG);
+								const gElement = document.createElementNS(
+									"http://www.w3.org/2000/svg",
+									"g",
+								);
+								gElement.appendChild(circle);
+								svgInstance.appendChild(gElement);
+							}
+						} catch (e) {
+							console.log(globalSvgContainer)
+							let svgInstance = globalSvgContainer.querySelector("svg")
+
+							if(!svgInstance){
+								svgInstance = createNewSVG();
+								globalSvgContainer.appendChild(svgInstance);
+							}
+
+							const gElement = document.createElementNS(
+								"http://www.w3.org/2000/svg",
+								"g",
+							);
+							gElement.appendChild(circle);
+							svgInstance.appendChild(gElement);
+							
+						}
 					}
-				}
+				})
+
 			} else {
 				alert("Please add a name for the point");
 			}
@@ -1885,19 +1353,25 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 				const reader = new FileReader();
 				reader.onload = (event) => {
 					const contents = event.target.result;
-					const img = document.createElement("img");
-					img.src = contents;
-					img.style.maxHeight = "100%";
-					img.style.maxWidth = "100%";
-					img.style.borderRadius = "5px"
+					// const img = document.createElement("img");
+					// img.src = contents;
+					// img.style.maxHeight = "100%";
+					// img.style.maxWidth = "100%";
+					// img.style.borderRadius = "5px"
 					const svgContainer =
 						document.getElementById("svg-container");
-					const internalSVG = svgContainer.querySelector(
+					var internalSVG = svgContainer.querySelector(
 						"svg[data-csv-editor='svg']",
 					);
 
-					if (internalSVG) {
-						const svgImage = document.createElementNS(
+					if (!internalSVG) {
+						svgContainer.innerHTML = "";
+						const newSVG = createNewSVG();
+						svgContainer.appendChild(newSVG);
+						internalSVG = newSVG
+					}
+
+					const svgImage = document.createElementNS(
 							"http://www.w3.org/2000/svg",
 							"image",
 						);
@@ -1914,10 +1388,6 @@ import UpdateValuesModal from "../components/UpdateValuesModal.astro";
 							svgImage,
 							internalSVG.firstChild,
 						);
-					} else {
-						svgContainer.innerHTML = "";
-						svgContainer.appendChild(img);
-					}
 				};
 				reader.readAsDataURL(file);
 			} else if (file.type === "text/csv") {

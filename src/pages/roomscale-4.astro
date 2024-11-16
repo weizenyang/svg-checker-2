@@ -42,6 +42,10 @@ import ObjectList from "../components/object-list.tsx";
                     <input type="checkbox" id="show-labels" name="show-labels" checked>
                 </div>
                 <div>
+                    <label for="show-face-orientation">Show Face Orientation</label>
+                    <input type="checkbox" id="show-face-orientation" name="show-face-orientation" checked>
+                </div>
+                <div>
                     <label for="scale-slider">Cone Size</label>
                     <input type="range" class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
                 </div>
@@ -790,6 +794,7 @@ animate();
                                     const item = loader.parse(arrayBuffer, "");
                                     item.name = entry.name;
                                     simplifiedNamesId.push({uuid: item.uuid, simplifiedName: entry.name.replace(/\D/g, "")})
+                                    console.log("item name" + item.name)
                                     glbFiles.push(item.name);
                                     scene.add(item);
                                 };
@@ -968,7 +973,7 @@ function updateLabelPositions() {
     }).filter(e => e.visible)
 
     sortedMarkers.map((marker, i) => {
-        console.log(marker)
+        // console.log(marker)
         const labelDiv = marker.userData.label;
         if (!labelDiv) return;
 
@@ -1230,6 +1235,50 @@ function convertFBXtoGLB(position, rotation) {
         } else {
             document.getElementById("marker-label-container").style.display = "none"
         }
+    });
+
+    document.getElementById("show-face-orientation").addEventListener("change", (e) => {
+        
+        if(e.target.checked){
+            console.log(glbFiles)
+            console.log(markers)
+                scene.traverse(function (child) {
+                    console.log(child.name)
+                    if (child.isMesh && !(child.userData && child.userData.label) && !(child.name.toLowerCase().includes("sphere"))) {
+                        child.material = new THREE.ShaderMaterial({
+                            vertexShader: `
+                                varying vec3 vNormal;
+                                void main() {
+                                    vNormal = normalize(normalMatrix * normal);
+                                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                                }`,
+                            fragmentShader: `
+                                varying vec3 vNormal;
+                                void main() {
+                                    float facingRatio = dot(vNormal, vec3(0.0, 0.0, 1.0));
+                                    float blueIntensity = 0.5 + 0.5 * facingRatio; // Blue becomes more intense as the normal faces the viewer
+                                    float redIntensity = 0.5 - 0.5 * facingRatio; // Red becomes more intense as the normal faces away
+                                    gl_FragColor = vec4(redIntensity, 0.0, blueIntensity, 0.5); // Semi-transparent
+                                }`,
+                            side: THREE.FrontSide,
+                            transparent: true
+                        });
+                    }
+                });
+        } else {
+            scene.traverse((child) => {
+            if (child.isMesh && !(child.userData && child.userData.label) && !(child.name.toLowerCase().includes("sphere"))) {
+                child.material = material;
+                child.material.wireframe = true; // Ensure wireframe is initially false
+            }
+        });
+        }
+        // createLabels()
+        // if(e.target.checked){
+        //     document.getElementById("marker-label-container").style.display = "block"
+        // } else {
+        //     document.getElementById("marker-label-container").style.display = "none"
+        // }
     });
 
     document.getElementById("scale-slider").addEventListener("input", (e) => {
