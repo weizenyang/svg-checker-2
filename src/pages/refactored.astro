@@ -1,7 +1,7 @@
 ---
 import UpdateValuesModal from "../components/UpdateValuesModal.astro";
-import Tutorial from "../components/Tutorial.astro"
-import '../styles.css';
+import Tutorial from "../components/Tutorial.astro";
+import "../styles.css";
 ---
 
 <html lang="en">
@@ -352,8 +352,7 @@ import '../styles.css';
 					>
 				</section>
 
-				<Tutorial x="some data" id="tutorial"/>
-
+				<Tutorial x="some data" id="tutorial" />
 
 				<div class="container" id="id-container">
 					<div class="id-list-title-container">
@@ -373,7 +372,10 @@ import '../styles.css';
 
 		<section class="container editor grid">
 			<div id="image-list-container" class="hidden flex-col">
-				<label for="check-floorplans-button" class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end">
+				<label
+					for="check-floorplans-button"
+					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
+				>
 					Check Floorplans
 				</label>
 				<input
@@ -418,9 +420,6 @@ import '../styles.css';
 			</div>
 			<svg id="svg" height="0px"></svg>
 		</section>
-
-		
-
 	</body>
 
 	<script>
@@ -489,8 +488,6 @@ import '../styles.css';
 		var svg = document.getElementById("svg"); // get the SVG element
 		var mouseRect = svg.createSVGRect(); // create a rectangle for the mouse position
 		var currentSelected = null;
-
-	
 
 		// "Show the dialog" button opens the dialog modally
 
@@ -621,6 +618,7 @@ import '../styles.css';
 		document
 			.getElementById("svg-container")
 			.addEventListener("mousedown", (e) => {
+				spawnLabel();
 				if (
 					e.srcElement.parentNode.nodeName.toLowerCase() == "svg" ||
 					e.srcElement.nodeName.toLowerCase() == "svg" ||
@@ -907,6 +905,7 @@ import '../styles.css';
 
 		//Move SVG with CX and CY
 		document.addEventListener("mousedown", (e) => {
+			spawnLabel()
 			if (mouseInContainer && tempSelected != null) {
 				if (e.button === 0) {
 					// Left mouse button
@@ -996,6 +995,8 @@ import '../styles.css';
 			});
 		});
 
+		document.addEventListener("mouseup", spawnLabel)
+
 		function moveElement(element, deltaX, deltaY) {
 			if (
 				element.getAttribute("cx") != null &&
@@ -1034,7 +1035,6 @@ import '../styles.css';
 		});
 
 		document.getElementById("add-point").addEventListener("click", (e) => {
-
 			svg = document.getElementById("svg");
 			const layers = Array.from(svg.children);
 
@@ -1052,10 +1052,10 @@ import '../styles.css';
 			});
 
 			if (document.getElementById("item-id").value.length > 0) {
-				console.log(document.getElementById("item-id").value)
-				const values = document.getElementById("item-id").value.split(",")
+				console.log(document.getElementById("item-id").value);
+				const values = document.getElementById("item-id").value.split(",");
 				values.map((e, i) => {
-					console.log(e)
+					console.log(e);
 					const circle = document.createElementNS(
 						"http://www.w3.org/2000/svg",
 						"circle",
@@ -1070,10 +1070,17 @@ import '../styles.css';
 					} else {
 						try {
 							if (
-								globalSvgContainer.querySelector("svg").querySelector("g")) {
-								globalSvgContainer.querySelector("svg").querySelector("g").appendChild(circle);
+								globalSvgContainer
+									.querySelector("svg")
+									.querySelector("g")
+							) {
+								globalSvgContainer
+									.querySelector("svg")
+									.querySelector("g")
+									.appendChild(circle);
 							} else {
-								let svgInstance = globalSvgContainer.querySelector("svg")
+								let svgInstance =
+									globalSvgContainer.querySelector("svg");
 
 								const gElement = document.createElementNS(
 									"http://www.w3.org/2000/svg",
@@ -1083,10 +1090,11 @@ import '../styles.css';
 								svgInstance.appendChild(gElement);
 							}
 						} catch (e) {
-							console.log(globalSvgContainer)
-							let svgInstance = globalSvgContainer.querySelector("svg")
+							console.log(globalSvgContainer);
+							let svgInstance =
+								globalSvgContainer.querySelector("svg");
 
-							if(!svgInstance){
+							if (!svgInstance) {
 								svgInstance = createNewSVG();
 								globalSvgContainer.appendChild(svgInstance);
 							}
@@ -1097,11 +1105,10 @@ import '../styles.css';
 							);
 							gElement.appendChild(circle);
 							svgInstance.appendChild(gElement);
-							
 						}
 					}
-				})
-
+				});
+				labelToggle()
 			} else {
 				alert("Please add a name for the point");
 			}
@@ -1300,10 +1307,15 @@ import '../styles.css';
 				svgContainer.innerHTML = "";
 				svgContainer.appendChild(svgElement);
 
-				if(imageList.length > 0){
-					previewBackplate(previewBackplate(document.getElementById("svg-container").querySelector("svg")))
+				if (imageList.length > 0) {
+					previewBackplate(
+						previewBackplate(
+							document
+								.getElementById("svg-container")
+								.querySelector("svg"),
+						),
+					);
 				}
-				
 
 				// Set type for export filename
 				type =
@@ -1368,26 +1380,23 @@ import '../styles.css';
 						svgContainer.innerHTML = "";
 						const newSVG = createNewSVG();
 						svgContainer.appendChild(newSVG);
-						internalSVG = newSVG
+						internalSVG = newSVG;
 					}
 
 					const svgImage = document.createElementNS(
-							"http://www.w3.org/2000/svg",
-							"image",
-						);
-						const svgViewbox = internalSVG
-							.getAttribute("viewBox")
-							.split(" ");
-						svgImage.setAttributeNS(null, "href", contents);
-						svgImage.setAttributeNS(null, "x", "0");
-						svgImage.setAttributeNS(null, "y", "0");
-						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
-						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
+						"http://www.w3.org/2000/svg",
+						"image",
+					);
+					const svgViewbox = internalSVG
+						.getAttribute("viewBox")
+						.split(" ");
+					svgImage.setAttributeNS(null, "href", contents);
+					svgImage.setAttributeNS(null, "x", "0");
+					svgImage.setAttributeNS(null, "y", "0");
+					svgImage.setAttributeNS(null, "width", svgViewbox[2]);
+					svgImage.setAttributeNS(null, "height", svgViewbox[3]);
 
-						internalSVG.insertBefore(
-							svgImage,
-							internalSVG.firstChild,
-						);
+					internalSVG.insertBefore(svgImage, internalSVG.firstChild);
 				};
 				reader.readAsDataURL(file);
 			} else if (file.type === "text/csv") {
@@ -1477,7 +1486,6 @@ import '../styles.css';
 
 					svgContainer.querySelector("svg").appendChild(gInstance); //Add g into the svg
 
-
 					//Floors
 					for (let i = 0; i < transformedLines.length; i++) {
 						const fields = transformedLines[i].split(",");
@@ -1526,32 +1534,7 @@ import '../styles.css';
 						}
 					}
 
-					//Add Toggle Label Checkbox
-					const showLabelsDiv = document.createElement("div");
-					showLabelsDiv.id = "showLabelsDiv";
-					const showLabelsToggle = document.createElement("input");
-					const showLabelsLabel = document.createElement("label");
-					showLabelsLabel.textContent = "Toggle Labels";
-					showLabelsLabel.setAttribute("for", "showLabelsToggle");
-
-					showLabelsToggle.type = "checkbox";
-					showLabelsToggle.style.padding = "0.5em";
-					showLabelsToggle.style.height = "fit-content";
-					showLabelsToggle.id = "showLabelsToggle";
-
-					showLabelsDiv.appendChild(showLabelsToggle);
-					showLabelsDiv.appendChild(showLabelsLabel);
-					document
-						.getElementById("editor-button-container")
-						.appendChild(showLabelsDiv);
-
-					showLabelsToggle.addEventListener("change", (e) => {
-						if (e.target.checked) {
-							spawnLabel();
-						} else {
-							killLabels();
-						}
-					});
+					labelToggle()
 
 					//Floor section
 					//Dynamically add Floors section
@@ -1659,6 +1642,36 @@ import '../styles.css';
 			}
 		}
 
+		function labelToggle() {
+			if(!document.getElementById("showLabelsDiv")){
+				//Add Toggle Label Checkbox
+				const showLabelsDiv = document.createElement("div");
+				showLabelsDiv.id = "showLabelsDiv";
+				const showLabelsToggle = document.createElement("input");
+				const showLabelsLabel = document.createElement("label");
+				showLabelsLabel.textContent = "Toggle Labels";
+				showLabelsLabel.setAttribute("for", "showLabelsToggle");
+
+				showLabelsToggle.type = "checkbox";
+				showLabelsToggle.style.padding = "0.5em";
+				showLabelsToggle.style.height = "fit-content";
+				showLabelsToggle.id = "showLabelsToggle";
+
+				showLabelsDiv.appendChild(showLabelsToggle);
+				showLabelsDiv.appendChild(showLabelsLabel);
+				document.getElementById("editor-button-container").appendChild(showLabelsDiv);
+
+				showLabelsToggle.addEventListener("change", (e) => {
+					if (e.target.checked) {
+						spawnLabel();
+					} else {
+						killLabels();
+					}
+				});
+			}
+
+		}
+
 		const imageList = [];
 
 		function uploadImages(e) {
@@ -1689,21 +1702,27 @@ import '../styles.css';
 
 			Promise.all(Array.from(files).map(readFile))
 				.then((results) => {
-					imageList.splice(0, imageList.length)
+					imageList.splice(0, imageList.length);
 					imageList.push(...results);
-					const imageListCarousel = document.getElementById("image-list-carousel");
+					const imageListCarousel = document.getElementById(
+						"image-list-carousel",
+					);
 					imageListCarousel.innerHTML = "";
 					imageList.forEach((image) => {
 						const listItem = document.createElement("li");
-						listItem.style.height = "100%"
+						listItem.style.height = "100%";
 						const imageElement = document.createElement("img");
 						imageElement.src = image.data;
-						imageElement.style.height = "60px"
+						imageElement.style.height = "60px";
 						// imageElement.setAttribute("data-name", image.name)
 						listItem.appendChild(imageElement);
 						imageListCarousel.appendChild(listItem);
 					});
-					previewBackplate(document.getElementById("svg-container").querySelector("svg"))
+					previewBackplate(
+						document
+							.getElementById("svg-container")
+							.querySelector("svg"),
+					);
 				})
 				.catch((error) =>
 					console.error("Error loading images:", error),
@@ -1732,43 +1751,68 @@ import '../styles.css';
 				newPreviewer.style.justifyContent = "justify-center";
 				newPreviewer.style.justifyItems = "justify-center";
 				newPreviewer.style.transform = "translate(-50%, -113%)";
-				newPreviewer.style.width = "310px"
+				newPreviewer.style.width = "310px";
 				previewerImg.id = "image-previewer-image";
-				previewerImg.style.width = "300px"
+				previewerImg.style.width = "300px";
 				previewerImg.style.marginBottom = "10px";
 				newPreviewer.appendChild(previewerImg);
 				previewerText.id = "image-previewer-text";
-				previewerText.style.fontSize = "12px"
+				previewerText.style.fontSize = "12px";
 				newPreviewer.appendChild(previewerText);
-				document.querySelector("body").appendChild(newPreviewer)
+				document.querySelector("body").appendChild(newPreviewer);
 			}
 
 			parentSVG.querySelectorAll("path").forEach((path) => {
 				const listener = path.addEventListener("mouseover", (e) => {
-					document.getElementById("image-previewer-container").style.display = "block"
-					const selectedImage = imageList.filter(image =>
-						image.name.split("_").join("").split("-").join("").includes(e.target.id.split("_").join("").split("-").join("")))[0];
+					document.getElementById(
+						"image-previewer-container",
+					).style.display = "block";
+					const selectedImage = imageList.filter((image) =>
+						image.name
+							.split("_")
+							.join("")
+							.split("-")
+							.join("")
+							.includes(
+								e.target.id
+									.split("_")
+									.join("")
+									.split("-")
+									.join(""),
+							),
+					)[0];
 					if (selectedImage) {
 						// console.log(selectedImage)
-						document.getElementById("image-previewer-image").src = selectedImage.data;
-						document.getElementById("image-previewer-text").innerHTML = selectedImage.name;
+						document.getElementById("image-previewer-image").src =
+							selectedImage.data;
+						document.getElementById(
+							"image-previewer-text",
+						).innerHTML = selectedImage.name;
 					} else {
-						document.getElementById("image-previewer-image").src = "";
-						document.getElementById("image-previewer-text").innerHTML = "";
+						document.getElementById("image-previewer-image").src =
+							"";
+						document.getElementById(
+							"image-previewer-text",
+						).innerHTML = "";
 					}
 				});
 
 				const listener2 = path.addEventListener("mouseout", (e) => {
-					document.getElementById("image-previewer-container").style.display = "none"
+					document.getElementById(
+						"image-previewer-container",
+					).style.display = "none";
 				});
 
 				listeners.push(listener);
 				listeners.push(listener2);
 			});
 			globalSvgContainer.addEventListener("mousemove", (e) => {
-				document.getElementById("image-previewer-container").style.left = `${e.clientX}px`
-				document.getElementById("image-previewer-container").style.top = `${e.clientY}px`
-			})
+				document.getElementById(
+					"image-previewer-container",
+				).style.left = `${e.clientX}px`;
+				document.getElementById("image-previewer-container").style.top =
+					`${e.clientY}px`;
+			});
 		}
 
 		fileInput.addEventListener("change", () => {
@@ -1864,6 +1908,16 @@ import '../styles.css';
 
 					multiSelect = false;
 				}
+			}
+
+			if (
+				e.key === "a" &&
+				e.ctrlKey &&
+				document.activeElement.tagName === "INPUT" &&
+				document.activeElement.type === "text"
+			) {
+				document.activeElement.select();
+				console.log(document.activeElement);
 			}
 
 			if (e.key == "Shift") {
@@ -2482,8 +2536,7 @@ import '../styles.css';
 		}
 
 		document.getElementById("flip-x").addEventListener("click", (e) => {
-			// var svg = document.querySelector("#svg-container").querySelector("svg");
-			// svg.style.scale = "-1 1"
+			
 			flipped = !flipped;
 
 			var doc = null;
@@ -2516,7 +2569,7 @@ import '../styles.css';
 					// }
 				},
 			);
-			spawnLabel();
+			spawnLabel()
 		});
 
 		document.getElementById("flip-y").addEventListener("click", (e) => {
