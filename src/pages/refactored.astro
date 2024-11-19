@@ -1204,9 +1204,9 @@ import "../styles.css";
 		const parseDataFromUrl = (url) => {
 		const params = new URLSearchParams(new URL(url).search);
 		const base64Image = params.get('image');
-		const imageName = params.get('imageName');
+		const imageName = params.get('imagename');
 		const base64Csv = params.get('csv');
-		const csvName = params.get('csvName');
+		const csvName = params.get('csvname');
 
 		return { base64Image, imageName, base64Csv, csvName };
 		};
