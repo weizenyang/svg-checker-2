@@ -1201,6 +1201,67 @@ import "../styles.css";
 			spawnLabel();
 		};
 
+		const parseDataFromUrl = (url) => {
+		const params = new URLSearchParams(new URL(url).search);
+		const base64Image = params.get('image');
+		const imageName = params.get('imageName');
+		const base64Csv = params.get('csv');
+		const csvName = params.get('csvName');
+
+		return { base64Image, imageName, base64Csv, csvName };
+		};
+
+		/**
+		 * Convert Base64 data to a File object
+		 */
+		const base64ToFile = (base64Data, fileName, mimeType) => {
+		const byteString = atob(base64Data); // Decode Base64 string
+		const byteArray = new Uint8Array(byteString.length);
+		for (let i = 0; i < byteString.length; i++) {
+			byteArray[i] = byteString.charCodeAt(i);
+		}
+
+		return new File([byteArray], fileName, { type: mimeType });
+		};
+
+		/**
+		 * Extract data from the URL and feed it into `handleFileChange`
+		 */
+		const handleDataFromUrl = (url) => {
+		const { base64Image, imageName, base64Csv, csvName } = parseDataFromUrl(url);
+
+		if (base64Image && imageName) {
+			const imageFile = base64ToFile(base64Image, imageName, 'image/webp');
+			handleFileChange(imageFile); // Call your existing function
+		}
+
+		if (base64Csv && csvName) {
+			const csvFile = base64ToFile(base64Csv, csvName, 'text/csv');
+			handleFileChange(csvFile); // Call your existing function
+		}
+		};
+
+		/**
+		 * Function to process the current URL
+		 */
+		const processCurrentUrl = () => {
+		const currentUrl = window.location.href;
+		handleDataFromUrl(currentUrl);
+		};
+
+		/**
+		 * Add event listeners
+		 */
+		window.addEventListener('DOMContentLoaded', () => {
+		// Process the initial URL when the page loads
+		processCurrentUrl();
+		});
+
+		// Detect changes to the URL
+		window.addEventListener('popstate', () => {
+		processCurrentUrl();
+		});
+
 		function handleFileChange(file) {
 			flipped = false;
 			var count = 0;
