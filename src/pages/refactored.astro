@@ -1216,37 +1216,37 @@ import "../styles.css";
 		// }
 
 		async function fetchDataFromServer() {
-		try {
-			// Fetch the image data as a buffer
-			const imageResponse = await fetch('http://localhost:9234/image');
-			if (!imageResponse.ok) throw new Error('Failed to fetch image');
+			try {
+				// Fetch the image data
+				const imageResponse = await fetch('http://localhost:9234/image');
+				if (!imageResponse.ok) throw new Error('Failed to fetch image');
+				const { image, imageName } = await imageResponse.json();
 
-			const imageBuffer = await imageResponse.arrayBuffer();
-			const imageBlob = new Blob([imageBuffer], { type: 'image/webp' }); // Update type if necessary
-			const imageFile = new File([imageBlob], 'image.webp'); // Use the correct name if provided by the server
+				// Convert the image buffer to a Blob
+				const imageBlob = new Blob([new Uint8Array(image.data)], { type: 'image/webp' }); // Update type if necessary
+				const imageFile = new File([imageBlob], imageName);
 
-			// Pass the image File object to handleFileChange
-			handleFileChange(imageFile);
+				// Pass the image File object to handleFileChange
+				handleFileChange(imageFile);
+			} catch (error) {
+				console.error('Error fetching image data from server:', error);
+			}
 
-		} catch (error) {
-			console.error('Error fetching image data from server:', error);
-		}
+			try {
+				// Fetch the CSV data
+				const csvResponse = await fetch('http://localhost:9234/csv');
+				if (!csvResponse.ok) throw new Error('Failed to fetch CSV');
+				const { csv, csvName } = await csvResponse.json();
 
-		try {
-			// Fetch the CSV data as a buffer
-			const csvResponse = await fetch('http://localhost:9234/csv');
-			if (!csvResponse.ok) throw new Error('Failed to fetch CSV');
+				// Convert the CSV buffer to a Blob
+				const csvBlob = new Blob([new Uint8Array(csv.data)], { type: 'text/csv' });
+				const csvFile = new File([csvBlob], csvName);
 
-			const csvBuffer = await csvResponse.arrayBuffer();
-			const csvBlob = new Blob([csvBuffer], { type: 'text/csv' });
-			const csvFile = new File([csvBlob], 'data.csv'); // Use the correct name if provided by the server
-
-			// Pass the CSV File object to handleFileChange
-			handleFileChange(csvFile);
-
-		} catch (error) {
-			console.error('Error fetching CSV data from server:', error);
-		}
+				// Pass the CSV File object to handleFileChange
+				handleFileChange(csvFile);
+			} catch (error) {
+				console.error('Error fetching CSV data from server:', error);
+			}
 		}
 
 		fetchDataFromServer()
