@@ -1225,7 +1225,7 @@ import "../styles.css";
 
 				// Convert the image buffer to a Blob
 				const imageBlob = new Blob([new Uint8Array(image.data)], { type: 'image/webp' }); // Update type if necessary
-				const imageFile = new File([imageBlob], imageName, { type: 'text/csv' });
+				const imageFile = new File([imageBlob], imageName, { type: 'image/webp' });
 
 				// Pass the image File object to handleFileChange
 				handleFileChange(imageFile);
