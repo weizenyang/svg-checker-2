@@ -1229,6 +1229,11 @@ import "../styles.css";
 				// Pass the image File object to handleFileChange
 				handleFileChange(imageFile);
 
+			} catch (error) {
+				console.error('Error fetching image data from server:', error);
+			}
+
+			try{
 				// Fetch the CSV data
 				const csvResponse = await fetch('http://localhost:9234/csv');
 				if (!csvResponse.ok) throw new Error('Failed to fetch CSV');
@@ -1241,7 +1246,7 @@ import "../styles.css";
 				// Pass the CSV File object to handleFileChange
 				handleFileChange(csvFile);
 			} catch (error) {
-				console.error('Error fetching data from server:', error);
+				console.error('Error fetching csv data from server:', error);
 			}
 		}
 
