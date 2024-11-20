@@ -1221,6 +1221,7 @@ import "../styles.css";
 				const imageResponse = await fetch('http://localhost:9234/image');
 				if (!imageResponse.ok) throw new Error('Failed to fetch image');
 				const { image, imageName } = await imageResponse.json();
+				console.log(imageResponse)
 
 				// Convert the image buffer to a Blob
 				const imageBlob = new Blob([new Uint8Array(image.data)], { type: 'image/webp' }); // Update type if necessary
@@ -1237,6 +1238,7 @@ import "../styles.css";
 				const csvResponse = await fetch('http://localhost:9234/csv');
 				if (!csvResponse.ok) throw new Error('Failed to fetch CSV');
 				const { csv, csvName } = await csvResponse.json();
+				console.log(csvResponse)
 
 				// Convert the CSV buffer to a Blob
 				const csvBlob = new Blob([new Uint8Array(csv.data)], { type: 'text/csv' });
