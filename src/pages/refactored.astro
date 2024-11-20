@@ -1225,7 +1225,7 @@ import "../styles.css";
 
 				// Convert the image buffer to a Blob
 				const imageBlob = new Blob([new Uint8Array(image.data)], { type: 'image/webp' }); // Update type if necessary
-				const imageFile = new File([imageBlob], imageName);
+				const imageFile = new File([imageBlob], imageName, { type: 'text/csv' });
 
 				// Pass the image File object to handleFileChange
 				handleFileChange(imageFile);
@@ -1242,7 +1242,7 @@ import "../styles.css";
 
 				// Convert the CSV buffer to a Blob
 				const csvBlob = new Blob([new Uint8Array(csv.data)], { type: 'text/csv' });
-				const csvFile = new File([csvBlob], csvName);
+				const csvFile = new File([csvBlob], csvName, { type: 'text/csv' });
 
 				// Pass the CSV File object to handleFileChange
 				handleFileChange(csvFile);
