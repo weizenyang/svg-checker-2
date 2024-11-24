@@ -372,6 +372,7 @@ import "../styles.css";
 
 		<section class="container editor grid">
 			<div id="image-list-container" class="hidden flex-col">
+				<input type="text" placeholder="To Remove" id="text-replacement">
 				<label
 					for="check-floorplans-button"
 					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
@@ -1788,6 +1789,8 @@ import "../styles.css";
 				removeEventListener("hover", e);
 			});
 
+
+
 			let previewerInstance = document.getElementById("image-previewer");
 			if (!previewerInstance) {
 				const newPreviewer = document.createElement("div");
@@ -1820,8 +1823,21 @@ import "../styles.css";
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
-					const selectedImage = imageList.filter((image) =>
-						image.name
+					const textReplacement = document.getElementById("text-replacement").value
+					console.log(textReplacement)
+					const selectedImage = imageList.filter((image) => {
+						console.log(e.target.id
+									.split("_")
+									.join("")
+									.split("-")
+									.join("")
+									.replace(textReplacement, ""))
+					console.log(image.name
+							.split("_")
+							.join("")
+							.split("-")
+							.join(""))	
+							return image.name
 							.split("_")
 							.join("")
 							.split("-")
@@ -1831,9 +1847,13 @@ import "../styles.css";
 									.split("_")
 									.join("")
 									.split("-")
-									.join(""),
-							),
+									.join("")
+									.replace(textReplacement, ""),
+							)
+					}
+
 					)[0];
+								
 					if (selectedImage) {
 						// console.log(selectedImage)
 						document.getElementById("image-previewer-image").src =
