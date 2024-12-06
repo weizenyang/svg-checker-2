@@ -687,7 +687,7 @@ import ObjectList from "../components/object-list.tsx";
             });
 
             // Pass the model File object to handleFileChange
-            handleDrop(modelFile);
+            handleFileChange(null, modelFile);
         } catch (error) {
             console.error("Error fetching model data from server:", error);
         }
@@ -706,7 +706,7 @@ import ObjectList from "../components/object-list.tsx";
             const csvFile = new File([csvBlob], csvName, { type: "text/csv" });
 
             // Pass the CSV File object to handleFileChange
-            handleDrop(csvFile);
+            handleFileChange(null, csvFile);
         } catch (error) {
             console.error("Error fetching CSV data from server:", error);
         }
@@ -720,160 +720,169 @@ import ObjectList from "../components/object-list.tsx";
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
 
+        handleFileChange(items, files)
+        
+    }
+
+    function handleFileChange(items, files){
+        console.log(items)
+        console.log(files)
         // Check if a single item is dropped
         if (items.length === 1) {
-            const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
-            const file = files[0];
-            console.log(items);
-            if (entry.isDirectory) {
-                enumerateDirectoryWithManyFiles(entry);
-            } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
+            console.log("items")
+                    const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
+                    const file = files[0];
+                    console.log(items);
+                    if (entry.isDirectory) {
+                        enumerateDirectoryWithManyFiles(entry);
+                    } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            processCSVData(e.target.result, file.name);
+                        };
+                        reader.readAsText(files[0]);
+                    } else if (
+                        file.type === "model/gltf-binary" ||
+                        file.name.endsWith(".glb")
+                    ) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const arrayBuffer = event.target.result;
 
-                    // Create a new DataView to read the binary data
-                    const dataView = new DataView(arrayBuffer);
-                    const decoder = new TextDecoder("utf-8");
+                            // Create a new DataView to read the binary data
+                            const dataView = new DataView(arrayBuffer);
+                            const decoder = new TextDecoder("utf-8");
 
-                    // Read the length of the JSON chunk
-                    const jsonChunkLength = dataView.getUint32(12, true);
+                            // Read the length of the JSON chunk
+                            const jsonChunkLength = dataView.getUint32(12, true);
 
-                    // Read the JSON chunk itself
-                    const jsonChunk = new Uint8Array(
-                        arrayBuffer,
-                        20,
-                        jsonChunkLength,
-                    );
-                    const jsonText = decoder.decode(jsonChunk);
-                    const json = JSON.parse(jsonText);
+                            // Read the JSON chunk itself
+                            const jsonChunk = new Uint8Array(
+                                arrayBuffer,
+                                20,
+                                jsonChunkLength,
+                            );
+                            const jsonText = decoder.decode(jsonChunk);
+                            const json = JSON.parse(jsonText);
 
-                    // Check for DRACO compression
-                    const usesDraco =
-                        json.extensionsUsed &&
-                        json.extensionsUsed.includes(
-                            "KHR_draco_mesh_compression",
-                        );
+                            // Check for DRACO compression
+                            const usesDraco =
+                                json.extensionsUsed &&
+                                json.extensionsUsed.includes(
+                                    "KHR_draco_mesh_compression",
+                                );
 
-                    // Parse and load the model
-                    loader.parse(
-                        arrayBuffer,
-                        "",
-                        (gltf) => {
-                            applyLitMaterialToGLTF(gltf.scene);
-                            gltf.scene.name = file.name;
-                            gltf.scene.scale.set(100, 100, 100);
-                            objects.push(gltf.scene);
-                            simplifiedNamesId.push({
-                                uuid: gltf.scene.uuid,
-                                simplifiedName: file.name.replace(/\D/g, ""),
+                            // Parse and load the model
+                            loader.parse(
+                                arrayBuffer,
+                                "",
+                                (gltf) => {
+                                    applyLitMaterialToGLTF(gltf.scene);
+                                    gltf.scene.name = file.name;
+                                    gltf.scene.scale.set(100, 100, 100);
+                                    objects.push(gltf.scene);
+                                    simplifiedNamesId.push({
+                                        uuid: gltf.scene.uuid,
+                                        simplifiedName: file.name.replace(/\D/g, ""),
+                                    });
+                                    scene.add(gltf.scene);
+                                    console.log(
+                                        "Model loaded successfully:",
+                                        gltf.scene,
+                                    );
+                                },
+                                (error) => {
+                                    console.error(
+                                        "An error occurred while loading the model:",
+                                        error,
+                                    );
+                                },
+                            );
+                        };
+                        reader.readAsArrayBuffer(file);
+                    }
+                } else if (files.length === 1) {
+                    console.log("files")
+                    const file = files[0];
+                    if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+                        globalFloors = [];
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            processCSVData(e.target.result, file.name);
+                        };
+                        reader.readAsText(files[0]);
+                    } else if (
+                        file.type === "model/gltf-binary" ||
+                        file.name.endsWith(".glb")
+                    ) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const arrayBuffer = event.target.result;
+                            // const loader = new GLTFLoader();
+                            loader.parse(arrayBuffer, "", (gltf) => {
+                                applyLitMaterialToGLTF(gltf.scene);
+                                gltf.scene.name = file.name;
+                                gltf.scene.scale.set(100, 100, 100);
+                                objects.push(gltf.scene);
+                                simplifiedNamesId.push({
+                                    uuid: gltf.scene.uuid,
+                                    simplifiedName: file.name.replace(/\D/g, ""),
+                                });
+                                scene.add(gltf.scene);
                             });
-                            scene.add(gltf.scene);
-                            console.log(
-                                "Model loaded successfully:",
-                                gltf.scene,
-                            );
-                        },
-                        (error) => {
-                            console.error(
-                                "An error occurred while loading the model:",
-                                error,
-                            );
-                        },
-                    );
-                };
-                reader.readAsArrayBuffer(file);
-            }
-        } else if (files.length === 1) {
-            const file = files[0];
-            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                globalFloors = [];
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
-                    // const loader = new GLTFLoader();
-                    loader.parse(arrayBuffer, "", (gltf) => {
-                        applyLitMaterialToGLTF(gltf.scene);
-                        gltf.scene.name = file.name;
-                        gltf.scene.scale.set(100, 100, 100);
-                        objects.push(gltf.scene);
-                        simplifiedNamesId.push({
-                            uuid: gltf.scene.uuid,
-                            simplifiedName: file.name.replace(/\D/g, ""),
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } else {
+                        console.error("Dropped item could not be accessed.");
+                    }
+                } else if (files.length > 1) {
+                    const file = files[0];
+                    if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            processCSVData(e.target.result, file.name);
+                        };
+                        reader.readAsText(files[0]);
+                    } else if (
+                        file.type === "model/gltf-binary" ||
+                        file.name.endsWith(".glb")
+                    ) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const arrayBuffer = event.target.result;
+                            const loader = new GLTFLoader();
+                            loader.parse(arrayBuffer, "", (gltf) => {
+                                applyLitMaterialToGLTF(gltf.scene);
+                                gltf.scene.name = file.name;
+                                objects.push(gltf.scene);
+                                simplifiedNamesId.push({
+                                    uuid: gltf.scene.uuid,
+                                    simplifiedName: file.name.replace(/\D/g, ""),
+                                });
+                                scene.add(gltf.scene);
+                            });
+                        };
+                        reader.readAsArrayBuffer(file);
+                    } else if (
+                        file.type === "image/jpg" ||
+                        file.name.endsWith(".jpg")
+                    ) {
+                        Array.from(files).forEach((i) => {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                const arrayBuffer = event.target.result;
+                                imageArray.push({ name: i.name, image: arrayBuffer });
+                                console.log(imageArray);
+                            };
+                            reader.readAsDataURL(i);
                         });
-                        scene.add(gltf.scene);
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            } else {
-                console.error("Dropped item could not be accessed.");
-            }
-        } else if (files.length > 1) {
-            const file = files[0];
-            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
-                    const loader = new GLTFLoader();
-                    loader.parse(arrayBuffer, "", (gltf) => {
-                        applyLitMaterialToGLTF(gltf.scene);
-                        gltf.scene.name = file.name;
-                        objects.push(gltf.scene);
-                        simplifiedNamesId.push({
-                            uuid: gltf.scene.uuid,
-                            simplifiedName: file.name.replace(/\D/g, ""),
-                        });
-                        scene.add(gltf.scene);
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            } else if (
-                file.type === "image/jpg" ||
-                file.name.endsWith(".jpg")
-            ) {
-                Array.from(files).forEach((i) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const arrayBuffer = event.target.result;
-                        imageArray.push({ name: i.name, image: arrayBuffer });
-                        console.log(imageArray);
-                    };
-                    reader.readAsDataURL(i);
-                });
-            } else {
-                console.error("Dropped item could not be accessed.");
-            }
-        } else {
-            // console.log(items)
-            // console.error("Please drop only one item.");
-        }
+                    } else {
+                        console.error("Dropped item could not be accessed.");
+                    }
+                } else {
+                    // console.log(items)
+                    // console.error("Please drop only one item.");
+                }
     }
 
     function applyLitMaterialToGLTF(gltfScene) {
