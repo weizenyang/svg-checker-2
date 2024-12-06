@@ -694,7 +694,7 @@ import ObjectList from "../components/object-list.tsx";
 
         try {
             // Fetch the CSV data
-            const csvResponse = await fetch("http://localhost:9234/csv-camera");
+            const csvResponse = await fetch("http://localhost:9234/camera-csv");
             if (!csvResponse.ok) throw new Error("Failed to fetch CSV");
             const { csv, csvName } = await csvResponse.json();
             console.log({ csv, csvName });
