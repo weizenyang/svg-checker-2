@@ -687,7 +687,7 @@ import ObjectList from "../components/object-list.tsx";
             });
 
             // Pass the model File object to handleFileChange
-            handleFileChange([modelFile], [modelFile]);
+            handleFileChange(modelFile, [modelFile]);
         } catch (error) {
             console.error("Error fetching model data from server:", error);
         }
@@ -706,7 +706,7 @@ import ObjectList from "../components/object-list.tsx";
             const csvFile = new File([csvBlob], csvName, { type: "text/csv" });
 
             // Pass the CSV File object to handleFileChange
-            handleFileChange([csvFile], [csvFile]);
+            handleFileChange(csvFile, [csvFile]);
         } catch (error) {
             console.error("Error fetching CSV data from server:", error);
         }
