@@ -11,70 +11,146 @@ import ObjectList from "../components/object-list.tsx";
         <title>Three.js - Three Sides of a Cube</title>
     </head>
     <body id="drop-zone" class="overflow-hidden">
-        <div class="ui-area transition-all bg-zinc-100 p-3 rounded-sm" id="ui-area">
-            <a href="/" class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg">
+        <div
+            class="ui-area transition-all bg-zinc-100 p-3 rounded-sm"
+            id="ui-area"
+        >
+            <a
+                href="/"
+                class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg"
+            >
                 <div class="align-center content-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-                      </svg>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                        class="size-5"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                        ></path>
+                    </svg>
                 </div>
-                <p class="ml-2 ">Home</p>
+                <p class="ml-2">Home</p>
             </a>
-            <hr class="border-b border-zinc-200 mb-3"/>
-            <button class="bg-zinc-300 text-lime-600 font-mono p-0.5 rounded-md w-full drop-shadow-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="log-scene">... Log Scene ...</button>
-            
+            <hr class="border-b border-zinc-200 mb-3" />
+            <button
+                class="bg-zinc-300 text-lime-600 font-mono p-0.5 rounded-md w-full drop-shadow-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                id="log-scene">... Log Scene ...</button
+            >
+
             <div class="flex space-x-1 mt-3">
                 <p class="font-medium">Flip:</p>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip"> X-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-flip"> Y-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="z-flip"> Z-Axis </button>
-                <button class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="y-up"> -Y Coords </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="x-flip"
+                >
+                    X-Axis
+                </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="y-flip"
+                >
+                    Y-Axis
+                </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="z-flip"
+                >
+                    Z-Axis
+                </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="y-up"
+                >
+                    -Y Coords
+                </button>
             </div>
 
-            
             <div class="rounded-md bg-white max-w-60 p-3 mt-3 space-y-2">
                 <div>
                     <label for="center-csv">Center</label>
-                    <input type="checkbox" id="center-csv" name="center-csv">
+                    <input type="checkbox" id="center-csv" name="center-csv" />
                 </div>
                 <div>
                     <label for="show-labels">Show Labels</label>
-                    <input type="checkbox" id="show-labels" name="show-labels" checked>
+                    <input
+                        type="checkbox"
+                        id="show-labels"
+                        name="show-labels"
+                        checked
+                    />
                 </div>
                 <div>
-                    <label for="show-face-orientation">Show Face Orientation</label>
-                    <input type="checkbox" id="show-face-orientation" name="show-face-orientation" checked>
+                    <label for="show-face-orientation"
+                        >Show Face Orientation</label
+                    >
+                    <input
+                        type="checkbox"
+                        id="show-face-orientation"
+                        name="show-face-orientation"
+                        checked
+                    />
                 </div>
                 <div>
                     <label for="scale-slider">Cone Size</label>
-                    <input type="range" class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75" id="cone-size-slider" name="cone-size-slider" min=0" max="50" step="1" value="1">
+                    <input
+                        type="range"
+                        class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75"
+                        id="cone-size-slider"
+                        name="cone-size-slider"
+                        min='0"'
+                        max="50"
+                        step="1"
+                        value="1"
+                    />
                 </div>
                 <div>
                     <label for="scale-slider">Scale</label>
-                    <input type="range" class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75" id="scale-slider" name="scale-slider" min="-5" max="5" step="0.1" value="1">
+                    <input
+                        type="range"
+                        class="accent-gray-400 hover:accent-lime-600 active:accent-lime-800 transition-all duration-75"
+                        id="scale-slider"
+                        name="scale-slider"
+                        min="-5"
+                        max="5"
+                        step="0.1"
+                        value="1"
+                    />
                 </div>
             </div>
 
-            
             <!-- <ObjectList client:load /> -->
 
-            <button id="export-all-fbx" class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-3 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400" style="margin-bottom: 10px">
+            <button
+                id="export-all-fbx"
+                class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-3 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400"
+                style="margin-bottom: 10px"
+            >
                 Export All To GLB
                 <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                class="ml-2 rotate-180"
-            >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-width="2"/>
-                <polyline points="7 10 12 15 17 10" stroke-width="2"/>
-                <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"/>
-            </svg></button
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    class="ml-2 rotate-180"
+                >
+                    <path
+                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                        stroke-width="2"></path>
+                    <polyline points="7 10 12 15 17 10" stroke-width="2"
+                    ></polyline>
+                    <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"
+                    ></line>
+                </svg></button
             >
 
             <div class="rounded-md bg-zinc-300 max-w-52 p-5 pl-2 pr-2 mt-3">
@@ -83,26 +159,39 @@ import ObjectList from "../components/object-list.tsx";
                     <p>Import a Camera CSV to start</p>
                 </div>
             </div>
-
-
-
         </div>
 
         <div class="fixed right-0 h-42 w-40 bg-neutral-100" id="gizmo">
-            <button id="camera-top" class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+            <button
+                id="camera-top"
+                class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                id="x-flip"
+            >
                 Top
             </button>
-            <div class="flex">            
-                <button id="camera-left" class="bg-zinc-300 p-5 pr-1 pl-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+            <div class="flex">
+                <button
+                    id="camera-left"
+                    class="bg-zinc-300 p-5 pr-1 pl-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="x-flip"
+                >
                     L
                 </button>
                 <div class="h-36 w-44" id="orthoView"></div>
-                <button id="camera-right" class="bg-zinc-300 p-5 pl-1 pr-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+                <button
+                    id="camera-right"
+                    class="bg-zinc-300 p-5 pl-1 pr-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="x-flip"
+                >
                     R
                 </button>
             </div>
 
-            <button id="camera-bottom" class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
+            <button
+                id="camera-bottom"
+                class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                id="x-flip"
+            >
                 Bottom
             </button>
             <!-- <button class="bg-zinc-300 p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
@@ -112,13 +201,15 @@ import ObjectList from "../components/object-list.tsx";
 
         <div class="notification-panel" id="notification-panel"></div>
 
-        
-        
         <div id="tag" class="z-[101]">
             <h3 id="label">-</h3>
         </div>
     </body>
-    <div id="marker-label-container" class="overflow-hidden pointer-events-none z-[100]"></div>
+    <div
+        id="marker-label-container"
+        class="overflow-hidden pointer-events-none z-[100]"
+    >
+    </div>
 </html>
 
 <script>
@@ -129,37 +220,41 @@ import ObjectList from "../components/object-list.tsx";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
 
-                // Initialize the GLTFLoader
-        const loader = new GLTFLoader();
-        const dracoLoader = new DRACOLoader();
-            // Set the path to the Draco decoder
-            // dracoLoader.setDecoderConfig({ type: 'js' });
-            dracoLoader.setDecoderPath('/draco/decoder/');
-            dracoLoader.preload()
-            loader.setDRACOLoader(dracoLoader);
-        
-        var arrowAsset
-        loader.load("/Arrow.glb", (e) => {  // Preload Arrow asset
-            console.log("Arrow asset loaded")
-            arrowAsset = e
-        })
+    // Initialize the GLTFLoader
+    const loader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    // Set the path to the Draco decoder
+    // dracoLoader.setDecoderConfig({ type: 'js' });
+    dracoLoader.setDecoderPath("/draco/decoder/");
+    dracoLoader.preload();
+    loader.setDRACOLoader(dracoLoader);
+
+    var arrowAsset;
+    loader.load("/Arrow.glb", (e) => {
+        // Preload Arrow asset
+        console.log("Arrow asset loaded");
+        arrowAsset = e;
+    });
 
     const scene = new THREE.Scene();
-    var imageArray = []
-    var VRRef = []
-    var VRSpheres = []
-    var objects = []
-    var markers = []
+    var imageArray = [];
+    var VRRef = [];
+    var VRSpheres = [];
+    var objects = [];
+    var markers = [];
     let labelContainer;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.autoClear=false;
+    renderer.autoClear = false;
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    const orthoRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    orthoRenderer.autoClear=false;
-    const orthoView = document.getElementById("orthoView")
+    const orthoRenderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+    });
+    orthoRenderer.autoClear = false;
+    const orthoView = document.getElementById("orthoView");
     orthoRenderer.setSize(orthoView.clientWidth, orthoView.clientHeight);
     document.getElementById("orthoView").appendChild(orthoRenderer.domElement);
 
@@ -198,8 +293,8 @@ import ObjectList from "../components/object-list.tsx";
     );
     orthoCamera.position.x = -210.41;
     orthoCamera.position.y = 1.31;
-    orthoCamera.position.z= 0;
-    //Mouse Raycaster Perspective 
+    orthoCamera.position.z = 0;
+    //Mouse Raycaster Perspective
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     //Mouse Raycaster Orthographic
@@ -227,153 +322,179 @@ import ObjectList from "../components/object-list.tsx";
         // });
     }
 
-    function handleFloors(){
+    function handleFloors() {
         //Floor section
-			//Dynamically add Floors section
-			var floorNumbers = []
-			const labelDivInstance = document.getElementById('labelDiv')
-			if(labelDivInstance){
-				labelDivInstance.remove()
-			}
-			globalFloors.forEach((e) => {
-                console.log("Pushing " + e.floor)
-				if(!floorNumbers.includes(e.floor)){
-					floorNumbers.push(e.floor)
-				}
-			})
+        //Dynamically add Floors section
+        var floorNumbers = [];
+        const labelDivInstance = document.getElementById("labelDiv");
+        if (labelDivInstance) {
+            labelDivInstance.remove();
+        }
+        globalFloors.forEach((e) => {
+            console.log("Pushing " + e.floor);
+            if (!floorNumbers.includes(e.floor)) {
+                floorNumbers.push(e.floor);
+            }
+        });
 
-			console.log(floorNumbers)
-			console.log(globalFloors)
+        console.log(floorNumbers);
+        console.log(globalFloors);
 
-			if(floorNumbers.length > 0){
-				const floorSection = document.getElementById("show-floors")
-                console.log(floorSection)
-				if(floorSection.classList.contains('hidden')){
-					floorSection.classList.remove('hidden')
-				}
-                const listChild = floorSection.getElementsByTagName('*')
-                console.log(listChild)
-                if(listChild.length > 0){
-                    Array.from(listChild).forEach(element => {
-                        element.remove()
-                    });
-                }
+        if (floorNumbers.length > 0) {
+            const floorSection = document.getElementById("show-floors");
+            console.log(floorSection);
+            if (floorSection.classList.contains("hidden")) {
+                floorSection.classList.remove("hidden");
+            }
+            const listChild = floorSection.getElementsByTagName("*");
+            console.log(listChild);
+            if (listChild.length > 0) {
+                Array.from(listChild).forEach((element) => {
+                    element.remove();
+                });
+            }
 
-				const checkboxesId = []
+            const checkboxesId = [];
 
-				floorNumbers.forEach((e) => {
-					const div = document.createElement('div')
-					const checkbox = document.createElement('input')
-					const label = document.createElement('label')
-					
-					label.innerText = `Floor ${e}`
-					label.htmlFor = `floor-${e}-checkbox`
+            floorNumbers.forEach((e) => {
+                const div = document.createElement("div");
+                const checkbox = document.createElement("input");
+                const label = document.createElement("label");
 
-					checkbox.type = 'checkbox'
-					checkbox.checked = true
-					checkbox.id = `floor-${e}-checkbox`
-                    checkbox.setAttribute("class", "mr-1")
+                label.innerText = `Floor ${e}`;
+                label.htmlFor = `floor-${e}-checkbox`;
 
-					checkboxesId.push(`floor-${e}-checkbox`)
-					div.appendChild(checkbox)
-					div.appendChild(label)
-                    div.setAttribute("class", "p-2 bg-zinc-100 rounded-sm mt-1")
-                    
+                checkbox.type = "checkbox";
+                checkbox.checked = true;
+                checkbox.id = `floor-${e}-checkbox`;
+                checkbox.setAttribute("class", "mr-1");
 
-					checkbox.addEventListener('change', (e) => {
-						// const g = globalSvgContainer.querySelector('g')
-						const selectedFloor = e.target.id.split("-")[1]
-                        const selectedMarkers = globalFloors.filter(i => i.floor == selectedFloor);
+                checkboxesId.push(`floor-${e}-checkbox`);
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                div.setAttribute("class", "p-2 bg-zinc-100 rounded-sm mt-1");
 
-						if(e.target.checked){
-                            selectedMarkers.forEach((e) => {
-                                e.arrow.visible = true
-                            })
-						} else {
-                            selectedMarkers.forEach((e) => {
-                                e.arrow.visible = false
-                            })
-                        }
+                checkbox.addEventListener("change", (e) => {
+                    // const g = globalSvgContainer.querySelector('g')
+                    const selectedFloor = e.target.id.split("-")[1];
+                    const selectedMarkers = globalFloors.filter(
+                        (i) => i.floor == selectedFloor,
+                    );
 
-                        createLabels()
+                    if (e.target.checked) {
+                        selectedMarkers.forEach((e) => {
+                            e.arrow.visible = true;
+                        });
+                    } else {
+                        selectedMarkers.forEach((e) => {
+                            e.arrow.visible = false;
+                        });
+                    }
 
-					})
+                    createLabels();
+                });
 
-					floorSection.appendChild(div)
-				})
-				
-			}
+                floorSection.appendChild(div);
+            });
+        }
     }
 
     function moveTo(event) {
         const intersects = raycaster.intersectObjects(scene.children);
         let objectPosition = intersects.filter(
-                (item) => item.object.cameraPos && item.object.parent.visible
-            );
-        let spheresSpawned = VRRef.map((e) => e.uuid)
-        console.log(spheresSpawned)
-        if(!spheresSpawned.includes(objectPosition[0].object.uuid)){
+            (item) => item.object.cameraPos && item.object.parent.visible,
+        );
+        let spheresSpawned = VRRef.map((e) => e.uuid);
+        console.log(spheresSpawned);
+        if (!spheresSpawned.includes(objectPosition[0].object.uuid)) {
             if (intersects.length > 0) {
-            if (objectPosition.length > 0) {
-                const rotation = camera.rotation
-                camera.position.x = objectPosition[0].object.position.x
-                camera.position.y = objectPosition[0].object.position.y
-                camera.position.z = objectPosition[0].object.position.z
-                console.log(objectPosition[0].object.name)
-                console.log(camera.rotation)
-                camera.rotation.set(THREE.MathUtils.degToRad(rotation.x), THREE.MathUtils.degToRad(rotation.y), THREE.MathUtils.degToRad(rotation.z))
+                if (objectPosition.length > 0) {
+                    const rotation = camera.rotation;
+                    camera.position.x = objectPosition[0].object.position.x;
+                    camera.position.y = objectPosition[0].object.position.y;
+                    camera.position.z = objectPosition[0].object.position.z;
+                    console.log(objectPosition[0].object.name);
+                    console.log(camera.rotation);
+                    camera.rotation.set(
+                        THREE.MathUtils.degToRad(rotation.x),
+                        THREE.MathUtils.degToRad(rotation.y),
+                        THREE.MathUtils.degToRad(rotation.z),
+                    );
 
-                // Load 360 texture
-                if(imageArray.length > 0){
-                    imageArray.forEach((e) => {
-                        const targetImage = e.name.includes(objectPosition[0].object.name.toLowerCase()) && !VRRef.includes(objectPosition[0].object.name.toLowerCase()) ? e.image : null
-                        if (targetImage){
-                            
-                            const textureLoader = new THREE.TextureLoader();
-                            console.log(e.image)
+                    // Load 360 texture
+                    if (imageArray.length > 0) {
+                        imageArray.forEach((e) => {
+                            const targetImage =
+                                e.name.includes(
+                                    objectPosition[0].object.name.toLowerCase(),
+                                ) &&
+                                !VRRef.includes(
+                                    objectPosition[0].object.name.toLowerCase(),
+                                )
+                                    ? e.image
+                                    : null;
+                            if (targetImage) {
+                                const textureLoader = new THREE.TextureLoader();
+                                console.log(e.image);
 
-                            textureLoader.load(e.image, function(texture) {
-                                console.log("Loading texture:", targetImage);
-                                
-                                // Create geometry and material for the sphere
-                                const geometry = new THREE.SphereGeometry(1, 60, 40);
-                                geometry.scale(-100, 100, 100); // Invert the sphere to view from inside
-                                const material = new THREE.MeshBasicMaterial({ map: texture });
-                                
-                                // Create the sphere mesh
-                                const sphere = new THREE.Mesh(geometry, material);
-                                
-                                // Set the sphere's position to match the object's position
-                                sphere.position.copy(objectPosition[0].object.position);
-                                sphere.rotation.set(0, objectPosition[0].object.rotation.z, 0)
-                                console.log(sphere)
-                                sphere.renderOrder = 100
-                                
-                                
-                                // Add the sphere to the scene
-                                scene.add(sphere);
-                                VRRef.push(objectPosition[0].object.name)
-                                VRSpheres.push(sphere)
-                                console.log(VRRef)
-                                console.log("Sphere added at position:", sphere.position);
-                            });
-                        }
-                    })
+                                textureLoader.load(e.image, function (texture) {
+                                    console.log(
+                                        "Loading texture:",
+                                        targetImage,
+                                    );
+
+                                    // Create geometry and material for the sphere
+                                    const geometry = new THREE.SphereGeometry(
+                                        1,
+                                        60,
+                                        40,
+                                    );
+                                    geometry.scale(-100, 100, 100); // Invert the sphere to view from inside
+                                    const material =
+                                        new THREE.MeshBasicMaterial({
+                                            map: texture,
+                                        });
+
+                                    // Create the sphere mesh
+                                    const sphere = new THREE.Mesh(
+                                        geometry,
+                                        material,
+                                    );
+
+                                    // Set the sphere's position to match the object's position
+                                    sphere.position.copy(
+                                        objectPosition[0].object.position,
+                                    );
+                                    sphere.rotation.set(
+                                        0,
+                                        objectPosition[0].object.rotation.z,
+                                        0,
+                                    );
+                                    console.log(sphere);
+                                    sphere.renderOrder = 100;
+
+                                    // Add the sphere to the scene
+                                    scene.add(sphere);
+                                    VRRef.push(objectPosition[0].object.name);
+                                    VRSpheres.push(sphere);
+                                    console.log(VRRef);
+                                    console.log(
+                                        "Sphere added at position:",
+                                        sphere.position,
+                                    );
+                                });
+                            }
+                        });
+                    }
+                    showWireframe(scene, true);
+                    VRSpheres.forEach((e) => {
+                        showWireframe(e, false);
+                    });
                 }
-                showWireframe(scene, true);
-                VRSpheres.forEach((e) => {
-                    showWireframe(e, false);
-                })
+            } else {
+                showWireframe(scene, false);
             }
-            
-
-        } else {
-            showWireframe(scene, false);
         }
-        }
-
-
-
     }
 
     window.addEventListener("pointermove", onPointerMove);
@@ -381,21 +502,21 @@ import ObjectList from "../components/object-list.tsx";
     window.addEventListener("click", moveTo);
 
     window.addEventListener("keydown", (e) => {
-        
-        if(e.key == "ArrowLeft"){
-            console.log(e.key)
-            camera.rotateY(THREE.MathUtils.degToRad(5))
-        } else if(e.key == "ArrowRight"){
-            console.log(e.key)
-            camera.rotateY(THREE.MathUtils.degToRad(-5))
-        } if(e.key == "ArrowUp"){
-            console.log(e.key)
-            camera.rotateX(THREE.MathUtils.degToRad(5))
-        } else if(e.key == "ArrowDown"){
-            console.log(e.key)
-            camera.rotateX(THREE.MathUtils.degToRad(-5))
+        if (e.key == "ArrowLeft") {
+            console.log(e.key);
+            camera.rotateY(THREE.MathUtils.degToRad(5));
+        } else if (e.key == "ArrowRight") {
+            console.log(e.key);
+            camera.rotateY(THREE.MathUtils.degToRad(-5));
         }
-    })
+        if (e.key == "ArrowUp") {
+            console.log(e.key);
+            camera.rotateX(THREE.MathUtils.degToRad(5));
+        } else if (e.key == "ArrowDown") {
+            console.log(e.key);
+            camera.rotateX(THREE.MathUtils.degToRad(-5));
+        }
+    });
 
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
     orbitalControls.enableKeys = false;
@@ -403,135 +524,135 @@ import ObjectList from "../components/object-list.tsx";
     // const orbitalControlsOrtho = new OrbitControls(orthoCamera, orthoRenderer.domElement);
     // orbitalControlsOrtho.enabled = false;
 
-// Variables for keyboard control
-const keyState = {};
+    // Variables for keyboard control
+    const keyState = {};
 
-// Event listeners for keydown and keyup
-window.addEventListener('keydown', (event) => {
-    keyState[event.key.toLowerCase()] = true;
-});
+    // Event listeners for keydown and keyup
+    window.addEventListener("keydown", (event) => {
+        keyState[event.key.toLowerCase()] = true;
+    });
 
-window.addEventListener('keyup', (event) => {
-    keyState[event.key.toLowerCase()] = false;
-});
+    window.addEventListener("keyup", (event) => {
+        keyState[event.key.toLowerCase()] = false;
+    });
 
-// Adjust these speeds to control rotation and movement
-const rotationSpeed = 0.02;
-const movementSpeed = 0.5;
+    // Adjust these speeds to control rotation and movement
+    const rotationSpeed = 0.02;
+    const movementSpeed = 0.5;
 
-function animate() {
-    // Update raycaster for object intersections
-    raycaster.setFromCamera(pointer, camera);
-    const intersects = raycaster.intersectObjects(scene.children);
+    function animate() {
+        // Update raycaster for object intersections
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(scene.children);
 
-    orthoRaycaster.setFromCamera(orthoPointer, orthoCamera);
-    const orthoIntersects = orthoRaycaster.intersectObjects(scene.children);
-    var label = document.getElementById("label");
-    label.innerHTML = "";
+        orthoRaycaster.setFromCamera(orthoPointer, orthoCamera);
+        const orthoIntersects = orthoRaycaster.intersectObjects(scene.children);
+        var label = document.getElementById("label");
+        label.innerHTML = "";
 
-    // Default Tag State
-    document.getElementById("tag").style.display = "none";
-    if (intersects.length > 0 && orthoIntersects.length > 0) {
-        document.getElementById("tag").style.display = "flex";
-        document.getElementById("tag").style.flexDirection = "column";
+        // Default Tag State
+        document.getElementById("tag").style.display = "none";
+        if (intersects.length > 0 && orthoIntersects.length > 0) {
+            document.getElementById("tag").style.display = "flex";
+            document.getElementById("tag").style.flexDirection = "column";
 
-        var idLabel = document.createElement("p");
-        var detailLabel = document.createElement("p");
-        let positionObjects = intersects.filter(
-            (item) => item.object.cameraPos && item.object.parent.visible
-        );
+            var idLabel = document.createElement("p");
+            var detailLabel = document.createElement("p");
+            let positionObjects = intersects.filter(
+                (item) => item.object.cameraPos && item.object.parent.visible,
+            );
 
-        let orthoPositionObjects = orthoIntersects.filter(
-            (item) => item.object.cameraPos && item.object.parent.visible
-        );
+            let orthoPositionObjects = orthoIntersects.filter(
+                (item) => item.object.cameraPos && item.object.parent.visible,
+            );
 
-        // positionObjects = orthoPositionObjects
+            // positionObjects = orthoPositionObjects
 
-        if (positionObjects.length > 0) {
-            idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
-            idLabel.style.color = "#007700";
-            idLabel.style.lineHeight = "1em";
-            label.append(idLabel);
+            if (positionObjects.length > 0) {
+                idLabel.innerText = `ID: ${positionObjects[0].object.name}`;
+                idLabel.style.color = "#007700";
+                idLabel.style.lineHeight = "1em";
+                label.append(idLabel);
 
-            idLabel.innerText += ` \nPos: ${positionObjects[0].object.position.x} ${positionObjects[0].object.position.y} ${positionObjects[0].object.position.z}`;
-            idLabel.innerText += ` \nRot: ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.x).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.z).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.y).toFixed(4)}`;
-            detailLabel.style.color = "#007700";
-            label.append(detailLabel);
+                idLabel.innerText += ` \nPos: ${positionObjects[0].object.position.x} ${positionObjects[0].object.position.y} ${positionObjects[0].object.position.z}`;
+                idLabel.innerText += ` \nRot: ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.x).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.z).toFixed(4)} ${THREE.MathUtils.radToDeg(positionObjects[0].object.rotation.y).toFixed(4)}`;
+                detailLabel.style.color = "#007700";
+                label.append(detailLabel);
+            }
         }
-    }
 
-    // Update camera position/rotation based on keyboard input
-    if (keyState['arrowup'] || keyState['w']) {
-        camera.position.z -= movementSpeed;
-    }
-    if (keyState['arrowdown'] || keyState['s']) {
-        camera.position.z += movementSpeed;
-    }
-    if (keyState['arrowleft'] || keyState['a']) {
-        camera.rotation.y += rotationSpeed;
-    }
-    if (keyState['arrowright'] || keyState['d']) {
-        camera.rotation.y -= rotationSpeed;
-    }
+        // Update camera position/rotation based on keyboard input
+        if (keyState["arrowup"] || keyState["w"]) {
+            camera.position.z -= movementSpeed;
+        }
+        if (keyState["arrowdown"] || keyState["s"]) {
+            camera.position.z += movementSpeed;
+        }
+        if (keyState["arrowleft"] || keyState["a"]) {
+            camera.rotation.y += rotationSpeed;
+        }
+        if (keyState["arrowright"] || keyState["d"]) {
+            camera.rotation.y -= rotationSpeed;
+        }
 
-    // Ensure camera target is updated correctly after manual rotation
-    orbitalControls.update();
-    orthoCamera.position.copy(camera.position)
-    orthoCamera.rotation.copy(camera.rotation)
-    orthoCamera.zoom = 100 / orbitalControls.getDistance()
-    orthoCamera.updateProjectionMatrix()
-    // orthoCamera.left = (orthoView.clientWidth / -2) * orbitalControls.getDistance()
-    // orthoCamera.right = (orthoView.clientWidth / 2) * orbitalControls.getDistance()
-    // orthoCamera.top = (orthoView.clientHeight / 2) * orbitalControls.getDistance()
-    // orthoCamera.bottom = (orthoView.clientHeight / -2) * orbitalControls.getDistance()
-    
-    requestAnimationFrame(animate);
+        // Ensure camera target is updated correctly after manual rotation
+        orbitalControls.update();
+        orthoCamera.position.copy(camera.position);
+        orthoCamera.rotation.copy(camera.rotation);
+        orthoCamera.zoom = 100 / orbitalControls.getDistance();
+        orthoCamera.updateProjectionMatrix();
+        // orthoCamera.left = (orthoView.clientWidth / -2) * orbitalControls.getDistance()
+        // orthoCamera.right = (orthoView.clientWidth / 2) * orbitalControls.getDistance()
+        // orthoCamera.top = (orthoView.clientHeight / 2) * orbitalControls.getDistance()
+        // orthoCamera.bottom = (orthoView.clientHeight / -2) * orbitalControls.getDistance()
 
-    // Render loop
-    renderer.clear();
-    VRSpheres.forEach((e) => {
-        renderer.render(e, camera);
-    });
-    renderer.clearDepth();
-    renderer.render(scene, camera);
+        requestAnimationFrame(animate);
 
-    objects.forEach((e) => {
+        // Render loop
+        renderer.clear();
+        VRSpheres.forEach((e) => {
+            renderer.render(e, camera);
+        });
         renderer.clearDepth();
-        renderer.render(e, camera);
-    });
+        renderer.render(scene, camera);
 
-    markers.forEach((e) => {
-        renderer.clearDepth();
-        renderer.render(e, camera);
-    });
+        objects.forEach((e) => {
+            renderer.clearDepth();
+            renderer.render(e, camera);
+        });
 
-    updateLabelPositions();
+        markers.forEach((e) => {
+            renderer.clearDepth();
+            renderer.render(e, camera);
+        });
 
-    // Render loop for orthographic camera
+        updateLabelPositions();
+
+        // Render loop for orthographic camera
         orthoRenderer.clear();
-    VRSpheres.forEach((e) => {
-        orthoRenderer.render(e, orthoCamera);
-    });
-    orthoRenderer.clearDepth();
-    orthoRenderer.render(scene, orthoCamera);
-
-    objects.forEach((e) => {
+        VRSpheres.forEach((e) => {
+            orthoRenderer.render(e, orthoCamera);
+        });
         orthoRenderer.clearDepth();
-        orthoRenderer.render(e, orthoCamera);
-    });
+        orthoRenderer.render(scene, orthoCamera);
 
-    markers.forEach((e) => {
-        orthoRenderer.clearDepth();
-        orthoRenderer.render(e, orthoCamera);
-    });
+        objects.forEach((e) => {
+            orthoRenderer.clearDepth();
+            orthoRenderer.render(e, orthoCamera);
+        });
 
-    // console.log(orbitalControls.getDistance())
+        markers.forEach((e) => {
+            orthoRenderer.clearDepth();
+            orthoRenderer.render(e, orthoCamera);
+        });
 
-    // console.log(camera.position)
-    // console.log(camera.rotation)
-}
+        // console.log(orbitalControls.getDistance())
 
-animate();  
+        // console.log(camera.position)
+        // console.log(camera.rotation)
+    }
+
+    animate();
 
     //Tag
     document.addEventListener("mousemove", (e) => {
@@ -546,76 +667,145 @@ animate();
     const glbFiles = [];
     const csvGroups = [];
     const simplifiedNamesId = [];
-    const images = []
-    let globalFloors = []
+    const images = [];
+    let globalFloors = [];
 
+    async function fetchDataFromServer() {
+        try {
+            // Fetch the image data
+            const modelResponse = await fetch("http://localhost:9234/model");
+            if (!modelResponse.ok) throw new Error("Failed to fetch model");
+            const { model, modelName } = await modelResponse.json();
+            console.log({ model, modelName });
 
+            // Convert the model buffer to a Blob
+            const modelBlob = new Blob([new Uint8Array(model.data)], {
+                type: "model/gltf-binary",
+            }); // Update type if necessary
+            const modelFile = new File([modelBlob], modelName, {
+                type: "model/gltf-binary",
+            });
+
+            // Pass the model File object to handleFileChange
+            handleDrop(modelFile);
+        } catch (error) {
+            console.error("Error fetching model data from server:", error);
+        }
+
+        try {
+            // Fetch the CSV data
+            const csvResponse = await fetch("http://localhost:9234/csv-camera");
+            if (!csvResponse.ok) throw new Error("Failed to fetch CSV");
+            const { csv, csvName } = await csvResponse.json();
+            console.log({ csv, csvName });
+
+            // Convert the CSV buffer to a Blob
+            const csvBlob = new Blob([new Uint8Array(csv.data)], {
+                type: "text/csv",
+            });
+            const csvFile = new File([csvBlob], csvName, { type: "text/csv" });
+
+            // Pass the CSV File object to handleFileChange
+            handleDrop(csvFile);
+        } catch (error) {
+            console.error("Error fetching CSV data from server:", error);
+        }
+    }
+
+    fetchDataFromServer();
 
     //File Drop
     function handleDrop(event) {
         event.preventDefault();
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
-        
 
         // Check if a single item is dropped
         if (items.length === 1) {
             const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
             const file = files[0];
-            console.log(items)
+            console.log(items);
             if (entry.isDirectory) {
-                    enumerateDirectoryWithManyFiles(entry);
+                enumerateDirectoryWithManyFiles(entry);
             } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     processCSVData(e.target.result, file.name);
                 };
                 reader.readAsText(files[0]);
-            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+            } else if (
+                file.type === "model/gltf-binary" ||
+                file.name.endsWith(".glb")
+            ) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const arrayBuffer = event.target.result;
-                    
+
                     // Create a new DataView to read the binary data
                     const dataView = new DataView(arrayBuffer);
-                    const decoder = new TextDecoder('utf-8');
+                    const decoder = new TextDecoder("utf-8");
 
                     // Read the length of the JSON chunk
                     const jsonChunkLength = dataView.getUint32(12, true);
 
                     // Read the JSON chunk itself
-                    const jsonChunk = new Uint8Array(arrayBuffer, 20, jsonChunkLength);
+                    const jsonChunk = new Uint8Array(
+                        arrayBuffer,
+                        20,
+                        jsonChunkLength,
+                    );
                     const jsonText = decoder.decode(jsonChunk);
                     const json = JSON.parse(jsonText);
 
                     // Check for DRACO compression
-                    const usesDraco = json.extensionsUsed && json.extensionsUsed.includes('KHR_draco_mesh_compression');
-                    
+                    const usesDraco =
+                        json.extensionsUsed &&
+                        json.extensionsUsed.includes(
+                            "KHR_draco_mesh_compression",
+                        );
+
                     // Parse and load the model
-                    loader.parse(arrayBuffer, '', (gltf) => {
-                        applyLitMaterialToGLTF(gltf.scene);
-                        gltf.scene.name = file.name;
-                        gltf.scene.scale.set(100, 100, 100)
-                        objects.push(gltf.scene);
-                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
-                        scene.add(gltf.scene);
-                        console.log('Model loaded successfully:', gltf.scene);
-                    }, (error) => {
-                        console.error('An error occurred while loading the model:', error);
-                    });
+                    loader.parse(
+                        arrayBuffer,
+                        "",
+                        (gltf) => {
+                            applyLitMaterialToGLTF(gltf.scene);
+                            gltf.scene.name = file.name;
+                            gltf.scene.scale.set(100, 100, 100);
+                            objects.push(gltf.scene);
+                            simplifiedNamesId.push({
+                                uuid: gltf.scene.uuid,
+                                simplifiedName: file.name.replace(/\D/g, ""),
+                            });
+                            scene.add(gltf.scene);
+                            console.log(
+                                "Model loaded successfully:",
+                                gltf.scene,
+                            );
+                        },
+                        (error) => {
+                            console.error(
+                                "An error occurred while loading the model:",
+                                error,
+                            );
+                        },
+                    );
                 };
                 reader.readAsArrayBuffer(file);
             }
         } else if (files.length === 1) {
             const file = files[0];
             if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                globalFloors = []
+                globalFloors = [];
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     processCSVData(e.target.result, file.name);
                 };
                 reader.readAsText(files[0]);
-            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+            } else if (
+                file.type === "model/gltf-binary" ||
+                file.name.endsWith(".glb")
+            ) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const arrayBuffer = event.target.result;
@@ -623,9 +813,12 @@ animate();
                     loader.parse(arrayBuffer, "", (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
-                        gltf.scene.scale.set(100, 100, 100)
-                        objects.push(gltf.scene)
-                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        gltf.scene.scale.set(100, 100, 100);
+                        objects.push(gltf.scene);
+                        simplifiedNamesId.push({
+                            uuid: gltf.scene.uuid,
+                            simplifiedName: file.name.replace(/\D/g, ""),
+                        });
                         scene.add(gltf.scene);
                     });
                 };
@@ -641,7 +834,10 @@ animate();
                     processCSVData(e.target.result, file.name);
                 };
                 reader.readAsText(files[0]);
-            } else if (file.type === "model/gltf-binary" || file.name.endsWith(".glb")) {
+            } else if (
+                file.type === "model/gltf-binary" ||
+                file.name.endsWith(".glb")
+            ) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const arrayBuffer = event.target.result;
@@ -649,25 +845,28 @@ animate();
                     loader.parse(arrayBuffer, "", (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
-                        objects.push(gltf.scene)
-                        simplifiedNamesId.push({uuid: gltf.scene.uuid, simplifiedName: file.name.replace(/\D/g, "")});
+                        objects.push(gltf.scene);
+                        simplifiedNamesId.push({
+                            uuid: gltf.scene.uuid,
+                            simplifiedName: file.name.replace(/\D/g, ""),
+                        });
                         scene.add(gltf.scene);
                     });
                 };
                 reader.readAsArrayBuffer(file);
-            } else if (file.type === "image/jpg" || file.name.endsWith(".jpg")) {
+            } else if (
+                file.type === "image/jpg" ||
+                file.name.endsWith(".jpg")
+            ) {
                 Array.from(files).forEach((i) => {
-                    
-
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         const arrayBuffer = event.target.result;
-                        imageArray.push({name: i.name, image: arrayBuffer})
-                        console.log(imageArray)
+                        imageArray.push({ name: i.name, image: arrayBuffer });
+                        console.log(imageArray);
                     };
                     reader.readAsDataURL(i);
-                })
-
+                });
             } else {
                 console.error("Dropped item could not be accessed.");
             }
@@ -675,7 +874,6 @@ animate();
             // console.log(items)
             // console.error("Please drop only one item.");
         }
-
     }
 
     function applyLitMaterialToGLTF(gltfScene) {
@@ -755,9 +953,20 @@ animate();
                                                 fileName: entry.name,
                                                 unitName: grandparentName,
                                             };
-                                            const csvObject = csvGroups.find(x => x.userData.simplifiedName === grandParent);
-                                            var newObject = {uuid: item.uuid, simplifiedName: grandparentName, csvObject: csvObject ? csvObject : ""}
-                                            simplifiedNamesId.push(newObject)
+                                            const csvObject = csvGroups.find(
+                                                (x) =>
+                                                    x.userData
+                                                        .simplifiedName ===
+                                                    grandParent,
+                                            );
+                                            var newObject = {
+                                                uuid: item.uuid,
+                                                simplifiedName: grandparentName,
+                                                csvObject: csvObject
+                                                    ? csvObject
+                                                    : "",
+                                            };
+                                            simplifiedNamesId.push(newObject);
                                             fbxFiles.push(currentObject);
 
                                             const fileUploadEvent =
@@ -793,8 +1002,14 @@ animate();
                                     const loader = new GLTFLoader();
                                     const item = loader.parse(arrayBuffer, "");
                                     item.name = entry.name;
-                                    simplifiedNamesId.push({uuid: item.uuid, simplifiedName: entry.name.replace(/\D/g, "")})
-                                    console.log("item name" + item.name)
+                                    simplifiedNamesId.push({
+                                        uuid: item.uuid,
+                                        simplifiedName: entry.name.replace(
+                                            /\D/g,
+                                            "",
+                                        ),
+                                    });
+                                    console.log("item name" + item.name);
                                     glbFiles.push(item.name);
                                     scene.add(item);
                                 };
@@ -833,62 +1048,66 @@ animate();
         });
     }
 
-// Function to export a Three.js object to a GLB file
-function exportToGLB(object, filename) {
-    const exporter = new GLTFExporter();
-    exporter.parse(
-        object,
-        (result) => {
-            let blob;
-            if (result instanceof ArrayBuffer) {
-                blob = new Blob([result], { type: 'application/octet-stream' });
-            } else if (typeof result === 'object') {
-                blob = new Blob([JSON.stringify(result)], { type: 'application/json' });
-            } else {
-                console.error('Unexpected result type:', result);
-                return;
+    // Function to export a Three.js object to a GLB file
+    function exportToGLB(object, filename) {
+        const exporter = new GLTFExporter();
+        exporter.parse(
+            object,
+            (result) => {
+                let blob;
+                if (result instanceof ArrayBuffer) {
+                    blob = new Blob([result], {
+                        type: "application/octet-stream",
+                    });
+                } else if (typeof result === "object") {
+                    blob = new Blob([JSON.stringify(result)], {
+                        type: "application/json",
+                    });
+                } else {
+                    console.error("Unexpected result type:", result);
+                    return;
+                }
+
+                saveBlob(blob, filename);
+            },
+            (error) => {
+                console.error("An error occurred during the GLB export", error);
+            },
+            { binary: true }, // Options object with binary set to true
+        );
+    }
+
+    // Function to save the Blob as a file
+    function saveBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.style.display = "none";
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+
+        // Clean up
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+            document.body.removeChild(link);
+        }, 100);
+    }
+
+    // Function to export all FBX files in fbxFiles array
+    function exportAllFBXFilesToGLB() {
+        fbxFiles.forEach((fbxFile, index) => {
+            const object = scene.getObjectByName(fbxFile.fileName);
+            if (object) {
+                const filename = `${fbxFile.fileName.split(".")[0]}.glb`;
+                exportToGLB(object, filename);
             }
+        });
+    }
 
-            saveBlob(blob, filename);
-        },
-        (error) => {
-            console.error('An error occurred during the GLB export', error);
-        },
-        { binary: true } // Options object with binary set to true
-    );
-}
-
-// Function to save the Blob as a file
-function saveBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.style.display = 'none';
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-
-    // Clean up
-    setTimeout(() => {
-        URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-    }, 100);
-}
-
-// Function to export all FBX files in fbxFiles array
-function exportAllFBXFilesToGLB() {
-    fbxFiles.forEach((fbxFile, index) => {
-        const object = scene.getObjectByName(fbxFile.fileName);
-        if (object) {
-            const filename = `${fbxFile.fileName.split('.')[0]}.glb`;
-            exportToGLB(object, filename);
-        }
-    });
-}
-
-// Add an event listener to the export button
-const exportButton = document.getElementById("export-all-fbx");
-exportButton.addEventListener("click", exportAllFBXFilesToGLB);
+    // Add an event listener to the export button
+    const exportButton = document.getElementById("export-all-fbx");
+    exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
     const logScene = document.getElementById("log-scene");
     logScene.addEventListener("click", (e) => {
@@ -900,12 +1119,10 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
         event.preventDefault();
     });
 
-
     function createCone(name, position, rotation) {
         const geometry = new THREE.ConeGeometry(20, 40, 32); // Cone with radius 0.5 and height 1
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
         const cone = new THREE.Mesh(geometry, material);
-
 
         // Set position
         cone.position.set(0, 0, 0);
@@ -917,203 +1134,223 @@ exportButton.addEventListener("click", exportAllFBXFilesToGLB);
             THREE.MathUtils.degToRad(90),
         );
         cone.updateMatrix();
-        cone.geometry.applyMatrix4( cone.matrix ); //to bake rotation to cone
+        cone.geometry.applyMatrix4(cone.matrix); //to bake rotation to cone
         cone.position.set(position.x, position.y, position.z);
-        cone.rotation.set( 0, THREE.MathUtils.degToRad(rotation.z), 0 );
-        cone.scale.set( 1, 1, 1 );
+        cone.rotation.set(0, THREE.MathUtils.degToRad(rotation.z), 0);
+        cone.scale.set(1, 1, 1);
         cone.updateMatrix();
-        console.log(cone.rotation)
-        cone.renderOrder = 0
-        cone.name = name
-        markers.push(cone)
+        console.log(cone.rotation);
+        cone.renderOrder = 0;
+        cone.name = name;
+        markers.push(cone);
         return cone;
     }
-    var showMarkerNames = false
+    var showMarkerNames = false;
 
-// Create a label div for each marker
-function createLabels() {
-    document.getElementById("marker-label-container").innerHTML = "";
-    var copiedMarkers;
-    copiedMarkers = markers.filter(e => e.visible)
-    copiedMarkers.forEach(marker => {
-        const labelDiv = document.createElement('div');
-        labelDiv.style.backgroundColor = "#444444"
-        labelDiv.style.padding = "2px 5px"
-        labelDiv.style.borderRadius = "6px"
-        labelDiv.className = 'marker-label';
-        labelDiv.innerText = marker.name;
-        
-        // Style the label
-        labelDiv.style.position = 'absolute';
-        labelDiv.style.color = 'white';
-        labelDiv.style.fontSize = '10px';
-        
-        document.getElementById("marker-label-container").appendChild(labelDiv);
-        marker.userData.label = labelDiv; // Store the label in userData
-    });
-}
+    // Create a label div for each marker
+    function createLabels() {
+        document.getElementById("marker-label-container").innerHTML = "";
+        var copiedMarkers;
+        copiedMarkers = markers.filter((e) => e.visible);
+        copiedMarkers.forEach((marker) => {
+            const labelDiv = document.createElement("div");
+            labelDiv.style.backgroundColor = "#444444";
+            labelDiv.style.padding = "2px 5px";
+            labelDiv.style.borderRadius = "6px";
+            labelDiv.className = "marker-label";
+            labelDiv.innerText = marker.name;
 
-// Function to update label positions on the screen
-function updateLabelPositions() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const widthHalf = width / 2;
-    const heightHalf = height / 2;
+            // Style the label
+            labelDiv.style.position = "absolute";
+            labelDiv.style.color = "white";
+            labelDiv.style.fontSize = "10px";
 
-    const distances = markers.map(marker => camera.position.distanceTo(marker.position));
-    const minDistance = Math.min(...distances);
-    const maxDistance = Math.max(...distances);
-    const distanceRange = maxDistance - minDistance || 1;
-
-    // Sort markers by distance from the camera (closest markers first)
-    const sortedMarkers = markers.sort((a, b) => {
-        const distanceA = camera.position.distanceTo(a.position);
-        const distanceB = camera.position.distanceTo(b.position);
-        return distanceA - distanceB;
-    }).filter(e => e.visible)
-
-    sortedMarkers.map((marker, i) => {
-        // console.log(marker)
-        const labelDiv = marker.userData.label;
-        if (!labelDiv) return;
-
-        // Get the 3D position of the marker and project it to 2D
-        const vector = new THREE.Vector3();
-        vector.setFromMatrixPosition(marker.matrixWorld).project(camera);
-
-        // Convert to 2D screen space
-        const x = (vector.x * widthHalf) + widthHalf;
-        const y = -(vector.y * heightHalf) + heightHalf;
-
-        // Update label position and visibility based on camera view
-        labelDiv.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
-        labelDiv.style.display = (vector.z > -1 && vector.z < 1) ? 'block' : 'none';
-
-        // Calculate distance and adjust opacity based on the relative distance
-        const distance = camera.position.distanceTo(marker.position);
-        const normalizedDistance = (distance - minDistance + 1) / distanceRange;
-        const minOpacity = 0.2;
-        labelDiv.style.opacity = minOpacity + (1 - minOpacity) * (1 - normalizedDistance) ** (maxDistance / minDistance);
-        labelDiv.style.zIndex = 1000 - Math.floor(distance); // Higher z-index for closer markers
-    });
-}
-
-function createCSVFromSphereGroups(csvGroups) {
-    let csvContent = ""; // CSV header
-
-    csvGroups.forEach(group => {
-        group.children.forEach(child => {
-            if (child instanceof THREE.Mesh) { // Ensure child is a mesh (sphere)
-                const name = child.name;
-                const worldPosition = new THREE.Vector3()
-                const worldQuaternion = new THREE.Quaternion()
-                const worldEuler = new THREE.Euler();
-                const position = child.getWorldPosition(worldPosition);
-                const rotation = child.getWorldQuaternion(worldQuaternion);
-                worldEuler.setFromQuaternion(worldQuaternion);
-                
-                csvContent += `${name},${worldPosition.x},${-worldPosition.y},${worldPosition.z},${worldEuler.x},${worldEuler.y},${worldEuler.z}\n`;
-            }
+            document
+                .getElementById("marker-label-container")
+                .appendChild(labelDiv);
+            marker.userData.label = labelDiv; // Store the label in userData
         });
-        
-        // Create a downloadable CSV file
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${group.name.split(".")[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    });
-}
-
-//Calculate center of all CSV points
-function calculateGroupCenter(group) {
-    const positions = group.children.map(child => child.position);
-    const totalPositions = positions.length;
-
-    if (totalPositions === 0) return null;
-
-    const sum = positions.reduce((acc, pos) => {
-        acc.x += pos.x;
-        acc.y += pos.y;
-        acc.z += pos.z;
-        return acc;
-    }, { x: 0, y: 0, z: 0 });
-
-    return {
-        x: sum.x / totalPositions,
-        y: sum.y / totalPositions,
-        z: sum.z / totalPositions,
-    };
-}
-
-function translateGroupToOrigin(group) {
-    const center = calculateGroupCenter(group);
-    group.initPosition = new THREE.Vector3(-center.x, -center.y, -center.z)
-    if (!center) return;
-
-    group.position.set(-center.x, -center.y, -center.z);
-}
-
-function alert(type, message){
-    var el = document.createElement('div')
-    el.style.background = "#ffffff88"
-    el.style.padding = "20px"
-    el.style.borderRadius = "15px"
-    el.classList.add('notification')
-    var text = document.createElement('p')
-    if(type == "error"){
-        el.classList.add('alert-error')
-    } else if(type == "notify"){
-        el.classList.add('alert-notify')
     }
-    text.innerText = message;
-    text.style.margin = "0px"
-    el.appendChild(text);
-    
-    document.getElementById('notification-panel').appendChild(el)
 
-    setTimeout((e) => {
-        el.remove()
-    }, 2000)
-}
+    // Function to update label positions on the screen
+    function updateLabelPositions() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const widthHalf = width / 2;
+        const heightHalf = height / 2;
 
-// Function to scale each point relative to the center point of the group
-function scaleGroupRelativeToCenter(group, scaleFactor) {
-    
-    m_Group.scale.set(scaleFactor, scaleFactor, scaleFactor)
-    if(!m_Group.initPosition){
-        m_Group.initPosition = new THREE.Vector3(m_Group.position.x, m_Group.position.y, m_Group.position.z)
+        const distances = markers.map((marker) =>
+            camera.position.distanceTo(marker.position),
+        );
+        const minDistance = Math.min(...distances);
+        const maxDistance = Math.max(...distances);
+        const distanceRange = maxDistance - minDistance || 1;
+
+        // Sort markers by distance from the camera (closest markers first)
+        const sortedMarkers = markers
+            .sort((a, b) => {
+                const distanceA = camera.position.distanceTo(a.position);
+                const distanceB = camera.position.distanceTo(b.position);
+                return distanceA - distanceB;
+            })
+            .filter((e) => e.visible);
+
+        sortedMarkers.map((marker, i) => {
+            // console.log(marker)
+            const labelDiv = marker.userData.label;
+            if (!labelDiv) return;
+
+            // Get the 3D position of the marker and project it to 2D
+            const vector = new THREE.Vector3();
+            vector.setFromMatrixPosition(marker.matrixWorld).project(camera);
+
+            // Convert to 2D screen space
+            const x = vector.x * widthHalf + widthHalf;
+            const y = -(vector.y * heightHalf) + heightHalf;
+
+            // Update label position and visibility based on camera view
+            labelDiv.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+            labelDiv.style.display =
+                vector.z > -1 && vector.z < 1 ? "block" : "none";
+
+            // Calculate distance and adjust opacity based on the relative distance
+            const distance = camera.position.distanceTo(marker.position);
+            const normalizedDistance =
+                (distance - minDistance + 1) / distanceRange;
+            const minOpacity = 0.2;
+            labelDiv.style.opacity =
+                minOpacity +
+                (1 - minOpacity) *
+                    (1 - normalizedDistance) ** (maxDistance / minDistance);
+            labelDiv.style.zIndex = 1000 - Math.floor(distance); // Higher z-index for closer markers
+        });
     }
-    m_Group.position.set(m_Group.initPosition.x * scaleFactor, m_Group.initPosition.y * 1, m_Group.initPosition.z * scaleFactor)
-    var center = group.position
-     group.children.forEach(child => {
-         child.scale.set(1 / scaleFactor, 1 / scaleFactor, 1 / scaleFactor)
-     });
-}
 
-function convertFBXtoGLB(position, rotation) {
-    // Assuming FBX is Y-up and GLB is Z-up
-    // Convert position
-    const convertedPosition = {
-        x: position.x,
-        y: position.z,
-        z: -position.y,
-    };
+    function createCSVFromSphereGroups(csvGroups) {
+        let csvContent = ""; // CSV header
 
-    // Convert rotation (assuming Euler angles)
-    const convertedRotation = {
-        x: rotation.x,
-        y: rotation.z,
-        z: -rotation.y,
-    };
+        csvGroups.forEach((group) => {
+            group.children.forEach((child) => {
+                if (child instanceof THREE.Mesh) {
+                    // Ensure child is a mesh (sphere)
+                    const name = child.name;
+                    const worldPosition = new THREE.Vector3();
+                    const worldQuaternion = new THREE.Quaternion();
+                    const worldEuler = new THREE.Euler();
+                    const position = child.getWorldPosition(worldPosition);
+                    const rotation = child.getWorldQuaternion(worldQuaternion);
+                    worldEuler.setFromQuaternion(worldQuaternion);
 
-    return { position: convertedPosition, rotation: convertedRotation };
-}
+                    csvContent += `${name},${worldPosition.x},${-worldPosition.y},${worldPosition.z},${worldEuler.x},${worldEuler.y},${worldEuler.z}\n`;
+                }
+            });
 
+            // Create a downloadable CSV file
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${group.name.split(".")[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+    }
 
+    //Calculate center of all CSV points
+    function calculateGroupCenter(group) {
+        const positions = group.children.map((child) => child.position);
+        const totalPositions = positions.length;
+
+        if (totalPositions === 0) return null;
+
+        const sum = positions.reduce(
+            (acc, pos) => {
+                acc.x += pos.x;
+                acc.y += pos.y;
+                acc.z += pos.z;
+                return acc;
+            },
+            { x: 0, y: 0, z: 0 },
+        );
+
+        return {
+            x: sum.x / totalPositions,
+            y: sum.y / totalPositions,
+            z: sum.z / totalPositions,
+        };
+    }
+
+    function translateGroupToOrigin(group) {
+        const center = calculateGroupCenter(group);
+        group.initPosition = new THREE.Vector3(-center.x, -center.y, -center.z);
+        if (!center) return;
+
+        group.position.set(-center.x, -center.y, -center.z);
+    }
+
+    function alert(type, message) {
+        var el = document.createElement("div");
+        el.style.background = "#ffffff88";
+        el.style.padding = "20px";
+        el.style.borderRadius = "15px";
+        el.classList.add("notification");
+        var text = document.createElement("p");
+        if (type == "error") {
+            el.classList.add("alert-error");
+        } else if (type == "notify") {
+            el.classList.add("alert-notify");
+        }
+        text.innerText = message;
+        text.style.margin = "0px";
+        el.appendChild(text);
+
+        document.getElementById("notification-panel").appendChild(el);
+
+        setTimeout((e) => {
+            el.remove();
+        }, 2000);
+    }
+
+    // Function to scale each point relative to the center point of the group
+    function scaleGroupRelativeToCenter(group, scaleFactor) {
+        m_Group.scale.set(scaleFactor, scaleFactor, scaleFactor);
+        if (!m_Group.initPosition) {
+            m_Group.initPosition = new THREE.Vector3(
+                m_Group.position.x,
+                m_Group.position.y,
+                m_Group.position.z,
+            );
+        }
+        m_Group.position.set(
+            m_Group.initPosition.x * scaleFactor,
+            m_Group.initPosition.y * 1,
+            m_Group.initPosition.z * scaleFactor,
+        );
+        var center = group.position;
+        group.children.forEach((child) => {
+            child.scale.set(1 / scaleFactor, 1 / scaleFactor, 1 / scaleFactor);
+        });
+    }
+
+    function convertFBXtoGLB(position, rotation) {
+        // Assuming FBX is Y-up and GLB is Z-up
+        // Convert position
+        const convertedPosition = {
+            x: position.x,
+            y: position.z,
+            z: -position.y,
+        };
+
+        // Convert rotation (assuming Euler angles)
+        const convertedRotation = {
+            x: rotation.x,
+            y: rotation.z,
+            z: -rotation.y,
+        };
+
+        return { position: convertedPosition, rotation: convertedRotation };
+    }
 
     // Function to process CSV data and create spheres
     function processCSVData(csvText, name?) {
@@ -1136,19 +1373,18 @@ function convertFBXtoGLB(position, rotation) {
                     y: parseFloat(row[5]),
                     z: parseFloat(row[6]),
                 };
-                const floor = name.includes('_') ? name.split("_")[0] : name //Get Floor Number
+                const floor = name.includes("_") ? name.split("_")[0] : name; //Get Floor Number
                 const arrow = createCone(name, position, rotation);
                 arrow.cameraPos = true;
-                arrow.floor = floor
-                
-                globalFloors.push({"floor" : floor, "arrow": arrow}) //Push obj to globalFloors
-                
+                arrow.floor = floor;
+
+                globalFloors.push({ floor: floor, arrow: arrow }); //Push obj to globalFloors
+
                 group.add(arrow);
-                console.log(arrow)
-                
+                console.log(arrow);
             }
 
-            if(name){
+            if (name) {
                 group.name = name;
                 group.userData.simplifiedName = name.replace(/\D/g, "");
             }
@@ -1156,36 +1392,39 @@ function convertFBXtoGLB(position, rotation) {
             m_Group = group;
         }
         createLabels();
-        csvGroups.push(group)
-        handleFloors()
+        csvGroups.push(group);
+        handleFloors();
 
         //Update main object references
-        if(simplifiedNamesId.length > 0){
+        if (simplifiedNamesId.length > 0) {
             simplifiedNamesId.forEach((e) => {
-                if(e.simplifiedName == name.replace(/\D/g, "")){
+                if (e.simplifiedName == name.replace(/\D/g, "")) {
                     e.csvObject = group.uuid;
                 } else {
-                    group.remove()
+                    group.remove();
                 }
-            })
+            });
         }
-            const csvUploadEvent = new CustomEvent('file-upload-csv', {
-                detail: {
-                    simplifiedName: group.userData.simplifiedName,
-                    name: group.name
-                },
-            })
-            window.dispatchEvent(csvUploadEvent)
+        const csvUploadEvent = new CustomEvent("file-upload-csv", {
+            detail: {
+                simplifiedName: group.userData.simplifiedName,
+                name: group.name,
+            },
+        });
+        window.dispatchEvent(csvUploadEvent);
     }
 
     function processVRImage(data, name?) {
-        const thisImage = {name: name, image: data}
-        imageArray.push(thisImage)
+        const thisImage = { name: name, image: data };
+        imageArray.push(thisImage);
     }
 
     document.getElementById("ui-area").addEventListener("click", (e) => {
-        if(!m_Group){
-            alert('error', 'Please Import some CSV files to use these features')
+        if (!m_Group) {
+            alert(
+                "error",
+                "Please Import some CSV files to use these features",
+            );
         }
     });
 
@@ -1218,33 +1457,40 @@ function convertFBXtoGLB(position, rotation) {
     });
 
     document.getElementById("center-csv").addEventListener("change", (e) => {
-        if(e.target.checked){
-            calculateGroupCenter(m_Group)
-            translateGroupToOrigin(m_Group)
-            alert('notify', 'csv-centered')
+        if (e.target.checked) {
+            calculateGroupCenter(m_Group);
+            translateGroupToOrigin(m_Group);
+            alert("notify", "csv-centered");
         } else {
-            m_Group.position.set(0, 0, 0)
-            alert('notify', 'csv-centered')
+            m_Group.position.set(0, 0, 0);
+            alert("notify", "csv-centered");
         }
     });
 
     document.getElementById("show-labels").addEventListener("change", (e) => {
-        createLabels()
-        if(e.target.checked){
-            document.getElementById("marker-label-container").style.display = "block"
+        createLabels();
+        if (e.target.checked) {
+            document.getElementById("marker-label-container").style.display =
+                "block";
         } else {
-            document.getElementById("marker-label-container").style.display = "none"
+            document.getElementById("marker-label-container").style.display =
+                "none";
         }
     });
 
-    document.getElementById("show-face-orientation").addEventListener("change", (e) => {
-        
-        if(e.target.checked){
-            console.log(glbFiles)
-            console.log(markers)
+    document
+        .getElementById("show-face-orientation")
+        .addEventListener("change", (e) => {
+            if (e.target.checked) {
+                console.log(glbFiles);
+                console.log(markers);
                 scene.traverse(function (child) {
-                    console.log(child.name)
-                    if (child.isMesh && !(child.userData && child.userData.label) && !(child.name.toLowerCase().includes("sphere"))) {
+                    console.log(child.name);
+                    if (
+                        child.isMesh &&
+                        !(child.userData && child.userData.label) &&
+                        !child.name.toLowerCase().includes("sphere")
+                    ) {
                         child.material = new THREE.ShaderMaterial({
                             vertexShader: `
                                 varying vec3 vNormal;
@@ -1261,106 +1507,113 @@ function convertFBXtoGLB(position, rotation) {
                                     gl_FragColor = vec4(redIntensity, 0.0, blueIntensity, 0.5); // Semi-transparent
                                 }`,
                             side: THREE.FrontSide,
-                            transparent: true
+                            transparent: true,
                         });
                     }
                 });
-        } else {
-            scene.traverse((child) => {
-            if (child.isMesh && !(child.userData && child.userData.label) && !(child.name.toLowerCase().includes("sphere"))) {
-                child.material = material;
-                child.material.wireframe = true; // Ensure wireframe is initially false
+            } else {
+                scene.traverse((child) => {
+                    if (
+                        child.isMesh &&
+                        !(child.userData && child.userData.label) &&
+                        !child.name.toLowerCase().includes("sphere")
+                    ) {
+                        child.material = material;
+                        child.material.wireframe = true; // Ensure wireframe is initially false
+                    }
+                });
             }
+            // createLabels()
+            // if(e.target.checked){
+            //     document.getElementById("marker-label-container").style.display = "block"
+            // } else {
+            //     document.getElementById("marker-label-container").style.display = "none"
+            // }
         });
-        }
-        // createLabels()
-        // if(e.target.checked){
-        //     document.getElementById("marker-label-container").style.display = "block"
-        // } else {
-        //     document.getElementById("marker-label-container").style.display = "none"
-        // }
-    });
 
     document.getElementById("scale-slider").addEventListener("input", (e) => {
-        scaleGroupRelativeToCenter(m_Group, e.target.value)
+        scaleGroupRelativeToCenter(m_Group, e.target.value);
     });
 
-    document.getElementById("cone-size-slider").addEventListener("input", (e) => {
-        markers.forEach((i) => {
-            console.log(e)
-            i.scale.set(e.target.value, e.target.value, e.target.value)
-            console.log(i.scale)
-        })
-    });
+    document
+        .getElementById("cone-size-slider")
+        .addEventListener("input", (e) => {
+            markers.forEach((i) => {
+                console.log(e);
+                i.scale.set(e.target.value, e.target.value, e.target.value);
+                console.log(i.scale);
+            });
+        });
 
-    window.addEventListener('export-csv', (e) => {
+    window.addEventListener("export-csv", (e) => {
         createCSVFromSphereGroups([m_Group]);
-    })
+    });
 
-    window.addEventListener('object-switch', (e) => {
+    window.addEventListener("object-switch", (e) => {
         csvGroups.forEach((e) => {
-            e.visible = false
-        })
+            e.visible = false;
+        });
         fbxFiles.forEach((e) => {
-            e.visible = false
-        })
+            e.visible = false;
+        });
         simplifiedNamesId.forEach((i) => {
-            if(i.simplifiedName == e.detail){
-                console.log(i.csvObject)
-                scene.getObjectByProperty('uuid', i.uuid).visible = true;
-            if(i.csvObject){
-                const csvObj = scene.getObjectByProperty('uuid', i.csvObject);
-                csvObj.visible = true;
-                csvObj.children.forEach((j) => {
-                    j.visible = true
-                })
-                m_Group = scene.getObjectByProperty('uuid', i.csvObject);
-            }
-
+            if (i.simplifiedName == e.detail) {
+                console.log(i.csvObject);
+                scene.getObjectByProperty("uuid", i.uuid).visible = true;
+                if (i.csvObject) {
+                    const csvObj = scene.getObjectByProperty(
+                        "uuid",
+                        i.csvObject,
+                    );
+                    csvObj.visible = true;
+                    csvObj.children.forEach((j) => {
+                        j.visible = true;
+                    });
+                    m_Group = scene.getObjectByProperty("uuid", i.csvObject);
+                }
             } else {
-                
-                    scene.getObjectByProperty('uuid', i.uuid).visible = false;
-                    if(i.csvObject){
-                        const csvObj = scene.getObjectByProperty('uuid', i.csvObject);
-                        csvObj.visible = false;
-                        csvObj.children.forEach((j) => {
-                            j.visible = false;
-                        })
-                    }
-            } 
-        })
-    })
-
-    
+                scene.getObjectByProperty("uuid", i.uuid).visible = false;
+                if (i.csvObject) {
+                    const csvObj = scene.getObjectByProperty(
+                        "uuid",
+                        i.csvObject,
+                    );
+                    csvObj.visible = false;
+                    csvObj.children.forEach((j) => {
+                        j.visible = false;
+                    });
+                }
+            }
+        });
+    });
 
     //Gizmo controls
     document.getElementById("camera-top").addEventListener("click", (e) => {
-        camera.position.set(0, 400, 0)
-        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
-    })
+        camera.position.set(0, 400, 0);
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0));
+    });
 
     document.getElementById("camera-bottom").addEventListener("click", (e) => {
-        camera.position.set(0, -400, 0)
-        camera.setRotationFromEuler(new THREE.Euler(0, 180, 0))
-    })
+        camera.position.set(0, -400, 0);
+        camera.setRotationFromEuler(new THREE.Euler(0, 180, 0));
+    });
 
     document.getElementById("camera-left").addEventListener("click", (e) => {
-        camera.position.set(-200, 0, 0)
-        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
-    })
+        camera.position.set(-200, 0, 0);
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0));
+    });
 
     document.getElementById("camera-right").addEventListener("click", (e) => {
-        camera.position.set(200, 0, 0)
-        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0))
-    })
+        camera.position.set(200, 0, 0);
+        camera.setRotationFromEuler(new THREE.Euler(0, 0, 0));
+    });
 
-    window.addEventListener('resize', onWindowResize, false );
+    window.addEventListener("resize", onWindowResize, false);
 
-    function onWindowResize(){
-
+    function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize( window.innerWidth, window.innerHeight );
+        renderer.setSize(window.innerWidth, window.innerHeight);
     }
 </script>
 
@@ -1387,7 +1640,7 @@ function convertFBXtoGLB(position, rotation) {
         height: min-content;
     }
 
-    .notification-panel{
+    .notification-panel {
         position: fixed;
         display: flex;
         flex-direction: column;
@@ -1397,10 +1650,9 @@ function convertFBXtoGLB(position, rotation) {
         gap: 10px;
     }
 
-    .notification{
+    .notification {
         padding: 0.5em;
         background-color: azure;
-
     }
 
     #tag,

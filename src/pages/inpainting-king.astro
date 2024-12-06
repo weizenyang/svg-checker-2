@@ -1,0 +1,532 @@
+---
+
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Drawing App</title>
+    <link rel="stylesheet" href="https://unpkg.com/fabric/dist/fabric.min.css">
+    <style>
+		body {
+			min-height: 95vh;
+			margin: 0%;
+		}
+
+        canvas {
+            border: 1px solid #000;
+        }
+        #toolbar {
+            margin-bottom: 10px;
+        }
+		#cursor{
+			border: #000 1px solid;
+			border-radius: 1000px;
+			position: fixed;
+			pointer-events: none;
+			cursor: none;
+		}
+		.drag-drop-prompt {
+			position: fixed;
+			display: none;
+			opacity: 0;
+			width: calc(100% - 25px);
+			height: calc(100% - 25px);
+			margin-right: 1em;
+			margin-bottom: 1em;
+			background-color: #00000055;
+			z-index: 10000000;
+			color: #eee;
+			transition: opacity 0.2;
+		}
+
+		.drag-drop-prompt.appear {
+			display: flex;
+			opacity: 1;
+		}
+
+		.animated-border {
+			position: relative;
+			width: 100%;
+			height: 100%;
+			background-image: repeating-linear-gradient(
+					0deg,
+					#333333,
+					#333333 10px,
+					transparent 10px,
+					transparent 20px,
+					#333333 20px
+				),
+				repeating-linear-gradient(
+					90deg,
+					#333333,
+					#333333 10px,
+					transparent 10px,
+					transparent 20px,
+					#333333 20px
+				),
+				repeating-linear-gradient(
+					180deg,
+					#333333,
+					#333333 10px,
+					transparent 10px,
+					transparent 20px,
+					#333333 20px
+				),
+				repeating-linear-gradient(
+					270deg,
+					#333333,
+					#333333 10px,
+					transparent 10px,
+					transparent 20px,
+					#333333 20px
+				);
+			background-size:
+				3px calc(100% + 20px),
+				calc(100% + 20px) 3px,
+				3px calc(100% + 20px),
+				calc(100% + 20px) 3px;
+			background-position:
+				0 0,
+				0 0,
+				100% 0,
+				0 100%;
+			background-repeat: no-repeat;
+			animation: borderAnimation 1s infinite linear;
+			display: flex;
+			align-items: center;
+			text-align: center;
+			justify-content: center;
+		}
+
+		@keyframes borderAnimation {
+			from {
+				background-position:
+					0 0,
+					-20px 0,
+					100% -20px,
+					0 100%;
+			}
+			to {
+				background-position:
+					0 -20px,
+					0 0,
+					100% 0,
+					-20px 100%;
+			}
+		}
+
+		#canvasContainer{
+			position: relative;
+			margin: 15px;
+		}
+
+		#drawingCanvas{
+			position: absolute;
+			left: 0px;
+			top: 0px;
+			opacity: 0.6;
+		}
+
+		#toolbar{
+			bottom: 0px;
+			left: 0px;
+		}
+
+		#resolution-table th{
+			border: #000 solid 1px;
+			min-width: 5em;
+		}
+
+    </style>
+</head>
+<body>
+	
+	<div class="drag-drop-prompt" id="drag-drop">
+		<div class="animated-border">
+			<h1>Drag and Drop Here</h1>
+		</div>
+	</div>
+	<p class="px-2 py-1 m-2 bg-zinc-200 rounded-md w-fit">To import an image, drag & drop it here</p>
+	<div id="canvasContainer">
+        <canvas id="imageCanvas"></canvas>
+        <canvas id="drawingCanvas"></canvas>
+		<div id="toolbar" class="mt-2">
+			<button id="export-button" class="px-2 py-1 bg-blue-500 text-white rounded shadow hover:bg-blue-600">Export Image + Mask</button>
+			<button id="clear-canvas" class="px-2 py-1 ml-2 bg-red-500 text-white rounded shadow hover:bg-red-600">Clear</button>
+			<select id="drawing-mode-selector">
+				<option value="pencil">Pencil</option>
+				<option value="line">Eraser</option>
+				<!-- <option value="line">Line</option>
+				<option value="rectangle">Rectangle</option>
+				<option value="circle">Circle</option> -->
+			</select>
+			
+			<input type="color" id="drawing-color" value="#ffffff">
+			
+			<input type="range" id="drawing-line-width" min="1" max="100" value="50">
+			<span>Line Width: <span id="line-width-label">50</span></span>
+			<div style="display: flex; flex-direction: column; padding-top: 20px; padding-bottom: 20px; max-width: 400px">
+				<label for="max-resolution">Max Resolution: <input type="number"  class="p-1 bg-neutral-200 rounded-md" id="max-resolution-label"></input></label>
+				<input type="range" id="max-resolution" min="1" max="10000" value="2048">
+			</div>
+			
+
+			<table class="table-auto border-collapse border border-black mt-4">
+				<thead>
+				  <tr>
+					<th class="border border-black px-4">Closest</th>
+					<th class="border border-black px-4">Width</th>
+					<th class="border border-black px-4">Height</th>
+					<th class="border border-black px-4">Ratio</th>
+				  </tr>
+				</thead>
+				<tbody id="resolution-table" class="*:border-[1px] *:border-black"></tbody>
+			  </table>
+
+		</div>
+    </div>
+	<div id="cursor"></div>
+
+
+</body>
+</html>
+
+<script>
+    const imageCanvas = document.getElementById('imageCanvas');
+    const drawingCanvas = document.getElementById('drawingCanvas');
+    const ctxImage = imageCanvas.getContext('2d');
+    const ctxDrawing = drawingCanvas.getContext('2d');
+
+	let currentImage = null
+	let lineWidth = 50
+	let isDrawing = false;
+	let lastX = 0;
+	let lastY = 0;
+	let brushColor = "rgb(255, 255, 255)"
+	let brushControl = false
+	ctxDrawing.strokeStyle = document.getElementById('drawing-color').value;
+	ctxDrawing.strokeStyle = brushColor;
+	ctxDrawing.lineWidth = lineWidth;
+	ctxDrawing.lineJoin = 'round';
+	ctxDrawing.lineCap = 'round';
+
+	function updateCursor(e?){
+		document.getElementById("cursor").style.width = `${lineWidth}px`
+		document.getElementById("cursor").style.height = `${lineWidth}px`
+		document.getElementById("cursor").style.transform = `translateX(-50%) translateY(-50%)`
+		if(e){
+			document.getElementById("cursor").style.left = `${e.clientX}px`
+			document.getElementById("cursor").style.top = `${e.clientY}px`
+		}
+
+
+	}
+
+	let resizeTimeout;
+	let oldContent = null;  // Variable to store the canvas content across resizes
+
+	function resizeCanvas() {
+    if (!currentImage) return;  // If no image is loaded, exit the function
+
+    const viewportWidth = window.innerWidth * 0.98;
+    const ratio = currentImage.naturalHeight / currentImage.naturalWidth;
+    const newHeight = viewportWidth * ratio;
+
+	imageCanvas.width = viewportWidth;
+    drawingCanvas.width = viewportWidth;
+    imageCanvas.height = newHeight;
+    drawingCanvas.height = newHeight;
+	
+	updateCursor()
+
+    ctxImage.drawImage(currentImage, 0, 0, viewportWidth, newHeight);
+}
+
+
+	function startDrawing(e) {
+		// ctxDrawing.strokeStyle = brushColor;
+		ctxDrawing.lineWidth = lineWidth;
+		ctxDrawing.strokeStyle = document.getElementById('drawing-color').value;
+		updateCursor(e)
+		isDrawing = true;
+		[lastX, lastY] = [e.offsetX, e.offsetY];
+	}
+
+	function draw(e) {
+		updateCursor(e)
+		if (!isDrawing) return;
+		ctxDrawing.beginPath();
+		ctxDrawing.moveTo(lastX, lastY);
+		ctxDrawing.lineTo(e.offsetX, e.offsetY);
+		ctxDrawing.stroke();
+		ctxDrawing.lineJoin = 'round';
+		ctxDrawing.lineCap = 'round';
+		[lastX, lastY] = [e.offsetX, e.offsetY];
+	}
+
+	function stopDrawing() {
+		isDrawing = false;
+	}
+
+	function diagonalMagnitude(x, y) {
+    const dx = x;
+    const dy = y;
+    const magnitude = Math.sqrt(dx * dx + dy * dy);
+    return (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? -magnitude : magnitude) : (dy < 0 ? -magnitude : magnitude));
+}
+
+	drawingCanvas.addEventListener('mousedown', (e) => {
+		e.preventDefault()
+		console.log(e.button)
+		if(e.button == 0){
+			startDrawing(e)
+		} else if (e.button == 2){
+			brushControl = true
+			
+		}
+		
+	}
+		
+	);
+	drawingCanvas.addEventListener('mousemove', (e) => {
+		if(brushControl){
+			lineWidth += diagonalMagnitude(e.movementX, e.movementY)
+		}
+		draw(e)
+	});
+	drawingCanvas.addEventListener('mouseup', (e) => {
+		stopDrawing(e)
+		brushControl = false
+	});
+	// drawingCanvas.addEventListener('mouseout', stopDrawing);
+
+	document.getElementById('clear-canvas').addEventListener('click', function() {
+		ctxDrawing.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+	});
+
+	document.getElementById('drawing-color').addEventListener('change', function() {
+		ctxDrawing.strokeStyle = this.value;
+	});
+
+
+
+	document.getElementById('drawing-line-width').addEventListener('input', function() {
+		lineWidth = this.value
+		ctxDrawing.lineWidth = lineWidth;
+		document.getElementById('line-width-label').textContent = this.value;
+		updateCursor()
+	});
+
+	document.getElementById('drawing-mode-selector').addEventListener('change', function() {
+
+	});
+
+	const dragDrop = document.getElementById("drag-drop")
+
+	var animationTimeout;
+		document.body.addEventListener("dragover", (e) => {
+			event.preventDefault(); // Prevent the default behavior
+			document.querySelector(".drag-drop-prompt").classList.add("appear");
+			if (animationTimeout != null) {
+				clearTimeout(animationTimeout);
+				animationTimeout = setTimeout((e) => {
+					document
+						.querySelector(".drag-drop-prompt")
+						.classList.remove("appear");
+				}, 500);
+			} else {
+				animationTimeout = setTimeout((e) => {
+					document
+						.querySelector(".drag-drop-prompt")
+						.classList.remove("appear");
+				}, 500);
+			}
+		});
+
+		document.getElementById("drag-drop").addEventListener("dragend", (e) => {
+			event.preventDefault(); // Prevent the default behavior
+			document
+				.querySelector(".drag-drop-prompt")
+				.classList.remove("appear");
+		});
+
+		document.getElementById("drag-drop").addEventListener("drop", (e) => {
+			e.preventDefault();
+			// e.stopPropagation();
+			console.log(e.dataTransfer)
+			handleDrop(e.dataTransfer.files[0]);
+			document
+				.querySelector(".drag-drop-prompt")
+				.classList.remove("appear");
+		});
+
+		
+		document.addEventListener('wheel', (e) => {
+			const currentWidth = document.getElementById("drawing-line-width").value
+				if(currentWidth < 100 && e.deltaY < 0){
+					console.log(currentWidth)
+					document.getElementById("drawing-line-width").value = parseInt(currentWidth) + 1
+					document.getElementById("line-width-label").innerText = document.getElementById("drawing-line-width").value
+				} else if (currentWidth > 1 && e.deltaY > 0){
+					
+					document.getElementById("drawing-line-width").value = parseInt(currentWidth) - 1
+					document.getElementById("line-width-label").innerText = document.getElementById("drawing-line-width").value
+				}
+				
+			
+		});
+
+		window.addEventListener('resize', () => {
+			clearTimeout(resizeTimeout);
+			resizeTimeout = setTimeout(resizeCanvas, 100);
+		});
+
+
+		function closestMultipleOf(multiple, inputWidth) {
+			return Math.floor(inputWidth / multiple) * multiple;
+		}
+
+
+		function handleDrop(file) {
+				const reader = new FileReader();
+				reader.onload = function(e) {
+					const img = new Image();
+					img.onload = function() {
+						currentImage = img;
+						resizeCanvas();
+						updateTable()
+					};
+					img.src = e.target.result;
+					
+				};
+				reader.readAsDataURL(file);
+			// }
+		}
+
+		document.getElementById("max-resolution-label").value = document.getElementById("max-resolution").value
+
+		document.getElementById("max-resolution-label").addEventListener("change", (e) => {
+			document.getElementById("max-resolution").value = e.target.value
+			updateTable()
+		})
+
+		document.getElementById("max-resolution").addEventListener("input", (e) => {
+			document.getElementById("max-resolution-label").value = e.target.value
+			updateTable()
+		})
+
+		function updateTable() {
+			const maxPixels = document.getElementById("max-resolution").value
+			const multipleArray = [1, 8, 16, 64];
+			const table = document.getElementById("resolution-table");
+			table.innerHTML = "";
+
+			multipleArray.forEach((e) => {
+				const row = document.createElement("tr");
+				const multiples = document.createElement("td");
+				const width = document.createElement("td");
+				const height = document.createElement("td");
+				const ratio = document.createElement("td");
+
+				// Calculate scaled dimensions
+				let scaledWidth = closestMultipleOf(e, currentImage.naturalWidth);
+				let scaledHeight = closestMultipleOf(e, currentImage.naturalHeight);
+				const longestEdge = scaledWidth >= scaledHeight ? scaledWidth : scaledHeight;
+
+				if (longestEdge > maxPixels) {
+					const scaleFactor = maxPixels / longestEdge;
+					scaledWidth = closestMultipleOf(e, scaledWidth * scaleFactor);
+					scaledHeight = closestMultipleOf(e, scaledHeight * scaleFactor);
+				}
+
+				multiples.innerText = `${e}`;
+				width.innerText = scaledWidth.toString();
+				height.innerText = scaledHeight.toString();
+				function simplifyRatio(width, height) {
+					const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+					const scale = 10 ** 6; // Scale factor to handle decimal precision
+
+					// Handle floating-point numbers
+					const scaledWidth = Math.round(width * scale);
+					const scaledHeight = Math.round(height * scale);
+
+					const divisor = gcd(scaledWidth, scaledHeight);
+
+					return `${scaledWidth / divisor}:${scaledHeight / divisor}`;
+				}
+
+				ratio.innerText = simplifyRatio(scaledWidth, scaledHeight);
+				
+				row.append(multiples, width, height, ratio);
+				table.append(row);
+			});
+		}
+
+		function exportCanvasAsImage(canvas, filename) {
+			const maxWidth = 2048;
+			const maxHeight = 2048;
+			const widthScale = maxWidth / canvas.width;
+			const heightScale = maxHeight / canvas.height;
+			const scale = Math.min(widthScale, heightScale, 1);  // Prevent upscaling
+
+			const exportWidth = canvas.width * scale;
+			const exportHeight = canvas.height * scale;
+
+			// Create an offscreen canvas to draw the scaled image
+			const exportCanvas = document.createElement('canvas');
+			exportCanvas.width = exportWidth;
+			exportCanvas.height = exportHeight;
+			const ctxExport = exportCanvas.getContext('2d');
+			ctxExport.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, exportWidth, exportHeight);
+
+			// Convert canvas to data URL
+			const dataUrl = exportCanvas.toDataURL('image/png');
+			const link = document.createElement('a');
+			link.download = filename;
+			link.href = dataUrl;
+			link.click();
+		}
+
+		function exportCanvasWithBlackBackground(canvas, filename) {
+			const maxWidth = 2048;
+			const maxHeight = 2048;
+			const widthScale = maxWidth / canvas.width;
+			const heightScale = maxHeight / canvas.height;
+			const scale = Math.min(widthScale, heightScale, 1);  // Prevent upscaling
+
+			const exportWidth = canvas.width * scale;
+			const exportHeight = canvas.height * scale;
+
+			// Create an offscreen canvas to draw the scaled image
+			const exportCanvas = document.createElement('canvas');
+			exportCanvas.width = exportWidth;
+			exportCanvas.height = exportHeight;
+			const ctxExport = exportCanvas.getContext('2d');
+			ctxExport.fillStyle = '#000000';
+			ctxExport.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+			ctxExport.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, exportWidth, exportHeight);
+
+			// Convert canvas to data URL
+			const dataUrl = exportCanvas.toDataURL('image/png');
+			const link = document.createElement('a');
+			link.download = filename;
+			link.href = dataUrl;
+			link.click();
+		}
+
+		function exportImages() {
+			if (!currentImage) {
+				alert('No image loaded to export!');
+				return;
+			}
+			exportCanvasAsImage(imageCanvas, 'background-image.png'); // Export the image canvas
+			exportCanvasWithBlackBackground(drawingCanvas, 'drawing-layer.png');   // Export the drawing canvas
+		}
+
+		// Add a button for exporting the images
+		document.getElementById('export-button').addEventListener('click', exportImages);
+</script>
+</body>
+</html>
