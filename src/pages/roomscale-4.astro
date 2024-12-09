@@ -693,6 +693,7 @@ import ObjectList from "../components/object-list.tsx";
             // })
             // Fetch the manifest of models
             // Fetch the manifest of models
+            let fileName
             try {
                 const modelResponse = await fetch("http://localhost:9234/model");
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
@@ -711,6 +712,7 @@ import ObjectList from "../components/object-list.tsx";
                     // Create a File object from the binary data
                     const blob = new Blob([bytes], { type: "model/gltf-binary" });
                     const glbFile = new File([blob], fileObj.modelName, { type: "model/gltf-binary" });
+                    fileName = fileObj.modelName
 
                     // Now pass the File object to handleFileChange
                     handleFileChange(glbFile, [glbFile]);
@@ -722,7 +724,8 @@ import ObjectList from "../components/object-list.tsx";
             try {
                 const modelResponse = await fetch("http://localhost:9234/model", {
                     method: "PUT", 
-                    headers: {"Content-Type": "application/json"}
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({"modelName": fileName})
                 });
                 
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
