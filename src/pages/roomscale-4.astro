@@ -720,7 +720,11 @@ import ObjectList from "../components/object-list.tsx";
             }
 
             try {
-                const modelResponse = await fetch("http://localhost:9234/model", {method: "PUT"});
+                const modelResponse = await fetch("http://localhost:9234/model", {
+                    method: "PUT", 
+                    headers: {"Content-Type": "application/json"}
+                });
+                
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
                 
                 const { models } = await modelResponse.json();
