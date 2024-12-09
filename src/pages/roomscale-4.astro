@@ -697,9 +697,9 @@ import ObjectList from "../components/object-list.tsx";
                 const modelResponse = await fetch("http://localhost:9234/model");
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
                 
-                const { files } = await modelResponse.json();
+                const { models } = await modelResponse.json();
                 
-                for (const fileObj of files) {
+                for (const fileObj of models) {
                     // Decode the base64 string into binary
                     const binaryStr = atob(fileObj.data);
                     const len = binaryStr.length;
