@@ -680,6 +680,7 @@ import ObjectList from "../components/object-list.tsx";
             console.log(modelArray)
             
             modelArray.forEach((e) => {
+                console.log(e)
                 // Convert the model buffer to a Blob
                 const modelBlob = new Blob([new Uint8Array(e.model.data)], {
                     type: "model/gltf-binary",
