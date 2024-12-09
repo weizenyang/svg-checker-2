@@ -716,7 +716,33 @@ import ObjectList from "../components/object-list.tsx";
                     handleFileChange(glbFile, [glbFile]);
                 }
             } catch (error) {
-            console.error("Error fetching model data from server:", error);
+                console.error("Error fetching model data from server:", error);
+            }
+
+            try {
+                const modelResponse = await fetch("http://localhost:9234/model", {method: "PUT"});
+                if (!modelResponse.ok) throw new Error("Failed to fetch model");
+                
+                const { models } = await modelResponse.json();
+                
+                for (const fileObj of models) {
+                    // Decode the base64 string into binary
+                    const binaryStr = atob(fileObj.data);
+                    const len = binaryStr.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+
+                    // Create a File object from the binary data
+                    const blob = new Blob([bytes], { type: "model/gltf-binary" });
+                    const glbFile = new File([blob], fileObj.modelName, { type: "model/gltf-binary" });
+
+                    // Now pass the File object to handleFileChange
+                    handleFileChange(glbFile, [glbFile]);
+                }
+            } catch (error) {
+                console.error("Error fetching model data from server:", error);
             }
         } catch (error) {
             console.error("Error fetching model data from server:", error);
