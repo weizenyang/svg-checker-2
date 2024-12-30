@@ -176,11 +176,11 @@ import "../styles.css";
 						class="sub-item"
 						style="display: flex; flex-direction: column; margin-bottom: 10px;"
 					>
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">
-							Edit:
+						<p class="w-full text-xs m-0 p-0">
+							Edit Points:
 						</p>
 						<div
-							class="grid grid-cols-2 button-gap"
+							class="grid grid-cols-2 button-gap gap-1 flex-start"
 							id="edit-options"
 						>
 							<button
@@ -196,6 +196,39 @@ import "../styles.css";
 								Flip Y</button
 							>
 						</div>
+					<p class="w-full text-xs m-0 mt-2 p-0">
+						Edit Canvas:
+					</p>
+					<div
+						class="grid grid-cols-2 button-gap gap-1 flex-start"
+						id="canvas-edit-options"
+					>
+					
+						<button
+							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+							id="canvas-flip-x"
+						>
+							Canvas Flip X</button
+						>
+						<button
+							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+							id="canvas-flip-y"
+						>
+							Canvas Flip Y</button
+						>
+						<button
+						class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+						id="canvas-rotate-left"
+						>
+							Rotate Left</button
+						>
+						<button
+							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+							id="canvas-rotate-right"
+						>
+							Rotate Right</button
+						>
+					</div>
 					</div>
 
 					<div
@@ -441,6 +474,9 @@ import "../styles.css";
 		}
 
 		var flipped = false;
+		var canvasFlipX = false;
+		var canvasFlipY = false;
+		var canvasRotate = 0;
 		var multiSelect = false;
 		var clusterId = [];
 
@@ -2105,35 +2141,50 @@ import "../styles.css";
 			});
 		}
 
-		function rotateCircles(angle) {
+		function rotateCircles(angle, customMidpoint = null) {
 			const svgElement = document.querySelector("#svg-container svg");
+			if (!svgElement) {
+				console.error("SVG element not found.");
+				return;
+			}
+
 			const circles = svgElement.querySelectorAll("circle");
+			if (circles.length === 0) {
+				console.warn("No circles found in the SVG.");
+				return;
+			}
 
-			if (circles.length === 0) return;
+			let bboxCenterX, bboxCenterY;
 
-			let minX = Infinity,
-				maxX = -Infinity,
-				minY = Infinity,
-				maxY = -Infinity;
+			if (customMidpoint) {
+				// Use the custom midpoint
+				bboxCenterX = customMidpoint.x;
+				bboxCenterY = customMidpoint.y;
+			} else {
+				// Calculate bounding box midpoint
+				let minX = Infinity,
+					maxX = -Infinity,
+					minY = Infinity,
+					maxY = -Infinity;
 
-			// Calculate bounding box
-			circles.forEach((circle) => {
-				const cx = parseFloat(circle.getAttribute("cx"));
-				const cy = parseFloat(circle.getAttribute("cy"));
-				const r = parseFloat(circle.getAttribute("r"));
+				circles.forEach((circle) => {
+					const cx = parseFloat(circle.getAttribute("cx"));
+					const cy = parseFloat(circle.getAttribute("cy"));
+					const r = parseFloat(circle.getAttribute("r"));
 
-				if (cx - r < minX) minX = cx - r;
-				if (cx + r > maxX) maxX = cx + r;
-				if (cy - r < minY) minY = cy - r;
-				if (cy + r > maxY) maxY = cy + r;
-			});
+					if (cx - r < minX) minX = cx - r;
+					if (cx + r > maxX) maxX = cx + r;
+					if (cy - r < minY) minY = cy - r;
+					if (cy + r > maxY) maxY = cy + r;
+				});
 
-			const bboxCenterX = minX + (maxX - minX) / 2;
-			const bboxCenterY = minY + (maxY - minY) / 2;
+				bboxCenterX = minX + (maxX - minX) / 2;
+				bboxCenterY = minY + (maxY - minY) / 2;
+			}
 
 			const radians = (angle * Math.PI) / 180;
 
-			// Rotate each circle around the bounding box center
+			// Rotate each circle around the chosen midpoint
 			circles.forEach((circle) => {
 				const cx = parseFloat(circle.getAttribute("cx"));
 				const cy = parseFloat(circle.getAttribute("cy"));
@@ -2153,6 +2204,12 @@ import "../styles.css";
 				circle.setAttribute("cx", newCx.toFixed(4));
 				circle.setAttribute("cy", newCy.toFixed(4));
 			});
+
+			console.log(
+				`Rotated circles around midpoint (${bboxCenterX.toFixed(
+					4
+				)}, ${bboxCenterY.toFixed(4)}) by ${angle} degrees.`
+			);
 		}
 
 		function getAveragedCircles(data) {
@@ -2613,8 +2670,8 @@ import "../styles.css";
 			return txt.value;
 		}
 
-		document.getElementById("flip-x").addEventListener("click", (e) => {
-			
+		//Flip Points only
+		function flipPointsX(){
 			flipped = !flipped;
 
 			var doc = null;
@@ -2648,9 +2705,9 @@ import "../styles.css";
 				},
 			);
 			spawnLabel()
-		});
+		}
 
-		document.getElementById("flip-y").addEventListener("click", (e) => {
+		function flipPointsY(){
 			// var svg = document.querySelector("#svg-container").querySelector("svg");
 			// svg.style.scale = "-1 1"
 			flipped = !flipped;
@@ -2686,6 +2743,84 @@ import "../styles.css";
 				},
 			);
 			spawnLabel();
+		}
+
+
+		function transformImages() {
+			// Select the SVG element
+			var svgElement = document.querySelector("#svg-container").querySelector("svg");
+			if (!svgElement) {
+				console.error(`SVG element not found for selector: ${svgElement}`);
+				return;
+			}
+
+			// Get all <image> elements within the SVG
+			const imageNodes = svgElement.querySelectorAll('image');
+			if (imageNodes.length === 0) {
+				console.warn('No <image> nodes found in the SVG.');
+				return;
+			}
+
+			// Iterate through each <image> node
+			console.log(imageNodes);
+			imageNodes.forEach(imageNode => {
+				// Get current attributes for width and x
+				const width = parseFloat(imageNode.getAttribute('width')) || 0;
+				const height = parseFloat(imageNode.getAttribute('height')) || 0;
+				const x = parseFloat(imageNode.getAttribute('x')) || 0;
+				const y = parseFloat(imageNode.getAttribute('y')) || 0;
+
+				// Calculate the transformation
+				const translateX = canvasFlipX ? width : 0;
+				const translateY = canvasFlipY ? height : 0;
+				const scaleX = canvasFlipX ? -1 : 1;
+				const scaleY = canvasFlipY ? -1 : 1;
+				const rotate = canvasRotate % 360
+
+				const transformValue = `translate(${translateX}, ${translateY}) scale(${scaleX}, ${scaleY}) rotate(${rotate}, ${width/2}, ${height/2})`;
+
+				// Apply the transformation
+				const existingTransform = imageNode.getAttribute('transform') || '';
+				imageNode.setAttribute('transform', `${transformValue}`.trim());
+
+				console.log(`Flipped <image> node with x: ${x}, width: ${width}, y: ${y}, height: ${height}`);
+			});
+		}
+
+		document.getElementById("flip-x").addEventListener("click", flipPointsX);
+		document.getElementById("flip-y").addEventListener("click", flipPointsY);
+		document.getElementById("canvas-flip-x").addEventListener("click", () => {
+			canvasFlipX = !canvasFlipX
+			console.log(canvasFlipX)
+			transformImages()
+			flipPointsX()
+		});
+		document.getElementById("canvas-flip-y").addEventListener("click", () => {
+			canvasFlipY = !canvasFlipY
+			console.log(canvasFlipY)
+			transformImages()
+			flipPointsY()
+		});
+
+		document.getElementById("canvas-rotate-left").addEventListener("click", () => {
+			canvasRotate -= 90
+			console.log(canvasRotate)
+			transformImages()
+			const svgElement = document.querySelector("#svg-container").querySelector("svg");
+			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
+			rotateCircles(-90, midpoint)
+			spawnLabel()
+			// flipPointsX()
+		});
+		document.getElementById("canvas-rotate-right").addEventListener("click", () => {
+			canvasRotate += 90
+			console.log(canvasRotate)
+			transformImages()
+			const svgElement = document.querySelector("#svg-container").querySelector("svg");
+			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
+			rotateCircles(90, midpoint)
+			spawnLabel()
+			// flipPointsY()
 		});
 
 		function spawnLabel() {
