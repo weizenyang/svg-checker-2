@@ -216,6 +216,7 @@ import "../styles.css";
 						>
 							Canvas Flip Y</button
 						>
+						<button id="reset-flip" class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden">Reset Flip</button>
 						<button
 						class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
 						id="canvas-rotate-left"
@@ -228,6 +229,8 @@ import "../styles.css";
 						>
 							Rotate Right</button
 						>
+						<button id="reset-rotation" class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden">Reset Rotation</button>
+						
 					</div>
 					</div>
 
@@ -1296,6 +1299,11 @@ import "../styles.css";
 			var count = 0;
 			globalFloors = [];
 			globalFloorsAggregated = [];
+			canvasFlipX = false;
+			canvasFlipY = false;
+			canvasRotate = 0;
+
+			updateResetButtons()
 
 			//Refresh show floors section
 			const floorSection = document.getElementById("show-floors");
@@ -1729,6 +1737,11 @@ import "../styles.css";
 				reader.readAsText(file);
 
 				labelToggle()
+
+				//Lord will spite me for this method
+				setTimeout((e) => {
+					spawnLabel()
+				}, 50)
 			}
 		}
 
@@ -1762,7 +1775,7 @@ import "../styles.css";
 				showLabelsToggle.checked = true
 			}
 
-			spawnLabel()
+			
 
 		}
 
@@ -2794,34 +2807,92 @@ import "../styles.css";
 			console.log(canvasFlipX)
 			transformImages()
 			flipPointsX()
+			updateResetButtons()
 		});
 		document.getElementById("canvas-flip-y").addEventListener("click", () => {
 			canvasFlipY = !canvasFlipY
 			console.log(canvasFlipY)
 			transformImages()
 			flipPointsY()
+			updateResetButtons()
 		});
 
 		document.getElementById("canvas-rotate-left").addEventListener("click", () => {
 			canvasRotate -= 90
-			console.log(canvasRotate)
 			transformImages()
 			const svgElement = document.querySelector("#svg-container").querySelector("svg");
 			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
 			rotateCircles(-90, midpoint)
 			spawnLabel()
+			updateResetButtons()
 			// flipPointsX()
 		});
 		document.getElementById("canvas-rotate-right").addEventListener("click", () => {
 			canvasRotate += 90
-			console.log(canvasRotate)
 			transformImages()
 			const svgElement = document.querySelector("#svg-container").querySelector("svg");
 			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
 			rotateCircles(90, midpoint)
 			spawnLabel()
+			updateResetButtons()
 			// flipPointsY()
 		});
+
+		document.getElementById("reset-rotation").addEventListener("click", (e) => {
+			const tempCanvasRotation = canvasRotate
+			canvasRotate = 0
+			transformImages()
+
+			const svgElement = document.querySelector("#svg-container").querySelector("svg");
+			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
+
+			rotateCircles(-tempCanvasRotation, midpoint)
+			spawnLabel()
+			updateResetButtons()
+		})
+
+		document.getElementById("reset-flip").addEventListener("click", (e) => {
+
+			transformImages()
+			if(canvasFlipX){
+				flipPointsX()
+				canvasFlipX = false
+				
+			}
+
+			if(canvasFlipY){
+				flipPointsY()
+				canvasFlipY = false
+			}
+			
+			updateResetButtons()
+		})
+
+		function updateResetButtons(){
+			if(canvasRotate != 0){
+				if(document.getElementById("reset-rotation").classList.contains("hidden")){
+					document.getElementById("reset-rotation").classList.remove("hidden")
+					document.getElementById("reset-rotation").classList.add("flex")
+				}
+			} else {
+				if(document.getElementById("reset-rotation").classList.contains("flex")){
+					document.getElementById("reset-rotation").classList.remove("flex")
+					document.getElementById("reset-rotation").classList.add("hidden")
+				}
+			}
+
+			if(canvasFlipX || canvasFlipY){
+				if(document.getElementById("reset-flip").classList.contains("hidden")){
+					document.getElementById("reset-flip").classList.remove("hidden")
+					document.getElementById("reset-flip").classList.add("flex")
+				}
+			} else if (!canvasFlipX && !canvasFlipY){
+				if(document.getElementById("reset-flip").classList.contains("flex")){
+					document.getElementById("reset-flip").classList.remove("flex")
+					document.getElementById("reset-flip").classList.add("hidden")
+				}
+			}
+		}
 
 		function spawnLabel() {
 			killLabels(true);
@@ -2862,11 +2933,11 @@ import "../styles.css";
 					labelDiv.style.top = `-${2048 - 4096 / scaleY / 2}px`;
 					labelDiv.style.pointerEvents = "none";
 
-					const createParagraph = (className, text, display) => {
+					const createParagraph = (className, text, display, color = "white") => {
 						const p = document.createElement("p");
 						Object.assign(p.style, {
-							color: "white",
-							margin: "0",
+							color: color,
+							margin: "0px",
 							pointerEvents: "none",
 							lineHeight: "1.5em",
 							display,
@@ -2886,7 +2957,7 @@ import "../styles.css";
 							position: "absolute",
 							left: `${e.getAttribute("cx")}px`,
 							top: `${e.getAttribute("cy")}px`,
-							transform: "translate(-50%, 1%)",
+							transform: "translate(-50%, -1%)",
 							backgroundColor: "rgba(0, 0, 0, 0.5)",
 							border: "2px solid rgba(255, 255, 255, 0.1)",
 							padding: "4px 24px",
@@ -2915,6 +2986,160 @@ import "../styles.css";
 						return div;
 					};
 
+					const createPreviewDiv1 = (e) => {
+						const div = document.createElement("div");
+						div.setAttribute(
+							"data-fullname",
+							e.getAttribute("data-fullname"),
+						);
+						Object.assign(div.style, {
+							position: "absolute",
+							color: "rgba(0, 0, 0, 255)",
+							left: `${e.getAttribute("cx")}px`,
+							top: `${e.getAttribute("cy")}px`,
+							transform: "translate(-50%, -101%)",
+							backgroundColor: "rgba(0, 0, 0, 0)",
+							border: "2px solid rgba(0, 0, 0, 1)",
+							padding: "4px 24px",
+							borderRadius: "0.75rem",
+							marginBottom: "0.25rem",
+							zIndex: "10",
+							pointerEvents: "none",
+							cursor: "pointer",
+							textAlign: "center",
+							fontSize: "2.25rem",
+							
+						});
+
+						const idText = e.id
+							.replace(/([A-Z0-9])/g, " $1")
+							.trim();
+						div.appendChild(
+							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+						);
+						return div;
+					};
+
+					const createPreviewDiv2 = (e) => {
+						const div = document.createElement("div");
+						div.setAttribute(
+							"data-fullname",
+							e.getAttribute("data-fullname"),
+						);
+
+						const cx = parseFloat(e.getAttribute("cx"));
+						const cy = parseFloat(e.getAttribute("cy"));
+
+						// Apply initial styles for measurement
+						Object.assign(div.style, {
+							position: "absolute",
+							visibility: "hidden", // Prevents flickering during measurement
+							whiteSpace: "nowrap", // Ensure proper size calculation
+							fontSize: "2.25rem", // Match intended font size
+							padding: "6px 28px",
+						});
+
+						const idText = e.id
+							.replace(/([A-Z0-9])/g, " $1")
+							.trim();
+						div.appendChild(
+							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+						);
+
+						// Append to document for measurement
+						document.body.appendChild(div);
+						const { width, height } = div.getBoundingClientRect();
+						document.body.removeChild(div); // Remove after measuring
+						div.querySelectorAll("p").forEach((e) => e.remove())
+
+						// // Calculate the adjusted offsets based on rotation
+						// const adjustedLeft = cx - height; // Use height for horizontal adjustment
+						// const adjustedTop = cy - width / 2;  // Use width for vertical adjustment
+
+						// Final styles with rotation and alignment
+						Object.assign(div.style, {
+							position: "absolute",
+							color: "rgba(0, 0, 0, 255)",
+							left: `${cx}px`,
+							top: `${cy - (width / 2)}px`,
+							width: `${height}px`,
+							height: `${width}px`,
+							// transform: `rotate(90deg)`, // Rotate around the center
+							backgroundColor: "rgba(0, 0, 0, 0)",
+							border: "2px solid rgba(0, 0, 0, 1)",
+							borderRadius: "0.75rem",
+							marginBottom: "0.25rem",
+							zIndex: "10",
+							pointerEvents: "none",
+							cursor: "pointer",
+							textAlign: "center",
+							fontSize: "2.25rem",
+							visibility: "visible", // Make visible after measurement
+						});
+
+						return div;
+					};
+
+					const createPreviewDiv3 = (e) => {
+						const div = document.createElement("div");
+						div.setAttribute(
+							"data-fullname",
+							e.getAttribute("data-fullname"),
+						);
+
+						const cx = parseFloat(e.getAttribute("cx"));
+						const cy = parseFloat(e.getAttribute("cy"));
+
+						// Apply initial styles for measurement
+						Object.assign(div.style, {
+							position: "absolute",
+							visibility: "hidden", // Prevents flickering during measurement
+							whiteSpace: "nowrap", // Ensure proper size calculation
+							fontSize: "2.25rem", // Match intended font size
+							padding: "6px 28px",
+						});
+
+						const idText = e.id
+							.replace(/([A-Z0-9])/g, " $1")
+							.trim();
+						div.appendChild(
+							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+						);
+
+						// Append to document for measurement
+						document.body.appendChild(div);
+						const { width, height } = div.getBoundingClientRect();
+						document.body.removeChild(div); // Remove after measuring
+						div.querySelectorAll("p").forEach((e) => e.remove())
+
+						// // Calculate the adjusted offsets based on rotation
+						// const adjustedLeft = cx - height; // Use height for horizontal adjustment
+						// const adjustedTop = cy - width / 2;  // Use width for vertical adjustment
+
+						// Final styles with rotation and alignment
+						Object.assign(div.style, {
+							position: "absolute",
+							color: "rgba(0, 0, 0, 255)",
+							left: `${cx - (height)}px`,
+							top: `${cy - (width / 2)}px`,
+							width: `${height}px`,
+							height: `${width}px`,
+							// transform: `rotate(90deg)`, // Rotate around the center
+							backgroundColor: "rgba(0, 0, 0, 0)",
+							border: "2px solid rgba(0, 0, 0, 1)",
+							borderRadius: "0.75rem",
+							marginBottom: "0.25rem",
+							zIndex: "10",
+							pointerEvents: "none",
+							cursor: "pointer",
+							textAlign: "center",
+							fontSize: "2.25rem",
+							visibility: "visible", // Make visible after measurement
+						});
+
+						return div;
+					};
+
 					const toggleHover = (div, isHovered) => {
 						div.style.borderColor = isHovered
 							? "rgba(255, 255, 255, 1)"
@@ -2927,10 +3152,19 @@ import "../styles.css";
 
 					circles.forEach((e) => {
 						const div = createDiv(e);
+						const previewDiv1 = createPreviewDiv1(e)
+						const previewDiv2 = createPreviewDiv2(e)
+						const previewDiv3 = createPreviewDiv3(e)
 						labelDiv.appendChild(div);
+						labelDiv.appendChild(previewDiv1);
+						labelDiv.appendChild(previewDiv2);
+						labelDiv.appendChild(previewDiv3);
 						svgContainer.appendChild(labelDiv);
 					});
+
 				}
+			} else {
+				console.log("No labels toggle found")
 			}
 		}
 
