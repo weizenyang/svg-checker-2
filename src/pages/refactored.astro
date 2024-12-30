@@ -1936,6 +1936,7 @@ import "../styles.css";
 
 		document.body.addEventListener("drop", (e) => {
 			e.preventDefault();
+			console.log(e)
 			console.log(e.dataTransfer.files[0]);
 			handleFileChange(e.dataTransfer.files[0]);
 			document
