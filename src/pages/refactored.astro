@@ -443,14 +443,14 @@ import "../styles.css";
 			>
 				<h3>Viewer</h3>
 			</div>
-
-			<div class="output" id="svg-container">
-				<p
-					style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
-				>
-					Import SVG file
-				</p>
+			<div class="overflow-scroll aspect-square max-h-[91vh] max-w-[91vh]" id="scalable-canvas">
+				<div class="output" id="svg-container">
+					<p style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;">
+						Import SVG file
+					</p>
+				</div>
 			</div>
+
 
 			<div class="space-y-4" id="tag">
 				<h3 id="label">-</h3>
@@ -567,6 +567,82 @@ import "../styles.css";
 
 			return newSVG;
 		};
+
+		const scalableCanvas = document.getElementById("scalable-canvas");
+		const svgContainer = document.getElementById("svg-container");
+
+		// Initialize variables for panning
+		let isPanning = false;
+		let startX, startY;
+		let translateX = 0, translateY = 0;
+
+		// Handle zooming with the mouse wheel
+		scalableCanvas.addEventListener("wheel", (e) => {
+			e.preventDefault(); // Prevent default scrolling behavior
+
+			// Get the current scale value or default to 1
+			let scale = parseFloat(svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1]) || 1;
+
+			// Adjust scale based on wheel delta
+			scale -= e.deltaY / 1000; // Scale up for scroll up, down for scroll down
+
+			// Clamp the scale value
+			scale = Math.max(1, Math.min(scale, 10)); // Min scale: 0.1, Max scale: 10
+
+			// Apply updated scale
+			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+
+			console.log(`Updated scale: ${scale}`);
+		});
+
+		// Handle panning
+		scalableCanvas.addEventListener("mousedown", (e) => {
+			isPanning = true;
+			startX = e.clientX - translateX;
+			startY = e.clientY - translateY;
+			scalableCanvas.style.cursor = "grabbing"; // Change cursor to grabbing
+		});
+
+		scalableCanvas.addEventListener("mousemove", (e) => {
+			if (!isPanning || tempSelected != null) return;
+
+			// Calculate new translate values
+			let newTranslateX = e.clientX - startX;
+			let newTranslateY = e.clientY - startY;
+
+			// Dynamically calculate boundaries based on canvas and container sizes
+			const canvasRect = scalableCanvas.getBoundingClientRect();
+			const svgRect = svgContainer.getBoundingClientRect();
+
+			const scale = parseFloat(svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1]) || 1;
+
+			const boundary = {
+				minX: Math.min(0, canvasRect.width - svgRect.width * 0.5 * scale),
+				maxX: Math.max(0, -(canvasRect.width - svgRect.width * 0.5 * scale)),
+				minY: Math.min(0, canvasRect.height - svgRect.height * 0.5 * scale),
+				maxY: Math.max(0, -(canvasRect.height - svgRect.height * 0.5 * scale)),
+			};
+
+			// console.log(boundary)
+
+			// Apply boundaries
+			translateX = Math.max(boundary.minX, Math.min(boundary.maxX, newTranslateX));
+			translateY = Math.max(boundary.minY, Math.min(boundary.maxY, newTranslateY));
+
+			// Apply updated translation
+			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+
+			// console.log(`Panning: translateX=${translateX}, translateY=${translateY}`);
+		});
+
+		scalableCanvas.addEventListener("mouseup", () => {
+			isPanning = false;
+			scalableCanvas.style.cursor = "default"; // Reset cursor
+		});
+
+		scalableCanvas.addEventListener("mouseleave", () => {
+			isPanning = false; // Stop panning if the mouse leaves the canvas
+		});
 
 		document
 			.getElementById("svg-container")
@@ -841,7 +917,8 @@ import "../styles.css";
 		});
 
 		function calculateSensitivity(svgElement) {
-			const svgRect = svgElement.getBoundingClientRect(); // Get the on-screen size of the SVG
+			// const svgRect = svgElement.getBoundingClientRect(); // Get the on-screen size of the SVG
+			const svgRect = document.getElementById("scalable-canvas").getBoundingClientRect();
 			const viewBox = svgElement.viewBox.baseVal; // Get the SVG's viewBox dimensions
 
 			const scaleX = viewBox.width / svgRect.width;
@@ -1070,6 +1147,7 @@ import "../styles.css";
 		}
 
 		document.addEventListener("mouseup", (e) => {
+			tempSelected = null
 			mouseDown = false;
 			rightMouseDown = false;
 		});
@@ -2902,24 +2980,25 @@ import "../styles.css";
 					const group = globalSvgContainer
 						.querySelector("svg")
 						.querySelector("g");
-					console.log(
-						globalSvgContainer
-							.querySelector("svg")
-							.querySelector("g"),
-					);
+					// console.log(
+					// 	globalSvgContainer
+					// 		.querySelector("svg")
+					// 		.querySelector("g"),
+					// );
 					if (!group) {
 					} else if (group instanceof SVGGElement) {
 						circles = [].slice.call(
 							group.getElementsByTagName("circle"),
 						);
 					}
-					console.log(circles);
+					// console.log(circles);
 
 					const svgContainer =
 						document.getElementById("svg-container");
 					const { scaleX, scaleY } = calculateSensitivity(
 						globalSvgContainer.querySelector("svg"),
 					);
+
 					const { width } = globalSvgContainer
 						.querySelector("svg")
 						.getBoundingClientRect();
@@ -2927,6 +3006,8 @@ import "../styles.css";
 					labelDiv.setAttribute("id", "labelDiv");
 					labelDiv.style.width = "4096px";
 					labelDiv.style.height = "4096px";
+					// labelDiv.style.width = "100%";
+					// labelDiv.style.height = "100%";
 					labelDiv.style.position = "absolute";
 					labelDiv.style.transform = `scale(${1 / scaleX})`;
 					labelDiv.style.left = `-${2048 - 4096 / scaleY / 2}px`;
@@ -3159,7 +3240,7 @@ import "../styles.css";
 						labelDiv.appendChild(previewDiv1);
 						labelDiv.appendChild(previewDiv2);
 						labelDiv.appendChild(previewDiv3);
-						svgContainer.appendChild(labelDiv);
+						svgContainer.prepend(labelDiv);
 					});
 
 				}
