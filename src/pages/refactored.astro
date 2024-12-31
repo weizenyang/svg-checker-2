@@ -482,6 +482,7 @@ import "../styles.css";
 		var canvasRotate = 0;
 		var multiSelect = false;
 		var clusterId = [];
+		var canvasScale = 1
 
 		var idFormat = format.none; //SVG ID format
 		var mouseDown = false;
@@ -589,8 +590,17 @@ import "../styles.css";
 			// Clamp the scale value
 			scale = Math.max(1, Math.min(scale, 10)); // Min scale: 0.1, Max scale: 10
 
+			canvasScale = scale
+
 			// Apply updated scale
-			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+			if(scale > 1.2){
+				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+			} else {
+				translateX = 0
+				translateY = 0
+				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+			}
+			
 
 			console.log(`Updated scale: ${scale}`);
 		});
@@ -917,6 +927,17 @@ import "../styles.css";
 		});
 
 		function calculateSensitivity(svgElement) {
+			const svgRect = svgElement.getBoundingClientRect(); // Get the on-screen size of the SVG
+			// const svgRect = document.getElementById("scalable-canvas").getBoundingClientRect();
+			const viewBox = svgElement.viewBox.baseVal; // Get the SVG's viewBox dimensions
+
+			const scaleX = viewBox.width / svgRect.width;
+			const scaleY = viewBox.height / svgRect.height;
+
+			return { scaleX, scaleY };
+		}
+
+		function calculateLabelOffset(svgElement) {
 			// const svgRect = svgElement.getBoundingClientRect(); // Get the on-screen size of the SVG
 			const svgRect = document.getElementById("scalable-canvas").getBoundingClientRect();
 			const viewBox = svgElement.viewBox.baseVal; // Get the SVG's viewBox dimensions
@@ -2995,7 +3016,7 @@ import "../styles.css";
 
 					const svgContainer =
 						document.getElementById("svg-container");
-					const { scaleX, scaleY } = calculateSensitivity(
+					const { scaleX, scaleY } = calculateLabelOffset(
 						globalSvgContainer.querySelector("svg"),
 					);
 
