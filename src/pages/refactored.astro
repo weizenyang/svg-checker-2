@@ -1502,6 +1502,8 @@ import "../styles.css";
 				// Append the SVG element to the div element
 				const svgContainer = document.getElementById("svg-container");
 				svgContainer.innerHTML = "";
+				svgElement.setAttributeNS(null, "width", "100%");
+				svgElement.setAttributeNS(null, "height", "100%");
 				svgContainer.appendChild(svgElement);
 
 				if (imageList.length > 0) {
