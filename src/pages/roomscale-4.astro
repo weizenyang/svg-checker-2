@@ -221,16 +221,17 @@ import ObjectList from "../components/object-list.tsx";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
 
     // Initialize the GLTFLoader
-    const loader = new GLTFLoader();
+    const GLTFloader = new GLTFLoader();
+    const FBXloader = new FBXLoader();
     const dracoLoader = new DRACOLoader();
     // Set the path to the Draco decoder
     // dracoLoader.setDecoderConfig({ type: 'js' });
     dracoLoader.setDecoderPath("/draco/decoder/");
     dracoLoader.preload();
-    loader.setDRACOLoader(dracoLoader);
+    GLTFloader.setDRACOLoader(dracoLoader);
 
     var arrowAsset;
-    loader.load("/Arrow.glb", (e) => {
+    GLTFloader.load("/Arrow.glb", (e) => {
         // Preload Arrow asset
         console.log("Arrow asset loaded");
         arrowAsset = e;
@@ -788,7 +789,7 @@ import ObjectList from "../components/object-list.tsx";
     }
 
     function handleFileChange(items, files) {
-
+        console.log(files)
         // Check if a single item is dropped
         if (items.length === 1) {
             console.log("items");
@@ -835,7 +836,7 @@ import ObjectList from "../components/object-list.tsx";
                         );
 
                     // Parse and load the model
-                    loader.parse(
+                    GLTFloader.parse(
                         arrayBuffer,
                         "",
                         (gltf) => {
@@ -866,7 +867,7 @@ import ObjectList from "../components/object-list.tsx";
         } else if (files.length === 1) {
             console.log("files");
             const file = files[0];
-            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
+            if (file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv")) {
                 globalFloors = [];
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -875,13 +876,13 @@ import ObjectList from "../components/object-list.tsx";
                 reader.readAsText(files[0]);
             } else if (
                 file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
+                file.name.toLowerCase().endsWith(".glb")
             ) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const arrayBuffer = event.target.result;
                     // const loader = new GLTFLoader();
-                    loader.parse(arrayBuffer, "", (gltf) => {
+                    GLTFloader.parse(arrayBuffer, "", (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
                         gltf.scene.scale.set(100, 100, 100);
@@ -892,6 +893,38 @@ import ObjectList from "../components/object-list.tsx";
                         });
                         scene.add(gltf.scene);
                     });
+                };
+                reader.readAsArrayBuffer(file);
+            } else if( file.name.toLowerCase().endsWith(".fbx") ){
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const thisArrayBuffer = event.target.result;
+                    const loader = new FBXLoader();
+                    const fbxData = new Uint8Array(thisArrayBuffer); // Convert the ArrayBuffer to Uint8Array
+                    const blob = new Blob([fbxData]); // Create a Blob from the Uint8Array
+                    const url = URL.createObjectURL(blob); // Create a URL for the Blob
+
+                    loader.load(
+                        url,
+                        (fbx) => {
+                            applyLitMaterialToGLTF(fbx); // Modify if this function is specific to GLTF
+                            fbx.name = file.name;
+                            fbx.scale.set(100, 100, 100);
+                            objects.push(fbx);
+                            simplifiedNamesId.push({
+                                uuid: fbx.uuid,
+                                simplifiedName: file.name.replace(/\D/g, ""),
+                            });
+                            scene.add(fbx);
+
+                            // Clean up the URL object
+                            URL.revokeObjectURL(url);
+                        },
+                        undefined,
+                        (error) => {
+                            console.error("Error loading FBX:", error);
+                        }
+                    );
                 };
                 reader.readAsArrayBuffer(file);
             } else {
