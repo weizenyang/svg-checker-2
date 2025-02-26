@@ -1,0 +1,627 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Equirectangular Image Editor</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+        color: #333;
+      }
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .drop-area {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: 3px dashed #ccc;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background-color: rgba(255, 255, 255, 0.9);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        z-index: 10;
+      }
+      .drop-area.highlight {
+        border-color: #4a90e2;
+        background-color: rgba(240, 247, 255, 0.9);
+      }
+      .drop-area p {
+        margin: 0;
+        font-size: 1.2rem;
+        color: #666;
+      }
+      .image-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .image-section h2 {
+        margin: 0;
+      }
+      .canvas-container {
+        position: relative;
+        width: 100%;
+        height: 300px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow: hidden;
+        background-color: #eee;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .rotation-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .lock-controls {
+        display: flex;
+        gap: 15px;
+      }
+      .lock-option {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .rotation-input {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      .rotation-input input {
+        width: 70px;
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        text-align: right;
+      }
+      .rotation-slider {
+        position: relative;
+        width: 100%;
+        height: 50px;
+        border: 1px solid #ddd;
+        border-radius: 25px;
+        overflow: hidden;
+        background-color: #f9f9f9;
+        margin-bottom: 10px;
+      }
+      .rotation-indicator {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background-color: red;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2;
+      }
+      .rotation-ticks {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        transition: transform 0.1s ease;
+      }
+      .tick {
+        position: absolute;
+        height: 30px;
+        width: 1px;
+        background-color: #ccc;
+      }
+      .tick.major {
+        height: 40px;
+        width: 2px;
+        background-color: #333;
+      }
+      .tick-label {
+        position: absolute;
+        top: 45px;
+        transform: translateX(-50%);
+        font-size: 12px;
+        color: #666;
+      }
+      .buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #4a90e2;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.2s;
+      }
+      button:hover {
+        background-color: #357abD;
+      }
+      button:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      .export-button {
+        background-color: #4CAF50;
+      }
+      .export-button:hover {
+        background-color: #3e8e41;
+      }
+      .reset-button {
+        background-color: #f44336;
+      }
+      .reset-button:hover {
+        background-color: #d32f2f;
+      }
+      .center-line {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 2px;
+        background-color: red;
+        pointer-events: none; /* allows clicking through to canvas */
+        z-index: 5;
+    }
+    </style>
+  </head>
+  <body>
+    <div class="flex align-center text-center">
+        <a
+        href="/"
+        class="flex w-fit border-2 pl-2 pr-2 p-1 text-center rounded-md content-center hover:bg-neutral-100"
+    >
+        <div class="align-center content-center">
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="1.5"
+                stroke="currentColor"
+                class="size-5"
+            >
+                <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                ></path>
+            </svg>
+        </div>
+    
+        <p class="ml-2">Home</p>
+    </a>
+        <h1 class="!m-0 pl-2 text-center align-center align-middle self-center">Equirectangular Image Editor</h1>
+    </div>
+    
+    
+    <div class="container">
+      <div class="image-section">
+        <h2>Reference Image</h2>
+        <div class="canvas-container">
+          <div id="reference-drop" class="drop-area">
+            <p>Drag & drop reference image here or click to select</p>
+          </div>
+          <canvas id="reference-canvas"></canvas>
+          <div class="center-line"></div>
+        </div>
+      </div>
+
+      <div class="image-section">
+        <h2>Image to Edit</h2>
+        <div class="canvas-container">
+          <div id="edit-drop" class="drop-area">
+            <p>Drag & drop image to edit here or click to select</p>
+          </div>
+          <canvas id="edit-canvas"></canvas>
+          <div class="center-line"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="rotation-header">
+          <h3 style="margin: 0;">Rotation Controls</h3>
+          <div class="lock-controls">
+            <label class="lock-option">
+              <input type="checkbox" id="lock-longitude"> Lock Longitude
+            </label>
+            <label class="lock-option">
+              <input type="checkbox" id="lock-latitude" checked> Lock Latitude
+            </label>
+          </div>
+        </div>
+        
+        <div class="rotation-input">
+          <span>Longitude:</span>
+          <div>
+            <input type="number" id="longitude-input" value="0.0" step="0.1" min="-180" max="180">
+            <span>°</span>
+          </div>
+        </div>
+        
+        <div class="rotation-slider">
+          <div class="rotation-indicator"></div>
+          <div id="rotation-ticks" class="rotation-ticks"></div>
+        </div>
+        
+        <div class="rotation-input">
+          <span>Latitude:</span>
+          <div>
+            <input type="number" id="latitude-input" value="0.0" step="0.1" min="-90" max="90">
+            <span>°</span>
+          </div>
+        </div>
+        
+        <div class="buttons">
+          <button id="reset-button" class="reset-button" disabled>Reset Rotation</button>
+          <button id="export-button" class="export-button" disabled>Export Image</button>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      // Global variables
+      let referenceImage = null;
+      let editImage = null;
+      let longitudeRotation = 0; // degrees
+      let latitudeRotation = 0;  // degrees
+      let isDragging = false;
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+      let lockLongitude = false;
+      let lockLatitude = true; // Locked by default
+      
+      // DOM Elements
+      const referenceCanvas = document.getElementById('reference-canvas');
+      const editCanvas = document.getElementById('edit-canvas');
+      const referenceCtx = referenceCanvas.getContext('2d');
+      const editCtx = editCanvas.getContext('2d');
+      const rotationTicksEl = document.getElementById('rotation-ticks');
+      const resetButton = document.getElementById('reset-button');
+      const exportButton = document.getElementById('export-button');
+      const lockLongitudeCheckbox = document.getElementById('lock-longitude');
+      const lockLatitudeCheckbox = document.getElementById('lock-latitude');
+      const longitudeInput = document.getElementById('longitude-input');
+      const latitudeInput = document.getElementById('latitude-input');
+      
+      // Set up drop areas
+      setupDropArea('reference-drop', loadReferenceImage);
+      setupDropArea('edit-drop', loadEditImage);
+      
+      // Canvas initialization
+      function initCanvas(canvas) {
+        const container = canvas.parentElement;
+        canvas.width = container.offsetWidth;
+        canvas.height = container.offsetHeight;
+      }
+      
+      // Initialize canvases
+      initCanvas(referenceCanvas);
+      initCanvas(editCanvas);
+      
+      // Create rotation tick marks
+      createRotationTicks();
+      
+      // Set up event listeners
+      window.addEventListener('resize', handleResize);
+      editCanvas.addEventListener('mousedown', handleMouseDown);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      resetButton.addEventListener('click', resetRotation);
+      exportButton.addEventListener('click', exportImage);
+      lockLongitudeCheckbox.addEventListener('change', function() {
+        lockLongitude = this.checked;
+      });
+      lockLatitudeCheckbox.addEventListener('change', function() {
+        lockLatitude = this.checked;
+      });
+      longitudeInput.addEventListener('change', function() {
+        longitudeRotation = parseFloat(this.value);
+        updateRotationDisplay();
+        if (editImage) {
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        }
+      });
+      latitudeInput.addEventListener('change', function() {
+        latitudeRotation = parseFloat(this.value);
+        updateRotationDisplay();
+        if (editImage) {
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        }
+      });
+      
+      // Functions
+      function setupDropArea(id, callback) {
+        const dropArea = document.getElementById(id);
+        const highlight = () => dropArea.classList.add('highlight');
+        const unhighlight = () => dropArea.classList.remove('highlight');
+        
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        // Highlight drop area when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+          dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        // Unhighlight when dragged item leaves or is dropped
+        ['dragleave', 'drop'].forEach(eventName => {
+          dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        // Handle dropped files
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        // Handle click to select files
+        dropArea.addEventListener('click', () => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = (e) => {
+            if (e.target.files.length) {
+              processFile(e.target.files[0], callback);
+            }
+          };
+          input.click();
+        });
+        
+        function handleDrop(e) {
+          const dt = e.dataTransfer;
+          const files = dt.files;
+          
+          if (files.length) {
+            processFile(files[0], callback);
+          }
+        }
+      }
+      
+      function processFile(file, callback) {
+        if (file.type.match('image.*')) {
+          const reader = new FileReader();
+          
+          reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+              callback(img);
+            };
+            img.src = e.target.result;
+          };
+          
+          reader.readAsDataURL(file);
+        }
+      }
+      
+      function loadReferenceImage(img) {
+        referenceImage = img;
+        drawImage(referenceCtx, img);
+        // Hide the drop area after image is loaded
+        document.getElementById('reference-drop').style.display = 'none';
+      }
+      
+      function loadEditImage(img) {
+        editImage = img;
+        drawImage(editCtx, img, longitudeRotation, latitudeRotation);
+        resetButton.disabled = false;
+        exportButton.disabled = false;
+        // Hide the drop area after image is loaded
+        document.getElementById('edit-drop').style.display = 'none';
+      }
+      
+      function drawImage(ctx, img, lonRotation = 0, latRotation = 0) {
+        if (!img) return;
+        
+        const canvas = ctx.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Normalize the horizontal offset
+        let xOffset = (lonRotation / 360) * img.width;
+        xOffset = ((xOffset % img.width) + img.width) % img.width;
+        
+        const yOffset = (latRotation / 180) * img.height;
+        
+        // Determine scale factor from source image width to canvas width
+        const scale = canvas.width / img.width;
+        
+        // Calculate available width from xOffset to the image end
+        const availableWidth = img.width - xOffset;
+        const destWidthFirst = availableWidth * scale;
+        
+        // Draw the right segment of the image
+        ctx.drawImage(
+            img,
+            xOffset, yOffset, availableWidth, img.height,
+            0, 0, destWidthFirst, canvas.height
+        );
+        
+        // If the first segment doesn't fill the canvas, draw the left segment of the image
+        if (destWidthFirst < canvas.width) {
+            const remainingDestWidth = canvas.width - destWidthFirst;
+            const remainingSrcWidth = remainingDestWidth / scale;
+            ctx.drawImage(
+            img,
+            0, yOffset, remainingSrcWidth, img.height,
+            destWidthFirst, 0, remainingDestWidth, canvas.height
+            );
+        }
+        }
+      
+      function handleResize() {
+        initCanvas(referenceCanvas);
+        initCanvas(editCanvas);
+        
+        if (referenceImage) {
+          drawImage(referenceCtx, referenceImage);
+        }
+        
+        if (editImage) {
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        }
+      }
+      
+      function handleMouseDown(e) {
+        if (!editImage) return;
+        
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        editCanvas.style.cursor = 'grabbing';
+      }
+      
+      function handleMouseMove(e) {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - lastMouseX;
+        const deltaY = e.clientY - lastMouseY;
+        
+        // Update rotation based on mouse movement only if not locked
+        if (!lockLongitude) {
+          // Convert pixels to degrees based on image width
+          longitudeRotation -= deltaX * 0.5; // Adjust sensitivity
+          // Keep longitude in range -180 to 180
+          longitudeRotation = ((longitudeRotation + 180) % 360) - 180;
+        }
+        
+        if (!lockLatitude) {
+          // Convert pixels to degrees based on image height
+          latitudeRotation += deltaY * 0.25; // Adjust sensitivity
+          // Limit latitude to -90 to 90
+          latitudeRotation = Math.max(-90, Math.min(90, latitudeRotation));
+        }
+        
+        // Update the display
+        updateRotationDisplay();
+        
+        // Redraw image with new rotation
+        drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+      
+      function handleMouseUp() {
+        isDragging = false;
+        editCanvas.style.cursor = 'grab';
+      }
+      
+      function createRotationTicks() {
+        // Create tick marks for the rotation slider
+        rotationTicksEl.innerHTML = '';
+        
+        // Create ticks for +/- 180 degrees
+        for (let i = -180; i <= 180; i += 10) {
+          const tick = document.createElement('div');
+          tick.className = i % 30 === 0 ? 'tick major' : 'tick';
+          
+          // Position the tick
+          const percent = ((i + 180) / 360) * 100;
+          tick.style.left = `${percent}%`;
+          
+          rotationTicksEl.appendChild(tick);
+          
+          // Add label for major ticks
+          if (i % 30 === 0) {
+            const label = document.createElement('div');
+            label.className = 'tick-label';
+            label.style.left = `${percent}%`;
+            label.textContent = i + '°';
+            rotationTicksEl.appendChild(label);
+          }
+        }
+      }
+      
+      function updateRotationDisplay() {
+        // Update the input fields
+        longitudeInput.value = longitudeRotation.toFixed(1);
+        latitudeInput.value = latitudeRotation.toFixed(1);
+        
+        // Update the rotation ticks position for longitude
+        const ticksOffset = ((longitudeRotation + 180) / 360) * 100;
+        rotationTicksEl.style.transform = `translateX(${50 - ticksOffset}%)`;
+      }
+      
+      function resetRotation() {
+        longitudeRotation = 0;
+        latitudeRotation = 0;
+        updateRotationDisplay();
+        
+        if (editImage) {
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        }
+      }
+      
+      function exportImage() {
+        if (!editImage) return;
+        
+        // Create a temporary canvas for the export
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = editImage.width;
+        tempCanvas.height = editImage.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // Apply the rotation to the original image
+        const xOffset = (longitudeRotation / 360) * editImage.width;
+        const yOffset = (latitudeRotation / 180) * editImage.height;
+        
+        tempCtx.drawImage(
+          editImage, 
+          xOffset, yOffset, editImage.width, editImage.height, 
+          0, 0, tempCanvas.width, tempCanvas.height
+        );
+        tempCtx.drawImage(
+          editImage, 
+          xOffset - editImage.width, yOffset, editImage.width, editImage.height, 
+          0, 0, tempCanvas.width, tempCanvas.height
+        );
+        
+        // Create a download link
+        const link = document.createElement('a');
+        link.download = 'rotated-equirectangular.png';
+        link.href = tempCanvas.toDataURL('image/png');
+        link.click();
+      }
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    </script>
+  </body>
+</html>

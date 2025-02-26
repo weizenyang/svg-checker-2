@@ -12,7 +12,7 @@ import ObjectList from "../components/object-list.tsx";
     </head>
     <body id="drop-zone" class="overflow-hidden">
         <div
-            class="ui-area transition-all bg-zinc-100 p-3 rounded-sm"
+            class="ui-area transition-all bg-zinc-100 p-1 rounded-sm text-xs"
             id="ui-area"
         >
             <a
@@ -128,14 +128,14 @@ import ObjectList from "../components/object-list.tsx";
 
             <button
                 id="export-all-fbx"
-                class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-3 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400"
+                class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-2 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400"
                 style="margin-bottom: 10px"
             >
                 Export All To GLB
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
+                    width="16"
+                    height="16"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -150,8 +150,12 @@ import ObjectList from "../components/object-list.tsx";
                     ></polyline>
                     <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"
                     ></line>
-                </svg></button
-            >
+                </svg></button>
+
+                <label style="margin-left: 10px; font-family: monospace;">
+                    <input type="checkbox" id="export-all-scene-checkbox" />
+                        Export Entire Scene
+                </label>
 
             <div class="rounded-md bg-zinc-300 max-w-52 p-5 pl-2 pr-2 mt-3">
                 <h2 class="font-bold">Floors:</h2>
@@ -161,7 +165,7 @@ import ObjectList from "../components/object-list.tsx";
             </div>
         </div>
 
-        <div class="fixed right-0 h-42 w-40 bg-neutral-100" id="gizmo">
+        <div class="fixed right-0 h-42 w-40 bg-neutral-100 text-sm" id="gizmo">
             <button
                 id="camera-top"
                 class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -1182,6 +1186,8 @@ import ObjectList from "../components/object-list.tsx";
         );
     }
 
+    
+
     // Function to save the Blob as a file
     function saveBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
@@ -1201,7 +1207,13 @@ import ObjectList from "../components/object-list.tsx";
 
     // Function to export all FBX files in fbxFiles array
     function exportAllFBXFilesToGLB() {
-        fbxFiles.forEach((fbxFile, index) => {
+    const exportEntireScene = document.getElementById("export-all-scene-checkbox").checked;
+    if (exportEntireScene) {
+        // Export the entire scene
+        exportToGLB(scene, "scene.glb");
+    } else {
+        // Export only the FBX models
+        fbxFiles.forEach((fbxFile) => {
             const object = scene.getObjectByName(fbxFile.fileName);
             if (object) {
                 const filename = `${fbxFile.fileName.split(".")[0]}.glb`;
@@ -1209,6 +1221,7 @@ import ObjectList from "../components/object-list.tsx";
             }
         });
     }
+}
 
     // Add an event listener to the export button
     const exportButton = document.getElementById("export-all-fbx");
