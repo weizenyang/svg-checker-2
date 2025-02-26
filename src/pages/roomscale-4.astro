@@ -165,7 +165,7 @@ import ObjectList from "../components/object-list.tsx";
             </div>
         </div>
 
-        <div class="fixed right-0 h-42 w-40 bg-neutral-100 text-sm" id="gizmo">
+        <div class="fixed right-0 h-42 w-40 bg-neutral-100 text-xs" id="gizmo">
             <button
                 id="camera-top"
                 class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -198,6 +198,29 @@ import ObjectList from "../components/object-list.tsx";
             >
                 Bottom
             </button>
+            <button id="open-align-popup">
+                Align Points
+            </button>
+
+            <div id="outliner" class="mt-2 max-h-64 overflow-y-auto bg-gray-200 p-2 text-[10px]"></div>
+            <!-- Alignment Popup: hidden by default -->
+            <div id="alignment-popup" class="fixed left-4 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-md shadow-lg p-4 hidden z-50">
+                <div class="mb-2">
+                <h3 class="font-bold text-sm mb-1">Reference Points</h3>
+                <div id="reference-dropzone" class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs">
+                    Drop 2 items here
+                </div>
+                </div>
+                <div class="mb-2">
+                <h3 class="font-bold text-sm mb-1">Align Points</h3>
+                <div id="align-dropzone" class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs">
+                    Drop 2 items here
+                </div>
+                </div>
+                <button id="align-button" class="w-full bg-blue-500 text-white py-1 rounded-md text-xs hidden">
+                Align
+                </button>
+            </div>
             <!-- <button class="bg-zinc-300 p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300" id="x-flip">
                 Orthographic
             </button> -->
@@ -248,6 +271,8 @@ import ObjectList from "../components/object-list.tsx";
     var objects = [];
     var markers = [];
     let labelContainer;
+    let referenceSelection = [];
+    let alignSelection = [];
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.autoClear = false;
@@ -857,6 +882,7 @@ import ObjectList from "../components/object-list.tsx";
                                 "Model loaded successfully:",
                                 gltf.scene,
                             );
+                            updateOutliner();
                         },
                         (error) => {
                             console.error(
@@ -896,6 +922,7 @@ import ObjectList from "../components/object-list.tsx";
                             simplifiedName: file.name.replace(/\D/g, ""),
                         });
                         scene.add(gltf.scene);
+                        updateOutliner();
                     });
                 };
                 reader.readAsArrayBuffer(file);
@@ -920,6 +947,7 @@ import ObjectList from "../components/object-list.tsx";
                                 simplifiedName: file.name.replace(/\D/g, ""),
                             });
                             scene.add(fbx);
+                            updateOutliner();
 
                             // Clean up the URL object
                             URL.revokeObjectURL(url);
@@ -959,7 +987,7 @@ import ObjectList from "../components/object-list.tsx";
                             simplifiedName: file.name.replace(/\D/g, ""),
                         });
                         scene.add(gltf.scene);
-                        console.log(scene)
+                        updateOutliner();
                     });
                 };
                 reader.readAsArrayBuffer(file);
@@ -983,6 +1011,8 @@ import ObjectList from "../components/object-list.tsx";
             console.log(items)
             console.log(files)
         }
+
+        
     }
 
     function applyLitMaterialToGLTF(gltfScene) {
@@ -1530,6 +1560,7 @@ import ObjectList from "../components/object-list.tsx";
             },
         });
         window.dispatchEvent(csvUploadEvent);
+        updateOutliner();
     }
 
     function processVRImage(data, name?) {
@@ -1648,6 +1679,243 @@ import ObjectList from "../components/object-list.tsx";
             //     document.getElementById("marker-label-container").style.display = "none"
             // }
         });
+
+        //Outliner Functions
+        function buildTree(object) {
+            const li = document.createElement("li");
+            li.className = "my-[3px] text-2xs hover:bg-gray-300 cursor-pointer flex flex-col";
+
+            // Create a container for the item (flex layout)
+            const container = document.createElement("div");
+            container.className = "flex items-center gap-2";
+
+            // Create a span for the object name
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = object.name || object.type || "Unnamed";
+
+            // Create a color picker input (default red)
+            const colorPicker = document.createElement("input");
+            colorPicker.type = "color";
+            colorPicker.value = "#ff0000";
+            colorPicker.className = "w-6 h-6 p-0 m-0 border-none";
+            
+            // Save a reference on the object so we can update it later.
+            object.userData.colorPicker = colorPicker;
+
+            // When the color changes, update the object's material color recursively.
+            colorPicker.addEventListener("input", (e) => {
+                e.stopPropagation();
+                const newColor = e.target.value;
+                updateObjectColor(object, newColor);
+            });
+
+            // Make the container draggable only if this is a leaf node.
+            if (!object.children || object.children.length === 0) {
+                container.draggable = true;
+                container.addEventListener("dragstart", (e) => {
+                e.stopPropagation();
+                e.dataTransfer.setData("text/plain", object.id);
+                });
+            }
+            
+            // Append the name and the color picker into the container
+            container.appendChild(nameSpan);
+            container.appendChild(colorPicker);
+            li.appendChild(container);
+            
+            // If there are children, recursively build the tree.
+            if (object.children && object.children.length > 0) {
+                const ul = document.createElement("ul");
+                ul.className = "ml-4 list-disc";
+                object.children.forEach(child => {
+                ul.appendChild(buildTree(child));
+                });
+                li.appendChild(ul);
+            }
+            
+            li.setAttribute("data-object-id", object.id);
+            return li;
+        }
+
+
+
+        function updateObjectColor(object, color) {
+            // Update material color if this object is a Mesh.
+            if (object.isMesh && object.material && object.material.color) {
+                object.material.color.set(color);
+                object.material.needsUpdate = true;
+            }
+            // If a color picker was stored on this object, update it.
+            if (object.userData && object.userData.colorPicker) {
+                object.userData.colorPicker.value = color;
+            }
+            // Recursively update all children.
+            if (object.children && object.children.length > 0) {
+                object.children.forEach(child => updateObjectColor(child, color));
+            }
+        }
+
+
+
+            // Update the outliner by listing all the scene's root-level objects and their children.
+            function updateOutliner() {
+                const outliner = document.getElementById("outliner");
+                if (!outliner) return;
+                
+                // Clear existing content.
+                outliner.innerHTML = "";
+                
+                // Create a list for scene children.
+                const ul = document.createElement("ul");
+                scene.children.forEach(child => {
+                    ul.appendChild(buildTree(child));
+                });
+                outliner.appendChild(ul);
+            }
+
+            const refDropzone = document.getElementById("reference-dropzone");
+            const alignDropzone = document.getElementById("align-dropzone");
+            const alignButton = document.getElementById("align-button");
+            const alignmentPopup = document.getElementById("alignment-popup");
+
+            // Prevent default behavior for dragover events.
+            [refDropzone, alignDropzone].forEach(zone => {
+                zone.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    console.log(e)
+                });
+            });
+
+            // Handle drop on Reference zone.
+            refDropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                console.log("Dropped")
+                console.log(e)
+                if (referenceSelection.length >= 2) return;
+                const objId = parseInt(e.dataTransfer.getData("text/plain"));
+                const obj = scene.getObjectById(objId);
+                if (!obj) return;
+                // Optionally, check that this object comes from a CSV-derived group (e.g. via a flag)
+                referenceSelection.push(obj);
+                console.log(referenceSelection)
+                updateDropzoneUI(refDropzone, referenceSelection);
+                checkAlignmentReady();
+            });
+
+            // Handle drop on Align zone.
+            alignDropzone.addEventListener("drop", (e) => {
+                e.preventDefault();
+                console.log(e)
+                if (alignSelection.length >= 2) return;
+                const objId = parseInt(e.dataTransfer.getData("text/plain"));
+                const obj = scene.getObjectById(objId);
+                if (!obj) return;
+                alignSelection.push(obj);
+                console.log(alignSelection)
+                updateDropzoneUI(alignDropzone, alignSelection);
+                checkAlignmentReady();
+            });
+
+            // Helper to update the dropzone display.
+            function updateDropzoneUI(zone, selectionArray) {
+            zone.innerHTML = "";
+            selectionArray.forEach(obj => {
+                const span = document.createElement("span");
+                span.textContent = obj.name;
+                span.className = "block text-center text-blue-700";
+                zone.appendChild(span);
+            });
+            if (selectionArray.length === 0) {
+                zone.textContent = "Drop 2 items here";
+            }
+            }
+
+            // Check if both zones have 2 items and show the Align button.
+            function checkAlignmentReady() {
+                if (referenceSelection.length === 2 && alignSelection.length === 2) {
+                    alignButton.classList.remove("hidden");
+                }
+            }
+
+            alignButton.addEventListener("click", () => {
+                alignGroups(referenceSelection, alignSelection);
+                // Clear selections and hide popup
+                referenceSelection = [];
+                alignSelection = [];
+                refDropzone.innerHTML = "Drop 2 items here";
+                alignDropzone.innerHTML = "Drop 2 items here";
+                alignButton.classList.add("hidden");
+                alignmentPopup.classList.add("hidden");
+            });
+
+                // Alignment function: splits the transformation between the two groups.
+                function alignGroups(refMarkers, alignMarkers) {
+                    // Assume the CSV-derived group is the parent of a marker.
+                    const groupA = refMarkers[0].parent;
+                    const groupB = alignMarkers[0].parent;
+                    
+                    // Helper to get an object's world position.
+                    const getPosition = (obj) => {
+                        const pos = new THREE.Vector3();
+                        obj.getWorldPosition(pos);
+                        return pos;
+                    };
+                    
+                    // Get the world positions of the two markers for each group.
+                    const p1 = getPosition(refMarkers[0]);
+                    const p2 = getPosition(refMarkers[1]);
+                    const q1 = getPosition(alignMarkers[0]);
+                    const q2 = getPosition(alignMarkers[1]);
+                    
+                    // Compute each group's anchor (midpoint of its two markers).
+                    const midA = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+                    const midB = new THREE.Vector3().addVectors(q1, q2).multiplyScalar(0.5);
+                    
+                    // Compute the global target anchor (average of the two midpoints).
+                    const midAvg = new THREE.Vector3().addVectors(midA, midB).multiplyScalar(0.5);
+                    
+                    // Compute rotation angles based on projection to the XZ plane.
+                    const getXZ = (vec) => new THREE.Vector2(vec.x, vec.z);
+                    const angleA = Math.atan2(
+                        getXZ(p2).y - getXZ(p1).y,
+                        getXZ(p2).x - getXZ(p1).x
+                    );
+                    const angleB = Math.atan2(
+                        getXZ(q2).y - getXZ(q1).y,
+                        getXZ(q2).x - getXZ(q1).x
+                    );
+                    const deltaAngle = angleB - angleA;
+                    
+                    // For each group, compute how much to translate so that its anchor becomes midAvg.
+                    const offsetA = new THREE.Vector3().subVectors(midAvg, midA);
+                    const offsetB = new THREE.Vector3().subVectors(midAvg, midB);
+                    
+                    // Apply the translation to each group.
+                    groupA.position.add(offsetA);
+                    groupB.position.add(offsetB);
+                    
+                    // Helper function to rotate a group about a given world point.
+                    function rotateGroupAboutPoint(group, point, angle) {
+                        group.position.sub(point);
+                        group.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                        group.position.add(point);
+                        group.rotation.y += angle;
+                    }
+                    
+                    // Rotate groupA about midAvg by half the deltaAngle.
+                    rotateGroupAboutPoint(groupA, midAvg, deltaAngle / 2);
+                    // Rotate groupB about midAvg by the negative half deltaAngle.
+                    rotateGroupAboutPoint(groupB, midAvg, -deltaAngle / 2);
+                    
+                    console.log("Aligned groups using marker anchors:", groupA.name, groupB.name);
+                }
+
+
+
+            document.getElementById("open-align-popup")?.addEventListener("click", () => {
+                alignmentPopup.classList.remove("hidden");
+            });
+
 
     document.getElementById("scale-slider").addEventListener("input", (e) => {
         scaleGroupRelativeToCenter(m_Group, e.target.value);
