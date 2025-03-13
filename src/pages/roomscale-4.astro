@@ -813,6 +813,7 @@ import ObjectList from "../components/object-list.tsx";
         event.preventDefault();
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
+        console.log(event.dataTransfer)
 
         handleFileChange(items, files);
     }
@@ -893,6 +894,40 @@ import ObjectList from "../components/object-list.tsx";
                     );
                 };
                 reader.readAsArrayBuffer(file);
+            } else if( file.name.toLowerCase().endsWith(".fbx") ){
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const thisArrayBuffer = event.target.result;
+                    console.log(thisArrayBuffer)
+                    const loader = new FBXLoader();
+                    const fbxData = new Uint8Array(thisArrayBuffer); // Convert the ArrayBuffer to Uint8Array
+                    const blob = new Blob([fbxData]); // Create a Blob from the Uint8Array
+                    const url = URL.createObjectURL(blob); // Create a URL for the Blob
+
+                    loader.load(
+                        url,
+                        (fbx) => {
+                            applyLitMaterialToGLTF(fbx); // Modify if this function is specific to GLTF
+                            fbx.name = file.name;
+                            fbx.scale.set(100, 100, 100);
+                            objects.push(fbx);
+                            simplifiedNamesId.push({
+                                uuid: fbx.uuid,
+                                simplifiedName: file.name.replace(/\D/g, ""),
+                            });
+                            scene.add(fbx);
+                            updateOutliner();
+
+                            // Clean up the URL object
+                            URL.revokeObjectURL(url);
+                        },
+                        undefined,
+                        (error) => {
+                            console.error("Error loading FBX:", error);
+                        }
+                    );
+                };
+                reader.readAsArrayBuffer(file);
             }
         } else if (files.length === 1) {
             console.log("files");
@@ -930,6 +965,7 @@ import ObjectList from "../components/object-list.tsx";
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const thisArrayBuffer = event.target.result;
+                    console.log(thisArrayBuffer)
                     const loader = new FBXLoader();
                     const fbxData = new Uint8Array(thisArrayBuffer); // Convert the ArrayBuffer to Uint8Array
                     const blob = new Blob([fbxData]); // Create a Blob from the Uint8Array
@@ -1909,8 +1945,6 @@ import ObjectList from "../components/object-list.tsx";
                     
                     console.log("Aligned groups using marker anchors:", groupA.name, groupB.name);
                 }
-
-
 
             document.getElementById("open-align-popup")?.addEventListener("click", () => {
                 alignmentPopup.classList.remove("hidden");

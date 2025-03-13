@@ -112,6 +112,7 @@ import "../styles.css";
 							stroke="currentColor"
 							strokeLinecap="round"
 							strokeLinejoin="round"
+							multiple
 						>
 							<path
 								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
@@ -176,9 +177,7 @@ import "../styles.css";
 						class="sub-item"
 						style="display: flex; flex-direction: column; margin-bottom: 10px;"
 					>
-						<p class="w-full text-xs m-0 p-0">
-							Edit Points:
-						</p>
+						<p class="w-full text-xs m-0 p-0">Edit Points:</p>
 						<div
 							class="grid grid-cols-2 button-gap gap-1 flex-start"
 							id="edit-options"
@@ -196,42 +195,46 @@ import "../styles.css";
 								Flip Y</button
 							>
 						</div>
-					<p class="w-full text-xs m-0 mt-2 p-0">
-						Edit Canvas:
-					</p>
-					<div
-						class="grid grid-cols-2 button-gap gap-1 flex-start"
-						id="canvas-edit-options"
-					>
-					
-						<button
-							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-							id="canvas-flip-x"
+						<p class="w-full text-xs m-0 mt-2 p-0">Edit Canvas:</p>
+						<div
+							class="grid grid-cols-2 button-gap gap-1 flex-start"
+							id="canvas-edit-options"
 						>
-							Canvas Flip X</button
-						>
-						<button
-							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-							id="canvas-flip-y"
-						>
-							Canvas Flip Y</button
-						>
-						<button id="reset-flip" class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden">Reset Flip</button>
-						<button
-						class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-						id="canvas-rotate-left"
-						>
-							Rotate Left</button
-						>
-						<button
-							class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-							id="canvas-rotate-right"
-						>
-							Rotate Right</button
-						>
-						<button id="reset-rotation" class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden">Reset Rotation</button>
-						
-					</div>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="canvas-flip-x"
+							>
+								Canvas Flip X</button
+							>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="canvas-flip-y"
+							>
+								Canvas Flip Y</button
+							>
+							<button
+								id="reset-flip"
+								class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden"
+								>Reset Flip</button
+							>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="canvas-rotate-left"
+							>
+								Rotate Left</button
+							>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="canvas-rotate-right"
+							>
+								Rotate Right</button
+							>
+							<button
+								id="reset-rotation"
+								class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden"
+								>Reset Rotation</button
+							>
+						</div>
 					</div>
 
 					<div
@@ -408,7 +411,11 @@ import "../styles.css";
 
 		<section class="container editor grid">
 			<div id="image-list-container" class="hidden flex-col">
-				<input type="text" placeholder="To Remove" id="text-replacement">
+				<input
+					type="text"
+					placeholder="To Remove"
+					id="text-replacement"
+				/>
 				<label
 					for="check-floorplans-button"
 					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
@@ -443,14 +450,18 @@ import "../styles.css";
 			>
 				<h3>Viewer</h3>
 			</div>
-			<div class="aspect-square max-h-[91vh] max-w-[91vh]" id="scalable-canvas">
+			<div
+				class="aspect-square max-h-[91vh] max-w-[91vh]"
+				id="scalable-canvas"
+			>
 				<div class="output" id="svg-container">
-					<p style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;">
+					<p
+						style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
+					>
 						Import SVG file
 					</p>
 				</div>
 			</div>
-
 
 			<div class="space-y-4" id="tag">
 				<h3 id="label">-</h3>
@@ -482,7 +493,7 @@ import "../styles.css";
 		var canvasRotate = 0;
 		var multiSelect = false;
 		var clusterId = [];
-		var canvasScale = 1
+		var canvasScale = 1;
 
 		var idFormat = format.none; //SVG ID format
 		var mouseDown = false;
@@ -502,6 +513,13 @@ import "../styles.css";
 		let globalFloorsAggregated = [];
 		let aggregatePoints = false;
 		let checkboxesId = [];
+
+		//Multiple SVGs
+		var importedSVGs = [];
+		var currentSVGIndex = 0;
+
+		//3d objectID
+		var object3dCount = 0;
 
 		var formattingButtons = document.querySelectorAll(".formatting");
 		formattingButtons.forEach((e) => {
@@ -575,14 +593,18 @@ import "../styles.css";
 		// Initialize variables for panning
 		let isPanning = false;
 		let startX, startY;
-		let translateX = 0, translateY = 0;
+		let translateX = 0,
+			translateY = 0;
 
 		// Handle zooming with the mouse wheel
 		scalableCanvas.addEventListener("wheel", (e) => {
 			e.preventDefault(); // Prevent default scrolling behavior
 
 			// Get the current scale value or default to 1
-			let scale = parseFloat(svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1]) || 1;
+			let scale =
+				parseFloat(
+					svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1],
+				) || 1;
 
 			// Adjust scale based on wheel delta
 			scale -= e.deltaY / 1000; // Scale up for scroll up, down for scroll down
@@ -590,17 +612,16 @@ import "../styles.css";
 			// Clamp the scale value
 			scale = Math.max(1, Math.min(scale, 10)); // Min scale: 0.1, Max scale: 10
 
-			canvasScale = scale
+			canvasScale = scale;
 
 			// Apply updated scale
-			if(scale > 1.2){
+			if (scale > 1.2) {
 				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
 			} else {
-				translateX = 0
-				translateY = 0
+				translateX = 0;
+				translateY = 0;
 				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
 			}
-			
 
 			console.log(`Updated scale: ${scale}`);
 		});
@@ -624,20 +645,41 @@ import "../styles.css";
 			const canvasRect = scalableCanvas.getBoundingClientRect();
 			const svgRect = svgContainer.getBoundingClientRect();
 
-			const scale = parseFloat(svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1]) || 1;
+			const scale =
+				parseFloat(
+					svgContainer.style.transform.match(/scale\(([^)]+)\)/)?.[1],
+				) || 1;
 
 			const boundary = {
-				minX: Math.min(0, canvasRect.width - svgRect.width * 0.5 * scale),
-				maxX: Math.max(0, -(canvasRect.width - svgRect.width * 0.5 * scale)),
-				minY: Math.min(0, canvasRect.height - svgRect.height * 0.5 * scale),
-				maxY: Math.max(0, -(canvasRect.height - svgRect.height * 0.5 * scale)),
+				minX: Math.min(
+					0,
+					canvasRect.width - svgRect.width * 0.5 * scale,
+				),
+				maxX: Math.max(
+					0,
+					-(canvasRect.width - svgRect.width * 0.5 * scale),
+				),
+				minY: Math.min(
+					0,
+					canvasRect.height - svgRect.height * 0.5 * scale,
+				),
+				maxY: Math.max(
+					0,
+					-(canvasRect.height - svgRect.height * 0.5 * scale),
+				),
 			};
 
 			// console.log(boundary)
 
 			// Apply boundaries
-			translateX = Math.max(boundary.minX, Math.min(boundary.maxX, newTranslateX));
-			translateY = Math.max(boundary.minY, Math.min(boundary.maxY, newTranslateY));
+			translateX = Math.max(
+				boundary.minX,
+				Math.min(boundary.maxX, newTranslateX),
+			);
+			translateY = Math.max(
+				boundary.minY,
+				Math.min(boundary.maxY, newTranslateY),
+			);
 
 			// Apply updated translation
 			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
@@ -939,7 +981,9 @@ import "../styles.css";
 
 		function calculateLabelOffset(svgElement) {
 			// const svgRect = svgElement.getBoundingClientRect(); // Get the on-screen size of the SVG
-			const svgRect = document.getElementById("scalable-canvas").getBoundingClientRect();
+			const svgRect = document
+				.getElementById("scalable-canvas")
+				.getBoundingClientRect();
 			const viewBox = svgElement.viewBox.baseVal; // Get the SVG's viewBox dimensions
 
 			const scaleX = viewBox.width / svgRect.width;
@@ -1043,7 +1087,7 @@ import "../styles.css";
 
 		//Move SVG with CX and CY
 		document.addEventListener("mousedown", (e) => {
-			spawnLabel()
+			spawnLabel();
 			if (mouseInContainer && tempSelected != null) {
 				if (e.button === 0) {
 					// Left mouse button
@@ -1133,7 +1177,7 @@ import "../styles.css";
 			});
 		});
 
-		document.addEventListener("mouseup", spawnLabel)
+		document.addEventListener("mouseup", spawnLabel);
 
 		function moveElement(element, deltaX, deltaY) {
 			if (
@@ -1168,7 +1212,7 @@ import "../styles.css";
 		}
 
 		document.addEventListener("mouseup", (e) => {
-			tempSelected = null
+			tempSelected = null;
 			mouseDown = false;
 			rightMouseDown = false;
 		});
@@ -1192,7 +1236,9 @@ import "../styles.css";
 
 			if (document.getElementById("item-id").value.length > 0) {
 				console.log(document.getElementById("item-id").value);
-				const values = document.getElementById("item-id").value.split(",");
+				const values = document
+					.getElementById("item-id")
+					.value.split(",");
 				values.map((e, i) => {
 					console.log(e);
 					const circle = document.createElementNS(
@@ -1247,7 +1293,7 @@ import "../styles.css";
 						}
 					}
 				});
-				labelToggle()
+				labelToggle();
 			} else {
 				alert("Please add a name for the point");
 			}
@@ -1357,52 +1403,274 @@ import "../styles.css";
 		async function fetchDataFromServer() {
 			try {
 				// Fetch the image data
-				const imageResponse = await fetch('http://localhost:9234/image');
-				if (!imageResponse.ok) throw new Error('Failed to fetch image');
+				const imageResponse = await fetch(
+					"http://localhost:9234/image",
+				);
+				if (!imageResponse.ok) throw new Error("Failed to fetch image");
 				const { image, imageName } = await imageResponse.json();
-				console.log({ image, imageName })
+				console.log({ image, imageName });
 
 				// Convert the image buffer to a Blob
-				const imageBlob = new Blob([new Uint8Array(image.data)], { type: 'image/webp' }); // Update type if necessary
-				const imageFile = new File([imageBlob], imageName, { type: 'image/webp' });
+				const imageBlob = new Blob([new Uint8Array(image.data)], {
+					type: "image/webp",
+				}); // Update type if necessary
+				const imageFile = new File([imageBlob], imageName, {
+					type: "image/webp",
+				});
 
 				// Pass the image File object to handleFileChange
 				handleFileChange(imageFile);
 			} catch (error) {
-				console.error('Error fetching image data from server:', error);
+				console.error("Error fetching image data from server:", error);
 			}
 
 			try {
 				// Fetch the CSV data
-				const csvResponse = await fetch('http://localhost:9234/csv');
-				if (!csvResponse.ok) throw new Error('Failed to fetch CSV');
+				const csvResponse = await fetch("http://localhost:9234/csv");
+				if (!csvResponse.ok) throw new Error("Failed to fetch CSV");
 				const { csv, csvName } = await csvResponse.json();
-				console.log({ csv, csvName })
+				console.log({ csv, csvName });
 
 				// Convert the CSV buffer to a Blob
-				const csvBlob = new Blob([new Uint8Array(csv.data)], { type: 'text/csv' });
-				const csvFile = new File([csvBlob], csvName, { type: 'text/csv' });
+				const csvBlob = new Blob([new Uint8Array(csv.data)], {
+					type: "text/csv",
+				});
+				const csvFile = new File([csvBlob], csvName, {
+					type: "text/csv",
+				});
 
 				// Pass the CSV File object to handleFileChange
 				handleFileChange(csvFile);
 			} catch (error) {
-				console.error('Error fetching CSV data from server:', error);
+				console.error("Error fetching CSV data from server:", error);
 			}
 		}
 
-		fetchDataFromServer()
+		fetchDataFromServer();
 
-		function handleFileChange(file) {
-			console.log(file)
+		function spawnSVGNavigation() {
+			// Check if navigation already exists and remove if needed
+			let navContainer = document.getElementById("svg-nav");
+			if (!navContainer) {
+				navContainer = document.createElement("div");
+				navContainer.id = "svg-nav";
+				// Style the container as desired (here we center the arrows)
+				navContainer.style.display = "flex";
+				navContainer.style.justifyContent = "center";
+				navContainer.style.marginTop = "1em";
+
+				// Create left arrow button
+				const leftArrow = document.createElement("button");
+				leftArrow.id = "svg-prev";
+				leftArrow.innerHTML = "&#8592;"; // left arrow symbol
+				leftArrow.style.marginRight = "1em";
+
+				// Create right arrow button
+				const rightArrow = document.createElement("button");
+				rightArrow.id = "svg-next";
+				rightArrow.innerHTML = "&#8594;"; // right arrow symbol
+
+				// Append the buttons to the nav container
+				navContainer.appendChild(leftArrow);
+				navContainer.appendChild(rightArrow);
+
+				// Append the nav container to the document, e.g. just below your svg-container
+				const svgContainer = document.getElementById("svg-container");
+				svgContainer.parentNode.insertBefore(
+					navContainer,
+					svgContainer.nextSibling,
+				);
+
+				// Add event listeners to change the current SVG
+				leftArrow.addEventListener("click", () => {
+					if (currentSVGIndex > 0) {
+						currentSVGIndex--;
+						processSVG(importedSVGs[currentSVGIndex].element);
+					}
+				});
+				rightArrow.addEventListener("click", () => {
+					if (currentSVGIndex < importedSVGs.length - 1) {
+						currentSVGIndex++;
+						processSVG(importedSVGs[currentSVGIndex].element);
+					}
+				});
+			}
+		}
+
+		const processSVG = (svgElement) => {
+			const list = svgElement.querySelectorAll(`[id]`);
+			svgElement.setAttribute("data-csv-editor", "svg");
+			document.getElementById("id-list").innerHTML = "";
+
+			const processIdList = (idFormat) => {
+				const regexLastUnderscore = /_(?=[^_]*$)/g;
+				const regexLastDash = /-(?=[^-]*$)/g;
+				const regexDashUnderscore = /\w+-\w+_\w+/;
+				const regexText = /^[^-]*/;
+				const regexGroupName = /^([A-Z]{2}\d{2}-\d{1,2})/;
+				const regexUnitNumber = /(\d{1,3})\D*$/;
+
+				const handleId = (currentId) => {
+					const listItem = document.createElement("li");
+
+					const regexResult =
+						idFormat === format.fullUnderscore
+							? currentId.replaceAll("-", "_")
+							: !regexDashUnderscore.test(currentId)
+								? currentId.replace(regexLastDash, "_")
+								: currentId;
+
+					const selected = svgElement.getElementById(`${currentId}`);
+					const groupMatched = selected.id.match(regexGroupName);
+					const unitMatched = selected.id.match(regexUnitNumber);
+
+					if (groupMatched) {
+						selected.setAttribute(
+							"group-attribute",
+							groupMatched[1],
+						);
+					}
+
+					if (unitMatched) {
+						selected.setAttribute("unit-attribute", unitMatched[1]);
+					}
+
+					selected.id = regexResult;
+					listItem.innerHTML = regexResult;
+					clusterId.push({
+						id: object3dCount,
+						clusterId: regexText.exec(regexResult)[0],
+						unitId: regexResult,
+					});
+
+					object3dCount++;
+					listItem.style.listStyle = "none";
+					listItem.style.padding = "0.5em 0em";
+					document.getElementById("id-list").append(listItem);
+				};
+
+				list.forEach((i) => {
+					const currentId = i.id;
+
+					if (idFormat === format.underscore) {
+						handleId(currentId);
+					} else if (idFormat === format.dash) {
+						handleId(
+							regexDashUnderscore.test(currentId)
+								? currentId.replace(regexLastUnderscore, "-")
+								: currentId,
+						);
+					} else if (
+						idFormat === format.none ||
+						idFormat === format.fullUnderscore
+					) {
+						handleId(currentId);
+					}
+				});
+			};
+
+			processIdList(idFormat);
+
+			// Append the SVG element to the div element
+			const svgContainer = document.getElementById("svg-container");
+			svgContainer.innerHTML = "";
+			svgElement.setAttributeNS(null, "width", "100%");
+			svgElement.setAttributeNS(null, "height", "100%");
+			svgContainer.appendChild(svgElement);
+
+			if (imageList.length > 0) {
+				previewBackplate(
+					previewBackplate(
+						document
+							.getElementById("svg-container")
+							.querySelector("svg"),
+					),
+				);
+			}
+
+			// Set type for export filename
+			type =
+				idFormat === format.underscore
+					? "underscore"
+					: idFormat === format.dash
+						? "dash"
+						: "";
+		};
+
+		function getBaseName(fileName) {
+			return fileName.replace(/\.[^/.]+$/, "").toLowerCase();
+		}
+
+		function handleDraggedImages(files) {
+			const imageFiles = Array.from(files).filter((file) =>
+				file.type.startsWith("image/"),
+			);
+			if (imageFiles.length === 0) return;
+
+			imageFiles.forEach((imageFile) => {
+				const reader = new FileReader();
+				reader.onload = (event) => {
+					const contents = event.target.result;
+					console.log("Image File")
+					console.log(imageFile.name)
+					const imageBaseName = getBaseName(imageFile.name);
+					console.log(getBaseName(imageFile.name))
+					console.log(importedSVGs)
+					// Loop through the imported SVG objects to find a matching name
+					importedSVGs.forEach((svgObj) => {
+						console.log("SVGOBJ")
+						console.log(svgObj)
+						const svgBaseName = getBaseName(svgObj.name);
+						if (svgBaseName === imageBaseName) {
+							console.log(svgBaseName)
+							console.log(imageBaseName)
+							const svgElement = svgObj.element;
+							// Create an <image> element for the SVG
+							const svgImage = document.createElementNS(
+								"http://www.w3.org/2000/svg",
+								"image",
+							);
+							const viewBox = svgElement
+								.getAttribute("viewBox")
+								.split(" ");
+							svgImage.setAttributeNS(null, "href", contents);
+							svgImage.setAttributeNS(null, "x", "0");
+							svgImage.setAttributeNS(null, "y", "0");
+							svgImage.setAttributeNS(null, "width", viewBox[2]);
+							svgImage.setAttributeNS(null, "height", viewBox[3]);
+							// Insert the image as the first child (or adjust position as needed)
+							svgElement.insertBefore(
+								svgImage,
+								svgElement.firstChild,
+							);
+						}
+					});
+				};
+				reader.readAsDataURL(imageFile);
+			});
+		}
+
+		function handleFileChange(files) {
+			console.log(files);
 			flipped = false;
-			var count = 0;
+			object3dCount = 0;
 			globalFloors = [];
 			globalFloorsAggregated = [];
 			canvasFlipX = false;
 			canvasFlipY = false;
 			canvasRotate = 0;
+			const file = files[0];
+			// importedSVGs = []; // Reset the array
+			let filesToProcess = Array.from(files).filter(
+				(file) => file.type === "image/svg+xml",
+			);
 
-			updateResetButtons()
+			// if (filesToProcess.length === 0) {
+			// 	alert("Please import valid SVG files.");
+			// 	return;
+			// }
+
+			updateResetButtons();
 
 			//Refresh show floors section
 			const floorSection = document.getElementById("show-floors");
@@ -1416,143 +1684,78 @@ import "../styles.css";
 			if (document.getElementById("showLabelsDiv")) {
 				document.getElementById("showLabelsDiv").remove();
 			}
-
-			const processSVG = (svgElement) => {
-				const list = svgElement.querySelectorAll(`[id]`);
-				svgElement.setAttribute("data-csv-editor", "svg");
-				document.getElementById("id-list").innerHTML = "";
-
-				const processIdList = (idFormat) => {
-					const regexLastUnderscore = /_(?=[^_]*$)/g;
-					const regexLastDash = /-(?=[^-]*$)/g;
-					const regexDashUnderscore = /\w+-\w+_\w+/;
-					const regexText = /^[^-]*/;
-					const regexGroupName = /^([A-Z]{2}\d{2}-\d{1,2})/;
-					const regexUnitNumber = /(\d{1,3})\D*$/;
-
-					const handleId = (currentId) => {
-						const listItem = document.createElement("li");
-
-						const regexResult =
-							idFormat === format.fullUnderscore
-								? currentId.replaceAll("-", "_")
-								: !regexDashUnderscore.test(currentId)
-									? currentId.replace(regexLastDash, "_")
-									: currentId;
-
-						const selected = svgElement.getElementById(
-							`${currentId}`,
+			console.log(files.length)
+			if(files.length > 1){
+				
+				if (file.type === "image/svg+xml") {
+				Array.from(files).forEach((fileToProcess, index) => {
+					const reader = new FileReader();
+					reader.onload = () => {
+						const svgString = reader.result;
+						const parser = new DOMParser();
+						const svgDoc = parser.parseFromString(
+							svgString,
+							"image/svg+xml",
 						);
-						const groupMatched = selected.id.match(regexGroupName);
-						const unitMatched = selected.id.match(regexUnitNumber);
+						// For each file, we assume the root element is the SVG element
+						const svgElement = svgDoc.documentElement;
+						importedSVGs.push({ name: getBaseName(fileToProcess.name), element: svgElement });
 
-						if (groupMatched) {
-							selected.setAttribute(
-								"group-attribute",
-								groupMatched[1],
-							);
+						// Once all files have been processed, show the first one and spawn navigation
+						if (importedSVGs.length === filesToProcess.length) {
+							currentSVGIndex = 0;
+							processSVG(importedSVGs[currentSVGIndex].element);
+							if (importedSVGs.length > 1) {
+								spawnSVGNavigation();
+							} else {
+								// Remove navigation if only one SVG is imported
+								const existingNav =
+									document.getElementById("svg-nav");
+								if (existingNav) existingNav.remove();
+							}
 						}
-
-						if (unitMatched) {
-							selected.setAttribute(
-								"unit-attribute",
-								unitMatched[1],
-							);
-						}
-
-						selected.id = regexResult;
-						listItem.innerHTML = regexResult;
-						clusterId.push({
-							id: count,
-							clusterId: regexText.exec(regexResult)[0],
-							unitId: regexResult,
-						});
-
-						count++;
-						listItem.style.listStyle = "none";
-						listItem.style.padding = "0.5em 0em";
-						document.getElementById("id-list").append(listItem);
 					};
-
-					list.forEach((i) => {
-						const currentId = i.id;
-
-						if (idFormat === format.underscore) {
-							handleId(currentId);
-						} else if (idFormat === format.dash) {
-							handleId(
-								regexDashUnderscore.test(currentId)
-									? currentId.replace(
-											regexLastUnderscore,
-											"-",
-										)
-									: currentId,
-							);
-						} else if (
-							idFormat === format.none ||
-							idFormat === format.fullUnderscore
-						) {
-							handleId(currentId);
-						}
-					});
-				};
-
-				processIdList(idFormat);
-
-				// Append the SVG element to the div element
-				const svgContainer = document.getElementById("svg-container");
-				svgContainer.innerHTML = "";
-				svgElement.setAttributeNS(null, "width", "100%");
-				svgElement.setAttributeNS(null, "height", "100%");
-				svgContainer.appendChild(svgElement);
-
-				if (imageList.length > 0) {
-					previewBackplate(
-						previewBackplate(
-							document
-								.getElementById("svg-container")
-								.querySelector("svg"),
-						),
-					);
-				}
-
-				// Set type for export filename
-				type =
-					idFormat === format.underscore
-						? "underscore"
-						: idFormat === format.dash
-							? "dash"
-							: "";
-			};
-
-			if (file.type === "image/svg+xml") {
-				const reader = new FileReader();
-				reader.addEventListener("load", () => {
-					const svgString = reader.result;
-					const parser = new DOMParser();
-					const svgDoc = parser.parseFromString(
-						svgString,
-						"image/svg+xml",
-					);
-					const svgElement = svgDoc.documentElement;
-					processSVG(svgElement);
-					if (
-						document
-							.getElementById("image-list-container")
-							.classList.contains("hidden")
-					) {
-						document
-							.getElementById("image-list-container")
-							.classList.remove("hidden");
-						document
-							.getElementById("image-list-container")
-							.classList.add("flex");
-						document
-							.getElementById("check-floorplans-button")
-							.addEventListener("change", uploadImages);
-					}
+					reader.readAsText(fileToProcess);
 				});
-				reader.readAsText(file);
+			} else if (
+				file.type === "image/jpeg" ||
+				file.type === "image/png" ||
+				file.type === "image/webp"
+			) {
+				handleDraggedImages(files)
+			} else if (file.type === "text/csv") {
+			}
+			} else {
+				if (file.type === "image/svg+xml") {
+				filesToProcess.forEach((fileToProcess, index) => {
+					const reader = new FileReader();
+					reader.onload = () => {
+						const svgString = reader.result;
+						const parser = new DOMParser();
+						const svgDoc = parser.parseFromString(
+							svgString,
+							"image/svg+xml",
+						);
+						// For each file, we assume the root element is the SVG element
+						const svgElement = svgDoc.documentElement;
+						importedSVGs.push({ name: getBaseName(file.name), element: svgElement });
+
+						// Once all files have been processed, show the first one and spawn navigation
+						if (importedSVGs.length === filesToProcess.length) {
+							currentSVGIndex = 0;
+							processSVG(importedSVGs[currentSVGIndex].element);
+							if (importedSVGs.length > 1) {
+								spawnSVGNavigation();
+							} else {
+								// Remove navigation if only one SVG is imported
+								const existingNav =
+									document.getElementById("svg-nav");
+								if (existingNav) existingNav.remove();
+							}
+						}
+					};
+					reader.readAsText(fileToProcess);
+				});
 			} else if (
 				file.type === "image/jpeg" ||
 				file.type === "image/png" ||
@@ -1837,17 +2040,20 @@ import "../styles.css";
 				};
 				reader.readAsText(file);
 
-				labelToggle()
+				labelToggle();
 
 				//Lord will spite me for this method
 				setTimeout((e) => {
-					spawnLabel()
-				}, 50)
+					spawnLabel();
+				}, 50);
 			}
+			}
+
+
 		}
 
 		function labelToggle() {
-			if(!document.getElementById("showLabelsDiv")){
+			if (!document.getElementById("showLabelsDiv")) {
 				//Add Toggle Label Checkbox
 				const showLabelsDiv = document.createElement("div");
 				showLabelsDiv.id = "showLabelsDiv";
@@ -1863,7 +2069,9 @@ import "../styles.css";
 
 				showLabelsDiv.appendChild(showLabelsToggle);
 				showLabelsDiv.appendChild(showLabelsLabel);
-				document.getElementById("editor-button-container").appendChild(showLabelsDiv);
+				document
+					.getElementById("editor-button-container")
+					.appendChild(showLabelsDiv);
 
 				showLabelsToggle.addEventListener("change", (e) => {
 					if (e.target.checked) {
@@ -1873,11 +2081,8 @@ import "../styles.css";
 					}
 				});
 
-				showLabelsToggle.checked = true
+				showLabelsToggle.checked = true;
 			}
-
-			
-
 		}
 
 		const imageList = [];
@@ -1943,8 +2148,6 @@ import "../styles.css";
 				removeEventListener("hover", e);
 			});
 
-
-
 			let previewerInstance = document.getElementById("image-previewer");
 			if (!previewerInstance) {
 				const newPreviewer = document.createElement("div");
@@ -1977,21 +2180,22 @@ import "../styles.css";
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
-					const textReplacement = document.getElementById("text-replacement").value
-					console.log(textReplacement)
+					const textReplacement =
+						document.getElementById("text-replacement").value;
+					console.log(textReplacement);
 					const selectedImage = imageList.filter((image) => {
-						console.log(e.target.id
-									.split("_")
-									.join("")
-									.split("-")
-									.join("")
-									.replace(textReplacement, ""))
-					console.log(image.name
-							.split("_")
-							.join("")
-							.split("-")
-							.join(""))	
-							return image.name
+						console.log(
+							e.target.id
+								.split("_")
+								.join("")
+								.split("-")
+								.join("")
+								.replace(textReplacement, ""),
+						);
+						console.log(
+							image.name.split("_").join("").split("-").join(""),
+						);
+						return image.name
 							.split("_")
 							.join("")
 							.split("-")
@@ -2003,11 +2207,9 @@ import "../styles.css";
 									.split("-")
 									.join("")
 									.replace(textReplacement, ""),
-							)
-					}
+							);
+					})[0];
 
-					)[0];
-								
 					if (selectedImage) {
 						// console.log(selectedImage)
 						document.getElementById("image-previewer-image").src =
@@ -2090,9 +2292,9 @@ import "../styles.css";
 
 		document.body.addEventListener("drop", (e) => {
 			e.preventDefault();
-			console.log(e)
+			console.log(e);
 			console.log(e.dataTransfer.files[0]);
-			handleFileChange(e.dataTransfer.files[0]);
+			handleFileChange(e.dataTransfer.files);
 			document
 				.querySelector(".drag-drop-prompt")
 				.classList.remove("appear");
@@ -2321,8 +2523,8 @@ import "../styles.css";
 
 			console.log(
 				`Rotated circles around midpoint (${bboxCenterX.toFixed(
-					4
-				)}, ${bboxCenterY.toFixed(4)}) by ${angle} degrees.`
+					4,
+				)}, ${bboxCenterY.toFixed(4)}) by ${angle} degrees.`,
 			);
 		}
 
@@ -2542,7 +2744,7 @@ import "../styles.css";
 				link.click();
 				document.body.removeChild(link);
 			} else {
-				alert("Import and SVG to start!");
+				alert("Import an SVG to start!");
 			}
 		}
 		//SVG Conversion
@@ -2785,7 +2987,7 @@ import "../styles.css";
 		}
 
 		//Flip Points only
-		function flipPointsX(){
+		function flipPointsX() {
 			flipped = !flipped;
 
 			var doc = null;
@@ -2818,10 +3020,10 @@ import "../styles.css";
 					// }
 				},
 			);
-			spawnLabel()
+			spawnLabel();
 		}
 
-		function flipPointsY(){
+		function flipPointsY() {
 			// var svg = document.querySelector("#svg-container").querySelector("svg");
 			// svg.style.scale = "-1 1"
 			flipped = !flipped;
@@ -2859,138 +3061,202 @@ import "../styles.css";
 			spawnLabel();
 		}
 
-
 		function transformImages() {
 			// Select the SVG element
-			var svgElement = document.querySelector("#svg-container").querySelector("svg");
+			var svgElement = document
+				.querySelector("#svg-container")
+				.querySelector("svg");
 			if (!svgElement) {
-				console.error(`SVG element not found for selector: ${svgElement}`);
+				console.error(
+					`SVG element not found for selector: ${svgElement}`,
+				);
 				return;
 			}
 
 			// Get all <image> elements within the SVG
-			const imageNodes = svgElement.querySelectorAll('image');
+			const imageNodes = svgElement.querySelectorAll("image");
 			if (imageNodes.length === 0) {
-				console.warn('No <image> nodes found in the SVG.');
+				console.warn("No <image> nodes found in the SVG.");
 				return;
 			}
 
 			// Iterate through each <image> node
 			console.log(imageNodes);
-			imageNodes.forEach(imageNode => {
+			imageNodes.forEach((imageNode) => {
 				// Get current attributes for width and x
-				const width = parseFloat(imageNode.getAttribute('width')) || 0;
-				const height = parseFloat(imageNode.getAttribute('height')) || 0;
-				const x = parseFloat(imageNode.getAttribute('x')) || 0;
-				const y = parseFloat(imageNode.getAttribute('y')) || 0;
+				const width = parseFloat(imageNode.getAttribute("width")) || 0;
+				const height =
+					parseFloat(imageNode.getAttribute("height")) || 0;
+				const x = parseFloat(imageNode.getAttribute("x")) || 0;
+				const y = parseFloat(imageNode.getAttribute("y")) || 0;
 
 				// Calculate the transformation
 				const translateX = canvasFlipX ? width : 0;
 				const translateY = canvasFlipY ? height : 0;
 				const scaleX = canvasFlipX ? -1 : 1;
 				const scaleY = canvasFlipY ? -1 : 1;
-				const rotate = canvasRotate % 360
+				const rotate = canvasRotate % 360;
 
-				const transformValue = `translate(${translateX}, ${translateY}) scale(${scaleX}, ${scaleY}) rotate(${rotate}, ${width/2}, ${height/2})`;
+				const transformValue = `translate(${translateX}, ${translateY}) scale(${scaleX}, ${scaleY}) rotate(${rotate}, ${width / 2}, ${height / 2})`;
 
 				// Apply the transformation
-				const existingTransform = imageNode.getAttribute('transform') || '';
-				imageNode.setAttribute('transform', `${transformValue}`.trim());
+				const existingTransform =
+					imageNode.getAttribute("transform") || "";
+				imageNode.setAttribute("transform", `${transformValue}`.trim());
 
-				console.log(`Flipped <image> node with x: ${x}, width: ${width}, y: ${y}, height: ${height}`);
+				console.log(
+					`Flipped <image> node with x: ${x}, width: ${width}, y: ${y}, height: ${height}`,
+				);
 			});
 		}
 
-		document.getElementById("flip-x").addEventListener("click", flipPointsX);
-		document.getElementById("flip-y").addEventListener("click", flipPointsY);
-		document.getElementById("canvas-flip-x").addEventListener("click", () => {
-			canvasFlipX = !canvasFlipX
-			console.log(canvasFlipX)
-			transformImages()
-			flipPointsX()
-			updateResetButtons()
-		});
-		document.getElementById("canvas-flip-y").addEventListener("click", () => {
-			canvasFlipY = !canvasFlipY
-			console.log(canvasFlipY)
-			transformImages()
-			flipPointsY()
-			updateResetButtons()
-		});
+		document
+			.getElementById("flip-x")
+			.addEventListener("click", flipPointsX);
+		document
+			.getElementById("flip-y")
+			.addEventListener("click", flipPointsY);
+		document
+			.getElementById("canvas-flip-x")
+			.addEventListener("click", () => {
+				canvasFlipX = !canvasFlipX;
+				console.log(canvasFlipX);
+				transformImages();
+				flipPointsX();
+				updateResetButtons();
+			});
+		document
+			.getElementById("canvas-flip-y")
+			.addEventListener("click", () => {
+				canvasFlipY = !canvasFlipY;
+				console.log(canvasFlipY);
+				transformImages();
+				flipPointsY();
+				updateResetButtons();
+			});
 
-		document.getElementById("canvas-rotate-left").addEventListener("click", () => {
-			canvasRotate -= 90
-			transformImages()
-			const svgElement = document.querySelector("#svg-container").querySelector("svg");
-			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
-			rotateCircles(-90, midpoint)
-			spawnLabel()
-			updateResetButtons()
-			// flipPointsX()
-		});
-		document.getElementById("canvas-rotate-right").addEventListener("click", () => {
-			canvasRotate += 90
-			transformImages()
-			const svgElement = document.querySelector("#svg-container").querySelector("svg");
-			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
-			rotateCircles(90, midpoint)
-			spawnLabel()
-			updateResetButtons()
-			// flipPointsY()
-		});
+		document
+			.getElementById("canvas-rotate-left")
+			.addEventListener("click", () => {
+				canvasRotate -= 90;
+				transformImages();
+				const svgElement = document
+					.querySelector("#svg-container")
+					.querySelector("svg");
+				const midpoint = {
+					x: svgElement.viewBox.baseVal.width / 2,
+					y: svgElement.viewBox.baseVal.height / 2,
+				};
+				rotateCircles(-90, midpoint);
+				spawnLabel();
+				updateResetButtons();
+				// flipPointsX()
+			});
+		document
+			.getElementById("canvas-rotate-right")
+			.addEventListener("click", () => {
+				canvasRotate += 90;
+				transformImages();
+				const svgElement = document
+					.querySelector("#svg-container")
+					.querySelector("svg");
+				const midpoint = {
+					x: svgElement.viewBox.baseVal.width / 2,
+					y: svgElement.viewBox.baseVal.height / 2,
+				};
+				rotateCircles(90, midpoint);
+				spawnLabel();
+				updateResetButtons();
+				// flipPointsY()
+			});
 
-		document.getElementById("reset-rotation").addEventListener("click", (e) => {
-			const tempCanvasRotation = canvasRotate
-			canvasRotate = 0
-			transformImages()
+		document
+			.getElementById("reset-rotation")
+			.addEventListener("click", (e) => {
+				const tempCanvasRotation = canvasRotate;
+				canvasRotate = 0;
+				transformImages();
 
-			const svgElement = document.querySelector("#svg-container").querySelector("svg");
-			const midpoint = {x: svgElement.viewBox.baseVal.width / 2, y: svgElement.viewBox.baseVal.height / 2}
+				const svgElement = document
+					.querySelector("#svg-container")
+					.querySelector("svg");
+				const midpoint = {
+					x: svgElement.viewBox.baseVal.width / 2,
+					y: svgElement.viewBox.baseVal.height / 2,
+				};
 
-			rotateCircles(-tempCanvasRotation, midpoint)
-			spawnLabel()
-			updateResetButtons()
-		})
+				rotateCircles(-tempCanvasRotation, midpoint);
+				spawnLabel();
+				updateResetButtons();
+			});
 
 		document.getElementById("reset-flip").addEventListener("click", (e) => {
-
-			transformImages()
-			if(canvasFlipX){
-				flipPointsX()
-				canvasFlipX = false
-				
+			transformImages();
+			if (canvasFlipX) {
+				flipPointsX();
+				canvasFlipX = false;
 			}
 
-			if(canvasFlipY){
-				flipPointsY()
-				canvasFlipY = false
+			if (canvasFlipY) {
+				flipPointsY();
+				canvasFlipY = false;
 			}
-			
-			updateResetButtons()
-		})
 
-		function updateResetButtons(){
-			if(canvasRotate != 0){
-				if(document.getElementById("reset-rotation").classList.contains("hidden")){
-					document.getElementById("reset-rotation").classList.remove("hidden")
-					document.getElementById("reset-rotation").classList.add("flex")
+			updateResetButtons();
+		});
+
+		function updateResetButtons() {
+			if (canvasRotate != 0) {
+				if (
+					document
+						.getElementById("reset-rotation")
+						.classList.contains("hidden")
+				) {
+					document
+						.getElementById("reset-rotation")
+						.classList.remove("hidden");
+					document
+						.getElementById("reset-rotation")
+						.classList.add("flex");
 				}
 			} else {
-				if(document.getElementById("reset-rotation").classList.contains("flex")){
-					document.getElementById("reset-rotation").classList.remove("flex")
-					document.getElementById("reset-rotation").classList.add("hidden")
+				if (
+					document
+						.getElementById("reset-rotation")
+						.classList.contains("flex")
+				) {
+					document
+						.getElementById("reset-rotation")
+						.classList.remove("flex");
+					document
+						.getElementById("reset-rotation")
+						.classList.add("hidden");
 				}
 			}
 
-			if(canvasFlipX || canvasFlipY){
-				if(document.getElementById("reset-flip").classList.contains("hidden")){
-					document.getElementById("reset-flip").classList.remove("hidden")
-					document.getElementById("reset-flip").classList.add("flex")
+			if (canvasFlipX || canvasFlipY) {
+				if (
+					document
+						.getElementById("reset-flip")
+						.classList.contains("hidden")
+				) {
+					document
+						.getElementById("reset-flip")
+						.classList.remove("hidden");
+					document.getElementById("reset-flip").classList.add("flex");
 				}
-			} else if (!canvasFlipX && !canvasFlipY){
-				if(document.getElementById("reset-flip").classList.contains("flex")){
-					document.getElementById("reset-flip").classList.remove("flex")
-					document.getElementById("reset-flip").classList.add("hidden")
+			} else if (!canvasFlipX && !canvasFlipY) {
+				if (
+					document
+						.getElementById("reset-flip")
+						.classList.contains("flex")
+				) {
+					document
+						.getElementById("reset-flip")
+						.classList.remove("flex");
+					document
+						.getElementById("reset-flip")
+						.classList.add("hidden");
 				}
 			}
 		}
@@ -3037,7 +3303,12 @@ import "../styles.css";
 					labelDiv.style.top = `-${2048 - 4096 / scaleY / 2}px`;
 					labelDiv.style.pointerEvents = "none";
 
-					const createParagraph = (className, text, display, color = "white") => {
+					const createParagraph = (
+						className,
+						text,
+						display,
+						color = "white",
+					) => {
 						const p = document.createElement("p");
 						Object.assign(p.style, {
 							color: color,
@@ -3112,14 +3383,18 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
-							
 						});
 
 						const idText = e.id
 							.replace(/([A-Z0-9])/g, " $1")
 							.trim();
 						div.appendChild(
-							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+							createParagraph(
+								"text-normal",
+								idText,
+								"block",
+								"rgba(0,0,0,0)",
+							),
 						);
 						return div;
 					};
@@ -3147,14 +3422,19 @@ import "../styles.css";
 							.replace(/([A-Z0-9])/g, " $1")
 							.trim();
 						div.appendChild(
-							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+							createParagraph(
+								"text-normal",
+								idText,
+								"block",
+								"rgba(0,0,0,0)",
+							),
 						);
 
 						// Append to document for measurement
 						document.body.appendChild(div);
 						const { width, height } = div.getBoundingClientRect();
 						document.body.removeChild(div); // Remove after measuring
-						div.querySelectorAll("p").forEach((e) => e.remove())
+						div.querySelectorAll("p").forEach((e) => e.remove());
 
 						// // Calculate the adjusted offsets based on rotation
 						// const adjustedLeft = cx - height; // Use height for horizontal adjustment
@@ -3165,7 +3445,7 @@ import "../styles.css";
 							position: "absolute",
 							color: "rgba(0, 0, 0, 255)",
 							left: `${cx}px`,
-							top: `${cy - (width / 2)}px`,
+							top: `${cy - width / 2}px`,
 							width: `${height}px`,
 							height: `${width}px`,
 							// transform: `rotate(90deg)`, // Rotate around the center
@@ -3207,14 +3487,19 @@ import "../styles.css";
 							.replace(/([A-Z0-9])/g, " $1")
 							.trim();
 						div.appendChild(
-							createParagraph("text-normal", idText, "block", "rgba(0,0,0,0)"),
+							createParagraph(
+								"text-normal",
+								idText,
+								"block",
+								"rgba(0,0,0,0)",
+							),
 						);
 
 						// Append to document for measurement
 						document.body.appendChild(div);
 						const { width, height } = div.getBoundingClientRect();
 						document.body.removeChild(div); // Remove after measuring
-						div.querySelectorAll("p").forEach((e) => e.remove())
+						div.querySelectorAll("p").forEach((e) => e.remove());
 
 						// // Calculate the adjusted offsets based on rotation
 						// const adjustedLeft = cx - height; // Use height for horizontal adjustment
@@ -3224,8 +3509,8 @@ import "../styles.css";
 						Object.assign(div.style, {
 							position: "absolute",
 							color: "rgba(0, 0, 0, 255)",
-							left: `${cx - (height)}px`,
-							top: `${cy - (width / 2)}px`,
+							left: `${cx - height}px`,
+							top: `${cy - width / 2}px`,
 							width: `${height}px`,
 							height: `${width}px`,
 							// transform: `rotate(90deg)`, // Rotate around the center
@@ -3256,19 +3541,18 @@ import "../styles.css";
 
 					circles.forEach((e) => {
 						const div = createDiv(e);
-						const previewDiv1 = createPreviewDiv1(e)
-						const previewDiv2 = createPreviewDiv2(e)
-						const previewDiv3 = createPreviewDiv3(e)
+						const previewDiv1 = createPreviewDiv1(e);
+						const previewDiv2 = createPreviewDiv2(e);
+						const previewDiv3 = createPreviewDiv3(e);
 						labelDiv.appendChild(div);
 						labelDiv.appendChild(previewDiv1);
 						labelDiv.appendChild(previewDiv2);
 						labelDiv.appendChild(previewDiv3);
 						svgContainer.prepend(labelDiv);
 					});
-
 				}
 			} else {
-				console.log("No labels toggle found")
+				console.log("No labels toggle found");
 			}
 		}
 
