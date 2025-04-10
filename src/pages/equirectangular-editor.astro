@@ -275,6 +275,10 @@
             <input type="number" id="longitude-input" value="0.0" step="0.1" min="-180" max="180">
             <span>°</span>
           </div>
+          <div>
+            <p id="longitude-offset-display"></p>
+            <span>px</span>
+          </div>
         </div>
         
         <div class="rotation-slider">
@@ -288,6 +292,10 @@
             <input type="number" id="latitude-input" value="0.0" step="0.1" min="-90" max="90">
             <span>°</span>
           </div>
+          <div>
+            <p id="latitude-offset-display"></p>
+            <span>px</span>
+          </div>
         </div>
         
         <div class="buttons">
@@ -298,16 +306,21 @@
     </div>
     
     <script>
+import { imageConfig } from "astro:assets";
+
       // Global variables
       let referenceImage = null;
       let editImage = null;
       let longitudeRotation = 0; // degrees
       let latitudeRotation = 0;  // degrees
+      let longitudeOffset = 0; // degrees
+      let latitudeOffset = 0;  // degrees
       let isDragging = false;
       let lastMouseX = 0;
       let lastMouseY = 0;
       let lockLongitude = false;
       let lockLatitude = true; // Locked by default
+      let imageSize = {width: 0, height: 0}
       
       // DOM Elements
       const referenceCanvas = document.getElementById('reference-canvas');
@@ -321,7 +334,9 @@
       const lockLatitudeCheckbox = document.getElementById('lock-latitude');
       const longitudeInput = document.getElementById('longitude-input');
       const latitudeInput = document.getElementById('latitude-input');
-      
+      const longitudeOffsetDisplay = document.getElementById('longitude-offset-display');
+      const latitudeOffsetDisplay = document.getElementById('latitude-offset-display');
+
       // Set up drop areas
       setupDropArea('reference-drop', loadReferenceImage);
       setupDropArea('edit-drop', loadEditImage);
@@ -355,6 +370,7 @@
       });
       longitudeInput.addEventListener('change', function() {
         longitudeRotation = parseFloat(this.value);
+        longitudeOffset = longitudeRotation * imageSize.width / 360
         updateRotationDisplay();
         if (editImage) {
           drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
@@ -362,6 +378,7 @@
       });
       latitudeInput.addEventListener('change', function() {
         latitudeRotation = parseFloat(this.value);
+        latitudeOffset = latitudeRotation * imageSize.width / 360
         updateRotationDisplay();
         if (editImage) {
           drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
@@ -425,6 +442,8 @@
               callback(img);
             };
             img.src = e.target.result;
+            imageSize.width = img.width
+            imageSize.height = img.height
           };
           
           reader.readAsDataURL(file);
@@ -518,6 +537,7 @@
           // Convert pixels to degrees based on image width
           longitudeRotation -= deltaX * 0.5; // Adjust sensitivity
           // Keep longitude in range -180 to 180
+          longitudeOffset = longitudeRotation * imageSize.width / 360
           longitudeRotation = ((longitudeRotation + 180) % 360) - 180;
         }
         
@@ -525,6 +545,7 @@
           // Convert pixels to degrees based on image height
           latitudeRotation += deltaY * 0.25; // Adjust sensitivity
           // Limit latitude to -90 to 90
+          latitudeOffset = latitudeRotation * imageSize.width / 360
           latitudeRotation = Math.max(-90, Math.min(90, latitudeRotation));
         }
         
@@ -577,6 +598,8 @@
         // Update the input fields
         longitudeInput.value = longitudeRotation.toFixed(1);
         latitudeInput.value = latitudeRotation.toFixed(1);
+        longitudeOffsetDisplay.innerHTML = longitudeOffset.toFixed(1);
+        latitudeOffsetDisplay.innerHTML = latitudeOffset.toFixed(1);
         
         // Update the rotation ticks position for longitude
         const ticksOffset = ((longitudeRotation + 180) / 360) * 100;
