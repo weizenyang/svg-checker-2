@@ -1,0 +1,35 @@
+102 ( apt D)
+203 (Apt B)
+301 (Apt F)
+304 (Apt F FLIPPED)
+305 (Apt C)
+306  (Apt D)
+307 (Apt E)
+701 (Apt F)
+702 (Apt A)
+706 (Apt D)
+707 (Apt E)
+709 (Apt C FLIPPED)
+1103 (Apt B)
+1104  (Apt F FLIPPED)
+1105  (Apt C)
+1107 (Apt E)
+1108 (Apt D FLIPPED)
+-801 F
+· 802 A
+· 803 B
+· 804 F FLIPPED
+· 805 C
+· 806 D
+· 807 E
+· 808 D Flipped
+· 809 C FLIPPED
+· 1001 F
+· 1002 A
+· 1003 B
+· 1004 F FLIPPED
+· 1005 C
+· 1006 D
+· 1007 E
+· 1008 D FLIPPED
+· 1009 C FLIPPED

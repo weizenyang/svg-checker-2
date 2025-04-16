@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <button id="playTone">Play Tone</button>
+  <script>
+    document.getElementById('playTone').addEventListener('click', () => {
+      const audioCtx = new AudioContext();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = 2.0; // Increase gain for testing
+      osc.frequency.value = 440; // A4 note
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        osc.disconnect();
+        gainNode.disconnect();
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

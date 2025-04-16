@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Three.js Reflective GLB with Controls & Toggles</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+    }
+    #ui input, #ui button { margin: 2px; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div>
+    <label>Camera Position (x, y, z): </label>
+    <input id="posX" type="number" value="0" step="0.1">
+    <input id="posY" type="number" value="1" step="0.1">
+    <input id="posZ" type="number" value="5" step="0.1">
+  </div>
+  <div>
+    <label>Camera Rotation (x, y, z in deg): </label>
+    <input id="rotX" type="number" value="0" step="1">
+    <input id="rotY" type="number" value="0" step="1">
+    <input id="rotZ" type="number" value="0" step="1">
+  </div>
+  <div>
+    <label>Sphere Radius: </label>
+    <input id="sphereRadius" type="number" value="1" step="0.1">
+    <button id="updateSphereRadius">Update Sphere Radius</button>
+  </div>
+  <div>
+    <button id="updateCamera">Update Camera</button>
+  </div>
+  <div style="margin-top:10px;">
+    <strong>Instructions:</strong>
+    <ul style="margin:5px 0 0 20px; padding:0;">
+      <li>Drag & drop a <b>.glb</b> model (its materials become reflective)</li>
+      <li>Drag & drop an <b>equirectangular image</b> to create an environment sphere</li>
+      <li>Press <b>P</b> to toggle the environment sphere</li>
+      <li>Click the canvas to lock the pointer for mouse-look control</li>
+      <li>Use <b>W, A, S, D</b> keys to move</li>
+      <li>Press <b>L</b> to toggle the global ambient light</li>
+      <li>Press <b>X</b> to toggle the world-axis helper</li>
+      <li>Press <b>F</b> to toggle red wireframe mode on the model</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  // Import modules from your local paths
+  import * as THREE from "../scripts/three";
+  import { OrbitControls } from "../scripts/three/examples/jsm/controls/OrbitControls.js";
+  import { PointerLockControls } from "../scripts/three/examples/jsm/controls/PointerLockControls.js";
+  import { GLTFLoader } from "../scripts/three/examples/jsm/loaders/GLTFLoader.js";
+  import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader.js";
+  import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
+  import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
+
+  let scene, camera, renderer;
+  let model;           // Loaded GLTF model
+  let cubeCamera;      // For dynamic reflection mapping
+  let sphere;          // Environment sphere from an equirectangular image
+  let globalLight;     // Global ambient light
+  let axesHelper;      // World axes helper
+  let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+  const speed = 0.1;   // Movement speed
+  let controls;        // PointerLockControls instance
+
+  init();
+  animate();
+
+  function init() {
+    // Create scene and camera (clipping extended to 10000)
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+    camera.position.set(0, 1, 5);
+
+    // Set up renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Create a cube render target for dynamic reflections
+    const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(256, {
+      format: THREE.RGBAFormat,
+      generateMipmaps: true,
+      minFilter: THREE.LinearMipmapLinearFilter
+    });
+    // Increase cubeCamera far clipping to match the main camera
+    cubeCamera = new THREE.CubeCamera(0.1, 10000, cubeRenderTarget);
+    scene.add(cubeCamera);
+
+    // Global ambient light for overall illumination
+    globalLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(globalLight);
+
+    // Also keep the hemisphere light for additional lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+    hemiLight.position.set(0, 200, 0);
+    scene.add(hemiLight);
+
+    // Add an axes helper to the scene (initially visible)
+    axesHelper = new THREE.AxesHelper(5);
+    scene.add(axesHelper);
+
+    // Set up PointerLockControls for mouse-based camera movement (click to enable)
+    controls = new PointerLockControls(camera, renderer.domElement);
+    // Add the controls' object to the scene so its position is managed by the controls
+    scene.add(controls.getObject());
+    document.addEventListener('click', () => {
+      controls.lock();
+    });
+
+    // Listen for window resize events
+    window.addEventListener('resize', onWindowResize, false);
+
+    // Enable drag and drop for files
+    window.addEventListener('dragover', e => { e.preventDefault(); }, false);
+    window.addEventListener('drop', onFileDrop, false);
+
+    // Listen for key events (WASD and toggle keys)
+    window.addEventListener('keydown', onKeyDown, false);
+    window.addEventListener('keyup', onKeyUp, false);
+
+    // UI controls for camera and sphere radius updates
+    document.getElementById('updateCamera').addEventListener('click', updateCameraPosition);
+    document.getElementById('updateSphereRadius').addEventListener('click', updateSphereRadius);
+  }
+
+  // Adjust renderer and camera on window resize
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // Update camera's position and rotation from UI
+  function updateCameraPosition() {
+    const posX = parseFloat(document.getElementById('posX').value);
+    const posY = parseFloat(document.getElementById('posY').value);
+    const posZ = parseFloat(document.getElementById('posZ').value);
+    camera.position.set(posX, posY, posZ);
+    // Also update the pointer lock controls object's position
+    controls.getObject().position.copy(camera.position);
+
+    const rotX = THREE.Math.degToRad(parseFloat(document.getElementById('rotX').value));
+    const rotY = THREE.Math.degToRad(parseFloat(document.getElementById('rotY').value));
+    const rotZ = THREE.Math.degToRad(parseFloat(document.getElementById('rotZ').value));
+    camera.rotation.set(rotX, rotY, rotZ);
+  }
+
+  // Update sphere radius (for the environment sphere) via UI input
+  function updateSphereRadius() {
+    const r = parseFloat(document.getElementById('sphereRadius').value);
+    if (sphere) {
+      sphere.geometry.dispose();
+      sphere.geometry = new THREE.SphereGeometry(r, 32, 32);
+    }
+  }
+
+  // Listen for key presses and toggle functionalities
+  function onKeyDown(e) {
+    switch (e.code) {
+      case "KeyW": moveForward = true; break;
+      case "KeyA": moveLeft = true; break;
+      case "KeyS": moveBackward = true; break;
+      case "KeyD": moveRight = true; break;
+      case "KeyP": // Toggle environment sphere
+        if (sphere) sphere.visible = !sphere.visible;
+        break;
+      case "KeyL": // Toggle global ambient light
+        globalLight.visible = !globalLight.visible;
+        break;
+      case "KeyX": // Toggle world axes helper
+        axesHelper.visible = !axesHelper.visible;
+        break;
+      case "KeyF": // Toggle wireframe mode on the loaded model, setting wireframe to red when enabled.
+        if (model) {
+          model.traverse(child => {
+            if (child.isMesh && child.material) {
+              if (child.material.wireframe === true) {
+                child.material.wireframe = false;
+                child.material.color.set(0xffffff);  // reset to white
+              } else {
+                child.material.wireframe = true;
+                child.material.color.set(0xff0000);  // set wireframe color to red
+              }
+            }
+          });
+        }
+        break;
+    }
+  }
+
+  function onKeyUp(e) {
+    switch (e.code) {
+      case "KeyW": moveForward = false; break;
+      case "KeyA": moveLeft = false; break;
+      case "KeyS": moveBackward = false; break;
+      case "KeyD": moveRight = false; break;
+    }
+  }
+
+  // Handle file drop events (for GLB and equirectangular image files)
+  function onFileDrop(event) {
+    event.preventDefault();
+    const dt = event.dataTransfer;
+    if (dt.items) {
+      for (let i = 0; i < dt.items.length; i++) {
+        const item = dt.items[i];
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          const filename = file.name.toLowerCase();
+          if (filename.endsWith('.glb')) {
+            // GLTFLoader with DRACOLoader support
+            const gltfLoader = new GLTFLoader();
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath("/draco/decoder/");
+            gltfLoader.setDRACOLoader(dracoLoader);
+            const url = URL.createObjectURL(file);
+            gltfLoader.load(url, gltf => {
+              // Remove any existing model
+              if (model) scene.remove(model);
+              model = gltf.scene;
+              // Replace each mesh's material with a reflective material
+              model.traverse(child => {
+                if (child.isMesh) {
+                  child.material = new THREE.MeshStandardMaterial({
+                    metalness: 1,
+                    roughness: 0,
+                    envMap: cubeCamera.renderTarget.texture
+                  });
+                  child.material.needsUpdate = true;
+                }
+              });
+              scene.add(model);
+              URL.revokeObjectURL(url);
+            }, undefined, error => {
+              console.error("Error loading GLTF model:", error);
+            });
+          } else if (file.type.startsWith("image/")) {
+            // Process equirectangular image for the environment sphere
+            const reader = new FileReader();
+            reader.onload = e => {
+              const imgURL = e.target.result;
+              const textureLoader = new THREE.TextureLoader();
+              textureLoader.load(imgURL, texture => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                if (sphere) scene.remove(sphere);
+                const radius = parseFloat(document.getElementById('sphereRadius').value) || 1;
+                const geometry = new THREE.SphereGeometry(radius, 32, 32);
+                const material = new THREE.MeshBasicMaterial({
+                  map: texture,
+                  side: THREE.BackSide
+                });
+                sphere = new THREE.Mesh(geometry, material);
+                sphere.name = "envSphere";
+                // Position the sphere at the camera so that it surrounds the viewer
+                sphere.position.copy(controls.getObject().position);
+                scene.add(sphere);
+              });
+            }
+            reader.readAsDataURL(file);
+          }
+        }
+      }
+    }
+  }
+
+  // Main animation/render loop
+  function animate() {
+    requestAnimationFrame(animate);
+
+    // WASD movement using the pointer lock controls object
+    if (moveForward) controls.getObject().translateZ(-speed);
+    if (moveBackward) controls.getObject().translateZ(speed);
+    if (moveLeft) controls.getObject().translateX(-speed);
+    if (moveRight) controls.getObject().translateX(speed);
+
+    // Keep the environment sphere centered on the camera
+    if (sphere) {
+      sphere.position.copy(controls.getObject().position);
+    }
+
+    // Update cube camera for reflective surfaces
+    if (model) {
+      model.visible = false; // Hide the model while capturing reflection
+      cubeCamera.position.copy(model.position);
+      cubeCamera.update(renderer, scene);
+      model.visible = true;
+    }
+
+    renderer.render(scene, camera);
+  }
+</script>
+</body>
+</html>
