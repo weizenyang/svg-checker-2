@@ -22,3 +22,7 @@ pnpm-debug.log*
 
 # specific files
 src/scripts/merge.js
+macbook
+macbook-key.pub
+macbook-key
+macbook.pub
