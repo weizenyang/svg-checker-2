@@ -15,6 +15,7 @@ import ObjectList from "../components/object-list.tsx";
             class="ui-area transition-all bg-zinc-100 p-1 rounded-sm text-xs"
             id="ui-area"
         >
+        <div class="flex">
             <a
                 href="/"
                 class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg"
@@ -35,8 +36,16 @@ import ObjectList from "../components/object-list.tsx";
                         ></path>
                     </svg>
                 </div>
-                <p class="ml-2">Home</p>
+                <p class="ml-2 text-center">Home</p>
             </a>
+            <button
+                id="clear-all-data"
+                class="flex transition-all duration-75 drop-shadow-sm bg-red-600 text-white p-2 ml-2 mb-3 rounded-md hover:drop-shadow-xl hover:bg-red-500 hover:text-white"
+                >
+                Clear All Data
+            </button>
+        </div>
+
             <hr class="border-b border-zinc-200 mb-3" />
             <button
                 class="bg-zinc-300 text-lime-600 font-mono p-0.5 rounded-md w-full drop-shadow-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -184,7 +193,7 @@ import ObjectList from "../components/object-list.tsx";
           </div>
             
             <div class="flex flex-col pointer-events-auto">
-                <div class="right-0 max-w-2xl h-60 bg-neutral-100 text-xs" id="gizmo">
+                <div class="right-0 max-w-2xl h-50 bg-neutral-100 text-xs" id="gizmo">
                     <button
                         id="camera-top"
                         class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -292,6 +301,43 @@ import ObjectList from "../components/object-list.tsx";
     window.addEventListener('mousemove', resizePanel);
     window.addEventListener('mouseup', stopResize);
   });
+
+  function clearAllData() {
+  // 1) Remove all dynamic scene children except axes & lights
+  scene.children.slice().forEach(child => {
+    const t = child.type;
+    if (t !== 'AxesHelper' && t !== 'AmbientLight' && t !== 'DirectionalLight') {
+      scene.remove(child);
+    }
+  });
+
+  // 2) Reset your tracking arrays
+  objects.length = 0;
+  markers.length = 0;
+  VRSpheres.length = 0;
+  imageArray.length = 0;
+  VRRef.length = 0;
+  simplifiedNamesId.length = 0;
+  csvGroups.length = 0;
+  fbxFiles.length = 0;
+  glbFiles.length = 0;
+  globalFloors.length = 0;
+
+  // 3) Clear HTML overlays
+  document.getElementById('marker-label-container').innerHTML = '';
+  document.getElementById('outliner').innerHTML = '';
+  document.getElementById('alignment-popup').classList.add('hidden');
+
+  console.log('Scene and data cleared.');
+}
+
+// Re-wire your button
+document.getElementById('clear-all-data')
+  .addEventListener('click', clearAllData);
+
+
+// Wire up the button
+document.getElementById('clear-all-data').addEventListener('click', clearAllData);
 
   function resizePanel(e) {
     if (!isResizing) return;
