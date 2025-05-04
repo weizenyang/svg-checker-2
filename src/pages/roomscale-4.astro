@@ -277,6 +277,7 @@ import ObjectList from "../components/object-list.tsx";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
+    import JSZip from 'jszip';
 
 
 //Resizing image previewer
@@ -456,22 +457,6 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
         pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
     }
 
-    function showWireframe(scene, boolean) {
-        // scene.traverse((object) => {
-        //     if (object.isMesh && object.material) {
-        //         if (Array.isArray(object.material)) {
-        //             object.material.forEach((material) => {
-        //                 material.wireframe = boolean;
-        //                 material.needsUpdate = true;
-        //             });
-        //         } else {
-        //             object.material.wireframe = boolean;
-        //             object.material.needsUpdate = true;
-        //         }
-        //     }
-        // });
-    }
-
     function handleFloors() {
         //Floor section
         //Dynamically add Floors section
@@ -559,17 +544,6 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
         if (!spheresSpawned.includes(objectPosition[0].object.uuid)) {
             if (intersects.length > 0) {
                 if (objectPosition.length > 0) {
-                    // const rotation = camera.rotation;
-                    // camera.position.x = objectPosition[0].object.position.x;
-                    // camera.position.y = objectPosition[0].object.position.y;
-                    // camera.position.z = objectPosition[0].object.position.z;
-                    // console.log(objectPosition[0].object.name);
-                    // console.log(camera.rotation);
-                    // camera.rotation.set(
-                    //     THREE.MathUtils.degToRad(rotation.x),
-                    //     THREE.MathUtils.degToRad(rotation.y),
-                    //     THREE.MathUtils.degToRad(rotation.z),
-                    // );
 
                     // Load 360 texture
                     if (imageArray.length > 0) {
@@ -603,55 +577,6 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
                                     // No image for this object, hide:
                                     document.getElementById('vr-image-panel').classList.add('hidden');
                                 }
-                                // const textureLoader = new THREE.TextureLoader();
-                                // console.log(e.image);
-
-                                // textureLoader.load(e.image, function (texture) {
-                                //     console.log(
-                                //         "Loading texture:",
-                                //         targetImage,
-                                //     );
-
-                                //     // Create geometry and material for the sphere
-                                //     const geometry = new THREE.SphereGeometry(
-                                //         1,
-                                //         60,
-                                //         40,
-                                //     );
-                                //     geometry.scale(-100, 100, 100); // Invert the sphere to view from inside
-                                //     const material =
-                                //         new THREE.MeshBasicMaterial({
-                                //             map: texture,
-                                //         });
-
-                                //     // Create the sphere mesh
-                                //     const sphere = new THREE.Mesh(
-                                //         geometry,
-                                //         material,
-                                //     );
-
-                                //     // Set the sphere's position to match the object's position
-                                //     sphere.position.copy(
-                                //         objectPosition[0].object.position,
-                                //     );
-                                //     sphere.rotation.set(
-                                //         0,
-                                //         objectPosition[0].object.rotation.z,
-                                //         0,
-                                //     );
-                                //     console.log(sphere);
-                                //     sphere.renderOrder = 100;
-
-                                //     // Add the sphere to the scene
-                                //     scene.add(sphere);
-                                //     VRRef.push(objectPosition[0].object.name);
-                                //     VRSpheres.push(sphere);
-                                //     console.log(VRRef);
-                                //     console.log(
-                                //         "Sphere added at position:",
-                                //         sphere.position,
-                                //     );
-                                // });
                             }
                         });
                     }
@@ -665,6 +590,64 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
             }
         }
     }
+
+const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048, {
+  format: THREE.RGBAFormat,
+  generateMipmaps: true,
+  minFilter: THREE.LinearMipmapLinearFilter,
+});
+
+// CubeCamera will render into cubeRenderTarget
+const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+scene.add(cubeCamera);
+
+// after you’ve created cubeRenderTarget & cubeCamera…
+
+// 1. Full‐screen quad geometry (2:1 aspect space)
+const quadGeo = new THREE.PlaneGeometry(2, 2);
+
+// 2. ShaderMaterial that maps UV→direction→cubemap
+const eqMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    envMap: { value: cubeRenderTarget.texture }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    #define PI 3.141592653589793
+    varying vec2 vUv;
+    uniform samplerCube envMap;
+    void main() {
+      // φ ∈ [0,2π], θ ∈ [0,π]
+      float phi   = vUv.x * PI * 2.0;
+      float theta = PI - (vUv.y * PI);
+      vec3 dir = vec3(
+        sin(theta) * cos(phi),
+        cos(theta),
+        sin(theta) * sin(phi)
+      );
+      gl_FragColor = textureCube(envMap, dir);
+    }
+  `,
+  depthTest: false,
+  depthWrite: false
+});
+
+// 3. Put it in its own scene
+// 3. Build the EQ scene & camera
+const eqScene = new THREE.Scene();
+const quadMesh = new THREE.Mesh(quadGeo, eqMaterial);
+quadMesh.frustumCulled = false;  // ensure it always draws
+eqScene.add(quadMesh);
+
+// 4. Orthographic camera that exactly covers NDC –1 to +1 in X & Y
+const eqCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+eqMaterial.needsUpdate = true;
 
     window.addEventListener("pointermove", onPointerMove);
 
@@ -1847,16 +1830,12 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
                     }
                 });
             }
-            // createLabels()
-            // if(e.target.checked){
-            //     document.getElementById("marker-label-container").style.display = "block"
-            // } else {
-            //     document.getElementById("marker-label-container").style.display = "none"
-            // }
         });
+
 
 // Updated buildTree with collapsible parents, auto-collapse for >6 children, and dblclick to toggle visibility
 function buildTree(object) {
+    
     // Create <li> for this node
     const li = document.createElement("li");
     li.className = "my-[3px] text-2xs hover:bg-gray-300 cursor-pointer flex flex-col";
@@ -1946,11 +1925,137 @@ function buildTree(object) {
         });
     }
 
+    // for CSV‐groups, enable right‐click → export all 360s
+    if (object.name.toLowerCase().endsWith('.csv')) {
+    container.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (confirm(`Export all 360° images for ${object.name}?`)) {
+        exportAll360ForGroup(object);
+        }
+    });
+    }
+
+
     // Apply initial disabled style if needed
     styleSubtree(li, object.userData.isEnabled);
     li.setAttribute("data-object-id", object.id);
     return li;
 }
+
+
+// helper to save the current renderer canvas as a PNG
+function saveDebugImage(label) {
+  const link = document.createElement('a');
+  link.href = renderer.domElement.toDataURL('image/png');
+  link.download = `${label}.png`;
+  link.click();
+}
+
+
+async function exportAll360ForGroup(group) {
+  // 0) Save original renderer state
+  const origSize                   = renderer.getSize(new THREE.Vector2());
+  const origDPR                    = renderer.getPixelRatio();
+  const origClearColor             = renderer.getClearColor(new THREE.Color()).getHex();
+  const origClearAlpha             = renderer.getClearAlpha();
+  const origAutoClear              = renderer.autoClear;
+  const origPhysicallyCorrectLights= renderer.physicallyCorrectLights;
+  const origToneMapping            = renderer.toneMapping;
+  const origToneMappingExposure    = renderer.toneMappingExposure;
+  const origDither                 = renderer.dither;
+
+  const zip   = new JSZip();
+  const cones = group.children.filter(ch => ch.cameraPos);
+
+  // add one PointLight per cone and leave them all active during capture
+  const exportLights = cones.map(cone => {
+    const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
+    light.position.copy(cone.position);
+    scene.add(light);
+    return light;
+  });
+
+  for (let i = 0; i < cones.length; i++) {
+    const cone = cones[i];
+    console.log(`Rendering lit-white 360° ${i+1}/${cones.length}: ${cone.name}`);
+
+    // hide every cone so none pollute the cubemap
+    markers.forEach(m => m.visible = false);
+
+    // white, light-reactive override
+    const whiteMat     = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 30 });
+    whiteMat.dithering = true;
+    const oldOverride  = scene.overrideMaterial;
+    scene.overrideMaterial = whiteMat;
+
+    // capture into cube map
+    cubeCamera.position.copy(cone.position);
+    cubeCamera.update(renderer, scene);
+
+    // restore material override & cone visibility
+    scene.overrideMaterial = oldOverride;
+    markers.forEach(m => m.visible = true);
+
+    // 2:1 equirectangular pass
+    renderer.setPixelRatio(1);
+    renderer.setSize(4096, 2048);
+    renderer.setRenderTarget(null);
+
+    // clear to opaque black
+    renderer.autoClear = true;
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear(true, true, true);
+
+    // render only the full-screen quad
+    renderer.render(eqScene, eqCam);
+
+    // grab PNG and add to zip
+    const dataURL = renderer.domElement.toDataURL('image/png');
+    const base64  = dataURL.split(',')[1];
+    zip.file(`${cone.name}.png`, base64, { base64: true });
+  }
+
+  // remove all the export lights
+  exportLights.forEach(light => scene.remove(light));
+
+  // generate and download the zip
+  console.log('Generating ZIP archive…');
+  await zip.generateAsync({ type: 'blob' }, meta => {
+    if (meta.percent % 5 < 0.01) {
+      console.log(`Zip progress: ${meta.percent.toFixed(2)}%`);
+    }
+  }).then(blob => {
+    const a = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `${group.name.replace(/\.csv$/i,'')}-white-lit-360s.zip`;
+    a.click();
+    console.log('Download ready!');
+  });
+
+  // 7) Restore the renderer’s original state
+  renderer.setPixelRatio(origDPR);
+  renderer.setSize(origSize.x, origSize.y);
+  renderer.setClearColor(origClearColor, origClearAlpha);
+  renderer.autoClear = origAutoClear;
+  renderer.physicallyCorrectLights = origPhysicallyCorrectLights;
+  renderer.toneMapping             = origToneMapping;
+  renderer.toneMappingExposure     = origToneMappingExposure;
+  renderer.dither                  = origDither;
+
+  // re-enable wireframe on all meshes
+  scene.traverse(obj => {
+    if (obj.isMesh && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [ obj.material ];
+      mats.forEach(m => { m.wireframe = true; m.needsUpdate = true; });
+    }
+  });
+
+  console.log('Renderer and wireframes restored.');
+}
+
+
+
+
 
 // Recursively toggle visibility in the Three.js scene
 function toggleVisibility(object, visible) {
