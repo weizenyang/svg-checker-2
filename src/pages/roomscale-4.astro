@@ -15,36 +15,36 @@ import ObjectList from "../components/object-list.tsx";
             class="ui-area transition-all bg-zinc-100 p-1 rounded-sm text-xs"
             id="ui-area"
         >
-        <div class="flex">
-            <a
-                href="/"
-                class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg"
-            >
-                <div class="align-center content-center">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        class="size-5"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-                        ></path>
-                    </svg>
-                </div>
-                <p class="ml-2 text-center">Home</p>
-            </a>
-            <button
-                id="clear-all-data"
-                class="flex transition-all duration-75 drop-shadow-sm bg-red-600 text-white p-2 ml-2 mb-3 rounded-md hover:drop-shadow-xl hover:bg-red-500 hover:text-white"
+            <div class="flex">
+                <a
+                    href="/"
+                    class="flex w-fit border-2 border-zinc-300 pl-2 pr-2 p-1 mb-3 transition-all duration-75 drop-shadow-sm text-center rounded-md content-center hover:bg-neutral-100 hover:drop-shadow-lg"
                 >
-                Clear All Data
-            </button>
-        </div>
+                    <div class="align-center content-center">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="size-5"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+                            ></path>
+                        </svg>
+                    </div>
+                    <p class="ml-2 text-center">Home</p>
+                </a>
+                <button
+                    id="clear-all-data"
+                    class="flex transition-all duration-75 drop-shadow-sm bg-red-600 text-white p-2 ml-2 mb-3 rounded-md hover:drop-shadow-xl hover:bg-red-500 hover:text-white"
+                >
+                    Clear All Data
+                </button>
+            </div>
 
             <hr class="border-b border-zinc-200 mb-3" />
             <button
@@ -159,12 +159,13 @@ import ObjectList from "../components/object-list.tsx";
                     ></polyline>
                     <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"
                     ></line>
-                </svg></button>
+                </svg></button
+            >
 
-                <label style="margin-left: 10px; font-family: monospace;">
-                    <input type="checkbox" id="export-all-scene-checkbox" />
-                        Export Entire Scene
-                </label>
+            <label style="margin-left: 10px; font-family: monospace;">
+                <input type="checkbox" id="export-all-scene-checkbox" />
+                Export Entire Scene
+            </label>
 
             <div class="rounded-md bg-zinc-300 max-w-52 p-5 pl-2 pr-2 mt-3">
                 <h2 class="font-bold">Floors:</h2>
@@ -175,25 +176,32 @@ import ObjectList from "../components/object-list.tsx";
         </div>
 
         <main class="fixed flex right-0 pointer-events-none">
-            <div id="vr-image-panel" class="relative right-0 w-[400px] h-[200px] resize overflow-auto border border-gray-400 min-w-[150px] min-h-[150px] pointer-events-auto" style="resize: both;">
+            <div
+                id="vr-image-panel"
+                class="relative right-0 w-[400px] h-[200px] resize overflow-auto border border-gray-400 min-w-[150px] min-h-[150px] pointer-events-auto"
+                style="resize: both;"
+            >
                 <img
-                id="vr-img"
-                src=""
-                style="width:100%; height:100%; object-fit: contain;"
-                alt="VR view"
-              />
-          
-              <!-- bottom-left resize handle -->
-              <div
-                id="vr-resize-handle"
-                class="absolute bottom-0 left-0 w-4 h-4 bg-white bg-opacity-50 rounded-tr-md"
-                style="cursor: sw-resize;"
-              >
+                    id="vr-img"
+                    src=""
+                    style="width:100%; height:100%; object-fit: contain;"
+                    alt="VR view"
+                />
+
+                <!-- bottom-left resize handle -->
+                <div
+                    id="vr-resize-handle"
+                    class="absolute bottom-0 left-0 w-4 h-4 bg-white bg-opacity-50 rounded-tr-md"
+                    style="cursor: sw-resize;"
+                >
+                </div>
             </div>
-          </div>
-            
+
             <div class="flex flex-col pointer-events-auto">
-                <div class="right-0 max-w-2xl h-50 bg-neutral-100 text-xs" id="gizmo">
+                <div
+                    class="right-0 max-w-2xl h-50 bg-neutral-100 text-xs"
+                    id="gizmo"
+                >
                     <button
                         id="camera-top"
                         class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -218,7 +226,7 @@ import ObjectList from "../components/object-list.tsx";
                             R
                         </button>
                     </div>
-        
+
                     <button
                         id="camera-bottom"
                         class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
@@ -226,36 +234,46 @@ import ObjectList from "../components/object-list.tsx";
                     >
                         Bottom
                     </button>
-                    <button id="open-align-popup">
-                        Align Points
+                    <button id="open-align-popup"> Align Points </button>
+                </div>
+
+                <div
+                    id="outliner"
+                    class="pointer-events-auto mt-2 max-h-5xl overflow-y-auto bg-gray-200 pl-2 text-[10px]"
+                >
+                </div>
+                <!-- Alignment Popup: hidden by default -->
+                <div
+                    id="alignment-popup"
+                    class="fixed left-4 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-md shadow-lg p-4 hidden z-50"
+                >
+                    <div class="mb-2">
+                        <h3 class="font-bold text-sm mb-1">Reference Points</h3>
+                        <div
+                            id="reference-dropzone"
+                            class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs"
+                        >
+                            Drop 2 items here
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <h3 class="font-bold text-sm mb-1">Align Points</h3>
+                        <div
+                            id="align-dropzone"
+                            class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs"
+                        >
+                            Drop 2 items here
+                        </div>
+                    </div>
+                    <button
+                        id="align-button"
+                        class="w-full bg-blue-500 text-white py-1 rounded-md text-xs hidden"
+                    >
+                        Align
                     </button>
                 </div>
-
-                    
-            <div id="outliner" class="pointer-events-auto mt-2 max-h-5xl overflow-y-auto bg-gray-200 pl-2 text-[10px]"></div>
-            <!-- Alignment Popup: hidden by default -->
-            <div id="alignment-popup" class="fixed left-4 top-1/2 transform -translate-y-1/2 bg-white border border-gray-300 rounded-md shadow-lg p-4 hidden z-50">
-                <div class="mb-2">
-                <h3 class="font-bold text-sm mb-1">Reference Points</h3>
-                <div id="reference-dropzone" class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs">
-                    Drop 2 items here
-                </div>
-                </div>
-                <div class="mb-2">
-                <h3 class="font-bold text-sm mb-1">Align Points</h3>
-                <div id="align-dropzone" class="w-40 h-20 border-2 border-dashed border-gray-400 flex flex-col items-center justify-center text-xs">
-                    Drop 2 items here
-                </div>
-                </div>
-                <button id="align-button" class="w-full bg-blue-500 text-white py-1 rounded-md text-xs hidden">
-                Align
-                </button>
             </div>
-            </div>
-
         </main>
-
-
 
         <div class="notification-panel" id="notification-panel"></div>
 
@@ -277,96 +295,135 @@ import ObjectList from "../components/object-list.tsx";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
-    import JSZip from 'jszip';
+    import JSZip from "jszip";
 
+    //Resizing image previewer
 
-//Resizing image previewer
+    const panel = document.getElementById("vr-image-panel");
+    const handle = document.getElementById("vr-resize-handle");
 
-  const panel = document.getElementById('vr-image-panel');
-  const handle = document.getElementById('vr-resize-handle');
+    let isResizing = false;
+    let startX, startY, startWidth, startHeight;
 
-  let isResizing = false;
-  let startX, startY, startWidth, startHeight;
+    handle.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        isResizing = true;
 
-  handle.addEventListener('mousedown', function(e) {
-    e.preventDefault();
-    isResizing = true;
+        // record starting mouse coords and panel size
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = panel.getBoundingClientRect();
+        startWidth = rect.width;
+        startHeight = rect.height;
 
-    // record starting mouse coords and panel size
-    startX = e.clientX;
-    startY = e.clientY;
-    const rect = panel.getBoundingClientRect();
-    startWidth = rect.width;
-    startHeight = rect.height;
+        window.addEventListener("mousemove", resizePanel);
+        window.addEventListener("mouseup", stopResize);
+    });
 
-    window.addEventListener('mousemove', resizePanel);
-    window.addEventListener('mouseup', stopResize);
-  });
+    // 1) Spawn the worker (once, at module load)
+    const compressor = new Worker("compressor.worker.js");
 
-  function clearAllData() {
-  // 1) Remove all dynamic scene children except axes & lights
-  scene.children.slice().forEach(child => {
-    const t = child.type;
-    if (t !== 'AxesHelper' && t !== 'AmbientLight' && t !== 'DirectionalLight') {
-      scene.remove(child);
-    }
-  });
+    // Map to hold pending promises
+    const pending = new Map();
 
-  // 2) Reset your tracking arrays
-  objects.length = 0;
-  markers.length = 0;
-  VRSpheres.length = 0;
-  imageArray.length = 0;
-  VRRef.length = 0;
-  simplifiedNamesId.length = 0;
-  csvGroups.length = 0;
-  fbxFiles.length = 0;
-  glbFiles.length = 0;
-  globalFloors.length = 0;
+    // 2) Handle responses from Worker
+    compressor.onmessage = (e) => {
+        const { id, buffer } = e.data;
+        const { resolve } = pending.get(id);
+        pending.delete(id);
+        resolve(buffer); // hand back the raw JPEG bytes
+    };
 
-  // 3) Clear HTML overlays
-  document.getElementById('marker-label-container').innerHTML = '';
-  document.getElementById('outliner').innerHTML = '';
-  document.getElementById('alignment-popup').classList.add('hidden');
-
-  console.log('Scene and data cleared.');
-}
-
-// Re-wire your button
-document.getElementById('clear-all-data')
-  .addEventListener('click', clearAllData);
-
-
-// Wire up the button
-document.getElementById('clear-all-data').addEventListener('click', clearAllData);
-
-  function resizePanel(e) {
-    if (!isResizing) return;
-
-    // horizontal drag (to the left) increases width
-    const deltaX = startX - e.clientX;
-    let newWidth = startWidth + deltaX;
-    const minW = 150;
-    if (newWidth < minW) newWidth = minW;
-
-    // enforce 2:1 ratio → height = width / 2
-    let newHeight = newWidth / 2;
-    const minH = minW / 2;
-    if (newHeight < minH) {
-      newHeight = minH;
-      newWidth = newHeight * 2;
+    // 3) Helper to offload JPEG encode
+    function encodeJPEGOffthread(canvas, quality = 0.8) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                // Create a small unique ID for this request
+                const id = crypto.randomUUID();
+                // Snapshot to an ImageBitmap (transferable)
+                const bitmap = await createImageBitmap(canvas);
+                // Store promise callbacks
+                pending.set(id, { resolve, reject });
+                // Post to worker
+                compressor.postMessage({ id, imageBitmap: bitmap, quality }, [
+                    bitmap,
+                ]);
+            } catch (err) {
+                reject(err);
+            }
+        });
     }
 
-    panel.style.width  = `${newWidth}px`;
-    panel.style.height = `${newHeight}px`;
-  }
+    function clearAllData() {
+        // 1) Remove all dynamic scene children except axes & lights
+        scene.children.slice().forEach((child) => {
+            const t = child.type;
+            if (
+                t !== "AxesHelper" &&
+                t !== "AmbientLight" &&
+                t !== "DirectionalLight"
+            ) {
+                scene.remove(child);
+            }
+        });
 
-  function stopResize() {
-    if (!isResizing) return;
-    isResizing = false;
-    window.removeEventListener('mousemove', resizePanel);
-    window.removeEventListener('mouseup', stopResize);
-  }
+        // 2) Reset your tracking arrays
+        objects.length = 0;
+        markers.length = 0;
+        VRSpheres.length = 0;
+        imageArray.length = 0;
+        VRRef.length = 0;
+        simplifiedNamesId.length = 0;
+        csvGroups.length = 0;
+        fbxFiles.length = 0;
+        glbFiles.length = 0;
+        globalFloors.length = 0;
+
+        // 3) Clear HTML overlays
+        document.getElementById("marker-label-container").innerHTML = "";
+        document.getElementById("outliner").innerHTML = "";
+        document.getElementById("alignment-popup").classList.add("hidden");
+
+        console.log("Scene and data cleared.");
+    }
+
+    // Re-wire your button
+    document
+        .getElementById("clear-all-data")
+        .addEventListener("click", clearAllData);
+
+    // Wire up the button
+    document
+        .getElementById("clear-all-data")
+        .addEventListener("click", clearAllData);
+
+    function resizePanel(e) {
+        if (!isResizing) return;
+
+        // horizontal drag (to the left) increases width
+        const deltaX = startX - e.clientX;
+        let newWidth = startWidth + deltaX;
+        const minW = 150;
+        if (newWidth < minW) newWidth = minW;
+
+        // enforce 2:1 ratio → height = width / 2
+        let newHeight = newWidth / 2;
+        const minH = minW / 2;
+        if (newHeight < minH) {
+            newHeight = minH;
+            newWidth = newHeight * 2;
+        }
+
+        panel.style.width = `${newWidth}px`;
+        panel.style.height = `${newHeight}px`;
+    }
+
+    function stopResize() {
+        if (!isResizing) return;
+        isResizing = false;
+        window.removeEventListener("mousemove", resizePanel);
+        window.removeEventListener("mouseup", stopResize);
+    }
 
     // Initialize the GLTFLoader
     const GLTFloader = new GLTFLoader();
@@ -466,23 +523,23 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
             labelDivInstance.remove();
         }
         globalFloors.forEach((e) => {
-            console.log("Pushing " + e.floor);
+            // console.log("Pushing " + e.floor);
             if (!floorNumbers.includes(e.floor)) {
                 floorNumbers.push(e.floor);
             }
         });
 
-        console.log(floorNumbers);
-        console.log(globalFloors);
+        // console.log(floorNumbers);
+        // console.log(globalFloors);
 
         if (floorNumbers.length > 0) {
             const floorSection = document.getElementById("show-floors");
-            console.log(floorSection);
+            // console.log(floorSection);
             if (floorSection.classList.contains("hidden")) {
                 floorSection.classList.remove("hidden");
             }
             const listChild = floorSection.getElementsByTagName("*");
-            console.log(listChild);
+            // console.log(listChild);
             if (listChild.length > 0) {
                 Array.from(listChild).forEach((element) => {
                     element.remove();
@@ -544,7 +601,6 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
         if (!spheresSpawned.includes(objectPosition[0].object.uuid)) {
             if (intersects.length > 0) {
                 if (objectPosition.length > 0) {
-
                     // Load 360 texture
                     if (imageArray.length > 0) {
                         imageArray.forEach((e) => {
@@ -558,24 +614,36 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
                                     ? e.image
                                     : null;
                             if (targetImage) {
-                                  // Hide panel if no hit:
+                                // Hide panel if no hit:
                                 if (!objectPosition.length) {
-                                    document.getElementById('vr-image-panel').classList.add('hidden');
+                                    document
+                                        .getElementById("vr-image-panel")
+                                        .classList.add("hidden");
                                     return;
                                 }
 
                                 // Find matching image:
-                                const entry = imageArray.find(e =>
-                                    e.name.toLowerCase().includes(objectPosition[0].object.name.toLowerCase())
+                                const entry = imageArray.find((e) =>
+                                    e.name
+                                        .toLowerCase()
+                                        .includes(
+                                            objectPosition[0].object.name.toLowerCase(),
+                                        ),
                                 );
 
                                 if (entry) {
-                                    const panel = document.getElementById('vr-image-panel');
-                                    panel.classList.remove('hidden');
-                                    document.getElementById('vr-img').src = targetImage;  // Data-URL or Blob URL
+                                    const panel =
+                                        document.getElementById(
+                                            "vr-image-panel",
+                                        );
+                                    panel.classList.remove("hidden");
+                                    document.getElementById("vr-img").src =
+                                        targetImage; // Data-URL or Blob URL
                                 } else {
                                     // No image for this object, hide:
-                                    document.getElementById('vr-image-panel').classList.add('hidden');
+                                    document
+                                        .getElementById("vr-image-panel")
+                                        .classList.add("hidden");
                                 }
                             }
                         });
@@ -591,34 +659,34 @@ document.getElementById('clear-all-data').addEventListener('click', clearAllData
         }
     }
 
-const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048, {
-  format: THREE.RGBAFormat,
-  generateMipmaps: true,
-  minFilter: THREE.LinearMipmapLinearFilter,
-});
+    const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048, {
+        format: THREE.RGBAFormat,
+        generateMipmaps: true,
+        minFilter: THREE.LinearMipmapLinearFilter,
+    });
 
-// CubeCamera will render into cubeRenderTarget
-const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
-scene.add(cubeCamera);
+    // CubeCamera will render into cubeRenderTarget
+    const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+    scene.add(cubeCamera);
 
-// after you’ve created cubeRenderTarget & cubeCamera…
+    // after you’ve created cubeRenderTarget & cubeCamera…
 
-// 1. Full‐screen quad geometry (2:1 aspect space)
-const quadGeo = new THREE.PlaneGeometry(2, 2);
+    // 1. Full‐screen quad geometry (2:1 aspect space)
+    const quadGeo = new THREE.PlaneGeometry(2, 2);
 
-// 2. ShaderMaterial that maps UV→direction→cubemap
-const eqMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    envMap: { value: cubeRenderTarget.texture }
-  },
-  vertexShader: `
+    // 2. ShaderMaterial that maps UV→direction→cubemap
+    const eqMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            envMap: { value: cubeRenderTarget.texture },
+        },
+        vertexShader: `
     varying vec2 vUv;
     void main() {
       vUv = uv;
       gl_Position = vec4(position, 1.0);
     }
   `,
-  fragmentShader: `
+        fragmentShader: `
     #define PI 3.141592653589793
     varying vec2 vUv;
     uniform samplerCube envMap;
@@ -634,20 +702,20 @@ const eqMaterial = new THREE.ShaderMaterial({
       gl_FragColor = textureCube(envMap, dir);
     }
   `,
-  depthTest: false,
-  depthWrite: false
-});
+        depthTest: false,
+        depthWrite: false,
+    });
 
-// 3. Put it in its own scene
-// 3. Build the EQ scene & camera
-const eqScene = new THREE.Scene();
-const quadMesh = new THREE.Mesh(quadGeo, eqMaterial);
-quadMesh.frustumCulled = false;  // ensure it always draws
-eqScene.add(quadMesh);
+    // 3. Put it in its own scene
+    // 3. Build the EQ scene & camera
+    const eqScene = new THREE.Scene();
+    const quadMesh = new THREE.Mesh(quadGeo, eqMaterial);
+    quadMesh.frustumCulled = false; // ensure it always draws
+    eqScene.add(quadMesh);
 
-// 4. Orthographic camera that exactly covers NDC –1 to +1 in X & Y
-const eqCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-eqMaterial.needsUpdate = true;
+    // 4. Orthographic camera that exactly covers NDC –1 to +1 in X & Y
+    const eqCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    eqMaterial.needsUpdate = true;
 
     window.addEventListener("pointermove", onPointerMove);
 
@@ -830,7 +898,7 @@ eqMaterial.needsUpdate = true;
             // const modelArray = await modelResponse.json();
 
             // console.log(modelArray)
-            
+
             // modelArray.forEach((e) => {
             //     console.log(e)
             //     // Convert the model buffer to a Blob
@@ -845,26 +913,32 @@ eqMaterial.needsUpdate = true;
             // })
             // Fetch the manifest of models
             // Fetch the manifest of models
-            let fileName
+            let fileName;
             try {
-                const modelResponse = await fetch("http://localhost:9234/model");
+                const modelResponse = await fetch(
+                    "http://localhost:9234/model",
+                );
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
-                
+
                 const { models } = await modelResponse.json();
-                
+
                 for (const fileObj of models) {
                     // Decode the base64 string into binary
                     const binaryStr = atob(fileObj.data);
                     const len = binaryStr.length;
                     const bytes = new Uint8Array(len);
                     for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
+                        bytes[i] = binaryStr.charCodeAt(i);
                     }
 
                     // Create a File object from the binary data
-                    const blob = new Blob([bytes], { type: "model/gltf-binary" });
-                    const glbFile = new File([blob], fileObj.modelName, { type: "model/gltf-binary" });
-                    fileName = fileObj.modelName
+                    const blob = new Blob([bytes], {
+                        type: "model/gltf-binary",
+                    });
+                    const glbFile = new File([blob], fileObj.modelName, {
+                        type: "model/gltf-binary",
+                    });
+                    fileName = fileObj.modelName;
 
                     // Now pass the File object to handleFileChange
                     handleFileChange(glbFile, [glbFile]);
@@ -874,28 +948,35 @@ eqMaterial.needsUpdate = true;
             }
 
             try {
-                const modelResponse = await fetch("http://localhost:9234/model", {
-                    method: "PUT", 
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({"modelName": fileName})
-                });
-                
+                const modelResponse = await fetch(
+                    "http://localhost:9234/model",
+                    {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ modelName: fileName }),
+                    },
+                );
+
                 if (!modelResponse.ok) throw new Error("Failed to fetch model");
-                
+
                 const { models } = await modelResponse.json();
-                
+
                 for (const fileObj of models) {
                     // Decode the base64 string into binary
                     const binaryStr = atob(fileObj.data);
                     const len = binaryStr.length;
                     const bytes = new Uint8Array(len);
                     for (let i = 0; i < len; i++) {
-                    bytes[i] = binaryStr.charCodeAt(i);
-                }
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
 
                     // Create a File object from the binary data
-                    const blob = new Blob([bytes], { type: "model/gltf-binary" });
-                    const glbFile = new File([blob], fileObj.modelName, { type: "model/gltf-binary" });
+                    const blob = new Blob([bytes], {
+                        type: "model/gltf-binary",
+                    });
+                    const glbFile = new File([blob], fileObj.modelName, {
+                        type: "model/gltf-binary",
+                    });
 
                     // Now pass the File object to handleFileChange
                     handleFileChange(glbFile, [glbFile]);
@@ -922,7 +1003,6 @@ eqMaterial.needsUpdate = true;
 
             // Pass the CSV File object to handleFileChange
             handleFileChange(csvFile, [csvFile]);
-
         } catch (error) {
             console.error("Error fetching CSV data from server:", error);
         }
@@ -935,141 +1015,65 @@ eqMaterial.needsUpdate = true;
         event.preventDefault();
         const items = event.dataTransfer.items;
         const files = event.dataTransfer.files;
-        console.log(event.dataTransfer)
+        console.log(event.dataTransfer);
 
         handleFileChange(items, files);
     }
 
-    function handleFileChange(items, files) {
-        console.log(files)
-        // Check if a single item is dropped
-        if (items.length === 1) {
-            console.log("items");
-            const entry = items[0].webkitGetAsEntry(); // Use webkitGetAsEntry for better folder support
-            const file = files[0];
-            console.log(items);
-            if (entry.isDirectory) {
-                enumerateDirectoryWithManyFiles(entry);
-            } else if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
+    async function handleFileChange(items, files) {
+        console.log("Dropped files:", files);
+        const fileArray = Array.from(files);
 
-                    // Create a new DataView to read the binary data
-                    const dataView = new DataView(arrayBuffer);
+        for (let i = 0; i < fileArray.length; i++) {
+            const file = fileArray[i];
+            const lower = file.name.toLowerCase();
+            console.log("Processing:", file.name);
+
+            // ----- Directory? -----
+            const item = items[i];
+            if (item && item.webkitGetAsEntry) {
+                const entry = item.webkitGetAsEntry();
+                if (entry && entry.isDirectory) {
+                    // recurse through folders
+                    await enumerateDirectoryWithManyFiles(entry);
+                    continue;
+                }
+            }
+
+            // ----- CSV -----
+            if (file.type === "text/csv" || lower.endsWith(".csv")) {
+                globalFloors = [];
+                const text = await file.text();
+                processCSVData(text, file.name);
+                continue;
+            }
+
+            // ----- GLB / GLTF -----
+            if (file.type === "model/gltf-binary" || lower.endsWith(".glb")) {
+                const arrayBuffer = await file.arrayBuffer();
+
+                // read the JSON chunk to detect Draco
+                try {
+                    const dv = new DataView(arrayBuffer);
                     const decoder = new TextDecoder("utf-8");
-
-                    // Read the length of the JSON chunk
-                    const jsonChunkLength = dataView.getUint32(12, true);
-
-                    // Read the JSON chunk itself
-                    const jsonChunk = new Uint8Array(
-                        arrayBuffer,
-                        20,
-                        jsonChunkLength,
-                    );
+                    const jsonLen = dv.getUint32(12, true);
+                    const jsonChunk = new Uint8Array(arrayBuffer, 20, jsonLen);
                     const jsonText = decoder.decode(jsonChunk);
                     const json = JSON.parse(jsonText);
-
-                    // Check for DRACO compression
-                    const usesDraco =
-                        json.extensionsUsed &&
-                        json.extensionsUsed.includes(
+                    console.log(
+                        "GLB uses DRACO?",
+                        json.extensionsUsed?.includes(
                             "KHR_draco_mesh_compression",
-                        );
-
-                    // Parse and load the model
-                    GLTFloader.parse(
-                        arrayBuffer,
-                        "",
-                        (gltf) => {
-                            applyLitMaterialToGLTF(gltf.scene);
-                            gltf.scene.name = file.name;
-                            gltf.scene.scale.set(100, 100, 100);
-                            objects.push(gltf.scene);
-                            simplifiedNamesId.push({
-                                uuid: gltf.scene.uuid,
-                                simplifiedName: file.name.replace(/\D/g, ""),
-                            });
-                            scene.add(gltf.scene);
-                            console.log(
-                                "Model loaded successfully:",
-                                gltf.scene,
-                            );
-                            updateOutliner();
-                        },
-                        (error) => {
-                            console.error(
-                                "An error occurred while loading the model:",
-                                error,
-                            );
-                        },
+                        ),
                     );
-                };
-                reader.readAsArrayBuffer(file);
-            } else if( file.name.toLowerCase().endsWith(".fbx") ){
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const thisArrayBuffer = event.target.result;
-                    console.log(thisArrayBuffer)
-                    const loader = new FBXLoader();
-                    const fbxData = new Uint8Array(thisArrayBuffer); // Convert the ArrayBuffer to Uint8Array
-                    const blob = new Blob([fbxData]); // Create a Blob from the Uint8Array
-                    const url = URL.createObjectURL(blob); // Create a URL for the Blob
+                } catch (e) {
+                    console.warn("Failed to inspect GLB JSON chunk:", e);
+                }
 
-                    loader.load(
-                        url,
-                        (fbx) => {
-                            applyLitMaterialToGLTF(fbx); // Modify if this function is specific to GLTF
-                            fbx.name = file.name;
-                            fbx.scale.set(0.1, 0.1, 0.1);
-                            objects.push(fbx);
-                            simplifiedNamesId.push({
-                                uuid: fbx.uuid,
-                                simplifiedName: file.name.replace(/\D/g, ""),
-                            });
-                            scene.add(fbx);
-                            updateOutliner();
-
-                            // Clean up the URL object
-                            URL.revokeObjectURL(url);
-                        },
-                        undefined,
-                        (error) => {
-                            console.error("Error loading FBX:", error);
-                        }
-                    );
-                };
-                reader.readAsArrayBuffer(file);
-            }
-        } else if (files.length === 1) {
-            console.log("files");
-            const file = files[0];
-            if (file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv")) {
-                globalFloors = [];
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.toLowerCase().endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
-                    // const loader = new GLTFLoader();
-                    GLTFloader.parse(arrayBuffer, "", (gltf) => {
+                GLTFloader.parse(
+                    arrayBuffer,
+                    "",
+                    (gltf) => {
                         applyLitMaterialToGLTF(gltf.scene);
                         gltf.scene.name = file.name;
                         gltf.scene.scale.set(100, 100, 100);
@@ -1080,97 +1084,54 @@ eqMaterial.needsUpdate = true;
                         });
                         scene.add(gltf.scene);
                         updateOutliner();
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            } else if( file.name.toLowerCase().endsWith(".fbx") ){
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const thisArrayBuffer = event.target.result;
-                    console.log(thisArrayBuffer)
-                    const loader = new FBXLoader();
-                    const fbxData = new Uint8Array(thisArrayBuffer); // Convert the ArrayBuffer to Uint8Array
-                    const blob = new Blob([fbxData]); // Create a Blob from the Uint8Array
-                    const url = URL.createObjectURL(blob); // Create a URL for the Blob
-
-                    loader.load(
-                        url,
-                        (fbx) => {
-                            applyLitMaterialToGLTF(fbx); // Modify if this function is specific to GLTF
-                            fbx.name = file.name;
-                            // fbx.scale.set(100, 100, 100);
-                            objects.push(fbx);
-                            simplifiedNamesId.push({
-                                uuid: fbx.uuid,
-                                simplifiedName: file.name.replace(/\D/g, ""),
-                            });
-                            scene.add(fbx);
-                            updateOutliner();
-
-                            // Clean up the URL object
-                            URL.revokeObjectURL(url);
-                        },
-                        undefined,
-                        (error) => {
-                            console.error("Error loading FBX:", error);
-                        }
-                    );
-                };
-                reader.readAsArrayBuffer(file);
-            } else {
-                console.error("Dropped item could not be accessed.");
+                    },
+                    (err) => console.error("GLB load error:", err),
+                );
+                continue;
             }
-        } else if (files.length > 1) {
-            const file = files[0];
-            if (file.type === "text/csv" || file.name.endsWith(".csv")) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    processCSVData(e.target.result, file.name);
-                };
-                reader.readAsText(files[0]);
-            } else if (
-                file.type === "model/gltf-binary" ||
-                file.name.endsWith(".glb")
-            ) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const arrayBuffer = event.target.result;
-                    const loader = new GLTFLoader();
-                    loader.parse(arrayBuffer, "", (gltf) => {
-                        applyLitMaterialToGLTF(gltf.scene);
-                        gltf.scene.name = file.name;
-                        objects.push(gltf.scene);
+
+            // ----- FBX -----
+            if (lower.endsWith(".fbx")) {
+                const arrayBuffer = await file.arrayBuffer();
+                // turn into a Blob URL for FBXLoader
+                const blob = new Blob([arrayBuffer]);
+                const url = URL.createObjectURL(blob);
+
+                const loader = new FBXLoader();
+                loader.load(
+                    url,
+                    (fbx) => {
+                        applyLitMaterialToGLTF(fbx);
+                        fbx.name = file.name;
+                        fbx.scale.set(0.1, 0.1, 0.1);
+                        objects.push(fbx);
                         simplifiedNamesId.push({
-                            uuid: gltf.scene.uuid,
+                            uuid: fbx.uuid,
                             simplifiedName: file.name.replace(/\D/g, ""),
                         });
-                        scene.add(gltf.scene);
+                        scene.add(fbx);
                         updateOutliner();
-                    });
-                };
-                reader.readAsArrayBuffer(file);
-            } else if (
-                file.type === "image/jpg" ||
-                file.name.endsWith(".jpg")
-            ) {
-                Array.from(files).forEach((i) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const arrayBuffer = event.target.result;
-                        imageArray.push({ name: i.name, image: arrayBuffer });
-                        console.log(imageArray);
-                    };
-                    reader.readAsDataURL(i);
-                });
-            } else {
-                console.error("Dropped item could not be accessed.");
+                        URL.revokeObjectURL(url);
+                    },
+                    undefined,
+                    (err) => console.error("FBX load error:", err),
+                );
+                continue;
             }
-        } else {
-            console.log(items)
-            console.log(files)
-        }
 
-        
+            // ----- JPG / Other Images -----
+            if (file.type.startsWith("image/") && lower.endsWith(".jpg")) {
+                const dataURL = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsDataURL(file);
+                });
+                imageArray.push({ name: file.name, image: dataURL });
+                continue;
+            }
+
+            console.warn("Unsupported file type:", file.name);
+        }
     }
 
     function applyLitMaterialToGLTF(gltfScene) {
@@ -1374,8 +1335,6 @@ eqMaterial.needsUpdate = true;
         );
     }
 
-    
-
     // Function to save the Blob as a file
     function saveBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
@@ -1395,21 +1354,23 @@ eqMaterial.needsUpdate = true;
 
     // Function to export all FBX files in fbxFiles array
     function exportAllFBXFilesToGLB() {
-    const exportEntireScene = document.getElementById("export-all-scene-checkbox").checked;
-    if (exportEntireScene) {
-        // Export the entire scene
-        exportToGLB(scene, "scene.glb");
-    } else {
-        // Export only the FBX models
-        fbxFiles.forEach((fbxFile) => {
-            const object = scene.getObjectByName(fbxFile.fileName);
-            if (object) {
-                const filename = `${fbxFile.fileName.split(".")[0]}.glb`;
-                exportToGLB(object, filename);
-            }
-        });
+        const exportEntireScene = document.getElementById(
+            "export-all-scene-checkbox",
+        ).checked;
+        if (exportEntireScene) {
+            // Export the entire scene
+            exportToGLB(scene, "scene.glb");
+        } else {
+            // Export only the FBX models
+            fbxFiles.forEach((fbxFile) => {
+                const object = scene.getObjectByName(fbxFile.fileName);
+                if (object) {
+                    const filename = `${fbxFile.fileName.split(".")[0]}.glb`;
+                    exportToGLB(object, filename);
+                }
+            });
+        }
     }
-}
 
     // Add an event listener to the export button
     const exportButton = document.getElementById("export-all-fbx");
@@ -1445,7 +1406,7 @@ eqMaterial.needsUpdate = true;
         cone.rotation.set(0, THREE.MathUtils.degToRad(rotation.z), 0);
         cone.scale.set(1, 1, 1);
         cone.updateMatrix();
-        console.log(cone.rotation);
+        // console.log(cone.rotation);
         cone.renderOrder = 0;
         cone.name = name;
         markers.push(cone);
@@ -1687,7 +1648,7 @@ eqMaterial.needsUpdate = true;
                 globalFloors.push({ floor: floor, arrow: arrow }); //Push obj to globalFloors
 
                 group.add(arrow);
-                console.log(arrow);
+                // console.log(arrow);
             }
 
             if (name) {
@@ -1832,430 +1793,646 @@ eqMaterial.needsUpdate = true;
             }
         });
 
+    // Updated buildTree with collapsible parents, auto-collapse for >6 children, and dblclick to toggle visibility
+    function buildTree(object) {
+        // Create <li> for this node
+        const li = document.createElement("li");
+        li.className =
+            "my-[3px] text-2xs hover:bg-gray-300 cursor-pointer flex flex-col";
 
-// Updated buildTree with collapsible parents, auto-collapse for >6 children, and dblclick to toggle visibility
-function buildTree(object) {
-    
-    // Create <li> for this node
-    const li = document.createElement("li");
-    li.className = "my-[3px] text-2xs hover:bg-gray-300 cursor-pointer flex flex-col";
+        // Container holds toggle (if any), name, and color picker
+        const container = document.createElement("div");
+        container.className = "flex items-center gap-2";
 
-    // Container holds toggle (if any), name, and color picker
-    const container = document.createElement("div");
-    container.className = "flex items-center gap-2";
-
-    // Initialize enabled state if not already
-    if (object.userData.isEnabled === undefined) {
-        object.userData.isEnabled = true;
-    }
-
-    // Double-click to toggle this object and its children
-    container.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        const newState = !object.userData.isEnabled;
-        toggleVisibility(object, newState);
-        styleSubtree(li, newState);
-        // Clear or refresh HTML labels overlay when CSV cones visibility changes
-        if (typeof createLabels === 'function') {
-            createLabels();
+        // Initialize enabled state if not already
+        if (object.userData.isEnabled === undefined) {
+            object.userData.isEnabled = true;
         }
-    });
 
-    // Create toggle button for nodes with children
-    const hasChildren = object.children && object.children.length > 0;
-    let toggle;
-    if (hasChildren) {
-        toggle = document.createElement("button");
-        // Start collapsed if >6 children, otherwise expanded
-        const startCollapsed = object.children.length > 6;
-        toggle.textContent = startCollapsed ? "+" : "\u2212";
-        toggle.className = "toggle-btn w-4 h-4 p-0 m-0 border-none bg-transparent";
-        toggle.style.cursor = "pointer";
-        container.appendChild(toggle);
+        // Double-click to toggle this object and its children
+        container.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            const newState = !object.userData.isEnabled;
+            toggleVisibility(object, newState);
+            styleSubtree(li, newState);
+            // Clear or refresh HTML labels overlay when CSV cones visibility changes
+            if (typeof createLabels === "function") {
+                createLabels();
+            }
+        });
+
+        // Create toggle button for nodes with children
+        const hasChildren = object.children && object.children.length > 0;
+        let toggle;
+        if (hasChildren) {
+            toggle = document.createElement("button");
+            // Start collapsed if >6 children, otherwise expanded
+            const startCollapsed = object.children.length > 6;
+            toggle.textContent = startCollapsed ? "+" : "\u2212";
+            toggle.className =
+                "toggle-btn w-4 h-4 p-0 m-0 border-none bg-transparent";
+            toggle.style.cursor = "pointer";
+            container.appendChild(toggle);
+        }
+
+        // Name label
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = object.name || object.type || "Unnamed";
+        container.appendChild(nameSpan);
+
+        // Color picker
+        const colorPicker = document.createElement("input");
+        colorPicker.type = "color";
+        colorPicker.style.cursor = "pointer";
+        colorPicker.value = "#ff0000";
+        colorPicker.className = "w-6 h-6 p-0 m-0 border-none";
+        object.userData.colorPicker = colorPicker;
+        colorPicker.addEventListener("input", (e) => {
+            e.stopPropagation();
+            updateObjectColor(object, e.target.value);
+        });
+        container.appendChild(colorPicker);
+
+        li.appendChild(container);
+
+        // Build children list
+        if (hasChildren) {
+            const ul = document.createElement("ul");
+            ul.className = "ml-4 list-disc";
+            // Auto-collapse large lists
+            const isCollapsed = object.children.length > 6;
+            ul.style.display = isCollapsed ? "none" : "block";
+
+            // Recursively add children
+            object.children.forEach((child) => {
+                const childLi = buildTree(child);
+                ul.appendChild(childLi);
+            });
+            li.appendChild(ul);
+
+            // Toggle expand/collapse
+            toggle.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const hidden = ul.style.display === "none";
+                ul.style.display = hidden ? "block" : "none";
+                toggle.textContent = hidden ? "\u2212" : "+";
+            });
+        } else {
+            // Leaf: make draggable
+            container.draggable = true;
+            container.addEventListener("dragstart", (e) => {
+                e.stopPropagation();
+                e.dataTransfer.setData("text/plain", object.id);
+            });
+        }
+
+        // Context menu on CSV files: export 360 for the whole group
+        if (object.name.toLowerCase().endsWith(".csv")) {
+            container.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                if (
+                    confirm(`Export all 360° images for group ${object.name}?`)
+                ) {
+                    // Determine group key
+                    const key = getGroupId(object.name);
+                    // Hide everything
+                    scene.children.forEach((o) => (o.visible = false));
+                    // Show only objects in this group (matching key)
+                    scene.children.forEach((o) => {
+                        const k = getGroupId(o.name || "");
+                        if (k === key) o.visible = true;
+                    });
+                    // Also show cones under the CSV group
+                    const csvGroup = scene.getObjectByName(object.name);
+                    if (csvGroup) csvGroup.visible = true;
+                    // Trigger 360 export
+                    exportAll360ForGroup(object);
+                }
+            });
+        }
+
+        // Apply initial disabled style if needed
+        styleSubtree(li, object.userData.isEnabled);
+        li.setAttribute("data-object-id", object.id);
+        return li;
     }
 
-    // Name label
-    const nameSpan = document.createElement("span");
-    nameSpan.textContent = object.name || object.type || "Unnamed";
-    container.appendChild(nameSpan);
+    // helper to save the current renderer canvas as a PNG
+    function saveDebugImage(label) {
+        const link = document.createElement("a");
+        link.href = renderer.domElement.toDataURL("image/png");
+        link.download = `${label}.png`;
+        link.click();
+    }
 
-    // Color picker
-    const colorPicker = document.createElement("input");
-    colorPicker.type = "color";
-    colorPicker.style.cursor = "pointer";
-    colorPicker.value = "#ff0000";
-    colorPicker.className = "w-6 h-6 p-0 m-0 border-none";
-    object.userData.colorPicker = colorPicker;
-    colorPicker.addEventListener("input", (e) => {
-        e.stopPropagation();
-        updateObjectColor(object, e.target.value);
-    });
-    container.appendChild(colorPicker);
+    /**
+     * exportAll360ForGroup: exports one group's CSV+cones into a zip folder (or downloads directly)
+     * @param {Object3D} groupObj - the CSV group object
+     * @param {JSZip} [zipFolder] - optional JSZip folder for multi-group export
+     */
+    async function exportAll360ForGroup(groupObj, zipFolder) {
+        const isRootCall = !zipFolder;
+        // Capture original renderer state
+        const origSize = renderer.getSize(new THREE.Vector2());
+        const origDPR = renderer.getPixelRatio();
+        const origClearColor = renderer
+            .getClearColor(new THREE.Color())
+            .getHex();
+        const origClearAlpha = renderer.getClearAlpha();
+        const origAutoClear = renderer.autoClear;
+        const origPhysLights = renderer.physicallyCorrectLights;
+        const origToneMapping = renderer.toneMapping;
+        const origToneExp = renderer.toneMappingExposure;
+        const origDither = renderer.dither;
 
-    li.appendChild(container);
+        // Prepare ZIP target
+        const zip = zipFolder || new JSZip();
 
-    // Build children list
-    if (hasChildren) {
+        // Derive prefix from CSV name
+        const base = groupObj.name.toLowerCase().replace(/\.csv$/, "");
+        const prefix = base.split("_").slice(-5).join("_");
+        console.log(
+            `Starting export for group: ${groupObj.name}, prefix: ${prefix}`,
+        );
+
+        // Find cones
+        const cones = groupObj.children.filter((ch) => ch.cameraPos);
+        console.log(`Found ${cones.length} cones for group ${prefix}`);
+
+        // Add lights once
+        const lights = cones.map((cone) => {
+            const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
+            light.position.copy(cone.position);
+            scene.add(light);
+            return light;
+        });
+
+        // Helper to yield control
+        const tick = () => new Promise((r) => setTimeout(r, 0));
+
+        // Single loop: render once per cone, then zip original + flipped
+        for (let i = 0; i < cones.length; i++) {
+            const cone = cones[i];
+            const instanceName = `${prefix}_${cone.name}`.toLowerCase();
+            console.log(
+                `▶ [${groupObj.name}] Processing cone ${i + 1}/${cones.length}: ${instanceName}`,
+            );
+
+            // Hide cones and override material
+            markers.forEach((m) => (m.visible = false));
+            const whiteMat = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                shininess: 30,
+            });
+            whiteMat.dithering = true;
+            const prevOverride = scene.overrideMaterial;
+            scene.overrideMaterial = whiteMat;
+
+            // Capture cube map
+            cubeCamera.position.copy(cone.position);
+            cubeCamera.update(renderer, scene);
+
+            // Restore material and visibility
+            scene.overrideMaterial = prevOverride;
+            markers.forEach((m) => (m.visible = true));
+
+            // Equirectangular pass
+            renderer.setPixelRatio(1);
+            renderer.setSize(4096, 2048);
+            renderer.setRenderTarget(null);
+            renderer.autoClear = true;
+            renderer.setClearColor(0x000000, 1);
+            renderer.clear(true, true, true);
+            renderer.render(eqScene, eqCam);
+
+            // Source canvas
+            const srcCanvas = renderer.domElement;
+
+            // ZIP original via worker
+            console.log(`  Compressing original (worker): ${instanceName}.jpg`);
+            const origBuffer = await encodeJPEGOffthread(srcCanvas, 0.8);
+            zip.file(
+              `${instanceName}.jpg`, origBuffer
+            );
+
+            // Prepare flipped name
+            const flipParts = prefix.split("_");
+            if (flipParts.length >= 3) flipParts[2] += "f";
+            const flippedName =
+                `${flipParts.join("_")}_${cone.name}`.toLowerCase();
+
+            // ZIP flipped
+            console.log(`  Capturing flipped: ${flippedName}.jpg`);
+            const off = document.createElement("canvas");
+            off.width = srcCanvas.width;
+            off.height = srcCanvas.height;
+            const ctx = off.getContext("2d");
+            ctx.translate(off.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(srcCanvas, 0, 0);
+            const flipDataURL = off.toDataURL("image/jpeg", 0.8);
+            zip.file(`${flippedName}.jpg`, flipDataURL.split(",")[1], {
+                base64: true,
+            });
+            const flipBuffer = await encodeJPEGOffthread(off, 0.8);
+            zip.file(
+              `${instanceName}.jpg`, flipBuffer
+            );
+
+            // Yield periodically
+            if (i % 5 === 4) await tick();
+        }
+
+        // Duplicate s1→s2
+        Object.keys(zip.files).forEach((fn) => {
+            if (/s1/i.test(fn)) {
+                const newName = fn.replace(/s1/gi, "s2");
+                console.log(`↪ Duplicating ${fn} to ${newName}`);
+                const data = zip.files[fn]._data;
+                zip.file(newName, data, { base64: true });
+            }
+        });
+
+        // Cleanup lights
+        lights.forEach((l) => scene.remove(l));
+        console.log(`Completed export for group ${prefix}`);
+
+        // If root call, finalize and download ZIP
+        if (isRootCall) {
+            console.log("Generating ZIP...");
+            const blob = await zip.generateAsync(
+                { type: "blob", streamFiles: true, worker: true },
+                (meta) => {
+                    console.log(`  ZIP progress: ${meta.percent.toFixed(1)}%`);
+                },
+            );
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${base}-360s-batches.zip`;
+            a.click();
+            console.log("Download triggered");
+        }
+
+        // Restore renderer state
+        renderer.setPixelRatio(origDPR);
+        renderer.setSize(origSize.x, origSize.y);
+        renderer.setClearColor(origClearColor, origClearAlpha);
+        renderer.autoClear = origAutoClear;
+        renderer.physicallyCorrectLights = origPhysLights;
+        renderer.toneMapping = origToneMapping;
+        renderer.toneMappingExposure = origToneExp;
+        renderer.dither = origDither;
+
+        // Re-enable wireframes
+        scene.traverse((o) => {
+            if (o.isMesh && o.material) {
+                const mats = Array.isArray(o.material)
+                    ? o.material
+                    : [o.material];
+                mats.forEach((m) => {
+                    m.wireframe = true;
+                    m.needsUpdate = true;
+                });
+            }
+        });
+        console.log("Renderer and wireframes restored.");
+    }
+
+    // Recursively toggle visibility in the Three.js scene
+    function toggleVisibility(object, visible) {
+        object.visible = visible;
+        object.userData.isEnabled = visible;
+        if (object.children) {
+            object.children.forEach((child) =>
+                toggleVisibility(child, visible),
+            );
+        }
+    }
+
+    // Apply or remove visual "disabled" style on a <li> subtree
+    function styleSubtree(liElement, enabled) {
+        const applyStyle = (el) => {
+            el.style.opacity = enabled ? "1" : "0.5";
+            el.style.textDecoration = enabled ? "" : "line-through";
+        };
+        applyStyle(liElement.querySelector("div"));
+        // Also style all descendant <div> containers
+        liElement
+            .querySelectorAll("li > div")
+            .forEach((div) => applyStyle(div));
+    }
+
+    function updateObjectColor(object, color) {
+        // Update material color if this object is a Mesh.
+        if (object.isMesh && object.material && object.material.color) {
+            object.material.color.set(color);
+            object.material.needsUpdate = true;
+        }
+        // If a color picker was stored on this object, update it.
+        if (object.userData && object.userData.colorPicker) {
+            object.userData.colorPicker.value = color;
+        }
+        // Recursively update all children.
+        if (object.children && object.children.length > 0) {
+            object.children.forEach((child) => updateObjectColor(child, color));
+        }
+    }
+
+    // Utility to extract a grouping key from object names (segments 3–6)
+    function getGroupId(name) {
+        const segments = name.split("_");
+        if (segments.length >= 6) {
+            // take segments[2], [3], [4], [5]
+            return segments.slice(2, 6).join("_");
+        }
+        return null;
+    }
+
+    // Updated updateOutliner with grouping logic
+    function updateOutliner() {
+        const outliner = document.getElementById("outliner");
+        if (!outliner) return;
+        outliner.innerHTML = "";
+
+        // -- build map of groups --
+        const groupsMap = new Map();
+        const standalone = [];
+        scene.children.forEach((obj) => {
+            const nm = obj.name || "";
+            const lo = nm.toLowerCase();
+            const key = getGroupId(nm);
+            if ((lo.endsWith(".csv") || lo.endsWith(".glb")) && key) {
+                if (!groupsMap.has(key)) groupsMap.set(key, []);
+                groupsMap.get(key).push(obj);
+            } else {
+                standalone.push(obj);
+            }
+        });
+
+        // -- status line --
+        let statusEl = null;
+        if (groupsMap.size > 1) {
+            statusEl = document.createElement("div");
+            statusEl.className = "mb-1 text-xs text-gray-700";
+            statusEl.textContent = "Ready to export groups…";
+            outliner.appendChild(statusEl);
+        }
+
+        // -- “Export All” button --
+        if (groupsMap.size > 1) {
+            // Export All Groups button
+            const btn = document.createElement("button");
+            btn.textContent = "Export All Groups 360°";
+            btn.className = "mb-2 p-1 bg-blue-500 text-white text-xs rounded";
+            btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                statusEl.textContent = 'Starting export of all groups…';
+                await new Promise(r=>setTimeout(r,0));
+
+                // 1) Single master zip
+                const rootZip = new JSZip();
+                let idx = 1;
+                const total = groupsMap.size;
+
+                // 2) Loop over each group once
+                for (const objs of groupsMap.values()) {
+                    const csvObj = objs.find(o => o.name.toLowerCase().endsWith('.csv'));
+                    if (!csvObj) continue;
+
+                    const key = getGroupId(csvObj.name);
+                    statusEl.textContent = `Processing group “${key}” (${idx}/${total})…`;
+                    console.log(`→ [${idx}/${total}] exporting group ${key}`);
+                    await new Promise(r=>setTimeout(r,0));
+
+                    // 3) Create a sub-folder in the master zip
+                    const folder = rootZip.folder(key);
+                    // This writes *only* this group’s panoramas into that folder
+                    await exportAll360ForGroup(csvObj, folder);
+
+                    idx++;
+                }
+
+                // 4) Finalize and download
+                statusEl.textContent = 'Finalizing ZIP…';
+                console.log('All groups done, generating combined ZIP');
+                const blob = await rootZip.generateAsync({
+                    type: 'blob',
+                    streamFiles: true,
+                    worker: true,
+                }, meta => console.log(`ZIP ${meta.percent.toFixed(1)}%`));
+
+                const a = document.createElement('a');
+                a.href     = URL.createObjectURL(blob);
+                a.download = 'all-groups-360s.zip';
+                a.click();
+                console.log('Combined ZIP download triggered');
+
+                statusEl.textContent = '✅ All groups exported!';
+                btn.disabled = false;
+            });
+
+            outliner.appendChild(btn);
+        }
+
+        // -- now render the tree as before --
         const ul = document.createElement("ul");
-        ul.className = "ml-4 list-disc";
-        // Auto-collapse large lists
-        const isCollapsed = object.children.length > 6;
-        ul.style.display = isCollapsed ? "none" : "block";
+        // Build grouped nodes
+        groupsMap.forEach((objs, key) => {
+            const parentLi = document.createElement("li");
+            parentLi.className =
+                "group-node my-[3px] text-2xs hover:bg-gray-300 cursor-pointer flex flex-col";
 
-        // Recursively add children
-        object.children.forEach(child => {
-            const childLi = buildTree(child);
-            ul.appendChild(childLi);
-        });
-        li.appendChild(ul);
+            // Container for name and events
+            const container = document.createElement("div");
+            container.className = "flex items-center gap-2";
+            container.textContent = `Group: ${key}`;
 
-        // Toggle expand/collapse
-        toggle.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const hidden = ul.style.display === "none";
-            ul.style.display = hidden ? "block" : "none";
-            toggle.textContent = hidden ? "\u2212" : "+";
-        });
-    } else {
-        // Leaf: make draggable
-        container.draggable = true;
-        container.addEventListener("dragstart", (e) => {
-            e.stopPropagation();
-            e.dataTransfer.setData("text/plain", object.id);
-        });
-    }
-
-    // for CSV‐groups, enable right‐click → export all 360s
-    if (object.name.toLowerCase().endsWith('.csv')) {
-    container.addEventListener('contextmenu', e => {
-        e.preventDefault();
-        if (confirm(`Export all 360° images for ${object.name}?`)) {
-        exportAll360ForGroup(object);
-        }
-    });
-    }
-
-
-    // Apply initial disabled style if needed
-    styleSubtree(li, object.userData.isEnabled);
-    li.setAttribute("data-object-id", object.id);
-    return li;
-}
-
-
-// helper to save the current renderer canvas as a PNG
-function saveDebugImage(label) {
-  const link = document.createElement('a');
-  link.href = renderer.domElement.toDataURL('image/png');
-  link.download = `${label}.png`;
-  link.click();
-}
-
-
-async function exportAll360ForGroup(group) {
-  // 0) Save original renderer state
-  const origSize                   = renderer.getSize(new THREE.Vector2());
-  const origDPR                    = renderer.getPixelRatio();
-  const origClearColor             = renderer.getClearColor(new THREE.Color()).getHex();
-  const origClearAlpha             = renderer.getClearAlpha();
-  const origAutoClear              = renderer.autoClear;
-  const origPhysicallyCorrectLights= renderer.physicallyCorrectLights;
-  const origToneMapping            = renderer.toneMapping;
-  const origToneMappingExposure    = renderer.toneMappingExposure;
-  const origDither                 = renderer.dither;
-
-  const zip   = new JSZip();
-  const cones = group.children.filter(ch => ch.cameraPos);
-
-  // add one PointLight per cone and leave them all active during capture
-  const exportLights = cones.map(cone => {
-    const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-    light.position.copy(cone.position);
-    scene.add(light);
-    return light;
-  });
-
-  for (let i = 0; i < cones.length; i++) {
-    const cone = cones[i];
-    console.log(`Rendering lit-white 360° ${i+1}/${cones.length}: ${cone.name}`);
-
-    // hide every cone so none pollute the cubemap
-    markers.forEach(m => m.visible = false);
-
-    // white, light-reactive override
-    const whiteMat     = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 30 });
-    whiteMat.dithering = true;
-    const oldOverride  = scene.overrideMaterial;
-    scene.overrideMaterial = whiteMat;
-
-    // capture into cube map
-    cubeCamera.position.copy(cone.position);
-    cubeCamera.update(renderer, scene);
-
-    // restore material override & cone visibility
-    scene.overrideMaterial = oldOverride;
-    markers.forEach(m => m.visible = true);
-
-    // 2:1 equirectangular pass
-    renderer.setPixelRatio(1);
-    renderer.setSize(4096, 2048);
-    renderer.setRenderTarget(null);
-
-    // clear to opaque black
-    renderer.autoClear = true;
-    renderer.setClearColor(0x000000, 1);
-    renderer.clear(true, true, true);
-
-    // render only the full-screen quad
-    renderer.render(eqScene, eqCam);
-
-    // grab PNG and add to zip
-    const dataURL = renderer.domElement.toDataURL('image/png');
-    const base64  = dataURL.split(',')[1];
-    zip.file(`${cone.name}.png`, base64, { base64: true });
-  }
-
-  // remove all the export lights
-  exportLights.forEach(light => scene.remove(light));
-
-  // generate and download the zip
-  console.log('Generating ZIP archive…');
-  await zip.generateAsync({ type: 'blob' }, meta => {
-    if (meta.percent % 5 < 0.01) {
-      console.log(`Zip progress: ${meta.percent.toFixed(2)}%`);
-    }
-  }).then(blob => {
-    const a = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
-    a.download = `${group.name.replace(/\.csv$/i,'')}-white-lit-360s.zip`;
-    a.click();
-    console.log('Download ready!');
-  });
-
-  // 7) Restore the renderer’s original state
-  renderer.setPixelRatio(origDPR);
-  renderer.setSize(origSize.x, origSize.y);
-  renderer.setClearColor(origClearColor, origClearAlpha);
-  renderer.autoClear = origAutoClear;
-  renderer.physicallyCorrectLights = origPhysicallyCorrectLights;
-  renderer.toneMapping             = origToneMapping;
-  renderer.toneMappingExposure     = origToneMappingExposure;
-  renderer.dither                  = origDither;
-
-  // re-enable wireframe on all meshes
-  scene.traverse(obj => {
-    if (obj.isMesh && obj.material) {
-      const mats = Array.isArray(obj.material) ? obj.material : [ obj.material ];
-      mats.forEach(m => { m.wireframe = true; m.needsUpdate = true; });
-    }
-  });
-
-  console.log('Renderer and wireframes restored.');
-}
-
-
-
-
-
-// Recursively toggle visibility in the Three.js scene
-function toggleVisibility(object, visible) {
-    object.visible = visible;
-    object.userData.isEnabled = visible;
-    if (object.children) {
-        object.children.forEach(child => toggleVisibility(child, visible));
-    }
-}
-
-// Apply or remove visual "disabled" style on a <li> subtree
-function styleSubtree(liElement, enabled) {
-    const applyStyle = (el) => {
-        el.style.opacity = enabled ? "1" : "0.5";
-        el.style.textDecoration = enabled ? "" : "line-through";
-    };
-    applyStyle(liElement.querySelector('div'));
-    // Also style all descendant <div> containers
-    liElement.querySelectorAll('li > div').forEach(div => applyStyle(div));
-}
-
-
-
-
-
-        function updateObjectColor(object, color) {
-            // Update material color if this object is a Mesh.
-            if (object.isMesh && object.material && object.material.color) {
-                object.material.color.set(color);
-                object.material.needsUpdate = true;
-            }
-            // If a color picker was stored on this object, update it.
-            if (object.userData && object.userData.colorPicker) {
-                object.userData.colorPicker.value = color;
-            }
-            // Recursively update all children.
-            if (object.children && object.children.length > 0) {
-                object.children.forEach(child => updateObjectColor(child, color));
-            }
-        }
-
-
-
-            // Update the outliner by listing all the scene's root-level objects and their children.
-            function updateOutliner() {
-                const outliner = document.getElementById("outliner");
-                if (!outliner) return;
-                
-                // Clear existing content.
-                outliner.innerHTML = "";
-                
-                // Create a list for scene children.
-                const ul = document.createElement("ul");
-                scene.children.forEach(child => {
-                    ul.appendChild(buildTree(child));
-                });
-                outliner.appendChild(ul);
-            }
-
-            const refDropzone = document.getElementById("reference-dropzone");
-            const alignDropzone = document.getElementById("align-dropzone");
-            const alignButton = document.getElementById("align-button");
-            const alignmentPopup = document.getElementById("alignment-popup");
-
-            // Prevent default behavior for dragover events.
-            [refDropzone, alignDropzone].forEach(zone => {
-                zone.addEventListener("dragover", (e) => {
-                    e.preventDefault();
-                    console.log(e)
-                });
-            });
-
-            // Handle drop on Reference zone.
-            refDropzone.addEventListener("drop", (e) => {
-                e.preventDefault();
-                console.log("Dropped")
-                console.log(e)
-                if (referenceSelection.length >= 2) return;
-                const objId = parseInt(e.dataTransfer.getData("text/plain"));
-                const obj = scene.getObjectById(objId);
-                if (!obj) return;
-                // Optionally, check that this object comes from a CSV-derived group (e.g. via a flag)
-                referenceSelection.push(obj);
-                console.log(referenceSelection)
-                updateDropzoneUI(refDropzone, referenceSelection);
-                checkAlignmentReady();
-            });
-
-            // Handle drop on Align zone.
-            alignDropzone.addEventListener("drop", (e) => {
-                e.preventDefault();
-                console.log(e)
-                if (alignSelection.length >= 2) return;
-                const objId = parseInt(e.dataTransfer.getData("text/plain"));
-                const obj = scene.getObjectById(objId);
-                if (!obj) return;
-                alignSelection.push(obj);
-                console.log(alignSelection)
-                updateDropzoneUI(alignDropzone, alignSelection);
-                checkAlignmentReady();
-            });
-
-            // Helper to update the dropzone display.
-            function updateDropzoneUI(zone, selectionArray) {
-            zone.innerHTML = "";
-            selectionArray.forEach(obj => {
-                const span = document.createElement("span");
-                span.textContent = obj.name;
-                span.className = "block text-center text-blue-700";
-                zone.appendChild(span);
-            });
-            if (selectionArray.length === 0) {
-                zone.textContent = "Drop 2 items here";
-            }
-            }
-
-            // Check if both zones have 2 items and show the Align button.
-            function checkAlignmentReady() {
-                if (referenceSelection.length === 2 && alignSelection.length === 2) {
-                    alignButton.classList.remove("hidden");
-                }
-            }
-
-            alignButton.addEventListener("click", () => {
-                alignGroups(referenceSelection, alignSelection);
-                // Clear selections and hide popup
-                referenceSelection = [];
-                alignSelection = [];
-                refDropzone.innerHTML = "Drop 2 items here";
-                alignDropzone.innerHTML = "Drop 2 items here";
-                alignButton.classList.add("hidden");
-                alignmentPopup.classList.add("hidden");
-            });
-
-                // Alignment function: splits the transformation between the two groups.
-                function alignGroups(refMarkers, alignMarkers) {
-                    // Assume the CSV-derived group is the parent of a marker.
-                    const groupA = refMarkers[0].parent;
-                    const groupB = alignMarkers[0].parent;
-                    
-                    // Helper to get an object's world position.
-                    const getPosition = (obj) => {
-                        const pos = new THREE.Vector3();
-                        obj.getWorldPosition(pos);
-                        return pos;
-                    };
-                    
-                    // Get the world positions of the two markers for each group.
-                    const p1 = getPosition(refMarkers[0]);
-                    const p2 = getPosition(refMarkers[1]);
-                    const q1 = getPosition(alignMarkers[0]);
-                    const q2 = getPosition(alignMarkers[1]);
-                    
-                    // Compute each group's anchor (midpoint of its two markers).
-                    const midA = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
-                    const midB = new THREE.Vector3().addVectors(q1, q2).multiplyScalar(0.5);
-                    
-                    // Compute the global target anchor (average of the two midpoints).
-                    const midAvg = new THREE.Vector3().addVectors(midA, midB).multiplyScalar(0.5);
-                    
-                    // Compute rotation angles based on projection to the XZ plane.
-                    const getXZ = (vec) => new THREE.Vector2(vec.x, vec.z);
-                    const angleA = Math.atan2(
-                        getXZ(p2).y - getXZ(p1).y,
-                        getXZ(p2).x - getXZ(p1).x
-                    );
-                    const angleB = Math.atan2(
-                        getXZ(q2).y - getXZ(q1).y,
-                        getXZ(q2).x - getXZ(q1).x
-                    );
-                    const deltaAngle = angleB - angleA;
-                    
-                    // For each group, compute how much to translate so that its anchor becomes midAvg.
-                    const offsetA = new THREE.Vector3().subVectors(midAvg, midA);
-                    const offsetB = new THREE.Vector3().subVectors(midAvg, midB);
-                    
-                    // Apply the translation to each group.
-                    groupA.position.add(offsetA);
-                    groupB.position.add(offsetB);
-                    
-                    // Helper function to rotate a group about a given world point.
-                    function rotateGroupAboutPoint(group, point, angle) {
-                        group.position.sub(point);
-                        group.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
-                        group.position.add(point);
-                        group.rotation.y += angle;
+            // Double-click toggles visibility
+            container.addEventListener("dblclick", (e) => {
+                e.stopPropagation();
+                const newState = !objs[0].visible;
+                objs.forEach((o) => (o.visible = newState));
+                objs.forEach((o) => {
+                    if (o.userData.csvObject) {
+                        const csvObj = scene.getObjectByProperty(
+                            "uuid",
+                            o.userData.csvObject,
+                        );
+                        if (csvObj) csvObj.visible = newState;
                     }
-                    
-                    // Rotate groupA about midAvg by half the deltaAngle.
-                    rotateGroupAboutPoint(groupA, midAvg, deltaAngle / 2);
-                    // Rotate groupB about midAvg by the negative half deltaAngle.
-                    rotateGroupAboutPoint(groupB, midAvg, -deltaAngle / 2);
-                    
-                    console.log("Aligned groups using marker anchors:", groupA.name, groupB.name);
-                }
-
-            document.getElementById("open-align-popup")?.addEventListener("click", () => {
-                alignmentPopup.classList.remove("hidden");
+                });
+                createLabels();
+                styleSubtree(parentLi, newState);
             });
 
+            parentLi.appendChild(container);
+
+            // Children
+            const childUl = document.createElement("ul");
+            childUl.className = "ml-4 list-disc";
+            objs.forEach((childObj) => {
+                childUl.appendChild(buildTree(childObj));
+            });
+            parentLi.appendChild(childUl);
+            ul.appendChild(parentLi);
+        });
+
+        // Standalone
+        standalone.forEach((obj) => {
+            ul.appendChild(buildTree(obj));
+        });
+
+        outliner.appendChild(ul);
+    }
+
+    const refDropzone = document.getElementById("reference-dropzone");
+    const alignDropzone = document.getElementById("align-dropzone");
+    const alignButton = document.getElementById("align-button");
+    const alignmentPopup = document.getElementById("alignment-popup");
+
+    // Prevent default behavior for dragover events.
+    [refDropzone, alignDropzone].forEach((zone) => {
+        zone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            console.log(e);
+        });
+    });
+
+    // Handle drop on Reference zone.
+    refDropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        console.log("Dropped");
+        console.log(e);
+        if (referenceSelection.length >= 2) return;
+        const objId = parseInt(e.dataTransfer.getData("text/plain"));
+        const obj = scene.getObjectById(objId);
+        if (!obj) return;
+        // Optionally, check that this object comes from a CSV-derived group (e.g. via a flag)
+        referenceSelection.push(obj);
+        console.log(referenceSelection);
+        updateDropzoneUI(refDropzone, referenceSelection);
+        checkAlignmentReady();
+    });
+
+    // Handle drop on Align zone.
+    alignDropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        console.log(e);
+        if (alignSelection.length >= 2) return;
+        const objId = parseInt(e.dataTransfer.getData("text/plain"));
+        const obj = scene.getObjectById(objId);
+        if (!obj) return;
+        alignSelection.push(obj);
+        console.log(alignSelection);
+        updateDropzoneUI(alignDropzone, alignSelection);
+        checkAlignmentReady();
+    });
+
+    // Helper to update the dropzone display.
+    function updateDropzoneUI(zone, selectionArray) {
+        zone.innerHTML = "";
+        selectionArray.forEach((obj) => {
+            const span = document.createElement("span");
+            span.textContent = obj.name;
+            span.className = "block text-center text-blue-700";
+            zone.appendChild(span);
+        });
+        if (selectionArray.length === 0) {
+            zone.textContent = "Drop 2 items here";
+        }
+    }
+
+    // Check if both zones have 2 items and show the Align button.
+    function checkAlignmentReady() {
+        if (referenceSelection.length === 2 && alignSelection.length === 2) {
+            alignButton.classList.remove("hidden");
+        }
+    }
+
+    alignButton.addEventListener("click", () => {
+        alignGroups(referenceSelection, alignSelection);
+        // Clear selections and hide popup
+        referenceSelection = [];
+        alignSelection = [];
+        refDropzone.innerHTML = "Drop 2 items here";
+        alignDropzone.innerHTML = "Drop 2 items here";
+        alignButton.classList.add("hidden");
+        alignmentPopup.classList.add("hidden");
+    });
+
+    // Alignment function: splits the transformation between the two groups.
+    function alignGroups(refMarkers, alignMarkers) {
+        // Assume the CSV-derived group is the parent of a marker.
+        const groupA = refMarkers[0].parent;
+        const groupB = alignMarkers[0].parent;
+
+        // Helper to get an object's world position.
+        const getPosition = (obj) => {
+            const pos = new THREE.Vector3();
+            obj.getWorldPosition(pos);
+            return pos;
+        };
+
+        // Get the world positions of the two markers for each group.
+        const p1 = getPosition(refMarkers[0]);
+        const p2 = getPosition(refMarkers[1]);
+        const q1 = getPosition(alignMarkers[0]);
+        const q2 = getPosition(alignMarkers[1]);
+
+        // Compute each group's anchor (midpoint of its two markers).
+        const midA = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+        const midB = new THREE.Vector3().addVectors(q1, q2).multiplyScalar(0.5);
+
+        // Compute the global target anchor (average of the two midpoints).
+        const midAvg = new THREE.Vector3()
+            .addVectors(midA, midB)
+            .multiplyScalar(0.5);
+
+        // Compute rotation angles based on projection to the XZ plane.
+        const getXZ = (vec) => new THREE.Vector2(vec.x, vec.z);
+        const angleA = Math.atan2(
+            getXZ(p2).y - getXZ(p1).y,
+            getXZ(p2).x - getXZ(p1).x,
+        );
+        const angleB = Math.atan2(
+            getXZ(q2).y - getXZ(q1).y,
+            getXZ(q2).x - getXZ(q1).x,
+        );
+        const deltaAngle = angleB - angleA;
+
+        // For each group, compute how much to translate so that its anchor becomes midAvg.
+        const offsetA = new THREE.Vector3().subVectors(midAvg, midA);
+        const offsetB = new THREE.Vector3().subVectors(midAvg, midB);
+
+        // Apply the translation to each group.
+        groupA.position.add(offsetA);
+        groupB.position.add(offsetB);
+
+        // Helper function to rotate a group about a given world point.
+        function rotateGroupAboutPoint(group, point, angle) {
+            group.position.sub(point);
+            group.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+            group.position.add(point);
+            group.rotation.y += angle;
+        }
+
+        // Rotate groupA about midAvg by half the deltaAngle.
+        rotateGroupAboutPoint(groupA, midAvg, deltaAngle / 2);
+        // Rotate groupB about midAvg by the negative half deltaAngle.
+        rotateGroupAboutPoint(groupB, midAvg, -deltaAngle / 2);
+
+        console.log(
+            "Aligned groups using marker anchors:",
+            groupA.name,
+            groupB.name,
+        );
+    }
+
+    document
+        .getElementById("open-align-popup")
+        ?.addEventListener("click", () => {
+            alignmentPopup.classList.remove("hidden");
+        });
 
     document.getElementById("scale-slider").addEventListener("input", (e) => {
         scaleGroupRelativeToCenter(m_Group, e.target.value);
@@ -2284,7 +2461,7 @@ function styleSubtree(liElement, enabled) {
         });
         simplifiedNamesId.forEach((i) => {
             if (i.simplifiedName == e.detail) {
-                console.log(i.csvObject);
+                // console.log(i.csvObject);
                 scene.getObjectByProperty("uuid", i.uuid).visible = true;
                 if (i.csvObject) {
                     const csvObj = scene.getObjectByProperty(
