@@ -2008,12 +2008,12 @@ import ObjectList from "../components/object-list.tsx";
             // Source canvas
             const srcCanvas = renderer.domElement;
 
-            // ZIP original via worker
-            console.log(`  Compressing original (worker): ${instanceName}.jpg`);
-            const origBuffer = await encodeJPEGOffthread(srcCanvas, 0.8);
-            zip.file(
-              `${instanceName}.jpg`, origBuffer
-            );
+            // ZIP original
+            console.log(`  Capturing original: ${instanceName}.jpg`);
+            const origDataURL = srcCanvas.toDataURL("image/jpeg", 0.8);
+            zip.file(`${instanceName}.jpg`, origDataURL.split(",")[1], {
+                base64: true,
+            });
 
             // Prepare flipped name
             const flipParts = prefix.split("_");
@@ -2034,10 +2034,6 @@ import ObjectList from "../components/object-list.tsx";
             zip.file(`${flippedName}.jpg`, flipDataURL.split(",")[1], {
                 base64: true,
             });
-            const flipBuffer = await encodeJPEGOffthread(off, 0.8);
-            zip.file(
-              `${instanceName}.jpg`, flipBuffer
-            );
 
             // Yield periodically
             if (i % 5 === 4) await tick();
