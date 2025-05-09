@@ -1660,6 +1660,9 @@ import "../styles.css";
 			canvasFlipY = false;
 			canvasRotate = 0;
 			const file = files[0];
+			if(!document.getElementById("image-list-container").classList.contains("hidden")){
+				document.getElementById("image-list-container").classList.add("hidden")
+			}
 
 			// if (files.length === 1) {
 			// 	importedSVGs = [];
@@ -1694,6 +1697,9 @@ import "../styles.css";
 			if(files.length > 1){
 				
 				if (file.type === "image/svg+xml") {
+					if(document.getElementById("image-list-container").classList.contains("hidden")){
+						document.getElementById("image-list-container").classList.remove("hidden")
+					}
 				Array.from(files).forEach((fileToProcess, index) => {
 					const reader = new FileReader();
 					reader.onload = () => {
@@ -1733,9 +1739,13 @@ import "../styles.css";
 			}
 			} else {
 				if (file.type === "image/svg+xml") {
+					if(document.getElementById("image-list-container").classList.contains("hidden")){
+						document.getElementById("image-list-container").classList.remove("hidden")
+					}
 					    importedSVGs = [];
 					currentSVGIndex = 0;
 					globalSvgContainer.innerHTML = "";
+
 				filesToProcess.forEach((fileToProcess, index) => {
 					const reader = new FileReader();
 					reader.onload = () => {
