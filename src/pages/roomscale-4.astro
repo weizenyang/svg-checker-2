@@ -320,39 +320,39 @@ import ObjectList from "../components/object-list.tsx";
         window.addEventListener("mouseup", stopResize);
     });
 
-    // 1) Spawn the worker (once, at module load)
-    const compressor = new Worker("compressor.worker.js");
+    // // 1) Spawn the worker (once, at module load)
+    // const compressor = new Worker("compressor.worker.js");
 
-    // Map to hold pending promises
-    const pending = new Map();
+    // // Map to hold pending promises
+    // const pending = new Map();
 
-    // 2) Handle responses from Worker
-    compressor.onmessage = (e) => {
-        const { id, buffer } = e.data;
-        const { resolve } = pending.get(id);
-        pending.delete(id);
-        resolve(buffer); // hand back the raw JPEG bytes
-    };
+    // // 2) Handle responses from Worker
+    // compressor.onmessage = (e) => {
+    //     const { id, buffer } = e.data;
+    //     const { resolve } = pending.get(id);
+    //     pending.delete(id);
+    //     resolve(buffer); // hand back the raw JPEG bytes
+    // };
 
-    // 3) Helper to offload JPEG encode
-    function encodeJPEGOffthread(canvas, quality = 0.8) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                // Create a small unique ID for this request
-                const id = crypto.randomUUID();
-                // Snapshot to an ImageBitmap (transferable)
-                const bitmap = await createImageBitmap(canvas);
-                // Store promise callbacks
-                pending.set(id, { resolve, reject });
-                // Post to worker
-                compressor.postMessage({ id, imageBitmap: bitmap, quality }, [
-                    bitmap,
-                ]);
-            } catch (err) {
-                reject(err);
-            }
-        });
-    }
+    // // 3) Helper to offload JPEG encode
+    // function encodeJPEGOffthread(canvas, quality = 0.8) {
+    //     return new Promise(async (resolve, reject) => {
+    //         try {
+    //             // Create a small unique ID for this request
+    //             const id = crypto.randomUUID();
+    //             // Snapshot to an ImageBitmap (transferable)
+    //             const bitmap = await createImageBitmap(canvas);
+    //             // Store promise callbacks
+    //             pending.set(id, { resolve, reject });
+    //             // Post to worker
+    //             compressor.postMessage({ id, imageBitmap: bitmap, quality }, [
+    //                 bitmap,
+    //             ]);
+    //         } catch (err) {
+    //             reject(err);
+    //         }
+    //     });
+    // }
 
     function clearAllData() {
         // 1) Remove all dynamic scene children except axes & lights
@@ -1390,6 +1390,15 @@ import ObjectList from "../components/object-list.tsx";
         const geometry = new THREE.ConeGeometry(20, 40, 32); // Cone with radius 0.5 and height 1
         const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
         const cone = new THREE.Mesh(geometry, material);
+        const dir = new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(rotation.z)), 0, Math.cos(THREE.MathUtils.degToRad(rotation.z)));
+        //normalize the direction vector (convert to vector of length 1)
+        dir.normalize();
+
+        // const origin = new THREE.Vector3( position.x, position.y, position.z);
+        // const length = 15;
+        // const hex = 0xff0000;
+        // const arrow = new THREE.ArrowHelper( dir, origin, length, hex, 5, 8);
+        // arrow.scale.set(3,3,3)
 
         // Set position
         cone.position.set(0, 0, 0);
@@ -1406,13 +1415,25 @@ import ObjectList from "../components/object-list.tsx";
         cone.rotation.set(0, THREE.MathUtils.degToRad(rotation.z), 0);
         cone.scale.set(1, 1, 1);
         cone.updateMatrix();
-        // console.log(cone.rotation);
+        console.log(cone.rotation);
         cone.renderOrder = 0;
         cone.name = name;
         markers.push(cone);
         return cone;
     }
     var showMarkerNames = false;
+
+    // function createCone(name, position, rotation) {
+    //     const loader = new GLTFLoader();
+    //     const camera = loader.load("./camera.glb", (e) => {
+    //         const model = e.scene
+
+    //         model.position.set(position.x, position.y, position.z)
+    //         model.renderOrder = 0;
+    //         model.name = name;
+    //     })
+    //     return camera
+    // }
 
     // Create a label div for each marker
     function createLabels() {
