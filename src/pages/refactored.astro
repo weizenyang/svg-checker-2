@@ -1660,12 +1660,12 @@ import "../styles.css";
 			canvasFlipY = false;
 			canvasRotate = 0;
 			const file = files[0];
-			
-			if (files.length === 1) {
-				importedSVGs = [];
-				currentSVGIndex = 0;
-				globalSvgContainer.innerHTML = "";
-			}
+
+			// if (files.length === 1) {
+			// 	importedSVGs = [];
+			// 	currentSVGIndex = 0;
+			// 	globalSvgContainer.innerHTML = "";
+			// }
 			// importedSVGs = []; // Reset the array
 			let filesToProcess = Array.from(files).filter(
 				(file) => file.type === "image/svg+xml",
@@ -1733,6 +1733,9 @@ import "../styles.css";
 			}
 			} else {
 				if (file.type === "image/svg+xml") {
+					    importedSVGs = [];
+					currentSVGIndex = 0;
+					globalSvgContainer.innerHTML = "";
 				filesToProcess.forEach((fileToProcess, index) => {
 					const reader = new FileReader();
 					reader.onload = () => {
