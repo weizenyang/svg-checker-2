@@ -1122,7 +1122,7 @@ import ObjectList from "../components/object-list.tsx";
             }
 
             // ----- JPG / Other Images -----
-            if (file.type.startsWith("image/") && lower.endsWith(".jpg")) {
+            if (file.type.startsWith("image/") && (lower.endsWith(".jpg") || lower.endsWith(".png"))) {
                 const dataURL = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
