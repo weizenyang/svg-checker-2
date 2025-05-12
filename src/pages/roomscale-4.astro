@@ -1954,6 +1954,12 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     // Capture cube map
     cubeCamera.position.copy(cone.position);
     cubeCamera.quaternion.copy(cone.quaternion);
+    cubeCamera.quaternion.multiply(
+      new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0,1,0),
+        Math.PI/2
+      )
+    );
     renderer.autoClear = true
     cubeCamera.update(renderer, scene);
 
@@ -2059,7 +2065,15 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
             // Capture cube map
             cubeCamera.position.copy(cone.position);
+            console.log(cone.quaternion)
             cubeCamera.quaternion.copy(cone.quaternion);
+               // add a 90° clockwise offset about world-Y
+               cubeCamera.quaternion.multiply(
+                 new THREE.Quaternion().setFromAxisAngle(
+                   new THREE.Vector3(0,1,0),
+                   -Math.PI/2
+                 )
+               );
             cubeCamera.update(renderer, scene);
 
             // Restore material and visibility
