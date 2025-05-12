@@ -591,75 +591,40 @@ import ObjectList from "../components/object-list.tsx";
         }
     }
 
-    function moveTo(event) {
-        const intersects = raycaster.intersectObjects(scene.children);
-        let objectPosition = intersects.filter(
-            (item) => item.object.cameraPos && item.object.parent.visible,
+    let showGeneratedView = false;
+
+async function moveTo(event) {
+    const intersects = raycaster.intersectObjects(markers);
+    const hit = intersects.find(
+        (i) => i.object.cameraPos && i.object.parent.visible
+    );
+    if (!hit) return;
+
+    const cone = hit.object;
+    const targetName = cone.name.toLowerCase();
+    const panel = document.getElementById("vr-image-panel");
+    const img = document.getElementById("vr-img");
+
+    if (showGeneratedView) {
+        console.log(cone)
+        const renderURL = await render360SnapshotForCone(cone);
+        img.src = renderURL;
+        panel.classList.remove("hidden");
+    } else {
+        const entry = imageArray.find((e) =>
+            e.name.toLowerCase().includes(targetName)
         );
-        let spheresSpawned = VRRef.map((e) => e.uuid);
-        console.log(spheresSpawned);
-        if (!spheresSpawned.includes(objectPosition[0].object.uuid)) {
-            if (intersects.length > 0) {
-                if (objectPosition.length > 0) {
-                    // Load 360 texture
-                    if (imageArray.length > 0) {
-                        imageArray.forEach((e) => {
-                            const targetImage =
-                                e.name.includes(
-                                    objectPosition[0].object.name.toLowerCase(),
-                                ) &&
-                                !VRRef.includes(
-                                    objectPosition[0].object.name.toLowerCase(),
-                                )
-                                    ? e.image
-                                    : null;
-                            if (targetImage) {
-                                // Hide panel if no hit:
-                                if (!objectPosition.length) {
-                                    document
-                                        .getElementById("vr-image-panel")
-                                        .classList.add("hidden");
-                                    return;
-                                }
-
-                                // Find matching image:
-                                const entry = imageArray.find((e) =>
-                                    e.name
-                                        .toLowerCase()
-                                        .includes(
-                                            objectPosition[0].object.name.toLowerCase(),
-                                        ),
-                                );
-                                console.log(imageArray)
-                                console.log(entry)
-
-                                if (entry) {
-                                    const panel =
-                                        document.getElementById(
-                                            "vr-image-panel",
-                                        );
-                                    panel.classList.remove("hidden");
-                                    document.getElementById("vr-img").src =
-                                        targetImage; // Data-URL or Blob URL
-                                } else {
-                                    // No image for this object, hide:
-                                    document
-                                        .getElementById("vr-image-panel")
-                                        .classList.add("hidden");
-                                }
-                            }
-                        });
-                    }
-                    // showWireframe(scene, true);
-                    // VRSpheres.forEach((e) => {
-                    //     showWireframe(e, false);
-                    // });
-                }
-            } else {
-                // showWireframe(scene, false);
-            }
+        if (entry) {
+            img.src = entry.image;
+            panel.classList.remove("hidden");
+        } else {
+            panel.classList.add("hidden");
         }
     }
+
+    showGeneratedView = !showGeneratedView;
+}
+    
 
     const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048, {
         format: THREE.RGBAFormat,
@@ -891,6 +856,7 @@ import ObjectList from "../components/object-list.tsx";
     const simplifiedNamesId = [];
     const images = [];
     let globalFloors = [];
+    let originalWireframeMeshes = []
 
     async function fetchDataFromServer() {
         try {
@@ -1146,6 +1112,7 @@ import ObjectList from "../components/object-list.tsx";
             if (child.isMesh) {
                 child.material = material;
                 child.material.wireframe = true; // Ensure wireframe is initially false
+                originalWireframeMeshes.push(child);
             }
         });
     }
@@ -1811,6 +1778,7 @@ import ObjectList from "../components/object-list.tsx";
                     ) {
                         child.material = material;
                         child.material.wireframe = true; // Ensure wireframe is initially false
+                        originalWireframeMeshes.push(child);
                     }
                 });
             }
@@ -1947,6 +1915,83 @@ import ObjectList from "../components/object-list.tsx";
         link.download = `${label}.png`;
         link.click();
     }
+
+async function render360SnapshotForCone(cone, allCones = markers) {
+    // 1) backup renderer state
+    const origSize       = renderer.getSize(new THREE.Vector2());
+    const origDPR        = renderer.getPixelRatio();
+    const origClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+    const origClearAlpha = renderer.getClearAlpha();
+    const origAutoClear  = renderer.autoClear;
+
+
+
+    // 2) add a light at every cone in the group
+    const lights = markers.map((mark) => {
+        const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
+        light.position.copy(mark.position);
+        scene.add(light);
+        return light;
+    });
+
+    // Hide everything but the cones
+    // scene.children.forEach(o => o.visible = false);
+    // markers.forEach(m => {
+    //   m.visible = true;
+    //   // keep their original materials
+    // });
+    cone.visible = true
+
+    markers.forEach((m) => (m.visible = false));
+    const whiteMat = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        shininess: 30,
+    });
+    whiteMat.dithering = true;
+    const prevOverride = scene.overrideMaterial;
+    scene.overrideMaterial = whiteMat;
+
+    // Capture cube map
+    cubeCamera.position.copy(cone.position);
+    renderer.autoClear = true
+    cubeCamera.update(renderer, scene);
+
+    // Restore material and visibility
+    scene.overrideMaterial = prevOverride;
+    markers.forEach((m) => (m.visible = true));
+
+    // 6) equirectangular pass (identical to exportAll360ForGroup)
+    // Equirectangular pass
+    renderer.setPixelRatio(1);
+    renderer.setSize(4096, 2048);
+    renderer.setRenderTarget(null);
+    renderer.autoClear = true;
+    renderer.setClearColor(0x000000, 1);
+    renderer.clear(true, true, true);
+    renderer.render(eqScene, eqCam);
+
+    // Source canvas
+    const srcCanvas = renderer.domElement;
+
+    const dataURL = srcCanvas.toDataURL("image/jpeg", 0.8);
+
+    // 8) re-enable wireframes
+    originalWireframeMeshes.forEach(m => {
+      m.material.wireframe = true;
+      m.material.needsUpdate = true;
+    });
+
+    lights.forEach((l) => scene.remove(l));
+
+    // 7) restore renderer state
+    renderer.setPixelRatio(origDPR);
+    renderer.setSize(origSize.x, origSize.y, true);
+    renderer.setClearColor(origClearColor, origClearAlpha);
+    renderer.autoClear = origAutoClear;
+
+    // 9) return a JPEG data-URL
+    return dataURL;
+}
 
     /**
      * exportAll360ForGroup: exports one group's CSV+cones into a zip folder (or downloads directly)
