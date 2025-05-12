@@ -1953,6 +1953,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
     // Capture cube map
     cubeCamera.position.copy(cone.position);
+    cubeCamera.quaternion.copy(cone.quaternion);
     renderer.autoClear = true
     cubeCamera.update(renderer, scene);
 
@@ -2058,6 +2059,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
             // Capture cube map
             cubeCamera.position.copy(cone.position);
+            cubeCamera.quaternion.copy(cone.quaternion);
             cubeCamera.update(renderer, scene);
 
             // Restore material and visibility
