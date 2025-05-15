@@ -286,6 +286,12 @@ import ObjectList from "../components/object-list.tsx";
         class="overflow-hidden pointer-events-none z-[100]"
     >
     </div>
+    <div id="hover-tooltip"
+     style="position:fixed; padding:4px 8px; font:11px/1 monospace;
+            color:#fff; background:#000d; border-radius:4px;
+            pointer-events:none; opacity:0; transition:opacity .15s">
+    Click to focus
+    </div>
 </html>
 
 <script>
@@ -296,9 +302,9 @@ import ObjectList from "../components/object-list.tsx";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
     import JSZip from "jszip";
+    import gsap from "gsap";
 
     //Resizing image previewer
-
     const panel = document.getElementById("vr-image-panel");
     const handle = document.getElementById("vr-resize-handle");
 
@@ -510,8 +516,41 @@ import ObjectList from "../components/object-list.tsx";
     const orthoPointer = new THREE.Vector2();
 
     function onPointerMove(event) {
-        pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+       /* If the pointer is over the outliner (or a child of it),
+          don’t run the viewport-hover logic – let the outliner’s
+          own mouseenter/leave handlers manage the tooltip. */
+       if (event.target.closest('#outliner')) {
+           return;
+       }
+        /* 1 — turn any movement into a “hide” */
+        hideTooltip();                // clears timer + fades out if visible
+
+        /* 2 — update the pointer NDC */
+        pointer.x =  (event.clientX / window.innerWidth ) * 2 - 1;
         pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        /* helper to climb to the GLB root */
+        function findGLBRoot(obj) {
+            while (obj && obj !== scene) {
+                if ((obj.name || "").toLowerCase().endsWith(".glb")) return obj;
+                obj = obj.parent;
+            }
+            return null;
+        }
+
+        /* 3 — ray‑cast and arm a NEW timer (only if cursor stays put) */
+        raycaster.setFromCamera(pointer, camera);
+        const firstHit = raycaster.intersectObjects(scene.children, true)[0];
+        const hitRoot  = firstHit ? findGLBRoot(firstHit.object) : null;
+
+        hoverObject = hitRoot;        // remember current object (may be null)
+
+        if (hoverObject) {
+            hoverTimerId = setTimeout(() => {
+                showTooltip(event.clientX, event.clientY,
+                            "Double-click to refocus");
+            }, 1000);   // 1 s delay (set to 3000 for 3 s)
+        }
     }
 
     function handleFloors() {
@@ -591,19 +630,26 @@ import ObjectList from "../components/object-list.tsx";
         }
     }
 
-    let showGeneratedView = false;
+let lastConeClicked = null;   // remembers which cone we clicked last
+let showGeneratedView   = false;  // toggle state *for that cone only*
 
-async function moveTo(event) {
+async function reviewVR(event) {
     const intersects = raycaster.intersectObjects(markers);
-    const hit = intersects.find(
-        (i) => i.object.cameraPos && i.object.parent.visible
-    );
+    const hit = intersects.find(i => i.object.cameraPos && i.object.parent.visible);
     if (!hit) return;
 
-    const cone = hit.object;
+    const cone       = hit.object;
+    const panel      = document.getElementById("vr-image-panel");
+    const img        = document.getElementById("vr-img");
     const targetName = cone.name.toLowerCase();
-    const panel = document.getElementById("vr-image-panel");
-    const img = document.getElementById("vr-img");
+
+    /* ───── decide which view to show ───── */
+    if (cone !== lastConeClicked) {          // new cone → always start in photo mode
+        lastConeClicked = cone;
+        showGeneratedView = false;
+    } else {
+        showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
+    }
 
     if (showGeneratedView) {
         console.log(cone)
@@ -622,7 +668,6 @@ async function moveTo(event) {
         }
     }
 
-    showGeneratedView = !showGeneratedView;
 }
     
 
@@ -686,7 +731,7 @@ async function moveTo(event) {
 
     window.addEventListener("pointermove", onPointerMove);
 
-    window.addEventListener("click", moveTo);
+    window.addEventListener("click", reviewVR);
 
     window.addEventListener("keydown", (e) => {
         if (e.key == "ArrowLeft") {
@@ -708,8 +753,41 @@ async function moveTo(event) {
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
     orbitalControls.enableKeys = false;
 
-    // const orbitalControlsOrtho = new OrbitControls(orthoCamera, orthoRenderer.domElement);
-    // orbitalControlsOrtho.enabled = false;
+    function fitCameraToObject(cam, controls, obj, padding = 2.5, duration = 0.6) {
+    // 1. Get world-space bounding box & size
+    const box   = new THREE.Box3().setFromObject(obj);
+    const size  = box.getSize(new THREE.Vector3());
+    const center= box.getCenter(new THREE.Vector3());
+
+    // 2. Figure out the largest side and required distance
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov    = cam.fov * (Math.PI/180);
+    let   dist   = (maxDim/2) / Math.tan(fov/2);
+    dist  *= padding;                // add some head-room
+
+    // 3. Build new camera position (keep same spherical angle)
+    const dir = new THREE.Vector3()
+                    .subVectors(cam.position, controls.target)
+                    .normalize();
+    const newPos = dir.multiplyScalar(dist).add(center);
+
+    // 4. Animate camera & target
+    const tweenObj = {
+        cx: cam.position.x, cy: cam.position.y, cz: cam.position.z,
+        tx: controls.target.x, ty: controls.target.y, tz: controls.target.z
+    };
+    gsap.to(tweenObj, {
+        cx: newPos.x, cy: newPos.y, cz: newPos.z,
+        tx: center.x, ty: center.y, tz: center.z,
+        duration,
+        ease: "power2.out",
+        onUpdate: () => {
+        cam.position.set(tweenObj.cx, tweenObj.cy, tweenObj.cz);
+        controls.target.set(tweenObj.tx, tweenObj.ty, tweenObj.tz);
+        controls.update();
+        }
+    });
+    }
 
     // Variables for keyboard control
     const keyState = {};
@@ -726,6 +804,15 @@ async function moveTo(event) {
     // Adjust these speeds to control rotation and movement
     const rotationSpeed = 0.02;
     const movementSpeed = 0.5;
+
+    // 1) Double-click in the viewport → focus whatever you double-clicked
+    renderer.domElement.addEventListener("dblclick", (e) => {
+    pointer.x =  (e.clientX / window.innerWidth ) * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(scene.children, true)[0];
+    if (hit) fitCameraToObject(camera, orbitalControls, hit.object);
+    });
 
     function animate() {
         // Update raycaster for object intersections
@@ -860,26 +947,6 @@ async function moveTo(event) {
 
     async function fetchDataFromServer() {
         try {
-            // // Fetch the image data
-            // const modelResponse = await fetch("http://localhost:9234/model");
-            // if (!modelResponse.ok) throw new Error("Failed to fetch model");
-            // const modelArray = await modelResponse.json();
-
-            // console.log(modelArray)
-
-            // modelArray.forEach((e) => {
-            //     console.log(e)
-            //     // Convert the model buffer to a Blob
-            //     const modelBlob = new Blob(e.model.data, {
-            //         type: "model/gltf-binary",
-            //     }); // Update type if necessary
-            //     const modelFile = new File([modelBlob], e.modelName, {
-            //         type: "model/gltf-binary",
-            //     });
-            //     // Pass the model File object to handleFileChange
-            //     handleFileChange(modelFile, [modelFile]);
-            // })
-            // Fetch the manifest of models
             // Fetch the manifest of models
             let fileName;
             try {
@@ -1474,7 +1541,7 @@ async function moveTo(event) {
             const distance = camera.position.distanceTo(marker.position);
             const normalizedDistance =
                 (distance - minDistance + 1) / distanceRange;
-            const minOpacity = 0.2;
+            const minOpacity = 0.6;
             labelDiv.style.opacity =
                 minOpacity +
                 (1 - minOpacity) *
@@ -1877,6 +1944,22 @@ async function moveTo(event) {
             });
         }
 
+
+            if ( (object.name || '').toLowerCase().endsWith('.glb') ) {
+                container.addEventListener('mouseenter', ev => {
+                    hoverTimerId = setTimeout(() => {
+                    showTooltip(ev.clientX, ev.clientY, "Click to refocus");
+                    }, 200);      // 3 s
+                });
+
+                container.addEventListener('mousemove', ev => {
+                    if (tooltip.style.opacity === '1') showTooltip(ev.clientX, ev.clientY, "Click to refocus");
+                });
+
+                container.addEventListener('mouseleave', hideTooltip);
+                container.addEventListener('click', hideTooltip); // user followed hint
+            }
+
         // Context menu on CSV files: export 360 for the whole group
         if (object.name.toLowerCase().endsWith(".csv")) {
             container.addEventListener("contextmenu", (e) => {
@@ -2228,11 +2311,42 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         return null;
     }
 
+    const tooltip = document.getElementById('hover-tooltip');
+    let  hoverTimerId  = null;
+    let hoverObject  = null; 
+
+    /**
+     * Show tooltip next to the mouse.
+     * @param {number}  x   screen-space X
+     * @param {number}  y   screen-space Y
+     * @param {string=} msg text to display (defaults to previous / “Double-click to refocus”)
+     */
+    function showTooltip(x, y, msg) {
+        if (msg !== undefined) tooltip.textContent = msg;
+        tooltip.style.left  = (x + 14) + 'px';
+        tooltip.style.top   = (y + 14) + 'px';
+        tooltip.style.opacity = 1;
+    }
+    /** hide tooltip & cancel timer */
+    function hideTooltip() {
+        clearTimeout(hoverTimerId);
+        hoverTimerId = null;
+        tooltip.style.opacity = 0;
+    }
+
     // Updated updateOutliner with grouping logic
     function updateOutliner() {
         const outliner = document.getElementById("outliner");
         if (!outliner) return;
         outliner.innerHTML = "";
+
+        // 2) Outliner rows already have the object id stored:
+        outliner.addEventListener("click", (e) => {
+        const li = e.target.closest("li[data-object-id]");
+        if (!li) return;
+        const obj = scene.getObjectById(+li.dataset.objectId);
+        if (obj)  fitCameraToObject(camera, orbitalControls, obj);
+        });
 
         // -- build map of groups --
         const groupsMap = new Map();
