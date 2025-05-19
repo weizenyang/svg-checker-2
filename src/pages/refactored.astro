@@ -429,6 +429,11 @@ import "../styles.css";
 					multiple
 					style="display:none; "
 				/>
+				<button id="clear-images"
+        class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
+        type="button">
+  Clear Images
+</button>
 				<div
 					id="image-carousel-container"
 					class="hidden flex-col p-2 bg-neutral-100 rounded-sm"
@@ -1576,14 +1581,14 @@ import "../styles.css";
 			svgElement.setAttributeNS(null, "height", "100%");
 			svgContainer.appendChild(svgElement);
 
+			console.log(imageList.length)
+
 			if (imageList.length > 0) {
-				previewBackplate(
 					previewBackplate(
 						document
 							.getElementById("svg-container")
 							.querySelector("svg"),
-					),
-				);
+					)
 			}
 
 			// Set type for export filename
@@ -1637,10 +1642,7 @@ import "../styles.css";
 							svgImage.setAttributeNS(null, "width", viewBox[2]);
 							svgImage.setAttributeNS(null, "height", viewBox[3]);
 							// Insert the image as the first child (or adjust position as needed)
-							svgElement.insertBefore(
-								svgImage,
-								svgElement.firstChild,
-							);
+							svgElement.insertBefore(svgImage, svgElement.firstChild);
 						}
 					});
 				};
@@ -2103,6 +2105,32 @@ import "../styles.css";
 		}
 
 		const imageList = [];
+		document.getElementById("check-floorplans-button").addEventListener("change", (e) => {
+			console.log("Change") 
+			uploadImages(e)
+		});
+
+		document.getElementById("clear-images").addEventListener("click", () => {
+			// 1. empty the array that the previewer uses
+			imageList.splice(0, imageList.length);
+
+			// 2. remove thumbnails
+			const carousel = document.getElementById("image-list-carousel");
+			if (carousel) carousel.innerHTML = "";
+
+			// 3. hide the image-list UI if it’s open
+			const imgListContainer = document.getElementById("image-carousel-container");
+			if (imgListContainer && imgListContainer.classList.contains("flex")) {
+				imgListContainer.classList.remove("flex");
+				imgListContainer.classList.add("hidden");
+			}
+
+			// 4. hide the floating previewer if it exists
+			const previewer = document.getElementById("image-previewer-container");
+			if (previewer) previewer.style.display = "none";
+			
+		});
+
 
 		function uploadImages(e) {
 			const files = Array.from(e.target.files);
@@ -2166,6 +2194,7 @@ import "../styles.css";
 			});
 
 			let previewerInstance = document.getElementById("image-previewer");
+			console.log("previewing")
 			if (!previewerInstance) {
 				const newPreviewer = document.createElement("div");
 				const previewerImg = document.createElement("img");
@@ -2197,21 +2226,15 @@ import "../styles.css";
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
-					const textReplacement =
-						document.getElementById("text-replacement").value;
+					const textReplacement = document.getElementById("text-replacement").value;
 					console.log(textReplacement);
-					const selectedImage = imageList.filter((image) => {
-						console.log(
-							e.target.id
+					console.log(e.target.id
 								.split("_")
 								.join("")
 								.split("-")
 								.join("")
-								.replace(textReplacement, ""),
-						);
-						console.log(
-							image.name.split("_").join("").split("-").join(""),
-						);
+								.replace(textReplacement, ""),);
+					const selectedImage = imageList.filter((image) => {
 						return image.name
 							.split("_")
 							.join("")
@@ -2226,6 +2249,8 @@ import "../styles.css";
 									.replace(textReplacement, ""),
 							);
 					})[0];
+
+					console.log(selectedImage)
 
 					if (selectedImage) {
 						// console.log(selectedImage)
