@@ -699,6 +699,37 @@ import "../styles.css";
 			isPanning = false; // Stop panning if the mouse leaves the canvas
 		});
 
+		// helper – add one element to the multiselect lists (no duplicates)
+		function addToSelection(el) {
+		if (!el || el.nodeName.toLowerCase() === 'svg') return;        // ignore root SVG
+			if (!el.classList.contains('svg-tool-selected')) {             // not already in set
+				el.classList.add('svg-tool-selected');
+				el.style.fill = '#ff0000';
+				groupGlobal.push(el);
+			}
+		}
+
+		// track the primary button
+		let primaryMouseIsDown = false;
+		document.addEventListener('mousedown', e => {
+		if (e.button === 0) primaryMouseIsDown = true;
+		});
+		document.addEventListener('mouseup',   e => {
+		if (e.button === 0) primaryMouseIsDown = false;
+		});
+
+		document.getElementById('svg-container')
+		.addEventListener('mousemove', e => {
+			if (!primaryMouseIsDown || !e.shiftKey) return;              // nothing to do
+
+			const target = e.target;                                     // element under cursor
+			const parentIsG = target.parentNode?.nodeName.toLowerCase() === 'g';
+			const valid     = parentIsG || target.nodeName.toLowerCase() === 'circle';
+
+			if (valid) addToSelection(target);
+		});
+
+
 		document
 			.getElementById("svg-container")
 			.addEventListener("mouseover", (e) => {
@@ -3356,11 +3387,24 @@ import "../styles.css";
 							color: color,
 							margin: "0px",
 							pointerEvents: "none",
-							lineHeight: "1.5em",
+							lineHeight: "1.3em",
 							display,
 						});
 						p.className = className;
-						p.textContent = text;
+						if (text.split(" ").length > 2) {
+							let textArray = text.split(" ");
+							let finalTextArray = []
+							textArray.forEach((word, index) => {
+								if (index > 0 &&index % 2 == 0) {
+									finalTextArray.push("<br>");
+								}
+								finalTextArray.push(word);
+							});
+							p.innerHTML = finalTextArray.join(" ");
+						} else {
+							p.textContent = text;
+						}
+						// p.textContent = text;
 						return p;
 					};
 
@@ -3386,6 +3430,7 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
+							lineHeight: "1.3em",
 						});
 
 						const idText = e.id
