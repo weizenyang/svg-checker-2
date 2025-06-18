@@ -298,6 +298,13 @@
           </div>
         </div>
         
+        <div class="rotation-input">
+          <span>Export Filename:</span>
+          <div>
+            <input type="text" id="filename-input" placeholder="Enter filename..." style="width: 200px;">
+          </div>
+        </div>
+        
         <div class="buttons">
           <button id="reset-button" class="reset-button" disabled>Reset Rotation</button>
           <button id="export-button" class="export-button" disabled>Export Image</button>
@@ -336,6 +343,7 @@ import { imageConfig } from "astro:assets";
       const latitudeInput = document.getElementById('latitude-input');
       const longitudeOffsetDisplay = document.getElementById('longitude-offset-display');
       const latitudeOffsetDisplay = document.getElementById('latitude-offset-display');
+      const filenameInput = document.getElementById('filename-input');
 
       // Set up drop areas
       setupDropArea('reference-drop', loadReferenceImage);
@@ -439,7 +447,7 @@ import { imageConfig } from "astro:assets";
           reader.onload = function(e) {
             const img = new Image();
             img.onload = function() {
-              callback(img);
+              callback(img, file.name);
             };
             img.src = e.target.result;
             imageSize.width = img.width
@@ -450,15 +458,20 @@ import { imageConfig } from "astro:assets";
         }
       }
       
-      function loadReferenceImage(img) {
+      function loadReferenceImage(img, filename) {
         referenceImage = img;
         drawImage(referenceCtx, img);
         // Hide the drop area after image is loaded
         document.getElementById('reference-drop').style.display = 'none';
       }
       
-      function loadEditImage(img) {
+      function loadEditImage(img, filename) {
         editImage = img;
+        // Set the filename in the input field (remove extension and add suffix)
+        if (filename) {
+          const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+          filenameInput.value = nameWithoutExt;
+        }
         drawImage(editCtx, img, longitudeRotation, latitudeRotation);
         resetButton.disabled = false;
         exportButton.disabled = false;
@@ -640,9 +653,10 @@ import { imageConfig } from "astro:assets";
           0, 0, tempCanvas.width, tempCanvas.height
         );
         
-        // Create a download link
+        // Create a download link with custom filename
+        const filename = filenameInput.value || 'rotated-equirectangular';
         const link = document.createElement('a');
-        link.download = 'rotated-equirectangular.png';
+        link.download = filename + '.png';
         link.href = tempCanvas.toDataURL('image/png');
         link.click();
       }

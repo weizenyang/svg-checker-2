@@ -2149,7 +2149,7 @@ import "../styles.css";
 			const carousel = document.getElementById("image-list-carousel");
 			if (carousel) carousel.innerHTML = "";
 
-			// 3. hide the image-list UI if it’s open
+			// 3. hide the image-list UI if it's open
 			const imgListContainer = document.getElementById("image-carousel-container");
 			if (imgListContainer && imgListContainer.classList.contains("flex")) {
 				imgListContainer.classList.remove("flex");
@@ -3387,25 +3387,50 @@ import "../styles.css";
 							color: color,
 							margin: "0px",
 							pointerEvents: "none",
-							lineHeight: "1.3em",
+							lineHeight: "1.5em",
 							display,
 						});
 						p.className = className;
-						if (text.split(" ").length > 2) {
-							let textArray = text.split(" ");
-							let finalTextArray = []
-							textArray.forEach((word, index) => {
-								if (index > 0 &&index % 2 == 0) {
-									finalTextArray.push("<br>");
-								}
-								finalTextArray.push(word);
-							});
-							p.innerHTML = finalTextArray.join(" ");
-						} else {
-							p.textContent = text;
-						}
-						// p.textContent = text;
+						p.innerHTML = text; // Changed from textContent to innerHTML to support line breaks
 						return p;
+					};
+
+					// Helper function to format text with line breaks for more than 3 words
+					const formatTextWithLineBreaks = (text) => {
+						// Extract room name from pattern like "0_Balcony_1" -> "Balcony"
+						// or "0_MasterBedroomBathroom_1" -> "MasterBedroomBathroom"
+						let cleanedText = text;
+						
+						// If the text contains underscores, extract the middle part(s)
+						if (text.includes('_')) {
+							const parts = text.split('_');
+							// Remove first and last parts if they are numbers
+							const isFirstPartNumber = /^\d+$/.test(parts[0]);
+							const isLastPartNumber = /^\d+$/.test(parts[parts.length - 1]);
+							
+							if (isFirstPartNumber && isLastPartNumber && parts.length >= 3) {
+								// Take everything except first and last part
+								cleanedText = parts.slice(1, -1).join('');
+							} else if (isFirstPartNumber && parts.length >= 2) {
+								// Only remove first part if it's a number
+								cleanedText = parts.slice(1).join('');
+							}
+						}
+						
+						// Add spaces before capital letters and numbers
+						const spacedText = cleanedText
+							.replace(/([A-Z0-9])/g, " $1")
+							.trim();
+						
+						const words = spacedText.split(' ').filter(word => word.length > 0);
+						if (words.length > 3) {
+							// Split roughly in half
+							const midPoint = Math.ceil(words.length / 2);
+							const firstLine = words.slice(0, midPoint).join(' ');
+							const secondLine = words.slice(midPoint).join(' ');
+							return `${firstLine}<br>${secondLine}`;
+						}
+						return spacedText;
 					};
 
 					const createDiv = (e) => {
@@ -3430,17 +3455,14 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
-							lineHeight: "1.3em",
 						});
 
-						const idText = e.id
-							.replace(/([A-Z0-9])/g, " $1")
-							.trim();
+						const formattedText = formatTextWithLineBreaks(e.id);
 						div.appendChild(
-							createParagraph("text-normal", idText, "block"),
+							createParagraph("text-normal", formattedText, "block"),
 						);
 						div.appendChild(
-							createParagraph("text-hover", idText, "none"),
+							createParagraph("text-hover", formattedText, "none"),
 						);
 
 						div.onmouseover = () => toggleHover(div, true);
@@ -3472,13 +3494,11 @@ import "../styles.css";
 							fontSize: "2.25rem",
 						});
 
-						const idText = e.id
-							.replace(/([A-Z0-9])/g, " $1")
-							.trim();
+						const formattedText = formatTextWithLineBreaks(e.id);
 						div.appendChild(
 							createParagraph(
 								"text-normal",
-								idText,
+								formattedText,
 								"block",
 								"rgba(0,0,0,0)",
 							),
@@ -3505,13 +3525,11 @@ import "../styles.css";
 							padding: "6px 28px",
 						});
 
-						const idText = e.id
-							.replace(/([A-Z0-9])/g, " $1")
-							.trim();
+						const formattedText = formatTextWithLineBreaks(e.id);
 						div.appendChild(
 							createParagraph(
 								"text-normal",
-								idText,
+								formattedText,
 								"block",
 								"rgba(0,0,0,0)",
 							),
@@ -3570,13 +3588,11 @@ import "../styles.css";
 							padding: "6px 28px",
 						});
 
-						const idText = e.id
-							.replace(/([A-Z0-9])/g, " $1")
-							.trim();
+						const formattedText = formatTextWithLineBreaks(e.id);
 						div.appendChild(
 							createParagraph(
 								"text-normal",
-								idText,
+								formattedText,
 								"block",
 								"rgba(0,0,0,0)",
 							),
