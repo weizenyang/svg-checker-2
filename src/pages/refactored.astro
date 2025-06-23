@@ -3387,7 +3387,7 @@ import "../styles.css";
 							color: color,
 							margin: "0px",
 							pointerEvents: "none",
-							lineHeight: "1.5em",
+							lineHeight: "1.2em",
 							display,
 						});
 						p.className = className;
@@ -3423,7 +3423,7 @@ import "../styles.css";
 							.trim();
 						
 						const words = spacedText.split(' ').filter(word => word.length > 0);
-						if (words.length > 3) {
+						if (words.length > 2) {
 							// Split roughly in half
 							const midPoint = Math.ceil(words.length / 2);
 							const firstLine = words.slice(0, midPoint).join(' ');
