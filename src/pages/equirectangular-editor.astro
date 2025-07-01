@@ -29,7 +29,7 @@
         height: 100%;
         border: 3px dashed #ccc;
         border-radius: 10px;
-        display: flex;
+        display: none; /* Hidden by default */
         align-items: center;
         justify-content: center;
         text-align: center;
@@ -41,6 +41,9 @@
       .drop-area.highlight {
         border-color: #4a90e2;
         background-color: rgba(240, 247, 255, 0.9);
+      }
+      .drop-area.show {
+        display: flex;
       }
       .drop-area p {
         margin: 0;
@@ -382,6 +385,38 @@ import { imageConfig } from "astro:assets";
       setupDropArea('reference-drop', loadReferenceImage);
       setupDropArea('edit-drop', loadEditImage);
       
+      // Initially show drop areas for empty canvases
+      document.getElementById('reference-drop').classList.add('show');
+      document.getElementById('edit-drop').classList.add('show');
+      
+      // Set up drag events on canvas containers to show drop areas
+      document.querySelectorAll('.canvas-container').forEach(container => {
+        container.addEventListener('dragenter', function(e) {
+          e.preventDefault();
+          const dropArea = container.querySelector('.drop-area');
+          dropArea.classList.add('show');
+        });
+        
+        container.addEventListener('dragleave', function(e) {
+          e.preventDefault();
+          // Only hide if we're leaving the container entirely
+          if (!container.contains(e.relatedTarget)) {
+            const dropArea = container.querySelector('.drop-area');
+            dropArea.classList.remove('show');
+          }
+        });
+        
+        container.addEventListener('dragover', function(e) {
+          e.preventDefault();
+        });
+        
+        container.addEventListener('drop', function(e) {
+          e.preventDefault();
+          const dropArea = container.querySelector('.drop-area');
+          dropArea.classList.remove('show');
+        });
+      });
+      
       // Canvas initialization
       function initCanvas(canvas) {
         const container = canvas.parentElement;
@@ -534,9 +569,8 @@ import { imageConfig } from "astro:assets";
       function loadReferenceImage(img, filename) {
         referenceImage = img;
         drawImage(referenceCtx, img);
-        // Show drop area again for replacement capability
-        document.getElementById('reference-drop').style.display = 'flex';
-        document.getElementById('reference-drop').querySelector('p').textContent = 'Drop new reference image to replace';
+        // Hide drop area after image is loaded - it will show again during drag events
+        document.getElementById('reference-drop').classList.remove('show');
       }
       
       function loadEditImage(img, filename) {
@@ -549,9 +583,8 @@ import { imageConfig } from "astro:assets";
         drawImage(editCtx, img, longitudeRotation, latitudeRotation);
         resetButton.disabled = false;
         exportButton.disabled = false;
-        // Show drop area again for replacement capability
-        document.getElementById('edit-drop').style.display = 'flex';
-        document.getElementById('edit-drop').querySelector('p').textContent = 'Drop new image to replace';
+        // Hide drop area after image is loaded - it will show again during drag events
+        document.getElementById('edit-drop').classList.remove('show');
       }
       
       function drawImage(ctx, img, lonRotation = 0, latRotation = 0) {
