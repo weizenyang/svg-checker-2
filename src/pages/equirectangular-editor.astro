@@ -201,7 +201,30 @@
         background-color: red;
         pointer-events: none; /* allows clicking through to canvas */
         z-index: 5;
-    }
+      }
+      .hover-indicator {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background-color: #ffff00;
+        pointer-events: none;
+        z-index: 6;
+        display: none;
+      }
+      .degree-display {
+        position: absolute;
+        bottom: -25px;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 7;
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -242,6 +265,8 @@
           </div>
           <canvas id="reference-canvas"></canvas>
           <div class="center-line"></div>
+          <div id="reference-hover-line" class="hover-indicator"></div>
+          <div id="reference-degree-display" class="degree-display"></div>
         </div>
       </div>
 
@@ -253,6 +278,8 @@
           </div>
           <canvas id="edit-canvas"></canvas>
           <div class="center-line"></div>
+          <div id="edit-hover-line" class="hover-indicator"></div>
+          <div id="edit-degree-display" class="degree-display"></div>
         </div>
       </div>
 
@@ -344,6 +371,12 @@ import { imageConfig } from "astro:assets";
       const longitudeOffsetDisplay = document.getElementById('longitude-offset-display');
       const latitudeOffsetDisplay = document.getElementById('latitude-offset-display');
       const filenameInput = document.getElementById('filename-input');
+      
+      // Hover indicator elements
+      const referenceHoverLine = document.getElementById('reference-hover-line');
+      const editHoverLine = document.getElementById('edit-hover-line');
+      const referenceDegreeDisplay = document.getElementById('reference-degree-display');
+      const editDegreeDisplay = document.getElementById('edit-degree-display');
 
       // Set up drop areas
       setupDropArea('reference-drop', loadReferenceImage);
@@ -393,7 +426,47 @@ import { imageConfig } from "astro:assets";
         }
       });
       
-      // Functions
+      // Mouse hover event listeners for degree display
+      referenceCanvas.addEventListener('mousemove', handleCanvasHover);
+      editCanvas.addEventListener('mousemove', handleCanvasHover);
+      referenceCanvas.addEventListener('mouseleave', hideHoverIndicators);
+      editCanvas.addEventListener('mouseleave', hideHoverIndicators);
+      
+      function handleCanvasHover(e) {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const canvasWidth = rect.width;
+        
+        // Calculate degree (0-360) based on mouse position
+        const degree = (x / canvasWidth) * 360;
+        
+        // Show hover lines on both canvases at the same position
+        const leftPercent = (x / canvasWidth) * 100;
+        
+        referenceHoverLine.style.left = leftPercent + '%';
+        editHoverLine.style.left = leftPercent + '%';
+        referenceDegreeDisplay.style.left = leftPercent + '%';
+        editDegreeDisplay.style.left = leftPercent + '%';
+        
+        // Update degree text
+        const degreeText = degree.toFixed(1) + '°';
+        referenceDegreeDisplay.textContent = degreeText;
+        editDegreeDisplay.textContent = degreeText;
+        
+        // Show indicators
+        referenceHoverLine.style.display = 'block';
+        editHoverLine.style.display = 'block';
+        referenceDegreeDisplay.style.display = 'block';
+        editDegreeDisplay.style.display = 'block';
+      }
+      
+      function hideHoverIndicators() {
+        referenceHoverLine.style.display = 'none';
+        editHoverLine.style.display = 'none';
+        referenceDegreeDisplay.style.display = 'none';
+        editDegreeDisplay.style.display = 'none';
+      }
+      
       function setupDropArea(id, callback) {
         const dropArea = document.getElementById(id);
         const highlight = () => dropArea.classList.add('highlight');
@@ -461,13 +534,14 @@ import { imageConfig } from "astro:assets";
       function loadReferenceImage(img, filename) {
         referenceImage = img;
         drawImage(referenceCtx, img);
-        // Hide the drop area after image is loaded
-        document.getElementById('reference-drop').style.display = 'none';
+        // Show drop area again for replacement capability
+        document.getElementById('reference-drop').style.display = 'flex';
+        document.getElementById('reference-drop').querySelector('p').textContent = 'Drop new reference image to replace';
       }
       
       function loadEditImage(img, filename) {
         editImage = img;
-        // Set the filename in the input field (remove extension and add suffix)
+        // Set the filename in the input field (remove extension)
         if (filename) {
           const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
           filenameInput.value = nameWithoutExt;
@@ -475,8 +549,9 @@ import { imageConfig } from "astro:assets";
         drawImage(editCtx, img, longitudeRotation, latitudeRotation);
         resetButton.disabled = false;
         exportButton.disabled = false;
-        // Hide the drop area after image is loaded
-        document.getElementById('edit-drop').style.display = 'none';
+        // Show drop area again for replacement capability
+        document.getElementById('edit-drop').style.display = 'flex';
+        document.getElementById('edit-drop').querySelector('p').textContent = 'Drop new image to replace';
       }
       
       function drawImage(ctx, img, lonRotation = 0, latRotation = 0) {
