@@ -2062,7 +2062,9 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     // 2) add a light at every cone in the group
     const lights = markers.map((mark) => {
         const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-        light.position.copy(mark.position);
+        const markWorldPos = new THREE.Vector3();
+        mark.getWorldPosition(markWorldPos);
+        light.position.copy(markWorldPos);
         scene.add(light);
         return light;
     });
@@ -2084,13 +2086,19 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     const prevOverride = scene.overrideMaterial;
     scene.overrideMaterial = whiteMat;
 
-    // Capture cube map
-    cubeCamera.position.copy(cone.position);
-    cubeCamera.quaternion.copy(cone.quaternion);
+    // Capture cube map - use world position/rotation to account for group transformations
+    const worldPosition = new THREE.Vector3();
+    const worldQuaternion = new THREE.Quaternion();
+    cone.getWorldPosition(worldPosition);
+    cone.getWorldQuaternion(worldQuaternion);
+    
+    cubeCamera.position.copy(worldPosition);
+    cubeCamera.quaternion.copy(worldQuaternion);
+    // Apply consistent 90° clockwise offset to align camera forward direction
     cubeCamera.quaternion.multiply(
       new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0,1,0),
-        Math.PI/2
+        -Math.PI/2
       )
     );
     renderer.autoClear = true
@@ -2170,7 +2178,9 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         // Add lights once
         const lights = cones.map((cone) => {
             const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-            light.position.copy(cone.position);
+            const coneWorldPos = new THREE.Vector3();
+            cone.getWorldPosition(coneWorldPos);
+            light.position.copy(coneWorldPos);
             scene.add(light);
             return light;
         });
@@ -2196,10 +2206,15 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             const prevOverride = scene.overrideMaterial;
             scene.overrideMaterial = whiteMat;
 
-            // Capture cube map
-            cubeCamera.position.copy(cone.position);
+            // Capture cube map - use world position/rotation to account for group transformations
+            const worldPosition = new THREE.Vector3();
+            const worldQuaternion = new THREE.Quaternion();
+            cone.getWorldPosition(worldPosition);
+            cone.getWorldQuaternion(worldQuaternion);
+            
+            cubeCamera.position.copy(worldPosition);
             console.log(cone.quaternion)
-            cubeCamera.quaternion.copy(cone.quaternion);
+            cubeCamera.quaternion.copy(worldQuaternion);
                // add a 90° clockwise offset about world-Y
                cubeCamera.quaternion.multiply(
                  new THREE.Quaternion().setFromAxisAngle(
