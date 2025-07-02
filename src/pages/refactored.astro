@@ -235,6 +235,30 @@ import "../styles.css";
 								>Reset Rotation</button
 							>
 						</div>
+						<p class="w-full text-xs m-0 mt-2 p-0">Edit Models:</p>
+						<div
+							class="grid grid-cols-2 button-gap gap-1 flex-start"
+							id="model-edit-options"
+						>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="model-flip-x"
+							>
+								Model Flip X</button
+							>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="model-flip-y"
+							>
+								Model Flip Y</button
+							>
+							<button
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								id="model-flip-z"
+							>
+								Model Flip Z</button
+							>
+						</div>
 					</div>
 
 					<div
@@ -3134,6 +3158,74 @@ import "../styles.css";
 			spawnLabel();
 		}
 
+		//Flip Models only
+		function flipModelsX() {
+			var doc = null;
+			doc = document.querySelector("#svg-container").querySelector("svg");
+			const width = doc.viewBox.baseVal.width;
+			
+			// Find and flip model elements (paths, polygons, rects, etc.)
+			const modelElements = doc.querySelectorAll("path, polygon, rect, ellipse");
+			modelElements.forEach((model) => {
+				const currentTransform = model.getAttribute("transform") || "";
+				const scaleTransform = `scaleX(-1) translate(-${width}, 0)`;
+				
+				if (currentTransform.includes("scaleX(-1)")) {
+					// Remove existing flip
+					model.setAttribute("transform", currentTransform.replace(/scaleX\(-1\)[^)]*\)/g, "").trim());
+				} else {
+					// Add flip transform
+					model.setAttribute("transform", `${currentTransform} ${scaleTransform}`.trim());
+				}
+			});
+			spawnLabel();
+		}
+
+		function flipModelsY() {
+			var doc = null;
+			doc = document.querySelector("#svg-container").querySelector("svg");
+			const height = doc.viewBox.baseVal.height;
+			
+			// Find and flip model elements (paths, polygons, rects, etc.)
+			const modelElements = doc.querySelectorAll("path, polygon, rect, ellipse");
+			modelElements.forEach((model) => {
+				const currentTransform = model.getAttribute("transform") || "";
+				const scaleTransform = `scaleY(-1) translate(0, -${height})`;
+				
+				if (currentTransform.includes("scaleY(-1)")) {
+					// Remove existing flip
+					model.setAttribute("transform", currentTransform.replace(/scaleY\(-1\)[^)]*\)/g, "").trim());
+				} else {
+					// Add flip transform
+					model.setAttribute("transform", `${currentTransform} ${scaleTransform}`.trim());
+				}
+			});
+			spawnLabel();
+		}
+
+		function flipModelsZ() {
+			var doc = null;
+			doc = document.querySelector("#svg-container").querySelector("svg");
+			const centerX = doc.viewBox.baseVal.width / 2;
+			const centerY = doc.viewBox.baseVal.height / 2;
+			
+			// Find and flip model elements (simulate Z-axis flip with rotation)
+			const modelElements = doc.querySelectorAll("path, polygon, rect, ellipse");
+			modelElements.forEach((model) => {
+				const currentTransform = model.getAttribute("transform") || "";
+				const rotateTransform = `rotate(180, ${centerX}, ${centerY})`;
+				
+				if (currentTransform.includes("rotate(180")) {
+					// Remove existing Z-flip (180-degree rotation)
+					model.setAttribute("transform", currentTransform.replace(/rotate\(180[^)]*\)/g, "").trim());
+				} else {
+					// Add Z-flip transform (180-degree rotation around center)
+					model.setAttribute("transform", `${currentTransform} ${rotateTransform}`.trim());
+				}
+			});
+			spawnLabel();
+		}
+
 		function transformImages() {
 			// Select the SVG element
 			var svgElement = document
@@ -3277,6 +3369,23 @@ import "../styles.css";
 
 			updateResetButtons();
 		});
+
+		// Model flip event listeners
+		document
+			.getElementById("model-flip-x")
+			.addEventListener("click", () => {
+				flipModelsX();
+			});
+		document
+			.getElementById("model-flip-y")
+			.addEventListener("click", () => {
+				flipModelsY();
+			});
+		document
+			.getElementById("model-flip-z")
+			.addEventListener("click", () => {
+				flipModelsZ();
+			});
 
 		function updateResetButtons() {
 			if (canvasRotate != 0) {
