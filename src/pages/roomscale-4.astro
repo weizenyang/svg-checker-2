@@ -80,28 +80,6 @@ import ObjectList from "../components/object-list.tsx";
                 </button>
             </div>
 
-            <div class="flex space-x-1 mt-3">
-                <p class="font-medium">Models:</p>
-                <button
-                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="models-x-flip"
-                >
-                    Flip-X
-                </button>
-                <button
-                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="models-y-flip"
-                >
-                    Flip-Y
-                </button>
-                <button
-                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="models-z-flip"
-                >
-                    Flip-Z
-                </button>
-            </div>
-
             <div class="rounded-md bg-white max-w-60 p-3 mt-3 space-y-2">
                 <div>
                     <label for="center-csv">Center</label>
@@ -1803,34 +1781,6 @@ async function reviewVR(event) {
         });
     });
 
-    // Model flip handlers
-    document.getElementById("models-x-flip").addEventListener("click", (e) => {
-        objects.forEach((model) => {
-            model.rotateOnWorldAxis(
-                new THREE.Vector3(1, 0, 0),
-                THREE.MathUtils.degToRad(180),
-            );
-        });
-    });
-
-    document.getElementById("models-y-flip").addEventListener("click", (e) => {
-        objects.forEach((model) => {
-            model.rotateOnWorldAxis(
-                new THREE.Vector3(0, 1, 0),
-                THREE.MathUtils.degToRad(180),
-            );
-        });
-    });
-
-    document.getElementById("models-z-flip").addEventListener("click", (e) => {
-        objects.forEach((model) => {
-            model.rotateOnWorldAxis(
-                new THREE.Vector3(0, 0, 1),
-                THREE.MathUtils.degToRad(180),
-            );
-        });
-    });
-
     document.getElementById("center-csv").addEventListener("change", (e) => {
         if (e.target.checked) {
             calculateGroupCenter(m_Group);
@@ -2062,9 +2012,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     // 2) add a light at every cone in the group
     const lights = markers.map((mark) => {
         const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-        const markWorldPos = new THREE.Vector3();
-        mark.getWorldPosition(markWorldPos);
-        light.position.copy(markWorldPos);
+        light.position.copy(mark.position);
         scene.add(light);
         return light;
     });
@@ -2086,19 +2034,13 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     const prevOverride = scene.overrideMaterial;
     scene.overrideMaterial = whiteMat;
 
-    // Capture cube map - use world position/rotation to account for group transformations
-    const worldPosition = new THREE.Vector3();
-    const worldQuaternion = new THREE.Quaternion();
-    cone.getWorldPosition(worldPosition);
-    cone.getWorldQuaternion(worldQuaternion);
-    
-    cubeCamera.position.copy(worldPosition);
-    cubeCamera.quaternion.copy(worldQuaternion);
-    // Apply consistent 90° clockwise offset to align camera forward direction
+    // Capture cube map
+    cubeCamera.position.copy(cone.position);
+    cubeCamera.quaternion.copy(cone.quaternion);
     cubeCamera.quaternion.multiply(
       new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0,1,0),
-        -Math.PI/2
+        Math.PI/2
       )
     );
     renderer.autoClear = true
@@ -2178,9 +2120,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         // Add lights once
         const lights = cones.map((cone) => {
             const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-            const coneWorldPos = new THREE.Vector3();
-            cone.getWorldPosition(coneWorldPos);
-            light.position.copy(coneWorldPos);
+            light.position.copy(cone.position);
             scene.add(light);
             return light;
         });
@@ -2206,15 +2146,10 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             const prevOverride = scene.overrideMaterial;
             scene.overrideMaterial = whiteMat;
 
-            // Capture cube map - use world position/rotation to account for group transformations
-            const worldPosition = new THREE.Vector3();
-            const worldQuaternion = new THREE.Quaternion();
-            cone.getWorldPosition(worldPosition);
-            cone.getWorldQuaternion(worldQuaternion);
-            
-            cubeCamera.position.copy(worldPosition);
+            // Capture cube map
+            cubeCamera.position.copy(cone.position);
             console.log(cone.quaternion)
-            cubeCamera.quaternion.copy(worldQuaternion);
+            cubeCamera.quaternion.copy(cone.quaternion);
                // add a 90° clockwise offset about world-Y
                cubeCamera.quaternion.multiply(
                  new THREE.Quaternion().setFromAxisAngle(
