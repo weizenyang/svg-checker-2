@@ -188,12 +188,34 @@ import ObjectList from "../components/object-list.tsx";
                     alt="VR view"
                 />
 
+                <!-- Overlay canvas for rendered view -->
+                <canvas
+                    id="vr-overlay-canvas"
+                    class="absolute top-0 left-0 w-full h-full pointer-events-none"
+                    style="opacity: 0.3; object-fit: contain; display: none;"
+                ></canvas>
+
+                <!-- Draggable overlay for rotation interaction -->
+                <div
+                    id="vr-drag-overlay"
+                    class="absolute top-0 left-0 w-full h-full cursor-grab hidden"
+                    style="z-index: 8;"
+                ></div>
+
                 <!-- Flipped tag indicator -->
                 <div
                     id="vr-flipped-tag"
                     class="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded hidden"
                 >
                     FLIPPED
+                </div>
+
+                <!-- Rotation display -->
+                <div
+                    id="vr-rotation-display"
+                    class="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-2 py-1 text-xs rounded hidden"
+                >
+                    Rotation: 0.0°
                 </div>
 
                 <!-- bottom-left resize handle -->
@@ -677,6 +699,13 @@ async function reviewVR(event) {
         console.log(cone)
         const renderURL = await render360SnapshotForCone(cone);
         img.src = renderURL;
+        
+        // Set up rotation for generated view
+        setVRImage(renderURL, cone.name);
+        
+        // Render overlay canvas with the generated view
+        await renderOverlayCanvas(cone);
+        
         // For generated views, check cone name for flipping
         applyImageFlipping(cone.name);
         panel.classList.remove("hidden");
@@ -686,18 +715,169 @@ async function reviewVR(event) {
         );
         if (entry) {
             img.src = entry.image;
+            
+            // Set up rotation for regular image
+            setVRImage(entry.image, entry.name);
+            
+            // Hide overlay for regular images
+            vrOverlayCanvas.style.display = 'none';
+            
             // Apply flipping based on the image entry name
             applyImageFlipping(entry.name);
             panel.classList.remove("hidden");
         } else {
-            // Hide panel and reset flip state
+            // Hide panel and reset states
             img.style.transform = "scaleX(1)";
             flippedTag.classList.add("hidden");
+            vrDragOverlay.classList.add("hidden");
+            vrRotationDisplay.classList.add("hidden");
+            vrOverlayCanvas.style.display = 'none';
             panel.classList.add("hidden");
         }
     }
 
 }
+
+async function renderOverlayCanvas(cone) {
+    if (!vrOverlayCanvas || !cone) return;
+    
+    // Set overlay canvas size to match the panel
+    const panel = document.getElementById("vr-image-panel");
+    vrOverlayCanvas.width = panel.offsetWidth;
+    vrOverlayCanvas.height = panel.offsetHeight;
+    
+    // Generate a separate render for the overlay
+    const overlayRenderURL = await render360SnapshotForCone(cone);
+    
+    // Load and draw the overlay image
+    const overlayImg = new Image();
+    overlayImg.onload = function() {
+        vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+        vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+    };
+    overlayImg.src = overlayRenderURL;
+    
+    // Show the overlay
+    vrOverlayCanvas.style.display = 'block';
+}
+
+    // VR Image Rotation Variables
+    let vrCurrentImage = null;
+    let vrRotation = 0; // degrees
+    let vrIsDragging = false;
+    let vrLastMouseX = 0;
+    let vrImageSize = { width: 0, height: 0 };
+
+    // VR Image Rotation DOM Elements
+    const vrOverlayCanvas = document.getElementById('vr-overlay-canvas');
+    const vrDragOverlay = document.getElementById('vr-drag-overlay');
+    const vrRotationDisplay = document.getElementById('vr-rotation-display');
+    const vrOverlayCtx = vrOverlayCanvas.getContext('2d');
+
+    // VR Image Rotation Event Handlers
+    vrDragOverlay.addEventListener('mousedown', handleVRMouseDown);
+    window.addEventListener('mousemove', handleVRMouseMove);
+    window.addEventListener('mouseup', handleVRMouseUp);
+
+    function handleVRMouseDown(e) {
+        if (!vrCurrentImage) return;
+        
+        vrIsDragging = true;
+        vrLastMouseX = e.clientX;
+        vrDragOverlay.style.cursor = 'grabbing';
+    }
+
+    function handleVRMouseMove(e) {
+        if (!vrIsDragging) return;
+        
+        const deltaX = e.clientX - vrLastMouseX;
+        
+        // Convert pixels to degrees (adjust sensitivity)
+        vrRotation -= deltaX * 0.5;
+        // Keep rotation in range -180 to 180
+        vrRotation = ((vrRotation + 180) % 360) - 180;
+        
+        // Update display
+        updateVRRotationDisplay();
+        
+        // Redraw rotated image
+        drawVRRotatedImage();
+        
+        vrLastMouseX = e.clientX;
+    }
+
+    function handleVRMouseUp() {
+        vrIsDragging = false;
+        vrDragOverlay.style.cursor = 'grab';
+    }
+
+    function updateVRRotationDisplay() {
+        vrRotationDisplay.textContent = `Rotation: ${vrRotation.toFixed(1)}°`;
+    }
+
+    function drawVRRotatedImage() {
+        if (!vrCurrentImage) return;
+        
+        const img = document.getElementById('vr-img');
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size to match the original image
+        canvas.width = vrImageSize.width;
+        canvas.height = vrImageSize.height;
+        
+        // Calculate horizontal offset for rotation
+        let xOffset = (vrRotation / 360) * vrImageSize.width;
+        xOffset = ((xOffset % vrImageSize.width) + vrImageSize.width) % vrImageSize.width;
+        
+        // Calculate available width from xOffset to the image end
+        const availableWidth = vrImageSize.width - xOffset;
+        
+        // Create a temporary image element for drawing
+        const tempImg = new Image();
+        tempImg.onload = function() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw the right segment of the image
+            ctx.drawImage(
+                tempImg,
+                xOffset, 0, availableWidth, vrImageSize.height,
+                0, 0, availableWidth, vrImageSize.height
+            );
+            
+            // Draw the left segment to complete the wrap-around
+            if (xOffset > 0) {
+                ctx.drawImage(
+                    tempImg,
+                    0, 0, xOffset, vrImageSize.height,
+                    availableWidth, 0, xOffset, vrImageSize.height
+                );
+            }
+            
+            // Update the main image
+            img.src = canvas.toDataURL('image/jpeg', 0.8);
+        };
+        tempImg.src = vrCurrentImage;
+    }
+
+    function setVRImage(imageSrc, imageName) {
+        vrCurrentImage = imageSrc;
+        vrRotation = 0;
+        
+        // Create a temporary image to get dimensions
+        const tempImg = new Image();
+        tempImg.onload = function() {
+            vrImageSize.width = tempImg.width;
+            vrImageSize.height = tempImg.height;
+            
+            // Show rotation controls
+            vrDragOverlay.classList.remove('hidden');
+            vrRotationDisplay.classList.remove('hidden');
+            updateVRRotationDisplay();
+        };
+        tempImg.src = imageSrc;
+    }
     
 
     const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(2048, {
