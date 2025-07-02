@@ -84,19 +84,19 @@ import ObjectList from "../components/object-list.tsx";
                 <p class="font-medium">Models:</p>
                 <button
                     class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="model-x-flip"
+                    id="models-x-flip"
                 >
                     Flip-X
                 </button>
                 <button
                     class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="model-y-flip"
+                    id="models-y-flip"
                 >
                     Flip-Y
                 </button>
                 <button
                     class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                    id="model-z-flip"
+                    id="models-z-flip"
                 >
                     Flip-Z
                 </button>
@@ -1800,6 +1800,34 @@ async function reviewVR(event) {
         m_Group.children.forEach((e) => {
             const initYPos = e.position.y;
             e.position.y = -initYPos;
+        });
+    });
+
+    // Model flip handlers
+    document.getElementById("models-x-flip").addEventListener("click", (e) => {
+        objects.forEach((model) => {
+            model.rotateOnWorldAxis(
+                new THREE.Vector3(1, 0, 0),
+                THREE.MathUtils.degToRad(180),
+            );
+        });
+    });
+
+    document.getElementById("models-y-flip").addEventListener("click", (e) => {
+        objects.forEach((model) => {
+            model.rotateOnWorldAxis(
+                new THREE.Vector3(0, 1, 0),
+                THREE.MathUtils.degToRad(180),
+            );
+        });
+    });
+
+    document.getElementById("models-z-flip").addEventListener("click", (e) => {
+        objects.forEach((model) => {
+            model.rotateOnWorldAxis(
+                new THREE.Vector3(0, 0, 1),
+                THREE.MathUtils.degToRad(180),
+            );
         });
     });
 
