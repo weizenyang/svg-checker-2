@@ -188,6 +188,14 @@ import ObjectList from "../components/object-list.tsx";
                     alt="VR view"
                 />
 
+                <!-- Flipped tag indicator -->
+                <div
+                    id="vr-flipped-tag"
+                    class="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded hidden"
+                >
+                    FLIPPED
+                </div>
+
                 <!-- bottom-left resize handle -->
                 <div
                     id="vr-resize-handle"
@@ -641,7 +649,21 @@ async function reviewVR(event) {
     const cone       = hit.object;
     const panel      = document.getElementById("vr-image-panel");
     const img        = document.getElementById("vr-img");
+    const flippedTag = document.getElementById("vr-flipped-tag");
     const targetName = cone.name.toLowerCase();
+
+    // Helper function to apply flipping based on image name
+    function applyImageFlipping(imageName) {
+        const shouldFlip = imageName.toLowerCase().includes("bf");
+        
+        if (shouldFlip) {
+            img.style.transform = "scaleX(-1)";
+            flippedTag.classList.remove("hidden");
+        } else {
+            img.style.transform = "scaleX(1)";
+            flippedTag.classList.add("hidden");
+        }
+    }
 
     /* ───── decide which view to show ───── */
     if (cone !== lastConeClicked) {          // new cone → always start in photo mode
@@ -655,6 +677,8 @@ async function reviewVR(event) {
         console.log(cone)
         const renderURL = await render360SnapshotForCone(cone);
         img.src = renderURL;
+        // For generated views, check cone name for flipping
+        applyImageFlipping(cone.name);
         panel.classList.remove("hidden");
     } else {
         const entry = imageArray.find((e) =>
@@ -662,8 +686,13 @@ async function reviewVR(event) {
         );
         if (entry) {
             img.src = entry.image;
+            // Apply flipping based on the image entry name
+            applyImageFlipping(entry.name);
             panel.classList.remove("hidden");
         } else {
+            // Hide panel and reset flip state
+            img.style.transform = "scaleX(1)";
+            flippedTag.classList.add("hidden");
             panel.classList.add("hidden");
         }
     }

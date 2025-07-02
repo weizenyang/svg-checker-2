@@ -228,20 +228,6 @@
         z-index: 7;
         display: none;
       }
-      .flipped-tag {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        background-color: rgba(255, 0, 0, 0.8);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: bold;
-        pointer-events: none;
-        z-index: 8;
-        display: none;
-      }
     </style>
   </head>
   <body>
@@ -284,7 +270,6 @@
           <div class="center-line"></div>
           <div id="reference-hover-line" class="hover-indicator"></div>
           <div id="reference-degree-display" class="degree-display"></div>
-          <div id="reference-flipped-tag" class="flipped-tag">Flipped</div>
         </div>
       </div>
 
@@ -298,7 +283,6 @@
           <div class="center-line"></div>
           <div id="edit-hover-line" class="hover-indicator"></div>
           <div id="edit-degree-display" class="degree-display"></div>
-          <div id="edit-flipped-tag" class="flipped-tag">Flipped</div>
         </div>
       </div>
 
@@ -374,8 +358,6 @@ import { imageConfig } from "astro:assets";
       let lockLongitude = false;
       let lockLatitude = true; // Locked by default
       let imageSize = {width: 0, height: 0}
-      let referenceFlipped = false; // Track if reference image should be flipped
-      let editFlipped = false; // Track if edit image should be flipped
       
       // DOM Elements
       const referenceCanvas = document.getElementById('reference-canvas');
@@ -398,11 +380,7 @@ import { imageConfig } from "astro:assets";
       const editHoverLine = document.getElementById('edit-hover-line');
       const referenceDegreeDisplay = document.getElementById('reference-degree-display');
       const editDegreeDisplay = document.getElementById('edit-degree-display');
-      
-      // Flipped tag elements
-      const referenceFlippedTag = document.getElementById('reference-flipped-tag');
-      const editFlippedTag = document.getElementById('edit-flipped-tag');
-      
+
       // Set up drop areas
       setupDropArea('reference-drop', loadReferenceImage);
       setupDropArea('edit-drop', loadEditImage);
@@ -458,17 +436,7 @@ import { imageConfig } from "astro:assets";
       editCanvas.addEventListener('mousedown', handleMouseDown);
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-      resetButton.addEventListener('click', () => {
-        longitudeRotation = 0;
-        latitudeRotation = 0;
-        longitudeOffset = 0;
-        latitudeOffset = 0;
-        updateRotationDisplay();
-        
-        if (editImage) {
-          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation, editFlipped);
-        }
-      });
+      resetButton.addEventListener('click', resetRotation);
       exportButton.addEventListener('click', exportImage);
       lockLongitudeCheckbox.addEventListener('change', function() {
         lockLongitude = this.checked;
@@ -481,7 +449,7 @@ import { imageConfig } from "astro:assets";
         longitudeOffset = longitudeRotation * imageSize.width / 360
         updateRotationDisplay();
         if (editImage) {
-          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation, editFlipped);
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
         }
       });
       latitudeInput.addEventListener('change', function() {
@@ -489,7 +457,7 @@ import { imageConfig } from "astro:assets";
         latitudeOffset = latitudeRotation * imageSize.width / 360
         updateRotationDisplay();
         if (editImage) {
-          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation, editFlipped);
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
         }
       });
       
@@ -600,55 +568,30 @@ import { imageConfig } from "astro:assets";
       
       function loadReferenceImage(img, filename) {
         referenceImage = img;
-        // Check if filename contains "bf" and set flip accordingly
-        referenceFlipped = filename && filename.toLowerCase().includes('bf');
-        drawImage(referenceCtx, img, 0, 0, referenceFlipped);
-        // Show/hide flipped tag
-        if (referenceFlipped) {
-          referenceFlippedTag.style.display = 'block';
-        } else {
-          referenceFlippedTag.style.display = 'none';
-        }
+        drawImage(referenceCtx, img);
         // Hide drop area after image is loaded - it will show again during drag events
         document.getElementById('reference-drop').classList.remove('show');
       }
       
       function loadEditImage(img, filename) {
         editImage = img;
-        // Check if filename contains "bf" and set flip accordingly
-        editFlipped = filename && filename.toLowerCase().includes('bf');
         // Set the filename in the input field (remove extension)
         if (filename) {
           const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
           filenameInput.value = nameWithoutExt;
         }
-        drawImage(editCtx, img, longitudeRotation, latitudeRotation, editFlipped);
-        // Show/hide flipped tag
-        if (editFlipped) {
-          editFlippedTag.style.display = 'block';
-        } else {
-          editFlippedTag.style.display = 'none';
-        }
+        drawImage(editCtx, img, longitudeRotation, latitudeRotation);
         resetButton.disabled = false;
         exportButton.disabled = false;
         // Hide drop area after image is loaded - it will show again during drag events
         document.getElementById('edit-drop').classList.remove('show');
       }
       
-      function drawImage(ctx, img, lonRotation = 0, latRotation = 0, flipped = false) {
+      function drawImage(ctx, img, lonRotation = 0, latRotation = 0) {
         if (!img) return;
         
         const canvas = ctx.canvas;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Save the current context state
-        ctx.save();
-        
-        // Apply horizontal flip if needed
-        if (flipped) {
-          ctx.scale(-1, 1);
-          ctx.translate(-canvas.width, 0);
-        }
         
         // Normalize the horizontal offset
         let xOffset = (lonRotation / 360) * img.width;
@@ -680,21 +623,18 @@ import { imageConfig } from "astro:assets";
             destWidthFirst, 0, remainingDestWidth, canvas.height
             );
         }
-        
-        // Restore the context state
-        ctx.restore();
-      }
+        }
       
       function handleResize() {
         initCanvas(referenceCanvas);
         initCanvas(editCanvas);
         
         if (referenceImage) {
-          drawImage(referenceCtx, referenceImage, 0, 0, referenceFlipped);
+          drawImage(referenceCtx, referenceImage);
         }
         
         if (editImage) {
-          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation, editFlipped);
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
         }
       }
       
@@ -734,7 +674,7 @@ import { imageConfig } from "astro:assets";
         updateRotationDisplay();
         
         // Redraw image with new rotation
-        drawImage(editCtx, editImage, longitudeRotation, latitudeRotation, editFlipped);
+        drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
         
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
@@ -787,22 +727,45 @@ import { imageConfig } from "astro:assets";
         rotationTicksEl.style.transform = `translateX(${50 - ticksOffset}%)`;
       }
       
+      function resetRotation() {
+        longitudeRotation = 0;
+        latitudeRotation = 0;
+        updateRotationDisplay();
+        
+        if (editImage) {
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+        }
+      }
+      
       function exportImage() {
         if (!editImage) return;
         
-        const canvas = document.createElement('canvas');
-        canvas.width = imageSize.width;
-        canvas.height = imageSize.height;
-        const ctx = canvas.getContext('2d');
+        // Create a temporary canvas for the export
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = editImage.width;
+        tempCanvas.height = editImage.height;
+        const tempCtx = tempCanvas.getContext('2d');
         
-        drawImage(ctx, editImage, longitudeRotation, latitudeRotation, editFlipped);
+        // Apply the rotation to the original image
+        const xOffset = (longitudeRotation / 360) * editImage.width;
+        const yOffset = (latitudeRotation / 180) * editImage.height;
         
-        // Get the filename from input with fallback
-        const filename = filenameInput.value.trim() || 'rotated-equirectangular';
+        tempCtx.drawImage(
+          editImage, 
+          xOffset, yOffset, editImage.width, editImage.height, 
+          0, 0, tempCanvas.width, tempCanvas.height
+        );
+        tempCtx.drawImage(
+          editImage, 
+          xOffset - editImage.width, yOffset, editImage.width, editImage.height, 
+          0, 0, tempCanvas.width, tempCanvas.height
+        );
         
+        // Create a download link with custom filename
+        const filename = filenameInput.value || 'rotated-equirectangular';
         const link = document.createElement('a');
-        link.download = `${filename}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.download = filename + '.png';
+        link.href = tempCanvas.toDataURL('image/png');
         link.click();
       }
       
