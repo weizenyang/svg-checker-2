@@ -703,8 +703,8 @@ async function reviewVR(event) {
         // Set up rotation for generated view
         setVRImage(renderURL, cone.name);
         
-        // Render overlay canvas with the generated view
-        await renderOverlayCanvas(cone);
+        // Hide overlay for generated views (since we're already showing the rendered view)
+        vrOverlayCanvas.style.display = 'none';
         
         // For generated views, check cone name for flipping
         applyImageFlipping(cone.name);
@@ -716,10 +716,11 @@ async function reviewVR(event) {
         if (entry) {
             img.src = entry.image;
             
-            // Set up rotation for regular image
+            // Set up rotation for equirectangular image
             setVRImage(entry.image, entry.name);
             
-            // Hide overlay for regular images
+            // Prepare overlay but keep it hidden initially (will show during drag)
+            await renderOverlayCanvas(cone);
             vrOverlayCanvas.style.display = 'none';
             
             // Apply flipping based on the image entry name
@@ -749,7 +750,7 @@ async function renderOverlayCanvas(cone) {
     // Generate a separate render for the overlay
     const overlayRenderURL = await render360SnapshotForCone(cone);
     
-    // Load and draw the overlay image
+    // Load and draw the overlay image (but keep it hidden until user drags)
     const overlayImg = new Image();
     overlayImg.onload = function() {
         vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
@@ -757,8 +758,7 @@ async function renderOverlayCanvas(cone) {
     };
     overlayImg.src = overlayRenderURL;
     
-    // Show the overlay
-    vrOverlayCanvas.style.display = 'block';
+    // Don't show the overlay automatically - let drag handlers control visibility
 }
 
     // VR Image Rotation Variables
@@ -785,6 +785,11 @@ async function renderOverlayCanvas(cone) {
         vrIsDragging = true;
         vrLastMouseX = e.clientX;
         vrDragOverlay.style.cursor = 'grabbing';
+        
+        // Show overlay when starting to drag
+        if (vrOverlayCanvas && !showGeneratedView) {
+            vrOverlayCanvas.style.display = 'block';
+        }
     }
 
     function handleVRMouseMove(e) {
@@ -809,6 +814,11 @@ async function renderOverlayCanvas(cone) {
     function handleVRMouseUp() {
         vrIsDragging = false;
         vrDragOverlay.style.cursor = 'grab';
+        
+        // Hide overlay when done dragging
+        if (vrOverlayCanvas) {
+            vrOverlayCanvas.style.display = 'none';
+        }
     }
 
     function updateVRRotationDisplay() {
