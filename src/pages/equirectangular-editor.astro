@@ -655,16 +655,20 @@ import { imageConfig } from "astro:assets";
         
         // Update rotation based on mouse movement only if not locked
         if (!lockLongitude) {
-          // Convert pixels to degrees based on image width
-          longitudeRotation -= deltaX * 0.5; // Adjust sensitivity
+          // Calculate sensitivity based on canvas width to make movement feel natural
+          const canvasWidth = editCanvas.offsetWidth;
+          const sensitivity = 360 / canvasWidth; // 1 pixel = degrees based on canvas size
+          longitudeRotation -= deltaX * sensitivity;
           // Keep longitude in range -180 to 180
           longitudeOffset = longitudeRotation * imageSize.width / 360
           longitudeRotation = ((longitudeRotation + 180) % 360) - 180;
         }
         
         if (!lockLatitude) {
-          // Convert pixels to degrees based on image height
-          latitudeRotation += deltaY * 0.25; // Adjust sensitivity
+          // Calculate sensitivity based on canvas height
+          const canvasHeight = editCanvas.offsetHeight;
+          const sensitivity = 180 / canvasHeight; // 1 pixel = degrees based on canvas size
+          latitudeRotation += deltaY * sensitivity;
           // Limit latitude to -90 to 90
           latitudeOffset = latitudeRotation * imageSize.width / 360
           latitudeRotation = Math.max(-90, Math.min(90, latitudeRotation));
