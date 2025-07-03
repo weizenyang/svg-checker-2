@@ -228,6 +228,105 @@
         z-index: 7;
         display: none;
       }
+      .tabs {
+        display: flex;
+        border-bottom: 2px solid #ddd;
+        margin-bottom: 20px;
+      }
+      .tab {
+        padding: 12px 24px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-bottom: none;
+        cursor: pointer;
+        font-weight: bold;
+        transition: background-color 0.2s;
+      }
+      .tab:hover {
+        background-color: #e9e9e9;
+      }
+      .tab.active {
+        background-color: white;
+        border-top: 3px solid #4a90e2;
+      }
+      .tab-content {
+        display: none;
+      }
+      .tab-content.active {
+        display: block;
+      }
+      .batch-upload {
+        border: 2px dashed #ddd;
+        border-radius: 8px;
+        padding: 40px;
+        text-align: center;
+        background-color: #fafafa;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .batch-upload:hover, .batch-upload.dragover {
+        border-color: #4a90e2;
+        background-color: #f0f7ff;
+      }
+      .file-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 15px 0;
+      }
+      .file-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+      .file-item:last-child {
+        border-bottom: none;
+      }
+      .file-name {
+        font-weight: bold;
+        flex-grow: 1;
+      }
+      .file-size {
+        color: #666;
+        font-size: 0.9em;
+        margin-right: 10px;
+      }
+      .remove-file {
+        background-color: #f44336;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 0.8em;
+      }
+      .remove-file:hover {
+        background-color: #d32f2f;
+      }
+      .batch-controls {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        margin: 20px 0;
+      }
+      .progress-bar {
+        width: 100%;
+        height: 20px;
+        background-color: #f0f0f0;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 15px 0;
+        display: none;
+      }
+      .progress-fill {
+        height: 100%;
+        background-color: #4a90e2;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
     </style>
   </head>
   <body>
@@ -260,84 +359,137 @@
     
     
     <div class="container">
-      <div class="image-section">
-        <h2>Reference Image</h2>
-        <div class="canvas-container">
-          <div id="reference-drop" class="drop-area">
-            <p>Drag & drop reference image here or click to select</p>
+      <!-- Tab Navigation -->
+      <div class="tabs">
+        <div class="tab active" data-tab="single">Single Image Editor</div>
+        <div class="tab" data-tab="batch">Batch Rotation</div>
+      </div>
+
+      <!-- Single Image Editor Tab -->
+      <div id="single-tab" class="tab-content active">
+        <div class="image-section">
+          <h2>Reference Image</h2>
+          <div class="canvas-container">
+            <div id="reference-drop" class="drop-area">
+              <p>Drag & drop reference image here or click to select</p>
+            </div>
+            <canvas id="reference-canvas"></canvas>
+            <div class="center-line"></div>
+            <div id="reference-hover-line" class="hover-indicator"></div>
+            <div id="reference-degree-display" class="degree-display"></div>
           </div>
-          <canvas id="reference-canvas"></canvas>
-          <div class="center-line"></div>
-          <div id="reference-hover-line" class="hover-indicator"></div>
-          <div id="reference-degree-display" class="degree-display"></div>
+        </div>
+
+        <div class="image-section">
+          <h2>Image to Edit</h2>
+          <div class="canvas-container">
+            <div id="edit-drop" class="drop-area">
+              <p>Drag & drop image to edit here or click to select</p>
+            </div>
+            <canvas id="edit-canvas"></canvas>
+            <div class="center-line"></div>
+            <div id="edit-hover-line" class="hover-indicator"></div>
+            <div id="edit-degree-display" class="degree-display"></div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="rotation-header">
+            <h3 style="margin: 0;">Rotation Controls</h3>
+            <div class="lock-controls">
+              <label class="lock-option">
+                <input type="checkbox" id="lock-longitude"> Lock Longitude
+              </label>
+              <label class="lock-option">
+                <input type="checkbox" id="lock-latitude" checked> Lock Latitude
+              </label>
+            </div>
+          </div>
+          
+          <div class="rotation-input">
+            <span>Longitude:</span>
+            <div>
+              <input type="number" id="longitude-input" value="0.0" step="0.1" min="-180" max="180">
+              <span>°</span>
+            </div>
+            <div>
+              <p id="longitude-offset-display"></p>
+              <span>px</span>
+            </div>
+          </div>
+          
+          <div class="rotation-slider">
+            <div class="rotation-indicator"></div>
+            <div id="rotation-ticks" class="rotation-ticks"></div>
+          </div>
+          
+          <div class="rotation-input">
+            <span>Latitude:</span>
+            <div>
+              <input type="number" id="latitude-input" value="0.0" step="0.1" min="-90" max="90">
+              <span>°</span>
+            </div>
+            <div>
+              <p id="latitude-offset-display"></p>
+              <span>px</span>
+            </div>
+          </div>
+          
+          <div class="rotation-input">
+            <span>Export Filename:</span>
+            <div>
+              <input type="text" id="filename-input" placeholder="Enter filename..." style="width: 200px;">
+            </div>
+          </div>
+          
+          <div class="buttons">
+            <button id="reset-button" class="reset-button" disabled>Reset Rotation</button>
+            <button id="export-button" class="export-button" disabled>Export Image</button>
+          </div>
         </div>
       </div>
 
-      <div class="image-section">
-        <h2>Image to Edit</h2>
-        <div class="canvas-container">
-          <div id="edit-drop" class="drop-area">
-            <p>Drag & drop image to edit here or click to select</p>
+      <!-- Batch Rotation Tab -->
+      <div id="batch-tab" class="tab-content">
+        <div class="image-section">
+          <h2>Batch Image Upload</h2>
+          <div id="batch-upload" class="batch-upload">
+            <p><strong>Drop multiple images here or click to select</strong></p>
+            <p>Supports JPG, PNG, and other image formats</p>
+            <input type="file" id="batch-file-input" multiple accept="image/*" style="display: none;">
           </div>
-          <canvas id="edit-canvas"></canvas>
-          <div class="center-line"></div>
-          <div id="edit-hover-line" class="hover-indicator"></div>
-          <div id="edit-degree-display" class="degree-display"></div>
+          
+          <div id="batch-file-list" class="file-list" style="display: none;">
+            <!-- File list will be populated here -->
+          </div>
         </div>
-      </div>
 
-      <div class="controls">
-        <div class="rotation-header">
-          <h3 style="margin: 0;">Rotation Controls</h3>
-          <div class="lock-controls">
-            <label class="lock-option">
-              <input type="checkbox" id="lock-longitude"> Lock Longitude
+        <div class="controls">
+          <div class="rotation-header">
+            <h3 style="margin: 0;">Batch Rotation Settings</h3>
+          </div>
+          
+          <div class="batch-controls">
+            <label>
+              <span>Rotation Degrees:</span>
+              <input type="number" id="batch-rotation-input" value="0" step="0.1" min="-180" max="180" style="width: 100px; margin-left: 10px;">
+              <span>°</span>
             </label>
-            <label class="lock-option">
-              <input type="checkbox" id="lock-latitude" checked> Lock Latitude
+            
+            <label>
+              <span>Output Prefix:</span>
+              <input type="text" id="batch-prefix-input" placeholder="rotated_" style="width: 120px; margin-left: 10px;">
             </label>
           </div>
-        </div>
-        
-        <div class="rotation-input">
-          <span>Longitude:</span>
-          <div>
-            <input type="number" id="longitude-input" value="0.0" step="0.1" min="-180" max="180">
-            <span>°</span>
+          
+          <div class="progress-bar" id="batch-progress-bar">
+            <div class="progress-fill" id="batch-progress-fill"></div>
           </div>
-          <div>
-            <p id="longitude-offset-display"></p>
-            <span>px</span>
+          
+          <div class="buttons">
+            <button id="batch-clear-button" class="reset-button" disabled>Clear All</button>
+            <button id="batch-process-button" class="export-button" disabled>Process & Download All</button>
           </div>
-        </div>
-        
-        <div class="rotation-slider">
-          <div class="rotation-indicator"></div>
-          <div id="rotation-ticks" class="rotation-ticks"></div>
-        </div>
-        
-        <div class="rotation-input">
-          <span>Latitude:</span>
-          <div>
-            <input type="number" id="latitude-input" value="0.0" step="0.1" min="-90" max="90">
-            <span>°</span>
-          </div>
-          <div>
-            <p id="latitude-offset-display"></p>
-            <span>px</span>
-          </div>
-        </div>
-        
-        <div class="rotation-input">
-          <span>Export Filename:</span>
-          <div>
-            <input type="text" id="filename-input" placeholder="Enter filename..." style="width: 200px;">
-          </div>
-        </div>
-        
-        <div class="buttons">
-          <button id="reset-button" class="reset-button" disabled>Reset Rotation</button>
-          <button id="export-button" class="export-button" disabled>Export Image</button>
         </div>
       </div>
     </div>
@@ -776,6 +928,223 @@ import { imageConfig } from "astro:assets";
       function preventDefaults(e) {
         e.preventDefault();
         e.stopPropagation();
+      }
+
+      // Tab functionality
+      let batchFiles = [];
+      
+      // Set up tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+          const tabName = this.getAttribute('data-tab');
+          
+          // Remove active class from all tabs and contents
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to clicked tab and corresponding content
+          this.classList.add('active');
+          document.getElementById(tabName + '-tab').classList.add('active');
+        });
+      });
+
+      // Batch upload functionality
+      const batchUpload = document.getElementById('batch-upload');
+      const batchFileInput = document.getElementById('batch-file-input');
+      const batchFileList = document.getElementById('batch-file-list');
+      const batchClearButton = document.getElementById('batch-clear-button');
+      const batchProcessButton = document.getElementById('batch-process-button');
+      const batchProgressBar = document.getElementById('batch-progress-bar');
+      const batchProgressFill = document.getElementById('batch-progress-fill');
+      const batchRotationInput = document.getElementById('batch-rotation-input');
+      const batchPrefixInput = document.getElementById('batch-prefix-input');
+
+      // Set up batch upload area
+      batchUpload.addEventListener('click', () => {
+        batchFileInput.click();
+      });
+
+      batchUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        batchUpload.classList.add('dragover');
+      });
+
+      batchUpload.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        batchUpload.classList.remove('dragover');
+      });
+
+      batchUpload.addEventListener('drop', (e) => {
+        e.preventDefault();
+        batchUpload.classList.remove('dragover');
+        const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+        addBatchFiles(files);
+      });
+
+      batchFileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        addBatchFiles(files);
+      });
+
+      function addBatchFiles(files) {
+        files.forEach(file => {
+          if (!batchFiles.find(f => f.name === file.name && f.size === file.size)) {
+            batchFiles.push(file);
+          }
+        });
+        updateBatchFileList();
+      }
+
+      function updateBatchFileList() {
+        if (batchFiles.length === 0) {
+          batchFileList.style.display = 'none';
+          (batchClearButton as HTMLButtonElement).disabled = true;
+          (batchProcessButton as HTMLButtonElement).disabled = true;
+          return;
+        }
+
+        batchFileList.style.display = 'block';
+        (batchClearButton as HTMLButtonElement).disabled = false;
+        (batchProcessButton as HTMLButtonElement).disabled = false;
+
+        batchFileList.innerHTML = '';
+        batchFiles.forEach((file, index) => {
+          const fileItem = document.createElement('div');
+          fileItem.className = 'file-item';
+          
+          const fileName = document.createElement('span');
+          fileName.className = 'file-name';
+          fileName.textContent = file.name;
+          
+          const fileSize = document.createElement('span');
+          fileSize.className = 'file-size';
+          fileSize.textContent = formatFileSize(file.size);
+          
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'remove-file';
+          removeBtn.textContent = 'Remove';
+          removeBtn.addEventListener('click', () => {
+            batchFiles.splice(index, 1);
+            updateBatchFileList();
+          });
+          
+          fileItem.appendChild(fileName);
+          fileItem.appendChild(fileSize);
+          fileItem.appendChild(removeBtn);
+          batchFileList.appendChild(fileItem);
+        });
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+
+      batchClearButton.addEventListener('click', () => {
+        batchFiles = [];
+        updateBatchFileList();
+      });
+
+      batchProcessButton.addEventListener('click', async () => {
+        if (batchFiles.length === 0) return;
+
+        const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
+        const prefix = batchPrefixInput.value || 'rotated_';
+        
+                 // Show progress bar
+         batchProgressBar.style.display = 'block';
+         (batchProcessButton as HTMLButtonElement).disabled = true;
+         (batchClearButton as HTMLButtonElement).disabled = true;
+
+         // Create JSZip instance for batch download
+         const JSZip = (await import('https://cdn.skypack.dev/jszip')).default;
+         const zip = new JSZip();
+
+         for (let i = 0; i < batchFiles.length; i++) {
+           const file = batchFiles[i];
+           const progress = ((i + 1) / batchFiles.length) * 100;
+           
+           // Update progress bar
+           batchProgressFill.style.width = progress + '%';
+           
+           try {
+             // Load image
+             const img = await loadImageFromFile(file) as HTMLImageElement;
+             
+             // Create canvas and apply rotation
+             const canvas = document.createElement('canvas');
+             canvas.width = img.width;
+             canvas.height = img.height;
+             const ctx = canvas.getContext('2d');
+             
+             // Apply rotation
+             const xOffset = (rotationDegrees / 360) * img.width;
+             const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
+             const availableWidth = img.width - normalizedXOffset;
+             
+             // Draw the rotated image
+             ctx.drawImage(
+               img,
+               normalizedXOffset, 0, availableWidth, img.height,
+               0, 0, availableWidth, img.height
+             );
+             
+             if (availableWidth < img.width) {
+               const remainingWidth = img.width - availableWidth;
+               ctx.drawImage(
+                 img,
+                 0, 0, remainingWidth, img.height,
+                 availableWidth, 0, remainingWidth, img.height
+               );
+             }
+            
+            // Convert to blob and add to zip
+            const blob = await new Promise(resolve => {
+              canvas.toBlob(resolve, 'image/png');
+            });
+            
+            const fileName = prefix + file.name.replace(/\.[^/.]+$/, '') + '.png';
+            zip.file(fileName, blob);
+            
+          } catch (error) {
+            console.error('Error processing file:', file.name, error);
+          }
+        }
+
+        // Generate and download zip file
+        try {
+          const content = await zip.generateAsync({ type: 'blob' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'batch_rotated_images.zip';
+          link.click();
+          URL.revokeObjectURL(link.href);
+        } catch (error) {
+          console.error('Error creating zip file:', error);
+        }
+
+                 // Reset UI
+         batchProgressBar.style.display = 'none';
+         batchProgressFill.style.width = '0%';
+         (batchProcessButton as HTMLButtonElement).disabled = false;
+         (batchClearButton as HTMLButtonElement).disabled = false;
+      });
+
+      function loadImageFromFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = e.target.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
       }
     </script>
   </body>
