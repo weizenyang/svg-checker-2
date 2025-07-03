@@ -454,8 +454,8 @@
         <div class="image-section">
           <h2>Batch Image Upload</h2>
           <div id="batch-upload" class="batch-upload">
-            <p><strong>Drop multiple images here or click to select</strong></p>
-            <p>Supports JPG, PNG, and other image formats</p>
+            <p><strong>Drop multiple images or folders here or click to select</strong></p>
+            <p>Supports JPG, PNG, and other image formats • Automatically finds images in nested folders</p>
             <input type="file" id="batch-file-input" multiple accept="image/*" style="display: none;">
           </div>
           
@@ -479,6 +479,12 @@
             <label>
               <span>Output Prefix:</span>
               <input type="text" id="batch-prefix-input" placeholder="" style="width: 120px; margin-left: 10px;">
+            </label>
+          </div>
+          
+          <div class="batch-controls">
+            <label class="lock-option">
+              <input type="checkbox" id="preserve-structure" checked> Preserve folder structure
             </label>
           </div>
           
@@ -1069,6 +1075,7 @@ import { imageConfig } from "astro:assets";
 
         const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
         const prefix = batchPrefixInput.value || '';
+        const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
         
                  // Show progress bar
          batchProgressBar.style.display = 'block';
@@ -1117,13 +1124,27 @@ import { imageConfig } from "astro:assets";
                );
              }
             
-            // Convert to blob and add to zip
-            const blob = await new Promise(resolve => {
-              canvas.toBlob(resolve, 'image/png');
-            });
-            
-            const fileName = prefix + file.name.replace(/\.[^/.]+$/, '') + '.png';
-            zip.file(fileName, blob);
+                         // Convert to blob and add to zip
+             const blob = await new Promise(resolve => {
+               canvas.toBlob(resolve, 'image/png');
+             });
+             
+             // Use relative path if available and preserve structure is enabled
+             const originalPath = (file as any).relativePath || file.name;
+             const pathParts = originalPath.split('/');
+             const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+             
+             let fullPath;
+             if (preserveStructure && pathParts.length > 0) {
+               // Preserve folder structure
+               const directory = pathParts.join('/');
+               fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+             } else {
+               // Flatten to root level
+               fullPath = prefix ? `${prefix}${filename}` : filename;
+             }
+             
+             zip.file(fullPath, blob);
             
           } catch (error) {
             console.error('Error processing file:', file.name, error);
@@ -1164,22 +1185,28 @@ import { imageConfig } from "astro:assets";
       }
 
       // Function to recursively extract files from directory entries
-      async function extractFilesFromEntry(entry) {
+      async function extractFilesFromEntry(entry, basePath = '') {
         const files = [];
         
         if (entry.isFile) {
-          // If it's a file, convert to File object
+          // If it's a file, convert to File object and store path info
           const file = await new Promise((resolve, reject) => {
             entry.file(resolve, reject);
           });
+          
+          // Add path information to the file object
+          const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
+          (file as any).relativePath = relativePath;
           files.push(file);
         } else if (entry.isDirectory) {
           // If it's a directory, read all entries recursively
           const dirReader = entry.createReader();
           const entries = await readAllDirectoryEntries(dirReader);
           
+          const currentPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+          
           for (const childEntry of entries) {
-            const childFiles = await extractFilesFromEntry(childEntry);
+            const childFiles = await extractFilesFromEntry(childEntry, currentPath);
             files.push(...childFiles);
           }
         }
