@@ -447,6 +447,64 @@
             <button id="export-button" class="export-button" disabled>Export Image</button>
           </div>
         </div>
+
+        <!-- Auto-Alignment Panel -->
+        <div class="controls" id="auto-alignment-panel" style="margin-top: 20px;">
+          <div class="rotation-header">
+            <h3 style="margin: 0;">Auto-Alignment</h3>
+          </div>
+          
+          <div class="batch-controls">
+            <label>
+              <span>Alignment Method:</span>
+              <select id="alignment-method" style="margin-left: 10px; padding: 5px;">
+                <option value="edge">Edge Detection Matching</option>
+                <option value="feature">Feature Point Matching</option>
+                <option value="phase">Phase Correlation</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="batch-controls" id="edge-options">
+            <label>
+              <span>Edge Detection:</span>
+              <select id="edge-method" style="margin-left: 10px; padding: 5px;">
+                <option value="canny">Canny (Default)</option>
+                <option value="sobel">Sobel</option>
+                <option value="prewitt">Prewitt</option>
+                <option value="roberts">Roberts</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="batch-controls" id="feature-options" style="display: none;">
+            <label>
+              <span>Corner Threshold:</span>
+              <input type="range" id="corner-threshold" min="0.01" max="0.3" step="0.01" value="0.1" style="margin-left: 10px;">
+              <span id="threshold-value">0.1</span>
+            </label>
+          </div>
+
+          <div class="batch-controls" id="phase-options" style="display: none;">
+            <label>
+              <span>Downsample Factor:</span>
+              <select id="downsample-factor" style="margin-left: 10px; padding: 5px;">
+                <option value="1">Full Resolution</option>
+                <option value="2">Half Resolution</option>
+                <option value="4" selected>Quarter Resolution</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="progress-bar" id="alignment-progress-bar" style="display: none;">
+            <div class="progress-fill" id="alignment-progress-fill"></div>
+          </div>
+
+          <div class="buttons">
+            <button id="show-edge-overlay" class="reset-button" disabled>Show Edge Overlay</button>
+            <button id="start-alignment" class="export-button" disabled>Start Auto-Alignment</button>
+          </div>
+        </div>
       </div>
 
       <!-- Batch Rotation Tab -->
@@ -729,6 +787,11 @@ import { imageConfig } from "astro:assets";
         drawImage(referenceCtx, img);
         // Hide drop area after image is loaded - it will show again during drag events
         document.getElementById('reference-drop').classList.remove('show');
+        // Reset edge overlay when new image is loaded
+        hideEdgeOverlays();
+        edgeOverlayVisible = false;
+        (showEdgeOverlayBtn as HTMLButtonElement).textContent = 'Show Edge Overlay';
+        checkAlignmentReady();
       }
       
       function loadEditImage(img, filename) {
@@ -739,10 +802,15 @@ import { imageConfig } from "astro:assets";
           filenameInput.value = nameWithoutExt;
         }
         drawImage(editCtx, img, longitudeRotation, latitudeRotation);
-        resetButton.disabled = false;
-        exportButton.disabled = false;
+        (resetButton as HTMLButtonElement).disabled = false;
+        (exportButton as HTMLButtonElement).disabled = false;
         // Hide drop area after image is loaded - it will show again during drag events
         document.getElementById('edit-drop').classList.remove('show');
+        // Reset edge overlay when new image is loaded
+        hideEdgeOverlays();
+        edgeOverlayVisible = false;
+        (showEdgeOverlayBtn as HTMLButtonElement).textContent = 'Show Edge Overlay';
+        checkAlignmentReady();
       }
       
       function drawImage(ctx, img, lonRotation = 0, latRotation = 0) {
@@ -1184,7 +1252,690 @@ import { imageConfig } from "astro:assets";
         });
       }
 
-      // Function to recursively extract files from directory entries
+      // Auto-alignment functionality
+      const alignmentMethod = document.getElementById('alignment-method');
+      const edgeOptions = document.getElementById('edge-options');
+      const featureOptions = document.getElementById('feature-options');
+      const phaseOptions = document.getElementById('phase-options');
+      const startAlignmentBtn = document.getElementById('start-alignment');
+      const alignmentProgressBar = document.getElementById('alignment-progress-bar');
+      const alignmentProgressFill = document.getElementById('alignment-progress-fill');
+      const cornerThreshold = document.getElementById('corner-threshold');
+      const thresholdValue = document.getElementById('threshold-value');
+      const showEdgeOverlayBtn = document.getElementById('show-edge-overlay');
+
+      // Edge overlay state
+      let edgeOverlayVisible = false;
+
+      // Enable alignment button when both images are loaded
+      function checkAlignmentReady() {
+        const canAlign = referenceImage && editImage;
+        (startAlignmentBtn as HTMLButtonElement).disabled = !canAlign;
+        (showEdgeOverlayBtn as HTMLButtonElement).disabled = !canAlign;
+      }
+
+      // Update alignment UI based on method selection
+      alignmentMethod.addEventListener('change', function() {
+        const method = (this as HTMLSelectElement).value;
+        edgeOptions.style.display = method === 'edge' ? 'block' : 'none';
+        featureOptions.style.display = method === 'feature' ? 'block' : 'none';
+        phaseOptions.style.display = method === 'phase' ? 'block' : 'none';
+      });
+
+      // Update threshold display
+      cornerThreshold.addEventListener('input', function() {
+        thresholdValue.textContent = (this as HTMLInputElement).value;
+      });
+
+      // Edge overlay toggle
+      showEdgeOverlayBtn.addEventListener('click', () => {
+        if (edgeOverlayVisible) {
+          hideEdgeOverlays();
+          (showEdgeOverlayBtn as HTMLButtonElement).textContent = 'Show Edge Overlay';
+          edgeOverlayVisible = false;
+        } else {
+          showEdgeOverlays();
+          (showEdgeOverlayBtn as HTMLButtonElement).textContent = 'Hide Edge Overlay';
+          edgeOverlayVisible = true;
+        }
+      });
+
+      // Update edge overlay when edge method changes
+      document.getElementById('edge-method')?.addEventListener('change', () => {
+        if (edgeOverlayVisible) {
+          showEdgeOverlays(); // Refresh overlays with new method
+        }
+      });
+
+      // Start alignment process
+      startAlignmentBtn.addEventListener('click', async () => {
+        if (!referenceImage || !editImage) return;
+
+        const method = (alignmentMethod as HTMLSelectElement).value;
+        alignmentProgressBar.style.display = 'block';
+        (startAlignmentBtn as HTMLButtonElement).disabled = true;
+
+        try {
+          let bestRotation = 0;
+          
+          if (method === 'edge') {
+            bestRotation = await performEdgeAlignment();
+          } else if (method === 'feature') {
+            bestRotation = await performFeatureAlignment();
+          } else if (method === 'phase') {
+            bestRotation = await performPhaseAlignment();
+          }
+
+          // Apply the detected rotation
+          longitudeRotation = bestRotation;
+          updateRotationDisplay();
+          drawImage(editCtx, editImage, longitudeRotation, latitudeRotation);
+
+        } catch (error) {
+          console.error('Alignment failed:', error);
+          alert('Auto-alignment failed. Please try a different method or align manually.');
+        }
+
+        alignmentProgressBar.style.display = 'none';
+        (startAlignmentBtn as HTMLButtonElement).disabled = false;
+      });
+
+      // Edge Detection Alignment
+      async function performEdgeAlignment() {
+        const edgeMethod = (document.getElementById('edge-method') as HTMLSelectElement).value;
+        
+        // Create canvases for processing
+        const refCanvas = document.createElement('canvas');
+        const editCanvas = document.createElement('canvas');
+        const size = 512; // Downsample for faster processing
+        
+        refCanvas.width = editCanvas.width = size;
+        refCanvas.height = editCanvas.height = size;
+        
+        const refCtx = refCanvas.getContext('2d');
+        const editCtx = editCanvas.getContext('2d');
+        
+        // Draw downsampled images
+        refCtx.drawImage(referenceImage, 0, 0, size, size);
+        editCtx.drawImage(editImage, 0, 0, size, size);
+        
+        // Get edge maps - reference (whitecard) and editor (detailed)
+        const refEdges = detectEdges(refCtx, size, size, edgeMethod);
+        const editEdges = detectEdges(editCtx, size, size, edgeMethod);
+        
+        let bestScore = 0;
+        let bestRotation = 0;
+        const searchRange = 180; // degrees
+        const step = 1; // degree steps
+        
+        for (let angle = -searchRange; angle <= searchRange; angle += step) {
+          alignmentProgressFill.style.width = ((angle + searchRange) / (searchRange * 2)) * 100 + '%';
+          
+          // Rotate the REFERENCE edge map (whitecard) to fit into the editor
+          const rotatedRefEdges = rotateEdgeMap(refEdges, size, size, angle);
+          
+          // Calculate fitting score: how well reference edges fit into editor edges
+          const score = calculateEdgeFitting(rotatedRefEdges, editEdges, size, size);
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestRotation = angle;
+          }
+          
+          // Yield control to prevent blocking
+          if (angle % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        return bestRotation;
+      }
+
+      // Feature Point Alignment
+      async function performFeatureAlignment() {
+        const threshold = parseFloat((cornerThreshold as HTMLInputElement).value);
+        
+        // Downsample for processing
+        const size = 512;
+        const refCanvas = document.createElement('canvas');
+        const editCanvas = document.createElement('canvas');
+        
+        refCanvas.width = editCanvas.width = size;
+        refCanvas.height = editCanvas.height = size;
+        
+        const refCtx = refCanvas.getContext('2d');
+        const editCtx = editCanvas.getContext('2d');
+        
+        refCtx.drawImage(referenceImage, 0, 0, size, size);
+        editCtx.drawImage(editImage, 0, 0, size, size);
+        
+        // Detect corner features
+        const refCorners = detectHarrisCorners(refCtx, size, size, threshold);
+        
+        let bestScore = 0;
+        let bestRotation = 0;
+        const searchRange = 180;
+        const step = 2; // Larger steps for feature matching
+        
+        for (let angle = -searchRange; angle <= searchRange; angle += step) {
+          alignmentProgressFill.style.width = ((angle + searchRange) / (searchRange * 2)) * 100 + '%';
+          
+          // Create rotated version
+          const rotatedCanvas = document.createElement('canvas');
+          rotatedCanvas.width = rotatedCanvas.height = size;
+          const rotatedCtx = rotatedCanvas.getContext('2d');
+          
+          const xOffset = (angle / 360) * size;
+          const normalizedOffset = ((xOffset % size) + size) % size;
+          const availableWidth = size - normalizedOffset;
+          
+          rotatedCtx.drawImage(editImage, normalizedOffset, 0, availableWidth, editImage.height, 0, 0, availableWidth, size);
+          if (normalizedOffset > 0) {
+            rotatedCtx.drawImage(editImage, 0, 0, normalizedOffset, editImage.height, availableWidth, 0, normalizedOffset, size);
+          }
+          
+          const editCorners = detectHarrisCorners(rotatedCtx, size, size, threshold);
+          const score = matchFeaturePoints(refCorners, editCorners);
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestRotation = angle;
+          }
+          
+          if (angle % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+        }
+        
+        return bestRotation;
+      }
+
+      // Phase Correlation Alignment
+      async function performPhaseAlignment() {
+        const downsample = parseInt((document.getElementById('downsample-factor') as HTMLSelectElement).value);
+        const size = Math.floor(512 / downsample);
+        
+        // Create processing canvases
+        const refCanvas = document.createElement('canvas');
+        const editCanvas = document.createElement('canvas');
+        
+        refCanvas.width = editCanvas.width = size;
+        refCanvas.height = editCanvas.height = size;
+        
+        const refCtx = refCanvas.getContext('2d');
+        const editCtx = editCanvas.getContext('2d');
+        
+        refCtx.drawImage(referenceImage, 0, 0, size, size);
+        editCtx.drawImage(editImage, 0, 0, size, size);
+        
+        // Convert to grayscale and get image data
+        const refData = getGrayscaleData(refCtx, size, size);
+        const editData = getGrayscaleData(editCtx, size, size);
+        
+        let bestScore = 0;
+        let bestRotation = 0;
+        const searchRange = 180;
+        const step = 2;
+        
+        for (let angle = -searchRange; angle <= searchRange; angle += step) {
+          alignmentProgressFill.style.width = ((angle + searchRange) / (searchRange * 2)) * 100 + '%';
+          
+          // Create rotated version of edit data
+          const rotatedData = rotateImageData(editData, size, size, angle);
+          
+          // Calculate normalized cross-correlation
+          const score = calculateNormalizedCrossCorrelation(refData, rotatedData);
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestRotation = angle;
+          }
+          
+          if (angle % 10 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+                 }
+         
+         return bestRotation;
+       }
+
+       // Gaussian Blur Function for Pattern-Based Matching
+       function applyGaussianBlur(data, width, height, sigma) {
+         const blurred = new Float32Array(width * height);
+         const kernel = createGaussianKernel(sigma);
+         const kernelSize = kernel.length;
+         const halfKernel = Math.floor(kernelSize / 2);
+         
+         // Apply separable Gaussian blur (horizontal then vertical)
+         const temp = new Float32Array(width * height);
+         
+         // Horizontal pass
+         for (let y = 0; y < height; y++) {
+           for (let x = 0; x < width; x++) {
+             let sum = 0;
+             let weightSum = 0;
+             
+             for (let k = 0; k < kernelSize; k++) {
+               const dx = k - halfKernel;
+               const sourceX = (x + dx + width) % width; // Wrap for equirectangular
+               const weight = kernel[k];
+               sum += data[y * width + sourceX] * weight;
+               weightSum += weight;
+             }
+             
+             temp[y * width + x] = sum / weightSum;
+           }
+         }
+         
+         // Vertical pass
+         for (let y = 0; y < height; y++) {
+           for (let x = 0; x < width; x++) {
+             let sum = 0;
+             let weightSum = 0;
+             
+             for (let k = 0; k < kernelSize; k++) {
+               const dy = k - halfKernel;
+               const sourceY = Math.max(0, Math.min(height - 1, y + dy)); // Clamp for vertical
+               const weight = kernel[k];
+               sum += temp[sourceY * width + x] * weight;
+               weightSum += weight;
+             }
+             
+             blurred[y * width + x] = sum / weightSum;
+           }
+         }
+         
+         return blurred;
+       }
+
+       function createGaussianKernel(sigma) {
+         const size = Math.ceil(sigma * 6); // 6 sigma rule
+         const kernel = new Float32Array(size);
+         const center = Math.floor(size / 2);
+         let sum = 0;
+         
+         for (let i = 0; i < size; i++) {
+           const x = i - center;
+           kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+           sum += kernel[i];
+         }
+         
+         // Normalize
+         for (let i = 0; i < size; i++) {
+           kernel[i] /= sum;
+         }
+         
+         return kernel;
+       }
+
+       // Edge Detection Functions
+       function detectEdges(ctx, width, height, method) {
+         const imageData = ctx.getImageData(0, 0, width, height);
+         const data = imageData.data;
+         
+         // Convert to grayscale first
+         const grayscale = new Float32Array(width * height);
+         for (let i = 0; i < width * height; i++) {
+           const pixelIdx = i * 4;
+           grayscale[i] = data[pixelIdx] * 0.299 + data[pixelIdx + 1] * 0.587 + data[pixelIdx + 2] * 0.114;
+         }
+         
+         // Apply Gaussian blur to grayscale for pattern matching (sigma = 1.5)
+         const blurredGrayscale = applyGaussianBlur(grayscale, width, height, 1.5);
+         
+         const edges = new Float32Array(width * height);
+         
+         // Apply edge detection to blurred grayscale
+         for (let y = 1; y < height - 1; y++) {
+           for (let x = 1; x < width - 1; x++) {
+             const idx = y * width + x;
+             let edgeValue = 0;
+             
+             if (method === 'canny' || method === 'sobel') {
+               // Sobel operator
+               const gx = 
+                 -1 * blurredGrayscale[(y-1) * width + (x-1)] + 1 * blurredGrayscale[(y-1) * width + (x+1)] +
+                 -2 * blurredGrayscale[y * width + (x-1)] + 2 * blurredGrayscale[y * width + (x+1)] +
+                 -1 * blurredGrayscale[(y+1) * width + (x-1)] + 1 * blurredGrayscale[(y+1) * width + (x+1)];
+               
+               const gy = 
+                 -1 * blurredGrayscale[(y-1) * width + (x-1)] + -2 * blurredGrayscale[(y-1) * width + x] + -1 * blurredGrayscale[(y-1) * width + (x+1)] +
+                  1 * blurredGrayscale[(y+1) * width + (x-1)] +  2 * blurredGrayscale[(y+1) * width + x] +  1 * blurredGrayscale[(y+1) * width + (x+1)];
+               
+               edgeValue = Math.sqrt(gx * gx + gy * gy);
+             } else if (method === 'prewitt') {
+               // Prewitt operator
+               const gx = 
+                 -1 * blurredGrayscale[(y-1) * width + (x-1)] + 1 * blurredGrayscale[(y-1) * width + (x+1)] +
+                 -1 * blurredGrayscale[y * width + (x-1)] + 1 * blurredGrayscale[y * width + (x+1)] +
+                 -1 * blurredGrayscale[(y+1) * width + (x-1)] + 1 * blurredGrayscale[(y+1) * width + (x+1)];
+               
+               const gy = 
+                 -1 * blurredGrayscale[(y-1) * width + (x-1)] + -1 * blurredGrayscale[(y-1) * width + x] + -1 * blurredGrayscale[(y-1) * width + (x+1)] +
+                  1 * blurredGrayscale[(y+1) * width + (x-1)] +  1 * blurredGrayscale[(y+1) * width + x] +  1 * blurredGrayscale[(y+1) * width + (x+1)];
+               
+               edgeValue = Math.sqrt(gx * gx + gy * gy);
+             } else if (method === 'roberts') {
+               // Roberts cross-gradient
+               const gx = blurredGrayscale[y * width + x] - blurredGrayscale[(y+1) * width + (x+1)];
+               const gy = blurredGrayscale[y * width + (x+1)] - blurredGrayscale[(y+1) * width + x];
+               edgeValue = Math.sqrt(gx * gx + gy * gy);
+             }
+             
+             edges[idx] = edgeValue;
+           }
+         }
+         
+         // Apply additional blur to the edge map for smoother pattern matching
+         return applyGaussianBlur(edges, width, height, 1.0);
+       }
+
+
+
+       function getGrayValue(data, x, y, width) {
+         const idx = (y * width + x) * 4;
+         return data[idx] * 0.299 + data[idx + 1] * 0.587 + data[idx + 2] * 0.114;
+       }
+
+               function calculateEdgeCorrelation(edges1, edges2) {
+          let correlation = 0;
+          let sum1 = 0, sum2 = 0;
+          const length = edges1.length;
+          
+          for (let i = 0; i < length; i++) {
+            correlation += edges1[i] * edges2[i];
+            sum1 += edges1[i] * edges1[i];
+            sum2 += edges2[i] * edges2[i];
+          }
+          
+          return correlation / Math.sqrt(sum1 * sum2);
+        }
+
+        // Rotate edge map horizontally for equirectangular images
+        function rotateEdgeMap(edges, width, height, angleDegrees) {
+          const rotated = new Float32Array(width * height);
+          const xOffset = (angleDegrees / 360) * width;
+          const normalizedOffset = ((xOffset % width) + width) % width;
+          
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const sourceX = (x + normalizedOffset) % width;
+              const sourceIdx = y * width + Math.floor(sourceX);
+              const targetIdx = y * width + x;
+              rotated[targetIdx] = edges[sourceIdx] || 0;
+            }
+          }
+          
+          return rotated;
+        }
+
+        // Calculate how well reference edges fit into editor edges (for blurred pattern matching)
+        function calculateEdgeFitting(refEdges, editEdges, width, height) {
+          // For blurred edges, we use normalized cross-correlation instead of exact matching
+          let correlation = 0;
+          let refSum = 0;
+          let editSum = 0;
+          let refSumSq = 0;
+          let editSumSq = 0;
+          let validPixels = 0;
+          
+          // Calculate means and correlation over the overlapping area
+          for (let i = 0; i < refEdges.length; i++) {
+            const refVal = refEdges[i];
+            const editVal = editEdges[i];
+            
+            // Only consider pixels with some edge strength
+            if (refVal > 5 || editVal > 5) {
+              correlation += refVal * editVal;
+              refSum += refVal;
+              editSum += editVal;
+              refSumSq += refVal * refVal;
+              editSumSq += editVal * editVal;
+              validPixels++;
+            }
+          }
+          
+          if (validPixels === 0) return 0;
+          
+          // Calculate normalized cross-correlation
+          const refMean = refSum / validPixels;
+          const editMean = editSum / validPixels;
+          
+          let numerator = 0;
+          let refVar = 0;
+          let editVar = 0;
+          
+          for (let i = 0; i < refEdges.length; i++) {
+            const refVal = refEdges[i];
+            const editVal = editEdges[i];
+            
+            if (refVal > 5 || editVal > 5) {
+              const refCentered = refVal - refMean;
+              const editCentered = editVal - editMean;
+              
+              numerator += refCentered * editCentered;
+              refVar += refCentered * refCentered;
+              editVar += editCentered * editCentered;
+            }
+          }
+          
+          const denominator = Math.sqrt(refVar * editVar);
+          
+          // Return normalized correlation coefficient (0 to 1)
+          return denominator > 0 ? Math.max(0, numerator / denominator) : 0;
+        }
+
+       // Harris Corner Detection
+       function detectHarrisCorners(ctx, width, height, threshold) {
+         const imageData = ctx.getImageData(0, 0, width, height);
+         const data = imageData.data;
+         const corners = [];
+         
+         // Calculate gradients
+         const Ix = new Float32Array(width * height);
+         const Iy = new Float32Array(width * height);
+         
+         for (let y = 1; y < height - 1; y++) {
+           for (let x = 1; x < width - 1; x++) {
+             const idx = y * width + x;
+             
+             // Sobel gradients
+             Ix[idx] = 
+               -1 * getGrayValue(data, x-1, y-1, width) + 1 * getGrayValue(data, x+1, y-1, width) +
+               -2 * getGrayValue(data, x-1, y,   width) + 2 * getGrayValue(data, x+1, y,   width) +
+               -1 * getGrayValue(data, x-1, y+1, width) + 1 * getGrayValue(data, x+1, y+1, width);
+             
+             Iy[idx] = 
+               -1 * getGrayValue(data, x-1, y-1, width) + -2 * getGrayValue(data, x, y-1, width) + -1 * getGrayValue(data, x+1, y-1, width) +
+                1 * getGrayValue(data, x-1, y+1, width) +  2 * getGrayValue(data, x, y+1, width) +  1 * getGrayValue(data, x+1, y+1, width);
+           }
+         }
+         
+         // Harris response
+         for (let y = 2; y < height - 2; y++) {
+           for (let x = 2; x < width - 2; x++) {
+             let A = 0, B = 0, C = 0;
+             
+             // 5x5 window
+             for (let dy = -2; dy <= 2; dy++) {
+               for (let dx = -2; dx <= 2; dx++) {
+                 const idx = (y + dy) * width + (x + dx);
+                 A += Ix[idx] * Ix[idx];
+                 B += Ix[idx] * Iy[idx];
+                 C += Iy[idx] * Iy[idx];
+               }
+             }
+             
+             const k = 0.04;
+             const det = A * C - B * B;
+             const trace = A + C;
+             const response = det - k * trace * trace;
+             
+             if (response > threshold) {
+               corners.push({ x, y, response });
+             }
+           }
+         }
+         
+         return corners.sort((a, b) => b.response - a.response).slice(0, 100); // Top 100 corners
+       }
+
+       function matchFeaturePoints(corners1, corners2) {
+         if (corners1.length === 0 || corners2.length === 0) return 0;
+         
+         let matches = 0;
+         const maxDistance = 20; // Max pixel distance for a match
+         
+         for (const corner1 of corners1) {
+           for (const corner2 of corners2) {
+             const dx = corner1.x - corner2.x;
+             const dy = corner1.y - corner2.y;
+             const distance = Math.sqrt(dx * dx + dy * dy);
+             
+             if (distance < maxDistance) {
+               matches++;
+               break; // Found a match for this corner
+             }
+           }
+         }
+         
+         return matches / Math.max(corners1.length, corners2.length);
+       }
+
+       // Phase Correlation Helper Functions
+       function getGrayscaleData(ctx, width, height) {
+         const imageData = ctx.getImageData(0, 0, width, height);
+         const data = imageData.data;
+         const gray = new Float32Array(width * height);
+         
+         for (let i = 0; i < width * height; i++) {
+           const pixelIdx = i * 4;
+           gray[i] = data[pixelIdx] * 0.299 + data[pixelIdx + 1] * 0.587 + data[pixelIdx + 2] * 0.114;
+         }
+         
+         return gray;
+       }
+
+       function rotateImageData(data, width, height, angleDegrees) {
+         const rotated = new Float32Array(width * height);
+         const xOffset = (angleDegrees / 360) * width;
+         const normalizedOffset = ((xOffset % width) + width) % width;
+         
+         for (let y = 0; y < height; y++) {
+           for (let x = 0; x < width; x++) {
+             const sourceX = (x + normalizedOffset) % width;
+             const sourceIdx = y * width + Math.floor(sourceX);
+             const targetIdx = y * width + x;
+             rotated[targetIdx] = data[sourceIdx] || 0;
+           }
+         }
+         
+         return rotated;
+       }
+
+       function calculateNormalizedCrossCorrelation(data1, data2) {
+         let sum1 = 0, sum2 = 0, sum12 = 0;
+         let sumSq1 = 0, sumSq2 = 0;
+         const length = data1.length;
+         
+         for (let i = 0; i < length; i++) {
+           sum1 += data1[i];
+           sum2 += data2[i];
+           sum12 += data1[i] * data2[i];
+           sumSq1 += data1[i] * data1[i];
+           sumSq2 += data2[i] * data2[i];
+         }
+         
+         const mean1 = sum1 / length;
+         const mean2 = sum2 / length;
+         
+         const numerator = sum12 - length * mean1 * mean2;
+         const denominator = Math.sqrt((sumSq1 - length * mean1 * mean1) * (sumSq2 - length * mean2 * mean2));
+         
+                 return denominator !== 0 ? numerator / denominator : 0;
+      }
+
+      // Edge overlay functions
+      function showEdgeOverlays() {
+        if (!referenceImage || !editImage) return;
+
+        const edgeMethod = (document.getElementById('edge-method') as HTMLSelectElement).value;
+        
+        // Create overlay canvases
+        createEdgeOverlay(referenceCanvas, referenceCtx, referenceImage, 'reference-edge-overlay', edgeMethod);
+        createEdgeOverlay(editCanvas, editCtx, editImage, 'edit-edge-overlay', edgeMethod);
+      }
+
+      function hideEdgeOverlays() {
+        // Remove existing overlays
+        const refOverlay = document.getElementById('reference-edge-overlay');
+        const editOverlay = document.getElementById('edit-edge-overlay');
+        
+        if (refOverlay) refOverlay.remove();
+        if (editOverlay) editOverlay.remove();
+      }
+
+      function createEdgeOverlay(baseCanvas, baseCtx, image, overlayId, edgeMethod) {
+        // Remove existing overlay first
+        const existingOverlay = document.getElementById(overlayId);
+        if (existingOverlay) existingOverlay.remove();
+
+        // Create overlay canvas
+        const overlay = document.createElement('canvas');
+        overlay.id = overlayId;
+        overlay.width = baseCanvas.width;
+        overlay.height = baseCanvas.height;
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '10';
+        
+        const overlayCtx = overlay.getContext('2d');
+        
+        // Generate edge map
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = baseCanvas.width;
+        tempCanvas.height = baseCanvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(image, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        const edges = detectEdges(tempCtx, tempCanvas.width, tempCanvas.height, edgeMethod);
+        
+        // Draw edges on overlay
+        const imageData = overlayCtx.createImageData(overlay.width, overlay.height);
+        const data = imageData.data;
+        
+        // Set overlay color based on canvas (red for reference, cyan for edit)
+        const isReference = overlayId.includes('reference');
+        const edgeColor = isReference ? [255, 0, 0, 180] : [0, 255, 255, 180]; // Red or Cyan with transparency
+        
+        // Find max edge strength for normalization
+        let maxEdge = 0;
+        for (let i = 0; i < edges.length; i++) {
+          if (edges[i] > maxEdge) maxEdge = edges[i];
+        }
+        
+        for (let i = 0; i < edges.length; i++) {
+          const edgeStrength = edges[i];
+          // For blurred edges, use a lower threshold and normalize
+          if (edgeStrength > maxEdge * 0.1) { // 10% of max edge strength
+            const pixelIdx = i * 4;
+            const intensity = Math.min(255, (edgeStrength / maxEdge) * 255);
+            data[pixelIdx] = (edgeColor[0] * intensity) / 255;     // R
+            data[pixelIdx + 1] = (edgeColor[1] * intensity) / 255; // G
+            data[pixelIdx + 2] = (edgeColor[2] * intensity) / 255; // B
+            data[pixelIdx + 3] = edgeColor[3]; // A (constant transparency)
+          }
+        }
+        
+        overlayCtx.putImageData(imageData, 0, 0);
+        
+        // Add overlay to the canvas container
+        baseCanvas.parentElement.appendChild(overlay);
+      }
+
+       // Function to recursively extract files from directory entries
       async function extractFilesFromEntry(entry, basePath = '') {
         const files = [];
         
