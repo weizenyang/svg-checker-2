@@ -1422,7 +1422,7 @@ async function renderOverlayCanvas(cone) {
 
     // Frame rate limiting for performance
     let lastTime = 0;
-    const targetFPS = 30; // Limit to 30 FPS for better performance
+    const targetFPS = 60; // Limit to 30 FPS for better performance
     const frameInterval = 1000 / targetFPS;
 
     function animate(currentTime = 0) {
