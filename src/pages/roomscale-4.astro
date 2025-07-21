@@ -44,6 +44,25 @@ import ObjectList from "../components/object-list.tsx";
                 >
                     Clear All Data
                 </button>
+                <button
+                    id="next-csv-point"
+                    class="flex transition-all duration-75 drop-shadow-sm bg-blue-600 text-white p-2 ml-2 mb-3 rounded-md hover:drop-shadow-xl hover:bg-blue-500 hover:text-white"
+                >
+                    Next Point
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="ml-2"
+                    >
+                        <path d="M9 18l6-6-6-6" stroke-width="2"></path>
+                    </svg>
+                </button>
             </div>
 
             <hr class="border-b border-zinc-200 mb-3" />
@@ -148,8 +167,8 @@ import ObjectList from "../components/object-list.tsx";
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
                     class="ml-2 rotate-180"
                 >
                     <path
@@ -411,10 +430,14 @@ import ObjectList from "../components/object-list.tsx";
         // 1) Remove all dynamic scene children except axes & lights
         scene.children.slice().forEach((child) => {
             const t = child.type;
+            const n = child.name;
             if (
                 t !== "AxesHelper" &&
                 t !== "AmbientLight" &&
-                t !== "DirectionalLight"
+                t !== "DirectionalLight" &&
+                n !== "X-Axis" &&
+                n !== "Y-Axis" &&
+                n !== "Z-Axis"
             ) {
                 scene.remove(child);
             }
@@ -451,6 +474,11 @@ import ObjectList from "../components/object-list.tsx";
     document
         .getElementById("clear-all-data")
         .addEventListener("click", clearAllData);
+
+    // Wire up the navigation button
+    document
+        .getElementById("next-csv-point")
+        .addEventListener("click", navigateToNextCsvPoint);
 
     function resizePanel(e) {
         if (!isResizing) return;
@@ -501,6 +529,18 @@ import ObjectList from "../components/object-list.tsx";
     
     // Persistent image storage system for random access
     class ImageManager {
+        imageIndex: Map<string, any>;
+        compressionCache: Map<string, any>;
+        maxImageSize: number;
+        maxCacheSize: number;
+        compressionQueue: Set<string>;
+        stats: {
+            totalImages: number;
+            cacheHits: number;
+            cacheMisses: number;
+            compressionTime: number;
+        };
+
         constructor(maxImageSize = 1024) {
             this.imageIndex = new Map(); // Lightweight index of all images
             this.compressionCache = new Map(); // Recently compressed images
@@ -821,9 +861,42 @@ import ObjectList from "../components/object-list.tsx";
     //Manipulatable Group
     var m_Group;
 
-    //Axis
-    const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    //Infinite Axis Lines
+    function createInfiniteAxisLines() {
+        const axisLength = 100000; // Large enough to appear infinite
+        
+        // X-axis (Red)
+        const xGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-axisLength, 0, 0),
+            new THREE.Vector3(axisLength, 0, 0)
+        ]);
+        const xMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const xLine = new THREE.Line(xGeometry, xMaterial);
+        xLine.name = "X-Axis";
+        scene.add(xLine);
+        
+        // Y-axis (Green)
+        const yGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, -axisLength, 0),
+            new THREE.Vector3(0, axisLength, 0)
+        ]);
+        const yMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        const yLine = new THREE.Line(yGeometry, yMaterial);
+        yLine.name = "Y-Axis";
+        scene.add(yLine);
+        
+        // Z-axis (Blue)
+        const zGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, -axisLength),
+            new THREE.Vector3(0, 0, axisLength)
+        ]);
+        const zMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+        const zLine = new THREE.Line(zGeometry, zMaterial);
+        zLine.name = "Z-Axis";
+        scene.add(zLine);
+    }
+    
+    createInfiniteAxisLines();
 
     //Lights
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -863,12 +936,12 @@ import ObjectList from "../components/object-list.tsx";
 
     function onPointerMove(event) {
        /* If the pointer is over the outliner (or a child of it),
-          don’t run the viewport-hover logic – let the outliner’s
+          don't run the viewport-hover logic – let the outliner's
           own mouseenter/leave handlers manage the tooltip. */
        if (event.target.closest('#outliner')) {
            return;
        }
-        /* 1 — turn any movement into a “hide” */
+        /* 1 — turn any movement into a "hide" */
         hideTooltip();                // clears timer + fades out if visible
 
         /* 2 — update the pointer NDC */
@@ -890,6 +963,22 @@ import ObjectList from "../components/object-list.tsx";
         const hitRoot  = firstHit ? findGLBRoot(firstHit.object) : null;
 
         hoverObject = hitRoot;        // remember current object (may be null)
+
+        /* 4 — check if hovering over a cone and disable/enable zoom accordingly */
+        const coneHit = raycaster.intersectObjects(markers).find(i => i.object.cameraPos && i.object.parent.visible);
+        if (coneHit) {
+            // Hovering over a cone - disable zoom functionality
+            orbitalControls.enableZoom = false;
+            orbitalControls.enablePan = false;
+            orbitalControls.enableRotate = false;
+            renderer.domElement.style.cursor = 'pointer';
+        } else {
+            // Not hovering over a cone - enable zoom functionality
+            orbitalControls.enableZoom = true;
+            orbitalControls.enablePan = true;
+            orbitalControls.enableRotate = true;
+            renderer.domElement.style.cursor = 'default';
+        }
 
         if (hoverObject) {
             hoverTimerId = setTimeout(() => {
@@ -1287,7 +1376,7 @@ async function renderOverlayCanvas(cone) {
     const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
     scene.add(cubeCamera);
 
-    // after you’ve created cubeRenderTarget & cubeCamera…
+    // after you've created cubeRenderTarget & cubeCamera…
 
     // 1. Full‐screen quad geometry (2:1 aspect space)
     const quadGeo = new THREE.PlaneGeometry(2, 2);
@@ -1398,14 +1487,111 @@ async function renderOverlayCanvas(cone) {
     // Variables for keyboard control
     const keyState = {};
 
+    // CSV navigation variables
+    let currentCsvIndex = 0;
+    let csvPoints = [];
+
     // Event listeners for keydown and keyup
     window.addEventListener("keydown", (event) => {
         keyState[event.key.toLowerCase()] = true;
+        
+        // Handle arrow key navigation for CSV points
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+            event.preventDefault(); // Prevent default arrow key behavior
+            if (event.key === "ArrowRight") {
+                navigateToNextCsvPoint();
+            } else if (event.key === "ArrowLeft") {
+                navigateToPreviousCsvPoint();
+            }
+        }
     });
 
     window.addEventListener("keyup", (event) => {
         keyState[event.key.toLowerCase()] = false;
     });
+
+    // Function to navigate to the next CSV point
+    function navigateToNextCsvPoint() {
+        if (csvPoints.length === 0) {
+            updateCsvPointsList();
+        }
+        
+        if (csvPoints.length > 0) {
+            currentCsvIndex = (currentCsvIndex + 1) % csvPoints.length;
+            focusOnCsvPoint(csvPoints[currentCsvIndex]);
+            updateNavigationDisplay();
+        }
+    }
+
+    // Function to navigate to the previous CSV point
+    function navigateToPreviousCsvPoint() {
+        if (csvPoints.length === 0) {
+            updateCsvPointsList();
+        }
+        
+        if (csvPoints.length > 0) {
+            currentCsvIndex = (currentCsvIndex - 1 + csvPoints.length) % csvPoints.length;
+            focusOnCsvPoint(csvPoints[currentCsvIndex]);
+            updateNavigationDisplay();
+        }
+    }
+
+    // Function to update the list of CSV points
+    function updateCsvPointsList() {
+        csvPoints = markers.filter(marker => marker.cameraPos && marker.parent && marker.parent.visible);
+        currentCsvIndex = 0;
+        console.log(`Found ${csvPoints.length} CSV points for navigation`);
+    }
+
+    // Function to focus camera on a specific CSV point
+    function focusOnCsvPoint(point) {
+        if (!point) return;
+        
+        // Calculate a position slightly offset from the point for better viewing
+        const offset = new THREE.Vector3(0, 50, 100); // Offset up and back
+        const targetPosition = point.position.clone().add(offset);
+        
+        // Animate camera to the new position
+        gsap.to(camera.position, {
+            x: targetPosition.x,
+            y: targetPosition.y,
+            z: targetPosition.z,
+            duration: 1,
+            ease: "power2.out",
+            onUpdate: () => {
+                orbitalControls.target.copy(point.position);
+                orbitalControls.update();
+            }
+        });
+        
+        console.log(`Navigated to CSV point: ${point.name}`);
+    }
+
+    // Function to update the navigation display
+    function updateNavigationDisplay() {
+        const button = document.getElementById('next-csv-point');
+        if (button && csvPoints.length > 0) {
+            button.textContent = `Next Point (${currentCsvIndex + 1}/${csvPoints.length})`;
+            // Re-add the SVG icon
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+            svg.setAttribute("width", "16");
+            svg.setAttribute("height", "16");
+            svg.setAttribute("viewBox", "0 0 24 24");
+            svg.setAttribute("fill", "none");
+            svg.setAttribute("stroke", "currentColor");
+            svg.setAttribute("stroke-linecap", "round");
+            svg.setAttribute("stroke-linejoin", "round");
+            svg.setAttribute("class", "ml-2");
+            
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", "M9 18l6-6-6-6");
+            path.setAttribute("stroke-width", "2");
+            svg.appendChild(path);
+            
+            button.appendChild(svg);
+        }
+    }
 
     // Adjust these speeds to control rotation and movement
     const rotationSpeed = 0.02;
@@ -1422,7 +1608,7 @@ async function renderOverlayCanvas(cone) {
 
     // Frame rate limiting for performance
     let lastTime = 0;
-    const targetFPS = 60; // Limit to 30 FPS for better performance
+    const targetFPS = 60; // Limit to 50 FPS for better performance
     const frameInterval = 1000 / targetFPS;
 
     function animate(currentTime = 0) {
@@ -1822,7 +2008,11 @@ async function renderOverlayCanvas(cone) {
             const existingInfo = uiArea.querySelector('.project-info');
             if (existingInfo) existingInfo.remove();
 
-            // Add new project info
+            // Project info pill is hidden per user request
+            return;
+
+            // Add new project info (commented out to hide the pill)
+            /* 
             const projectInfo = document.createElement('div');
             projectInfo.className = 'project-info bg-blue-100 p-2 rounded-md mb-3 text-xs';
             projectInfo.innerHTML = `
@@ -1857,6 +2047,7 @@ async function renderOverlayCanvas(cone) {
                     alert(`Share this link: ${shareUrl}`);
                 });
             });
+            */
         }
     }
 
@@ -2576,6 +2767,10 @@ async function renderOverlayCanvas(cone) {
         });
         window.dispatchEvent(csvUploadEvent);
         updateOutliner();
+        
+        // Update CSV points list for navigation
+        updateCsvPointsList();
+        updateNavigationDisplay();
     }
 
     function processVRImage(data, name?) {
@@ -2850,7 +3045,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
     // 2) add a light at every cone in the group
     const lights = markers.map((mark) => {
-        const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
+        const light = new THREE.PointLight(0xffffff, 10, 0, 0.8);
         light.position.copy(mark.position);
         scene.add(light);
         return light;
@@ -3063,7 +3258,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         if (isRootCall) {
             console.log("Generating ZIP...");
             const blob = await zip.generateAsync(
-                { type: "blob", streamFiles: true, worker: true },
+                { type: "blob", streamFiles: true },
                 (meta) => {
                     console.log(`  ZIP progress: ${meta.percent.toFixed(1)}%`);
                 },
@@ -3158,7 +3353,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
      * Show tooltip next to the mouse.
      * @param {number}  x   screen-space X
      * @param {number}  y   screen-space Y
-     * @param {string=} msg text to display (defaults to previous / “Double-click to refocus”)
+     * @param {string=} msg text to display (defaults to previous / "Double-click to refocus")
      */
     function showTooltip(x, y, msg) {
         if (msg !== undefined) tooltip.textContent = msg;
@@ -3181,7 +3376,8 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
         // 2) Outliner rows already have the object id stored:
         outliner.addEventListener("click", (e) => {
-        const li = e.target.closest("li[data-object-id]");
+        const target = e.target as HTMLElement;
+        const li = target.closest("li[data-object-id]") as HTMLElement;
         if (!li) return;
         const obj = scene.getObjectById(+li.dataset.objectId);
         if (obj)  fitCameraToObject(camera, orbitalControls, obj);
@@ -3211,7 +3407,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             outliner.appendChild(statusEl);
         }
 
-        // -- “Export All” button --
+        // -- "Export All" button --
         if (groupsMap.size > 1) {
             // Export All Groups button
             const btn = document.createElement("button");
@@ -3233,13 +3429,13 @@ async function render360SnapshotForCone(cone, allCones = markers) {
                     if (!csvObj) continue;
 
                     const key = getGroupId(csvObj.name);
-                    statusEl.textContent = `Processing group “${key}” (${idx}/${total})…`;
+                    statusEl.textContent = `Processing group "${key}" (${idx}/${total})…`;
                     console.log(`→ [${idx}/${total}] exporting group ${key}`);
                     await new Promise(r=>setTimeout(r,0));
 
                     // 3) Create a sub-folder in the master zip
                     const folder = rootZip.folder(key);
-                    // This writes *only* this group’s panoramas into that folder
+                    // This writes *only* this group's panoramas into that folder
                     await exportAll360ForGroup(csvObj, folder);
 
                     idx++;
@@ -3251,7 +3447,6 @@ async function render360SnapshotForCone(cone, allCones = markers) {
                 const blob = await rootZip.generateAsync({
                     type: 'blob',
                     streamFiles: true,
-                    worker: true,
                 }, meta => console.log(`ZIP ${meta.percent.toFixed(1)}%`));
 
                 const a = document.createElement('a');
