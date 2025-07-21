@@ -478,7 +478,7 @@ import ObjectList from "../components/object-list.tsx";
     // Wire up the navigation button
     document
         .getElementById("next-csv-point")
-        .addEventListener("click", navigateToNextCsvPoint);
+        .addEventListener("click", () => navigateToNextCsvPoint().catch(console.error));
 
     function resizePanel(e) {
         if (!isResizing) return;
@@ -1499,9 +1499,9 @@ async function renderOverlayCanvas(cone) {
         if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
             event.preventDefault(); // Prevent default arrow key behavior
             if (event.key === "ArrowRight") {
-                navigateToNextCsvPoint();
+                navigateToNextCsvPoint().catch(console.error);
             } else if (event.key === "ArrowLeft") {
-                navigateToPreviousCsvPoint();
+                navigateToPreviousCsvPoint().catch(console.error);
             }
         }
     });
@@ -1511,27 +1511,27 @@ async function renderOverlayCanvas(cone) {
     });
 
     // Function to navigate to the next CSV point
-    function navigateToNextCsvPoint() {
+    async function navigateToNextCsvPoint() {
         if (csvPoints.length === 0) {
             updateCsvPointsList();
         }
         
         if (csvPoints.length > 0) {
             currentCsvIndex = (currentCsvIndex + 1) % csvPoints.length;
-            focusOnCsvPoint(csvPoints[currentCsvIndex]);
+            await focusOnCsvPoint(csvPoints[currentCsvIndex]);
             updateNavigationDisplay();
         }
     }
 
     // Function to navigate to the previous CSV point
-    function navigateToPreviousCsvPoint() {
+    async function navigateToPreviousCsvPoint() {
         if (csvPoints.length === 0) {
             updateCsvPointsList();
         }
         
         if (csvPoints.length > 0) {
             currentCsvIndex = (currentCsvIndex - 1 + csvPoints.length) % csvPoints.length;
-            focusOnCsvPoint(csvPoints[currentCsvIndex]);
+            await focusOnCsvPoint(csvPoints[currentCsvIndex]);
             updateNavigationDisplay();
         }
     }
@@ -1544,7 +1544,7 @@ async function renderOverlayCanvas(cone) {
     }
 
     // Function to focus camera on a specific CSV point
-    function focusOnCsvPoint(point) {
+    async function focusOnCsvPoint(point) {
         if (!point) return;
         
         // Calculate a position slightly offset from the point for better viewing
@@ -1564,7 +1564,66 @@ async function renderOverlayCanvas(cone) {
             }
         });
         
+        // Update VR image panel to match the selected point
+        await updateVRPanelForPoint(point);
+        
         console.log(`Navigated to CSV point: ${point.name}`);
+    }
+
+    // Function to update VR panel for a specific point
+    async function updateVRPanelForPoint(point) {
+        const panel = document.getElementById("vr-image-panel");
+        const img = document.getElementById("vr-img");
+        const flippedTag = document.getElementById("vr-flipped-tag");
+        const targetName = point.name.toLowerCase();
+
+        // Helper function to apply flipping based on image name
+        function applyImageFlipping(imageName) {
+            const shouldFlip = imageName.toLowerCase().includes("bf");
+            
+            if (shouldFlip) {
+                img.style.transform = "scaleX(-1)";
+                flippedTag.classList.remove("hidden");
+            } else {
+                img.style.transform = "scaleX(1)";
+                flippedTag.classList.add("hidden");
+            }
+        }
+
+        // Show loading indicator
+        img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666'%3ELoading...%3C/text%3E%3C/svg%3E";
+        panel.classList.remove("hidden");
+
+        try {
+            // Use persistent image manager for on-demand loading
+            const entry = await imageManager.findImageByName(targetName, 'medium');
+            if (entry) {
+                img.src = entry.image;
+                
+                // Set up rotation for equirectangular image
+                setVRImage(entry.image, entry.name);
+                
+                // Prepare overlay and show it for comparison
+                await renderOverlayCanvas(point);
+                vrOverlayCanvas.style.display = 'block';
+                
+                // Apply flipping based on the image entry name
+                applyImageFlipping(entry.name);
+            } else {
+                // Hide panel and reset states
+                img.style.transform = "scaleX(1)";
+                flippedTag.classList.add("hidden");
+                vrDragOverlay.classList.add("hidden");
+                vrRotationDisplay.classList.add("hidden");
+                vrOverlayCanvas.style.display = 'none';
+                panel.classList.add("hidden");
+                console.warn(`Image not found: ${targetName}`);
+            }
+        } catch (error) {
+            console.error(`Error loading image ${targetName}:`, error);
+            // Show error state
+            img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23ff0000'%3EError loading image%3C/text%3E%3C/svg%3E";
+        }
     }
 
     // Function to update the navigation display
