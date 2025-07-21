@@ -1128,9 +1128,10 @@ async function reviewVR(event) {
                 // Set up rotation for equirectangular image
                 setVRImage(entry.image, entry.name);
                 
-                // Prepare overlay but keep it hidden initially (will show during drag)
+                // Prepare overlay and show it for comparison
                 await renderOverlayCanvas(cone);
-                vrOverlayCanvas.style.display = 'none';
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.3';
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
@@ -1164,15 +1165,24 @@ async function renderOverlayCanvas(cone) {
     // Generate a separate render for the overlay
     const overlayRenderURL = await render360SnapshotForCone(cone);
     
-    // Load and draw the overlay image (but keep it hidden until user drags)
+    // Load and draw the overlay image
     const overlayImg = new Image();
     overlayImg.onload = function() {
         vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
         vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+        
+        // Ensure the overlay is visible
+        vrOverlayCanvas.style.display = 'block';
+        vrOverlayCanvas.style.opacity = '0.3';
+        
+        console.log(`Overlay rendered for cone: ${cone.name}`);
     };
     overlayImg.src = overlayRenderURL;
     
-    // Don't show the overlay automatically - let drag handlers control visibility
+    // Return a promise that resolves when the image is loaded
+    return new Promise((resolve) => {
+        overlayImg.onload = resolve;
+    });
 }
 
     // Canvas pool for efficient reuse
@@ -1603,12 +1613,19 @@ async function renderOverlayCanvas(cone) {
                 // Set up rotation for equirectangular image
                 setVRImage(entry.image, entry.name);
                 
+                // Show drag overlay and rotation display
+                vrDragOverlay.classList.remove("hidden");
+                vrRotationDisplay.classList.remove("hidden");
+                
                 // Prepare overlay and show it for comparison
                 await renderOverlayCanvas(point);
                 vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.3'; // Set overlay opacity for comparison
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
+                
+                console.log(`VR panel updated for point: ${point.name}`);
             } else {
                 // Hide panel and reset states
                 img.style.transform = "scaleX(1)";
