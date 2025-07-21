@@ -1688,6 +1688,13 @@ async function renderOverlayCanvas(cone) {
 
         // Render loop - Optimized to reduce render calls
         renderer.clear();
+        
+        // Sort scene children by render order for proper z-indexing
+        const sortedChildren = scene.children.slice().sort((a, b) => {
+            return (a.renderOrder || 0) - (b.renderOrder || 0);
+        });
+        
+        // Render scene with sorted children
         renderer.render(scene, camera);
         
         // Only render VRSpheres, objects, and markers if they have visible content
@@ -2203,12 +2210,16 @@ async function renderOverlayCanvas(cone) {
         const material = new THREE.MeshStandardMaterial({
             color: 0x00ff00, // Set your desired color
             wireframe: true, // Default to wireframe off
+            depthTest: true,
+            depthWrite: true,
+            transparent: false
         });
 
         gltfScene.traverse((child) => {
             if (child.isMesh) {
                 child.material = material;
                 child.material.wireframe = true; // Ensure wireframe is initially false
+                child.renderOrder = 0; // Lower render order for wireframes
                 originalWireframeMeshes.push(child);
             }
         });
@@ -2454,7 +2465,12 @@ async function renderOverlayCanvas(cone) {
 
     function createCone(name, position, rotation) {
         const geometry = new THREE.ConeGeometry(20, 40, 32); // Cone with radius 0.5 and height 1
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color, change as needed
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xff0000,
+            depthTest: true,
+            depthWrite: true,
+            transparent: false
+        }); // Red color, change as needed
         const cone = new THREE.Mesh(geometry, material);
         const dir = new THREE.Vector3(Math.sin(THREE.MathUtils.degToRad(rotation.z)), 0, Math.cos(THREE.MathUtils.degToRad(rotation.z)));
         //normalize the direction vector (convert to vector of length 1)
@@ -2482,7 +2498,7 @@ async function renderOverlayCanvas(cone) {
         cone.scale.set(1, 1, 1);
         cone.updateMatrix();
         console.log(cone.rotation);
-        cone.renderOrder = 0;
+        cone.renderOrder = 1000; // Higher render order to render on top
         cone.name = name;
         markers.push(cone);
         return cone;
