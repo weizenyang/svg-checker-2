@@ -1131,7 +1131,7 @@ async function reviewVR(event) {
                 // Prepare overlay and show it for comparison
                 await renderOverlayCanvas(cone);
                 vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.3';
+                vrOverlayCanvas.style.opacity = '0.45';
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
@@ -1155,34 +1155,59 @@ async function reviewVR(event) {
 }
 
 async function renderOverlayCanvas(cone) {
-    if (!vrOverlayCanvas || !cone) return;
+    if (!vrOverlayCanvas || !cone) {
+        console.warn('Missing overlay canvas or cone');
+        return;
+    }
     
-    // Set overlay canvas size to match the panel
-    const panel = document.getElementById("vr-image-panel");
-    vrOverlayCanvas.width = panel.offsetWidth;
-    vrOverlayCanvas.height = panel.offsetHeight;
-    
-    // Generate a separate render for the overlay
-    const overlayRenderURL = await render360SnapshotForCone(cone);
-    
-    // Load and draw the overlay image
-    const overlayImg = new Image();
-    overlayImg.onload = function() {
-        vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
-        vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+    try {
+        // Set overlay canvas size to match the panel
+        const panel = document.getElementById("vr-image-panel");
+        if (!panel) {
+            console.warn('VR panel not found');
+            return;
+        }
         
-        // Ensure the overlay is visible
-        vrOverlayCanvas.style.display = 'block';
-        vrOverlayCanvas.style.opacity = '0.3';
+        vrOverlayCanvas.width = panel.offsetWidth;
+        vrOverlayCanvas.height = panel.offsetHeight;
         
-        console.log(`Overlay rendered for cone: ${cone.name}`);
-    };
-    overlayImg.src = overlayRenderURL;
-    
-    // Return a promise that resolves when the image is loaded
-    return new Promise((resolve) => {
-        overlayImg.onload = resolve;
-    });
+        console.log(`Rendering overlay for cone: ${cone.name}`);
+        
+        // Generate a separate render for the overlay
+        const overlayRenderURL = await render360SnapshotForCone(cone);
+        
+        // Load and draw the overlay image
+        return new Promise((resolve, reject) => {
+            const overlayImg = new Image();
+            
+            overlayImg.onload = function() {
+                try {
+                    vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+                    vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+                    
+                    // Ensure the overlay is visible
+                    vrOverlayCanvas.style.display = 'block';
+                    vrOverlayCanvas.style.opacity = '0.45';
+                    
+                    console.log(`Overlay successfully rendered for cone: ${cone.name}`);
+                    resolve();
+                } catch (error) {
+                    console.error('Error drawing overlay:', error);
+                    reject(error);
+                }
+            };
+            
+            overlayImg.onerror = function() {
+                console.error('Failed to load overlay image');
+                reject(new Error('Failed to load overlay image'));
+            };
+            
+            overlayImg.src = overlayRenderURL;
+        });
+    } catch (error) {
+        console.error('Error in renderOverlayCanvas:', error);
+        throw error;
+    }
 }
 
     // Canvas pool for efficient reuse
@@ -1617,10 +1642,18 @@ async function renderOverlayCanvas(cone) {
                 vrDragOverlay.classList.remove("hidden");
                 vrRotationDisplay.classList.remove("hidden");
                 
-                // Prepare overlay and show it for comparison
-                await renderOverlayCanvas(point);
+                // Immediately show overlay canvas (will be updated when rendering completes)
                 vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.3'; // Set overlay opacity for comparison
+                vrOverlayCanvas.style.opacity = '0.45';
+                
+                // Prepare overlay and show it for comparison
+                try {
+                    await renderOverlayCanvas(point);
+                    console.log('Overlay rendering completed successfully');
+                } catch (overlayError) {
+                    console.error('Error rendering overlay:', overlayError);
+                    // Overlay is already visible from above, so we just log the error
+                }
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
