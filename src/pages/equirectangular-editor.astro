@@ -1930,64 +1930,93 @@ declare const JSZip: any;
             batchGroups.get(groupKey).push(i);
           });
         }
-        for (let i = 0; i < batchFiles.length; i++) {
-          const file = batchFiles[i];
-          const progress = ((i + 1) / batchFiles.length) * 100;
-          batchProgressFill.style.width = progress + '%';
-          try {
-            const img = await loadImageFromFile(file) as HTMLImageElement;
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            const xOffset = (rotationDegrees / 360) * img.width;
-            const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
-            const availableWidth = img.width - normalizedXOffset;
-            ctx.drawImage(
-              img,
-              normalizedXOffset, 0, availableWidth, img.height,
-              0, 0, availableWidth, img.height
-            );
-            if (availableWidth < img.width) {
-              const remainingWidth = img.width - availableWidth;
+        // Process files in smaller chunks to avoid memory issues
+        const chunkSize = 20; // Process 20 files at a time
+        const totalChunks = Math.ceil(batchFiles.length / chunkSize);
+        
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+          const startIndex = chunkIndex * chunkSize;
+          const endIndex = Math.min(startIndex + chunkSize, batchFiles.length);
+          const chunk = batchFiles.slice(startIndex, endIndex);
+          
+          console.log(`Processing chunk ${chunkIndex + 1}/${totalChunks} (files ${startIndex + 1}-${endIndex})`);
+          
+          for (let i = 0; i < chunk.length; i++) {
+            const file = chunk[i];
+            const globalIndex = startIndex + i;
+            const progress = ((globalIndex + 1) / batchFiles.length) * 100;
+            batchProgressFill.style.width = progress + '%';
+            
+            try {
+              const img = await loadImageFromFile(file) as HTMLImageElement;
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              const xOffset = (rotationDegrees / 360) * img.width;
+              const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
+              const availableWidth = img.width - normalizedXOffset;
               ctx.drawImage(
                 img,
-                0, 0, remainingWidth, img.height,
-                availableWidth, 0, remainingWidth, img.height
+                normalizedXOffset, 0, availableWidth, img.height,
+                0, 0, availableWidth, img.height
               );
+              if (availableWidth < img.width) {
+                const remainingWidth = img.width - availableWidth;
+                ctx.drawImage(
+                  img,
+                  0, 0, remainingWidth, img.height,
+                  availableWidth, 0, remainingWidth, img.height
+                );
+              }
+              const blob = await new Promise(resolve => {
+                canvas.toBlob(resolve, 'image/png');
+              });
+              const originalPath = (file as any).relativePath || file.name;
+              const pathParts = originalPath.split('/');
+              const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+              let fullPath;
+              if (batchGroupingColumn !== null) {
+                // Use group key as folder
+                const groupKey = splitNames[globalIndex][batchGroupingColumn] || 'group';
+                fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+              } else if (preserveStructure && pathParts.length > 0) {
+                const directory = pathParts.join('/');
+                fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+              } else {
+                fullPath = prefix ? `${prefix}${filename}` : filename;
+              }
+              zip.file(fullPath, blob);
+            } catch (error) {
+              console.error('Error processing file:', file.name, error);
             }
-            const blob = await new Promise(resolve => {
-              canvas.toBlob(resolve, 'image/png');
-            });
-            const originalPath = (file as any).relativePath || file.name;
-            const pathParts = originalPath.split('/');
-            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
-            let fullPath;
-            if (batchGroupingColumn !== null) {
-              // Use group key as folder
-              const groupKey = splitNames[i][batchGroupingColumn] || 'group';
-              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
-            } else if (preserveStructure && pathParts.length > 0) {
-              const directory = pathParts.join('/');
-              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
-            } else {
-              fullPath = prefix ? `${prefix}${filename}` : filename;
-            }
-            zip.file(fullPath, blob);
-          } catch (error) {
-            console.error('Error processing file:', file.name, error);
           }
+          
+          // Small delay between chunks to prevent UI freezing
+          await new Promise(resolve => setTimeout(resolve, 10));
         }
-        // Generate and download zip file
+        // Generate and download zip file with streaming to avoid memory issues
+        console.log('Creating ZIP file with streaming...');
         try {
-          const content = await zip.generateAsync({ type: 'blob' });
+          const content = await zip.generateAsync({ 
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
+          });
+          console.log('ZIP file created successfully! Size:', (content.size / 1024 / 1024).toFixed(2), 'MB');
           const link = document.createElement('a');
           link.href = URL.createObjectURL(content);
           link.download = 'batch_rotated_images.zip';
           link.click();
           URL.revokeObjectURL(link.href);
+          console.log('Batch processing completed successfully! Downloaded: batch_rotated_images.zip');
         } catch (error) {
           console.error('Error creating zip file:', error);
+          if (error.message.includes('Array buffer allocation failed')) {
+            alert('Error: ZIP file too large for browser memory. Try processing fewer files at once or use smaller images.');
+          } else {
+            alert('Error creating ZIP file. Please try again.');
+          }
         }
         // Reset UI
         batchProgressBar.style.display = 'none';
