@@ -1790,12 +1790,13 @@ declare const JSZip: any;
             
             worker.onmessage = function(e) {
               if (e.data.type === 'progress') {
-                // Update progress bar
+                // Update progress bar with better calculation
                 const totalProgress = ((completedBatches * batchSize) + e.data.current) / files.length * 100;
-                batchProgressFill.style.width = Math.min(totalProgress, 100) + '%';
+                const clampedProgress = Math.min(Math.max(totalProgress, 0), 100);
+                batchProgressFill.style.width = clampedProgress + '%';
                 
                 // Log progress to console
-                console.log(`Worker ${workerIndex + 1}: Processing ${e.data.filename} (${Math.round(totalProgress)}% - ${e.data.current}/${e.data.total} files)`);
+                console.log(`Worker ${workerIndex + 1}: Processing ${e.data.filename} (${Math.round(clampedProgress)}% - ${e.data.current}/${e.data.total} files)`);
               } else if (e.data.type === 'log') {
                 // Handle log messages from worker
                 if (e.data.level === 'error') {
@@ -1824,11 +1825,22 @@ declare const JSZip: any;
         
         // Wait for all batches to complete
         console.log('⏳ Waiting for all workers to complete...');
-        await Promise.all(batchPromises);
-        console.log('✅ All workers completed! Processing results...');
+        try {
+          await Promise.all(batchPromises);
+          console.log('✅ All workers completed! Processing results...');
+        } catch (error) {
+          console.error('❌ Error during worker processing:', error);
+          throw new Error('Worker processing failed: ' + error.message);
+        }
         
         // Sort results by original index
         allResults.sort((a, b) => a.index - b.index);
+        
+        // Validate results
+        console.log(`📊 Processing results: ${allResults.length} files processed, expected ${files.length} files`);
+        if (allResults.length !== files.length) {
+          console.warn(`⚠️ Warning: Processed ${allResults.length} files but expected ${files.length} files`);
+        }
         
         // Create multiple ZIP files organized by folder structure
         const zipFiles = [];
