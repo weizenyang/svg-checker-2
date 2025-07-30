@@ -1717,6 +1717,9 @@ declare const JSZip: any;
                 error: error.message,
                 success: false
               });
+              
+              // Log error to console
+              console.error(`❌ Failed to process file: ${file.name} - ${error.message}`);
             }
           }
           
@@ -1774,9 +1777,16 @@ declare const JSZip: any;
                 // Update progress bar
                 const totalProgress = ((completedBatches * batchSize) + e.data.current) / files.length * 100;
                 batchProgressFill.style.width = Math.min(totalProgress, 100) + '%';
+                
+                // Log progress to console
+                console.log(`Processing: ${e.data.filename} (${Math.round(totalProgress)}% - ${e.data.current}/${e.data.total} files)`);
               } else if (e.data.type === 'complete') {
                 allResults.push(...e.data.results);
                 completedBatches++;
+                
+                // Log batch completion
+                console.log(`Batch ${e.data.batchId} completed: ${e.data.results.length} files processed`);
+                
                 resolve();
               }
             };
@@ -1831,6 +1841,9 @@ declare const JSZip: any;
         const prefix = batchPrefixInput.value || '';
         const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
         
+        // Log process start
+        console.log(`🚀 Starting batch processing: ${batchFiles.length} files, ${maxWorkers} workers, ${rotationDegrees}° rotation`);
+        
         // Show progress bar
         batchProgressBar.style.display = 'block';
         (batchProcessButton as HTMLButtonElement).disabled = true;
@@ -1853,8 +1866,11 @@ declare const JSZip: any;
           link.click();
           URL.revokeObjectURL(link.href);
           
+          // Log completion
+          console.log(`✅ Batch processing completed successfully! Downloaded: batch_rotated_images.zip`);
+          
         } catch (error) {
-          console.error('Error in batch processing:', error);
+          console.error('❌ Error in batch processing:', error);
           alert('Error processing batch. Please try again.');
         }
         
