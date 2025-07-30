@@ -1596,6 +1596,7 @@ declare const JSZip: any;
           }
         });
         updateBatchFileList();
+        updateBatchGroupingOptions();
       }
 
       function updateBatchFileList() {
@@ -1629,6 +1630,7 @@ declare const JSZip: any;
           removeBtn.addEventListener('click', () => {
             batchFiles.splice(index, 1);
             updateBatchFileList();
+            updateBatchGroupingOptions();
           });
           
           fileItem.appendChild(fileName);
@@ -1649,88 +1651,299 @@ declare const JSZip: any;
       batchClearButton.addEventListener('click', () => {
         batchFiles = [];
         updateBatchFileList();
+        updateBatchGroupingOptions();
       });
 
-      batchProcessButton.addEventListener('click', async () => {
+      // --- Multithreaded Batch Processing ---
+      // Create Web Worker for image processing
+      const workerScript = `
+        self.onmessage = async function(e) {
+          const { files, rotationDegrees, batchId } = e.data;
+          const results = [];
+          
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+              // Load image
+              const img = await createImageBitmap(file);
+              
+              // Create canvas and apply rotation
+              const canvas = new OffscreenCanvas(img.width, img.height);
+              const ctx = canvas.getContext('2d');
+              
+              // Apply rotation
+              const xOffset = (rotationDegrees / 360) * img.width;
+              const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
+              const availableWidth = img.width - normalizedXOffset;
+              
+              ctx.drawImage(
+                img,
+                normalizedXOffset, 0, availableWidth, img.height,
+                0, 0, availableWidth, img.height
+              );
+              
+              if (availableWidth < img.width) {
+                const remainingWidth = img.width - availableWidth;
+                ctx.drawImage(
+                  img,
+                  0, 0, remainingWidth, img.height,
+                  availableWidth, 0, remainingWidth, img.height
+                );
+              }
+              
+              // Convert to blob
+              const blob = await canvas.convertToBlob({ type: 'image/png' });
+              
+              results.push({
+                index: i,
+                filename: file.name,
+                blob: blob,
+                success: true
+              });
+              
+              // Report progress
+              self.postMessage({
+                type: 'progress',
+                batchId: batchId,
+                current: i + 1,
+                total: files.length,
+                filename: file.name
+              });
+              
+            } catch (error) {
+              results.push({
+                index: i,
+                filename: file.name,
+                error: error.message,
+                success: false
+              });
+            }
+          }
+          
+          self.postMessage({
+            type: 'complete',
+            batchId: batchId,
+            results: results
+          });
+        };
+      `;
+      
+      const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(workerBlob);
+      
+      // Create worker pool
+      const workerPool = [];
+      const maxWorkers = navigator.hardwareConcurrency || 4;
+      
+      for (let i = 0; i < maxWorkers; i++) {
+        const worker = new Worker(workerUrl);
+        workerPool.push(worker);
+      }
+      
+      let activeWorkers = 0;
+      let batchCounter = 0;
+      
+      // Multithreaded batch processing
+      async function processBatchMultithreaded(files, rotationDegrees, prefix, preserveStructure, batchGroupingColumn) {
+        const zip = new JSZip();
+        const batchSize = Math.max(1, Math.floor(files.length / maxWorkers));
+        const batches = [];
+        
+        // Split files into batches
+        for (let i = 0; i < files.length; i += batchSize) {
+          batches.push(files.slice(i, i + batchSize));
+        }
+        
+        // Prepare grouping if enabled
+        let splitNames = null;
+        if (batchGroupingColumn !== null) {
+          splitNames = files.map(file => (file.name.substring(0, file.name.lastIndexOf('.')) || file.name).split('_'));
+        }
+        
+        const allResults = [];
+        let completedBatches = 0;
+        
+        // Process batches in parallel
+        const batchPromises = batches.map((batch, batchIndex) => {
+          return new Promise((resolve) => {
+            const worker = workerPool[activeWorkers % maxWorkers];
+            const batchId = batchCounter++;
+            
+            worker.onmessage = function(e) {
+              if (e.data.type === 'progress') {
+                // Update progress bar
+                const totalProgress = ((completedBatches * batchSize) + e.data.current) / files.length * 100;
+                batchProgressFill.style.width = Math.min(totalProgress, 100) + '%';
+              } else if (e.data.type === 'complete') {
+                allResults.push(...e.data.results);
+                completedBatches++;
+                resolve();
+              }
+            };
+            
+            worker.postMessage({
+              files: batch,
+              rotationDegrees: rotationDegrees,
+              batchId: batchId
+            });
+          });
+        });
+        
+        // Wait for all batches to complete
+        await Promise.all(batchPromises);
+        
+        // Sort results by original index and add to zip
+        allResults.sort((a, b) => a.index - b.index);
+        
+        for (let i = 0; i < allResults.length; i++) {
+          const result = allResults[i];
+          if (result.success) {
+            const file = files[result.index];
+            const originalPath = (file as any).relativePath || file.name;
+            const pathParts = originalPath.split('/');
+            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+            
+            let fullPath;
+            if (batchGroupingColumn !== null) {
+              const groupKey = splitNames[result.index][batchGroupingColumn] || 'group';
+              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+            } else if (preserveStructure && pathParts.length > 0) {
+              const directory = pathParts.join('/');
+              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+            } else {
+              fullPath = prefix ? `${prefix}${filename}` : filename;
+            }
+            
+            zip.file(fullPath, result.blob);
+          } else {
+            console.error('Error processing file:', result.filename, result.error);
+          }
+        }
+        
+        return zip;
+      }
+      
+      // Replace the original batch processing with multithreaded version
+      batchProcessButton.onclick = async () => {
         if (batchFiles.length === 0) return;
-
+        
         const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
         const prefix = batchPrefixInput.value || '';
         const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
         
-                 // Show progress bar
-         batchProgressBar.style.display = 'block';
-         (batchProcessButton as HTMLButtonElement).disabled = true;
-         (batchClearButton as HTMLButtonElement).disabled = true;
+        // Show progress bar
+        batchProgressBar.style.display = 'block';
+        (batchProcessButton as HTMLButtonElement).disabled = true;
+        (batchClearButton as HTMLButtonElement).disabled = true;
+        
+        try {
+          const zip = await processBatchMultithreaded(
+            batchFiles, 
+            rotationDegrees, 
+            prefix, 
+            preserveStructure, 
+            batchGroupingColumn
+          );
+          
+          // Generate and download zip file
+          const content = await zip.generateAsync({ type: 'blob' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'batch_rotated_images.zip';
+          link.click();
+          URL.revokeObjectURL(link.href);
+          
+        } catch (error) {
+          console.error('Error in batch processing:', error);
+          alert('Error processing batch. Please try again.');
+        }
+        
+        // Reset UI
+        batchProgressBar.style.display = 'none';
+        batchProgressFill.style.width = '0%';
+        (batchProcessButton as HTMLButtonElement).disabled = false;
+        (batchClearButton as HTMLButtonElement).disabled = false;
+      };
+      
+      // Cleanup workers on page unload
+      window.addEventListener('beforeunload', () => {
+        workerPool.forEach(worker => worker.terminate());
+        URL.revokeObjectURL(workerUrl);
+      });
 
-         // Create JSZip instance for batch download
-         const zip = new JSZip();
-
-         for (let i = 0; i < batchFiles.length; i++) {
-           const file = batchFiles[i];
-           const progress = ((i + 1) / batchFiles.length) * 100;
-           
-           // Update progress bar
-           batchProgressFill.style.width = progress + '%';
-           
-           try {
-             // Load image
-             const img = await loadImageFromFile(file) as HTMLImageElement;
-             
-             // Create canvas and apply rotation
-             const canvas = document.createElement('canvas');
-             canvas.width = img.width;
-             canvas.height = img.height;
-             const ctx = canvas.getContext('2d');
-             
-             // Apply rotation
-             const xOffset = (rotationDegrees / 360) * img.width;
-             const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
-             const availableWidth = img.width - normalizedXOffset;
-             
-             // Draw the rotated image
-             ctx.drawImage(
-               img,
-               normalizedXOffset, 0, availableWidth, img.height,
-               0, 0, availableWidth, img.height
-             );
-             
-             if (availableWidth < img.width) {
-               const remainingWidth = img.width - availableWidth;
-               ctx.drawImage(
-                 img,
-                 0, 0, remainingWidth, img.height,
-                 availableWidth, 0, remainingWidth, img.height
-               );
-             }
-            
-                         // Convert to blob and add to zip
-             const blob = await new Promise(resolve => {
-               canvas.toBlob(resolve, 'image/png');
-             });
-             
-             // Use relative path if available and preserve structure is enabled
-             const originalPath = (file as any).relativePath || file.name;
-             const pathParts = originalPath.split('/');
-             const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
-             
-             let fullPath;
-             if (preserveStructure && pathParts.length > 0) {
-               // Preserve folder structure
-               const directory = pathParts.join('/');
-               fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
-             } else {
-               // Flatten to root level
-               fullPath = prefix ? `${prefix}${filename}` : filename;
-             }
-             
-             zip.file(fullPath, blob);
-            
+      // --- Patch batchProcessButton logic ---
+      const origBatchProcessHandler = batchProcessButton.onclick;
+      batchProcessButton.onclick = async () => {
+        if (batchFiles.length === 0) return;
+        const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
+        const prefix = batchPrefixInput.value || '';
+        const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
+        // Show progress bar
+        batchProgressBar.style.display = 'block';
+        (batchProcessButton as HTMLButtonElement).disabled = true;
+        (batchClearButton as HTMLButtonElement).disabled = true;
+        // Create JSZip instance for batch download
+        const zip = new JSZip();
+        // Prepare grouping if enabled
+        let batchGroups = null;
+        let splitNames = null;
+        if (batchGroupingColumn !== null) {
+          splitNames = batchFiles.map(file => (file.name.substring(0, file.name.lastIndexOf('.')) || file.name).split('_'));
+          batchGroups = new Map();
+          splitNames.forEach((parts, i) => {
+            const groupKey = parts[batchGroupingColumn] || '';
+            if (!batchGroups.has(groupKey)) batchGroups.set(groupKey, []);
+            batchGroups.get(groupKey).push(i);
+          });
+        }
+        for (let i = 0; i < batchFiles.length; i++) {
+          const file = batchFiles[i];
+          const progress = ((i + 1) / batchFiles.length) * 100;
+          batchProgressFill.style.width = progress + '%';
+          try {
+            const img = await loadImageFromFile(file) as HTMLImageElement;
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            const xOffset = (rotationDegrees / 360) * img.width;
+            const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
+            const availableWidth = img.width - normalizedXOffset;
+            ctx.drawImage(
+              img,
+              normalizedXOffset, 0, availableWidth, img.height,
+              0, 0, availableWidth, img.height
+            );
+            if (availableWidth < img.width) {
+              const remainingWidth = img.width - availableWidth;
+              ctx.drawImage(
+                img,
+                0, 0, remainingWidth, img.height,
+                availableWidth, 0, remainingWidth, img.height
+              );
+            }
+            const blob = await new Promise(resolve => {
+              canvas.toBlob(resolve, 'image/png');
+            });
+            const originalPath = (file as any).relativePath || file.name;
+            const pathParts = originalPath.split('/');
+            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+            let fullPath;
+            if (batchGroupingColumn !== null) {
+              // Use group key as folder
+              const groupKey = splitNames[i][batchGroupingColumn] || 'group';
+              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+            } else if (preserveStructure && pathParts.length > 0) {
+              const directory = pathParts.join('/');
+              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+            } else {
+              fullPath = prefix ? `${prefix}${filename}` : filename;
+            }
+            zip.file(fullPath, blob);
           } catch (error) {
             console.error('Error processing file:', file.name, error);
           }
         }
-
         // Generate and download zip file
         try {
           const content = await zip.generateAsync({ type: 'blob' });
@@ -1742,13 +1955,12 @@ declare const JSZip: any;
         } catch (error) {
           console.error('Error creating zip file:', error);
         }
-
-                 // Reset UI
-         batchProgressBar.style.display = 'none';
-         batchProgressFill.style.width = '0%';
-         (batchProcessButton as HTMLButtonElement).disabled = false;
-         (batchClearButton as HTMLButtonElement).disabled = false;
-      });
+        // Reset UI
+        batchProgressBar.style.display = 'none';
+        batchProgressFill.style.width = '0%';
+        (batchProcessButton as HTMLButtonElement).disabled = false;
+        (batchClearButton as HTMLButtonElement).disabled = false;
+      };
 
       function loadImageFromFile(file) {
         return new Promise((resolve, reject) => {
@@ -2551,108 +2763,13 @@ declare const JSZip: any;
         }
       }
       // Update options when batch files change
-      const origUpdateBatchFileList = updateBatchFileList;
-      updateBatchFileList = function() {
-        origUpdateBatchFileList();
-        updateBatchGroupingOptions();
-      };
+      // Add grouping options update to existing calls
       // Also update on clear
       batchClearButton.addEventListener('click', updateBatchGroupingOptions);
       // Track selected column
       batchGroupingColumnSelect.addEventListener('change', function() {
         batchGroupingColumn = this.value === '' ? null : parseInt(this.value);
       });
-
-      // --- Patch batchProcessButton logic ---
-      const origBatchProcessHandler = batchProcessButton.onclick;
-      batchProcessButton.onclick = async () => {
-        if (batchFiles.length === 0) return;
-        const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
-        const prefix = batchPrefixInput.value || '';
-        const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
-        // Show progress bar
-        batchProgressBar.style.display = 'block';
-        (batchProcessButton as HTMLButtonElement).disabled = true;
-        (batchClearButton as HTMLButtonElement).disabled = true;
-        // Create JSZip instance for batch download
-        const zip = new JSZip();
-        // Prepare grouping if enabled
-        let batchGroups = null;
-        let splitNames = null;
-        if (batchGroupingColumn !== null) {
-          splitNames = batchFiles.map(file => (file.name.substring(0, file.name.lastIndexOf('.')) || file.name).split('_'));
-          batchGroups = new Map();
-          splitNames.forEach((parts, i) => {
-            const groupKey = parts[batchGroupingColumn] || '';
-            if (!batchGroups.has(groupKey)) batchGroups.set(groupKey, []);
-            batchGroups.get(groupKey).push(i);
-          });
-        }
-        for (let i = 0; i < batchFiles.length; i++) {
-          const file = batchFiles[i];
-          const progress = ((i + 1) / batchFiles.length) * 100;
-          batchProgressFill.style.width = progress + '%';
-          try {
-            const img = await loadImageFromFile(file) as HTMLImageElement;
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            const xOffset = (rotationDegrees / 360) * img.width;
-            const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
-            const availableWidth = img.width - normalizedXOffset;
-            ctx.drawImage(
-              img,
-              normalizedXOffset, 0, availableWidth, img.height,
-              0, 0, availableWidth, img.height
-            );
-            if (availableWidth < img.width) {
-              const remainingWidth = img.width - availableWidth;
-              ctx.drawImage(
-                img,
-                0, 0, remainingWidth, img.height,
-                availableWidth, 0, remainingWidth, img.height
-              );
-            }
-            const blob = await new Promise(resolve => {
-              canvas.toBlob(resolve, 'image/png');
-            });
-            const originalPath = (file as any).relativePath || file.name;
-            const pathParts = originalPath.split('/');
-            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
-            let fullPath;
-            if (batchGroupingColumn !== null) {
-              // Use group key as folder
-              const groupKey = splitNames[i][batchGroupingColumn] || 'group';
-              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
-            } else if (preserveStructure && pathParts.length > 0) {
-              const directory = pathParts.join('/');
-              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
-            } else {
-              fullPath = prefix ? `${prefix}${filename}` : filename;
-            }
-            zip.file(fullPath, blob);
-          } catch (error) {
-            console.error('Error processing file:', file.name, error);
-          }
-        }
-        // Generate and download zip file
-        try {
-          const content = await zip.generateAsync({ type: 'blob' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(content);
-          link.download = 'batch_rotated_images.zip';
-          link.click();
-          URL.revokeObjectURL(link.href);
-        } catch (error) {
-          console.error('Error creating zip file:', error);
-        }
-        // Reset UI
-        batchProgressBar.style.display = 'none';
-        batchProgressFill.style.width = '0%';
-        (batchProcessButton as HTMLButtonElement).disabled = false;
-        (batchClearButton as HTMLButtonElement).disabled = false;
-      };
     </script>
   </body>
 </html>
