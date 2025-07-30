@@ -1752,10 +1752,14 @@ declare const JSZip: any;
         const batchSize = Math.max(1, Math.floor(files.length / maxWorkers));
         const batches = [];
         
+        console.log(`Parallel processing setup: ${files.length} files, ${maxWorkers} workers, ${batchSize} files per batch`);
+        
         // Split files into batches
         for (let i = 0; i < files.length; i += batchSize) {
           batches.push(files.slice(i, i + batchSize));
         }
+        
+        console.log(`Created ${batches.length} batches for parallel processing`);
         
         // Prepare grouping if enabled
         let splitNames = null;
@@ -1769,8 +1773,11 @@ declare const JSZip: any;
         // Process batches in parallel
         const batchPromises = batches.map((batch, batchIndex) => {
           return new Promise((resolve) => {
-            const worker = workerPool[activeWorkers % maxWorkers];
+            const workerIndex = batchIndex % maxWorkers;
+            const worker = workerPool[workerIndex];
             const batchId = batchCounter++;
+            
+            console.log(`Starting batch ${batchId} with ${batch.length} files on worker ${workerIndex + 1}/${maxWorkers}`);
             
             worker.onmessage = function(e) {
               if (e.data.type === 'progress') {
@@ -1779,13 +1786,13 @@ declare const JSZip: any;
                 batchProgressFill.style.width = Math.min(totalProgress, 100) + '%';
                 
                 // Log progress to console
-                console.log(`Processing: ${e.data.filename} (${Math.round(totalProgress)}% - ${e.data.current}/${e.data.total} files)`);
+                console.log(`Worker ${workerIndex + 1}: Processing ${e.data.filename} (${Math.round(totalProgress)}% - ${e.data.current}/${e.data.total} files)`);
               } else if (e.data.type === 'complete') {
                 allResults.push(...e.data.results);
                 completedBatches++;
                 
                 // Log batch completion
-                console.log(`Batch ${e.data.batchId} completed: ${e.data.results.length} files processed`);
+                console.log(`Worker ${workerIndex + 1}: Batch ${e.data.batchId} completed: ${e.data.results.length} files processed`);
                 
                 resolve();
               }
