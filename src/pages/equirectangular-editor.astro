@@ -1719,7 +1719,7 @@ declare const JSZip: any;
               });
               
               // Log error to console
-              console.error(`❌ Failed to process file: ${file.name} - ${error.message}`);
+              console.error(`Failed to process file: ${file.name} - ${error.message}`);
             }
           }
           
@@ -1842,7 +1842,7 @@ declare const JSZip: any;
         const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
         
         // Log process start
-        console.log(`🚀 Starting batch processing: ${batchFiles.length} files, ${maxWorkers} workers, ${rotationDegrees}° rotation`);
+        console.log(`Starting batch processing: ${batchFiles.length} files, ${maxWorkers} workers, ${rotationDegrees}° rotation`);
         
         // Show progress bar
         batchProgressBar.style.display = 'block';
@@ -1867,10 +1867,10 @@ declare const JSZip: any;
           URL.revokeObjectURL(link.href);
           
           // Log completion
-          console.log(`✅ Batch processing completed successfully! Downloaded: batch_rotated_images.zip`);
+          console.log(`Batch processing completed successfully! Downloaded: batch_rotated_images.zip`);
           
         } catch (error) {
-          console.error('❌ Error in batch processing:', error);
+          console.error('Error in batch processing:', error);
           alert('Error processing batch. Please try again.');
         }
         
