@@ -1718,8 +1718,12 @@ declare const JSZip: any;
                 success: false
               });
               
-              // Log error to console
-              console.error('Failed to process file: ' + file.name + ' - ' + error.message);
+              // Send error log to main thread
+              self.postMessage({
+                type: 'log',
+                level: 'error',
+                message: 'Failed to process file: ' + file.name + ' - ' + error.message
+              });
             }
           }
           
@@ -1787,6 +1791,13 @@ declare const JSZip: any;
                 
                 // Log progress to console
                 console.log(`Worker ${workerIndex + 1}: Processing ${e.data.filename} (${Math.round(totalProgress)}% - ${e.data.current}/${e.data.total} files)`);
+              } else if (e.data.type === 'log') {
+                // Handle log messages from worker
+                if (e.data.level === 'error') {
+                  console.error(`Worker ${workerIndex + 1}: ${e.data.message}`);
+                } else {
+                  console.log(`Worker ${workerIndex + 1}: ${e.data.message}`);
+                }
               } else if (e.data.type === 'complete') {
                 allResults.push(...e.data.results);
                 completedBatches++;
