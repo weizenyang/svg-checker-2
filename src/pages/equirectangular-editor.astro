@@ -2498,6 +2498,161 @@ declare const JSZip: any;
           readEntries();
         });
       }
+
+      // --- Batch Rotation Grouping Option ---
+      // Add UI for grouping by filename column
+      let batchGroupingPatterns = [];
+      let batchGroupingColumn = null;
+      const batchGroupingControls = document.createElement('div');
+      batchGroupingControls.className = 'batch-controls';
+      batchGroupingControls.innerHTML = `
+        <label>
+          <span>Group output by filename column:</span>
+          <select id="batch-grouping-column-select" style="margin-left: 10px; padding: 5px;">
+            <option value="">(No grouping)</option>
+          </select>
+        </label>
+      `;
+      // Insert after the preserve-structure control
+      const preserveStructureControl = document.getElementById('preserve-structure').parentElement.parentElement;
+      preserveStructureControl.parentElement.insertBefore(batchGroupingControls, preserveStructureControl.nextSibling);
+      const batchGroupingColumnSelect = batchGroupingControls.querySelector('#batch-grouping-column-select');
+
+      // When batch files change, update grouping options
+      function updateBatchGroupingOptions() {
+        if (batchFiles.length < 2) {
+          batchGroupingPatterns = [];
+          batchGroupingColumnSelect.innerHTML = '<option value="">(No grouping)</option>';
+          return;
+        }
+        // Use the same delimiter-based logic as in file grouping
+        const filenames = batchFiles.map(file => file.name.substring(0, file.name.lastIndexOf('.')) || file.name);
+        const delimiter = '_';
+        const splitNames = filenames.map(name => name.split(delimiter));
+        const maxColumns = Math.max(...splitNames.map(parts => parts.length));
+        batchGroupingPatterns = [];
+        batchGroupingColumnSelect.innerHTML = '<option value="">(No grouping)</option>';
+        for (let col = 0; col < maxColumns; col++) {
+          const values = new Set();
+          splitNames.forEach(parts => {
+            if (col < parts.length) values.add(parts[col]);
+          });
+          if (values.size > 1) {
+            batchGroupingPatterns.push({
+              position: col,
+              delimiter,
+              unique: Array.from(values)
+            });
+            const option = document.createElement('option');
+            option.value = col.toString();
+            option.textContent = `Column ${col + 1} (${values.size} groups)`;
+            batchGroupingColumnSelect.appendChild(option);
+          }
+        }
+      }
+      // Update options when batch files change
+      const origUpdateBatchFileList = updateBatchFileList;
+      updateBatchFileList = function() {
+        origUpdateBatchFileList();
+        updateBatchGroupingOptions();
+      };
+      // Also update on clear
+      batchClearButton.addEventListener('click', updateBatchGroupingOptions);
+      // Track selected column
+      batchGroupingColumnSelect.addEventListener('change', function() {
+        batchGroupingColumn = this.value === '' ? null : parseInt(this.value);
+      });
+
+      // --- Patch batchProcessButton logic ---
+      const origBatchProcessHandler = batchProcessButton.onclick;
+      batchProcessButton.onclick = async () => {
+        if (batchFiles.length === 0) return;
+        const rotationDegrees = parseFloat(batchRotationInput.value) || 0;
+        const prefix = batchPrefixInput.value || '';
+        const preserveStructure = (document.getElementById('preserve-structure') as HTMLInputElement).checked;
+        // Show progress bar
+        batchProgressBar.style.display = 'block';
+        (batchProcessButton as HTMLButtonElement).disabled = true;
+        (batchClearButton as HTMLButtonElement).disabled = true;
+        // Create JSZip instance for batch download
+        const zip = new JSZip();
+        // Prepare grouping if enabled
+        let batchGroups = null;
+        let splitNames = null;
+        if (batchGroupingColumn !== null) {
+          splitNames = batchFiles.map(file => (file.name.substring(0, file.name.lastIndexOf('.')) || file.name).split('_'));
+          batchGroups = new Map();
+          splitNames.forEach((parts, i) => {
+            const groupKey = parts[batchGroupingColumn] || '';
+            if (!batchGroups.has(groupKey)) batchGroups.set(groupKey, []);
+            batchGroups.get(groupKey).push(i);
+          });
+        }
+        for (let i = 0; i < batchFiles.length; i++) {
+          const file = batchFiles[i];
+          const progress = ((i + 1) / batchFiles.length) * 100;
+          batchProgressFill.style.width = progress + '%';
+          try {
+            const img = await loadImageFromFile(file) as HTMLImageElement;
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            const xOffset = (rotationDegrees / 360) * img.width;
+            const normalizedXOffset = ((xOffset % img.width) + img.width) % img.width;
+            const availableWidth = img.width - normalizedXOffset;
+            ctx.drawImage(
+              img,
+              normalizedXOffset, 0, availableWidth, img.height,
+              0, 0, availableWidth, img.height
+            );
+            if (availableWidth < img.width) {
+              const remainingWidth = img.width - availableWidth;
+              ctx.drawImage(
+                img,
+                0, 0, remainingWidth, img.height,
+                availableWidth, 0, remainingWidth, img.height
+              );
+            }
+            const blob = await new Promise(resolve => {
+              canvas.toBlob(resolve, 'image/png');
+            });
+            const originalPath = (file as any).relativePath || file.name;
+            const pathParts = originalPath.split('/');
+            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+            let fullPath;
+            if (batchGroupingColumn !== null) {
+              // Use group key as folder
+              const groupKey = splitNames[i][batchGroupingColumn] || 'group';
+              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+            } else if (preserveStructure && pathParts.length > 0) {
+              const directory = pathParts.join('/');
+              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+            } else {
+              fullPath = prefix ? `${prefix}${filename}` : filename;
+            }
+            zip.file(fullPath, blob);
+          } catch (error) {
+            console.error('Error processing file:', file.name, error);
+          }
+        }
+        // Generate and download zip file
+        try {
+          const content = await zip.generateAsync({ type: 'blob' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'batch_rotated_images.zip';
+          link.click();
+          URL.revokeObjectURL(link.href);
+        } catch (error) {
+          console.error('Error creating zip file:', error);
+        }
+        // Reset UI
+        batchProgressBar.style.display = 'none';
+        batchProgressFill.style.width = '0%';
+        (batchProcessButton as HTMLButtonElement).disabled = false;
+        (batchClearButton as HTMLButtonElement).disabled = false;
+      };
     </script>
   </body>
 </html>
