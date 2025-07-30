@@ -1661,11 +1661,16 @@ declare const JSZip: any;
           const { files, rotationDegrees, batchId } = e.data;
           const results = [];
           
+          console.log('Worker: Starting batch', batchId, 'with', files.length, 'files');
+          
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             try {
+              console.log('Worker: Processing file', i + 1, '/', files.length, ':', file.name);
+              
               // Load image
               const img = await createImageBitmap(file);
+              console.log('Worker: Image loaded successfully:', file.name, '(', img.width, 'x', img.height, ')');
               
               // Create canvas and apply rotation
               const canvas = new OffscreenCanvas(img.width, img.height);
@@ -1691,8 +1696,11 @@ declare const JSZip: any;
                 );
               }
               
+              console.log('Worker: Image rotation applied successfully:', file.name);
+              
               // Convert to blob
               const blob = await canvas.convertToBlob({ type: 'image/png' });
+              console.log('Worker: Blob created successfully:', file.name, '(', blob.size, 'bytes)');
               
               results.push({
                 index: i,
@@ -1711,6 +1719,7 @@ declare const JSZip: any;
               });
               
             } catch (error) {
+              console.error('Worker: Error processing file:', file.name, error);
               results.push({
                 index: i,
                 filename: file.name,
@@ -1727,6 +1736,7 @@ declare const JSZip: any;
             }
           }
           
+          console.log('Worker: Batch', batchId, 'completed. Successful:', results.filter(r => r.success).length, '/', results.length);
           self.postMessage({
             type: 'complete',
             batchId: batchId,
@@ -1805,11 +1815,18 @@ declare const JSZip: any;
                   console.log(`Worker ${workerIndex + 1}: ${e.data.message}`);
                 }
               } else if (e.data.type === 'complete') {
+                const successfulInBatch = e.data.results.filter(r => r.success).length;
+                const totalInBatch = e.data.results.length;
+                
                 allResults.push(...e.data.results);
                 completedBatches++;
                 
-                // Log batch completion
-                console.log(`Worker ${workerIndex + 1}: Batch ${e.data.batchId} completed: ${e.data.results.length} files processed`);
+                // Log batch completion with success rate
+                console.log(`Worker ${workerIndex + 1}: Batch ${e.data.batchId} completed: ${successfulInBatch}/${totalInBatch} files successful`);
+                
+                if (successfulInBatch < totalInBatch) {
+                  console.warn(`⚠️ Worker ${workerIndex + 1}: ${totalInBatch - successfulInBatch} files failed in batch ${e.data.batchId}`);
+                }
                 
                 resolve();
               }
