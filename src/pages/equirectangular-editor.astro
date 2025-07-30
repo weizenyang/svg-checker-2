@@ -3,6 +3,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Equirectangular Image Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style pre-load>
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -363,6 +364,7 @@
       <div class="tabs">
         <div class="tab active" data-tab="single">Single Image Editor</div>
         <div class="tab" data-tab="batch">Batch Rotation</div>
+        <div class="tab" data-tab="grouping">File Grouping</div>
       </div>
 
       <!-- Single Image Editor Tab -->
@@ -556,10 +558,60 @@
           </div>
         </div>
       </div>
+
+      <!-- File Grouping Tab -->
+      <div id="grouping-tab" class="tab-content">
+        <div class="image-section">
+          <h2>File Grouping Analysis</h2>
+          <div id="grouping-upload" class="batch-upload">
+            <p><strong>Drop multiple files here or click to select</strong></p>
+            <p>Upload files to analyze their naming patterns and group them into folders</p>
+            <input type="file" id="grouping-file-input" multiple style="display: none;">
+          </div>
+          
+          <div id="grouping-file-list" class="file-list" style="display: none;">
+            <!-- File list will be populated here -->
+          </div>
+        </div>
+
+        <div class="controls" id="grouping-analysis" style="display: none;">
+          <div class="rotation-header">
+            <h3 style="margin: 0;">Pattern Analysis</h3>
+          </div>
+          
+          <div id="pattern-columns" style="margin: 20px 0;">
+            <!-- Pattern columns will be displayed here -->
+          </div>
+          
+          <div class="batch-controls">
+            <label>
+              <span>Group by Column:</span>
+              <select id="grouping-column-select" style="margin-left: 10px; padding: 5px;">
+                <option value="">Select a column to group by...</option>
+              </select>
+            </label>
+          </div>
+          
+          <div id="grouping-preview" style="margin: 20px 0; display: none;">
+            <h4>Grouping Preview:</h4>
+            <div id="grouping-preview-content" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background-color: #f9f9f9;">
+              <!-- Preview content will be shown here -->
+            </div>
+          </div>
+          
+          <div class="buttons">
+            <button id="grouping-clear-button" class="reset-button" disabled>Clear All</button>
+            <button id="grouping-process-button" class="export-button" disabled>Create Grouped Folders</button>
+          </div>
+        </div>
+      </div>
     </div>
     
     <script>
 import { imageConfig } from "astro:assets";
+
+// Declare JSZip as a global variable
+declare const JSZip: any;
 
       // Global variables
       let referenceImage = null;
@@ -1005,6 +1057,428 @@ import { imageConfig } from "astro:assets";
       }
 
       // Tab functionality
+      let groupingFiles = [];
+      let patternAnalysis = null;
+      
+      // Set up tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+          const tabName = this.getAttribute('data-tab');
+          
+          // Remove active class from all tabs and contents
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to clicked tab and corresponding content
+          this.classList.add('active');
+          document.getElementById(tabName + '-tab').classList.add('active');
+        });
+      });
+
+      // Grouping functionality
+      const groupingUpload = document.getElementById('grouping-upload');
+      const groupingFileInput = document.getElementById('grouping-file-input');
+      const groupingFileList = document.getElementById('grouping-file-list');
+      const groupingAnalysis = document.getElementById('grouping-analysis');
+      const groupingClearButton = document.getElementById('grouping-clear-button');
+      const groupingProcessButton = document.getElementById('grouping-process-button');
+      const groupingColumnSelect = document.getElementById('grouping-column-select');
+      const groupingPreview = document.getElementById('grouping-preview');
+      const groupingPreviewContent = document.getElementById('grouping-preview-content');
+      const patternColumns = document.getElementById('pattern-columns');
+
+      // Set up grouping upload area
+      groupingUpload.addEventListener('click', () => {
+        groupingFileInput.click();
+      });
+
+      groupingUpload.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        groupingUpload.classList.add('dragover');
+      });
+
+      groupingUpload.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        groupingUpload.classList.remove('dragover');
+      });
+
+      groupingUpload.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        groupingUpload.classList.remove('dragover');
+        
+        // Handle both files and folders
+        const items = Array.from(e.dataTransfer.items);
+        const files = [];
+        
+        for (const item of items) {
+          if (item.kind === 'file') {
+            const entry = item.webkitGetAsEntry();
+            if (entry) {
+              const extractedFiles = await extractFilesFromEntry(entry);
+              files.push(...extractedFiles);
+            }
+          }
+        }
+        
+        addGroupingFiles(files);
+      });
+
+      groupingFileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        addGroupingFiles(files);
+      });
+
+      function addGroupingFiles(files) {
+        files.forEach(file => {
+          if (!groupingFiles.find(f => f.name === file.name && f.size === file.size)) {
+            groupingFiles.push(file);
+          }
+        });
+        updateGroupingFileList();
+        analyzeFilePatterns();
+      }
+
+      function updateGroupingFileList() {
+        if (groupingFiles.length === 0) {
+          groupingFileList.style.display = 'none';
+          groupingAnalysis.style.display = 'none';
+          (groupingClearButton as HTMLButtonElement).disabled = true;
+          (groupingProcessButton as HTMLButtonElement).disabled = true;
+          return;
+        }
+
+        groupingFileList.style.display = 'block';
+        (groupingClearButton as HTMLButtonElement).disabled = false;
+
+        groupingFileList.innerHTML = '';
+        groupingFiles.forEach((file, index) => {
+          const fileItem = document.createElement('div');
+          fileItem.className = 'file-item';
+          
+          const fileName = document.createElement('span');
+          fileName.className = 'file-name';
+          fileName.textContent = file.name;
+          
+          const fileSize = document.createElement('span');
+          fileSize.className = 'file-size';
+          fileSize.textContent = formatFileSize(file.size);
+          
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'remove-file';
+          removeBtn.textContent = 'Remove';
+          removeBtn.addEventListener('click', () => {
+            groupingFiles.splice(index, 1);
+            updateGroupingFileList();
+            analyzeFilePatterns();
+          });
+          
+          fileItem.appendChild(fileName);
+          fileItem.appendChild(fileSize);
+          fileItem.appendChild(removeBtn);
+          groupingFileList.appendChild(fileItem);
+        });
+      }
+
+      function analyzeFilePatterns() {
+        if (groupingFiles.length < 2) {
+          groupingAnalysis.style.display = 'none';
+          return;
+        }
+
+        // Extract filenames without extensions
+        const filenames = groupingFiles.map(file => {
+          const name = file.name;
+          return name.substring(0, name.lastIndexOf('.')) || name;
+        });
+
+        // Find common patterns
+        const patterns = findCommonPatterns(filenames);
+        
+        if (patterns.length > 0) {
+          patternAnalysis = patterns;
+          displayPatternColumns(patterns);
+          groupingAnalysis.style.display = 'block';
+          (groupingProcessButton as HTMLButtonElement).disabled = false;
+        } else {
+          groupingAnalysis.style.display = 'none';
+          (groupingProcessButton as HTMLButtonElement).disabled = true;
+        }
+      }
+
+      function findCommonPatterns(filenames) {
+        if (filenames.length < 2) return [];
+
+        // Find the longest common prefix and suffix
+        const first = filenames[0];
+        const last = filenames[filenames.length - 1];
+        
+        let commonPrefix = '';
+        let commonSuffix = '';
+        
+        // Find common prefix
+        for (let i = 0; i < Math.min(first.length, last.length); i++) {
+          if (first[i] === last[i]) {
+            commonPrefix += first[i];
+          } else {
+            break;
+          }
+        }
+        
+        // Find common suffix
+        for (let i = 1; i <= Math.min(first.length, last.length); i++) {
+          if (first[first.length - i] === last[last.length - i]) {
+            commonSuffix = first[first.length - i] + commonSuffix;
+          } else {
+            break;
+          }
+        }
+
+        // If we have a common prefix and suffix, analyze the middle parts
+        if (commonPrefix && commonSuffix) {
+          const middlePatterns = analyzeMiddlePatterns(filenames, commonPrefix, commonSuffix);
+          return [
+            { type: 'prefix', value: commonPrefix, unique: [commonPrefix] },
+            ...middlePatterns,
+            { type: 'suffix', value: commonSuffix, unique: [commonSuffix] }
+          ];
+        }
+        
+        // If no clear pattern, try to find common substrings
+        return findCommonSubstrings(filenames);
+      }
+
+      function analyzeMiddlePatterns(filenames, prefix, suffix) {
+        const patterns = [];
+        const middleParts = filenames.map(name => {
+          const start = prefix.length;
+          const end = name.length - suffix.length;
+          return name.substring(start, end);
+        });
+
+        // Group similar middle parts
+        const groups = new Map();
+        middleParts.forEach(part => {
+          if (!groups.has(part)) {
+            groups.set(part, []);
+          }
+          groups.get(part).push(part);
+        });
+
+        // Create pattern objects
+        const uniqueParts = Array.from(groups.keys());
+        if (uniqueParts.length > 1) {
+          patterns.push({
+            type: 'middle',
+            value: uniqueParts.join(', '),
+            unique: uniqueParts
+          });
+        }
+
+        return patterns;
+      }
+
+      function findCommonSubstrings(filenames) {
+        const patterns = [];
+        
+        // Find common substrings by analyzing character positions
+        const maxLength = Math.max(...filenames.map(f => f.length));
+        
+        for (let pos = 0; pos < maxLength; pos++) {
+          const charsAtPos = new Set();
+          const validFiles = [];
+          
+          filenames.forEach((name, index) => {
+            if (pos < name.length) {
+              charsAtPos.add(name[pos]);
+              validFiles.push(index);
+            }
+          });
+          
+          if (charsAtPos.size > 1 && charsAtPos.size < filenames.length) {
+            // Found a position with variation
+            const uniqueChars = Array.from(charsAtPos);
+            patterns.push({
+              type: 'position',
+              position: pos,
+              value: uniqueChars.join(', '),
+              unique: uniqueChars
+            });
+          }
+        }
+        
+        return patterns;
+      }
+
+      function displayPatternColumns(patterns) {
+        patternColumns.innerHTML = '';
+        groupingColumnSelect.innerHTML = '<option value="">Select a column to group by...</option>';
+        
+        patterns.forEach((pattern, index) => {
+          const columnDiv = document.createElement('div');
+          columnDiv.style.cssText = 'margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;';
+          
+          const title = document.createElement('h4');
+          title.style.margin = '0 0 10px 0';
+          title.textContent = `Column ${index + 1} (${pattern.type})`;
+          
+          const value = document.createElement('p');
+          value.style.margin = '5px 0';
+          value.textContent = `Values: ${pattern.value}`;
+          
+          const unique = document.createElement('p');
+          unique.style.margin = '5px 0; font-size: 0.9em; color: #666;';
+          unique.textContent = `Unique options: ${pattern.unique.length}`;
+          
+          columnDiv.appendChild(title);
+          columnDiv.appendChild(value);
+          columnDiv.appendChild(unique);
+          patternColumns.appendChild(columnDiv);
+          
+          // Add option to select dropdown
+          const option = document.createElement('option');
+          option.value = index.toString();
+          option.textContent = `Column ${index + 1} (${pattern.unique.length} groups)`;
+          groupingColumnSelect.appendChild(option);
+        });
+      }
+
+      // Handle column selection for grouping
+      groupingColumnSelect.addEventListener('change', function() {
+        const selectedIndex = parseInt((this as HTMLSelectElement).value);
+        if (selectedIndex >= 0 && patternAnalysis) {
+          showGroupingPreview(selectedIndex);
+        } else {
+          groupingPreview.style.display = 'none';
+        }
+      });
+
+      function showGroupingPreview(columnIndex) {
+        const pattern = patternAnalysis[columnIndex];
+        const filenames = groupingFiles.map(file => {
+          const name = file.name;
+          return name.substring(0, name.lastIndexOf('.')) || name;
+        });
+
+        // Group files by the selected pattern
+        const groups = new Map();
+        
+        filenames.forEach((filename, fileIndex) => {
+          let groupKey = '';
+          
+          if (pattern.type === 'prefix') {
+            groupKey = pattern.value;
+          } else if (pattern.type === 'suffix') {
+            groupKey = pattern.value;
+          } else if (pattern.type === 'middle') {
+            const start = patternAnalysis[0]?.value?.length || 0;
+            const end = filename.length - (patternAnalysis[patternAnalysis.length - 1]?.value?.length || 0);
+            groupKey = filename.substring(start, end);
+          } else if (pattern.type === 'position') {
+            groupKey = filename[pattern.position] || '';
+          }
+          
+          if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+          }
+          groups.get(groupKey).push(groupingFiles[fileIndex]);
+        });
+
+        // Display preview
+        groupingPreviewContent.innerHTML = '';
+        groups.forEach((files, groupName) => {
+          const groupDiv = document.createElement('div');
+          groupDiv.style.cssText = 'margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 3px; background-color: white;';
+          
+          const groupTitle = document.createElement('h5');
+          groupTitle.style.margin = '0 0 5px 0';
+          groupTitle.textContent = `Folder: "${groupName}" (${files.length} files)`;
+          
+          const fileList = document.createElement('ul');
+          fileList.style.margin = '5px 0; padding-left: 20px; font-size: 0.9em;';
+          
+          files.forEach(file => {
+            const li = document.createElement('li');
+            li.textContent = file.name;
+            fileList.appendChild(li);
+          });
+          
+          groupDiv.appendChild(groupTitle);
+          groupDiv.appendChild(fileList);
+          groupingPreviewContent.appendChild(groupDiv);
+        });
+
+        groupingPreview.style.display = 'block';
+      }
+
+      groupingClearButton.addEventListener('click', () => {
+        groupingFiles = [];
+        patternAnalysis = null;
+        updateGroupingFileList();
+        groupingAnalysis.style.display = 'none';
+        groupingPreview.style.display = 'none';
+      });
+
+      groupingProcessButton.addEventListener('click', async () => {
+        const selectedIndex = parseInt((groupingColumnSelect as HTMLSelectElement).value);
+        if (selectedIndex < 0 || !patternAnalysis) return;
+
+        const pattern = patternAnalysis[selectedIndex];
+        const filenames = groupingFiles.map(file => {
+          const name = file.name;
+          return name.substring(0, name.lastIndexOf('.')) || name;
+        });
+
+        // Group files
+        const groups = new Map();
+        
+        filenames.forEach((filename, fileIndex) => {
+          let groupKey = '';
+          
+          if (pattern.type === 'prefix') {
+            groupKey = pattern.value;
+          } else if (pattern.type === 'suffix') {
+            groupKey = pattern.value;
+          } else if (pattern.type === 'middle') {
+            const start = patternAnalysis[0]?.value?.length || 0;
+            const end = filename.length - (patternAnalysis[patternAnalysis.length - 1]?.value?.length || 0);
+            groupKey = filename.substring(start, end);
+          } else if (pattern.type === 'position') {
+            groupKey = filename[pattern.position] || '';
+          }
+          
+          if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+          }
+          groups.get(groupKey).push(groupingFiles[fileIndex]);
+        });
+
+        // Create zip with grouped folders
+        try {
+          const zip = new JSZip();
+
+          groups.forEach((files, groupName) => {
+            const folder = zip.folder(groupName);
+            
+            files.forEach(file => {
+              folder.file(file.name, file);
+            });
+          });
+
+          const content = await zip.generateAsync({ type: 'blob' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(content);
+          link.download = 'grouped_files.zip';
+          link.click();
+          URL.revokeObjectURL(link.href);
+          
+          alert(`Successfully created ${groups.size} folders with ${groupingFiles.length} total files!`);
+        } catch (error) {
+          console.error('Error creating grouped folders:', error);
+          alert('Error creating grouped folders. Please try again.');
+        }
+      });
+
+      // Tab functionality
       let batchFiles = [];
       
       // Set up tab switching
@@ -1151,7 +1625,6 @@ import { imageConfig } from "astro:assets";
          (batchClearButton as HTMLButtonElement).disabled = true;
 
          // Create JSZip instance for batch download
-         const JSZip = (await import('https://cdn.skypack.dev/jszip')).default;
          const zip = new JSZip();
 
          for (let i = 0; i < batchFiles.length; i++) {

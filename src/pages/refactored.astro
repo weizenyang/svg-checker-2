@@ -11,6 +11,20 @@ import "../styles.css";
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Astro</title>
+		<style>
+			/* Floor toggle drag styles */
+			[data-project-floor] {
+				transition: background-color 0.15s ease !important;
+			}
+
+			[data-project-floor]:hover {
+				background-color: rgba(255, 255, 255, 0.1) !important;
+			}
+
+			[data-project-floor].dragging {
+				background-color: rgba(0, 150, 255, 0.3) !important;
+			}
+		</style>
 	</head>
 	<body class="">
 		<div class="drag-drop-prompt">
@@ -471,6 +485,8 @@ import "../styles.css";
 			</div>
 			<svg id="svg" height="0px"></svg>
 		</section>
+
+
 	</body>
 
 	<script>
@@ -754,6 +770,13 @@ import "../styles.css";
 					document.getElementById("tag").style.display = "flex";
 					document.getElementById("label").innerHTML = "";
 					var label = document.createElement("div");
+					label.style.display = "flex";
+					label.style.flexDirection = "column";
+					label.style.alignItems = "flex-start";
+					label.style.justifyContent = "flex-start";
+					label.style.gap = "10px";
+					label.style.padding = "10px";
+					label.style.backgroundColor = "#000000";
 					if (e.srcElement.id) {
 						var idLabel = document.createElement("p");
 						idLabel.innerText = `ID: ${e.srcElement.id}`;
@@ -1027,16 +1050,22 @@ import "../styles.css";
 		}
 
 		function calculateBoundingBoxCenter(elements) {
-			if (elements.length === 0) return { x: 0, y: 0 };
+			if (elements.length === 0) {
+				console.log('[Anchor Calculation] No elements selected, returning {x:0, y:0}');
+				return { x: 0, y: 0 };
+			}
 
-			let minX = Infinity,
-				maxX = -Infinity,
-				minY = Infinity,
-				maxY = -Infinity;
+			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
 			elements.forEach((element) => {
-				const cx = parseFloat(element.getAttribute("cx"));
-				const cy = parseFloat(element.getAttribute("cy"));
+				// Try to get cx/cy (for circles), else data-center-x/y (for triangles)
+				let cx = parseFloat(element.getAttribute("cx"));
+				let cy = parseFloat(element.getAttribute("cy"));
+				if (isNaN(cx) || isNaN(cy)) {
+					cx = parseFloat(element.getAttribute("data-center-x"));
+					cy = parseFloat(element.getAttribute("data-center-y"));
+				}
+				if (isNaN(cx) || isNaN(cy)) return; // skip if still invalid
 
 				if (cx < minX) minX = cx;
 				if (cx > maxX) maxX = cx;
@@ -1044,10 +1073,22 @@ import "../styles.css";
 				if (cy > maxY) maxY = cy;
 			});
 
-			return {
+			// If no valid points, return 0,0
+			if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) {
+				console.log('[Anchor Calculation] No valid points, returning {x:0, y:0}');
+				return { x: 0, y: 0 };
+			}
+
+			const anchor = {
 				x: (minX + maxX) / 2,
 				y: (minY + maxY) / 2,
 			};
+			console.log('[Anchor Calculation]', {
+				inputElements: elements,
+				minX, maxX, minY, maxY,
+				anchor
+			});
+			return anchor;
 		}
 
 		// Tag and mouse move event listener
@@ -1226,7 +1267,25 @@ import "../styles.css";
 
 				element.setAttribute("cx", newCx);
 				element.setAttribute("cy", newCy);
+			} else if (element.getAttribute("data-triangle") === "true") {
+				// Handle triangle movement
+				moveTriangle(element, deltaX, deltaY);
 			}
+		}
+
+		function moveTriangle(triangle, deltaX, deltaY) {
+			const currentCenterX = parseFloat(triangle.getAttribute("data-center-x"));
+			const currentCenterY = parseFloat(triangle.getAttribute("data-center-y"));
+			
+			const newCenterX = currentCenterX + deltaX;
+			const newCenterY = currentCenterY + deltaY;
+			
+			// Update center position
+			triangle.setAttribute("data-center-x", newCenterX);
+			triangle.setAttribute("data-center-y", newCenterY);
+			
+			// Recompute triangle points
+			updateTrianglePoints(triangle, newCenterX, newCenterY);
 		}
 
 		function scaleElement(element, scaleFactor, anchor) {
@@ -1242,7 +1301,96 @@ import "../styles.css";
 
 				element.setAttribute("cx", newCx);
 				element.setAttribute("cy", newCy);
+			} else if (element.getAttribute("data-triangle") === "true") {
+				// Handle triangle scaling
+				scaleTriangle(element, scaleFactor, anchor);
 			}
+		}
+
+		function scaleTriangle(triangle, scaleFactor, anchor) {
+			const currentCenterX = parseFloat(triangle.getAttribute("data-center-x"));
+			const currentCenterY = parseFloat(triangle.getAttribute("data-center-y"));
+
+			// Defensive: Check for NaN in inputs
+			if (
+				isNaN(currentCenterX) || isNaN(currentCenterY) ||
+				!anchor || isNaN(anchor.x) || isNaN(anchor.y) || isNaN(scaleFactor)
+			) {
+				console.error('scaleTriangle: Invalid input', {
+					currentCenterX, currentCenterY, anchor, scaleFactor
+				});
+				return;
+			}
+
+			// Move the center relative to the anchor
+			const newCenterX = anchor.x + (currentCenterX - anchor.x) * scaleFactor;
+			const newCenterY = anchor.y + (currentCenterY - anchor.y) * scaleFactor;
+
+			// Set new attributes
+			triangle.setAttribute("data-center-x", newCenterX);
+			triangle.setAttribute("data-center-y", newCenterY);
+
+			// Use the current scale (do not change it)
+			const currentScale = parseFloat(triangle.getAttribute("data-scale")) || 1;
+			updateTrianglePoints(triangle, newCenterX, newCenterY, currentScale);
+		}
+
+		function updateTrianglePoints(triangle, centerX, centerY, scale = null) {
+			// Validate inputs
+			if (isNaN(centerX) || isNaN(centerY)) {
+				console.error('updateTrianglePoints: Invalid center coordinates', centerX, centerY);
+				return;
+			}
+
+			if (scale === null) {
+				scale = parseFloat(triangle.getAttribute("data-scale")) || 1;
+			}
+			
+			if (isNaN(scale) || scale <= 0) {
+				console.error('updateTrianglePoints: Invalid scale', scale);
+				scale = 1;
+			}
+			
+			// Get direction from data attributes
+			const dir = parseFloat(triangle.getAttribute("data-dir")) || 0;
+			
+			if (isNaN(dir)) {
+				console.error('updateTrianglePoints: Invalid direction', triangle.getAttribute("data-dir"));
+				return;
+			}
+			
+			// Base triangle shape (points down at 0deg)
+			const tri = [
+				{ x: 0, y: 50 },
+				{ x: -30, y: -30 },
+				{ x: 30, y: -30 }
+			];
+			
+			// Apply scale and rotation
+			const angle = dir * Math.PI / 180;
+			const scaledTri = tri.map(p => {
+				// Scale first
+				const scaledX = p.x * scale;
+				const scaledY = p.y * scale;
+				
+				// Then rotate
+				const rotatedX = scaledX * Math.cos(angle) - scaledY * Math.sin(angle);
+				const rotatedY = scaledX * Math.sin(angle) + scaledY * Math.cos(angle);
+				
+				// Then translate to center
+				const finalX = centerX + rotatedX;
+				const finalY = centerY + rotatedY;
+				
+				// Validate final coordinates
+				if (isNaN(finalX) || isNaN(finalY)) {
+					console.error('updateTrianglePoints: NaN in final coordinates', finalX, finalY);
+					return '0,0';
+				}
+				
+				return `${finalX},${finalY}`;
+			});
+			
+			triangle.setAttribute('points', scaledTri.join(' '));
 		}
 
 		document.addEventListener("mouseup", (e) => {
@@ -1938,6 +2086,15 @@ import "../styles.css";
 
 					svgContainer.querySelector("svg").appendChild(gInstance); //Add g into the svg
 
+					// Check if this is a project CSV (has Position_X_Meters header)
+					const isProjectCSV = lines[0] && lines[0].toLowerCase().includes('position_x_meters');
+					
+					if (isProjectCSV) {
+						console.log('Project CSV detected - processing as Project CSV');
+						renderProjectCsvPreview(contents);
+						return; // Skip simple CSV processing
+					}
+
 					//Floors
 					for (let i = 0; i < transformedLines.length; i++) {
 						const fields = transformedLines[i].split(",");
@@ -2461,20 +2618,21 @@ import "../styles.css";
 
 				const svgElement = globalSvgContainer.querySelector("svg");
 				if (svgElement != null) {
-					// Select all circles in the SVG
-					groupGlobal = Array.from(
-						svgElement.querySelectorAll("circle"),
-					);
+					// Select all circles and triangles (polygons) in the SVG
+					const circles = Array.from(svgElement.querySelectorAll("circle"));
+					const triangles = Array.from(svgElement.querySelectorAll("polygon[data-triangle='true']"));
+					
+					groupGlobal = [...circles, ...triangles];
 
-					groupGlobal.forEach((e) => {
-						e.classList.add("svg-tool-selected");
-						e.style.fill = "#ff0000";
+					groupGlobal.forEach((element) => {
+						element.classList.add("svg-tool-selected");
+						element.style.fill = "#ff0000";
 					});
 
 					// Indicate multi-selection mode
 					multiSelect = true;
 
-					console.log("All circles selected:", groupGlobal);
+					console.log("All elements selected:", groupGlobal.length, "elements (", circles.length, "circles,", triangles.length, "triangles)");
 				}
 			}
 
@@ -3841,6 +3999,330 @@ import "../styles.css";
 					return sheet;
 				}
 			}
+		}
+
+		// Project CSV data storage
+
+		let projectData = [];
+		let floorLevels = new Map(); // Map of Z value to floor data
+
+		function renderProjectCsvPreview(csvText) {
+			projectData = [];
+			floorLevels.clear();
+
+			const rows = csvText.trim().split(/\r?\n/);
+			console.log('CSV rows:', rows.length);
+			if (rows.length < 2) return;
+			
+			const headers = rows[0].split(',');
+			console.log('Headers:', headers);
+			
+			// Find relevant columns
+			const idxX = headers.findIndex(h => h.trim().toLowerCase() === 'position_x_meters');
+			const idxY = headers.findIndex(h => h.trim().toLowerCase() === 'position_y_meters');
+			const idxZ = headers.findIndex(h => h.trim().toLowerCase() === 'position_z_meters');
+			const idxDir = headers.findIndex(h => h.trim().toLowerCase() === 'cardinal_direction');
+			
+			console.log('Column indices:', { idxX, idxY, idxZ, idxDir });
+			
+			// Try to find ID column (Index or FileName)
+			let idxId = headers.findIndex(h => h.toLowerCase() === 'filename');
+			if (idxId === -1) idxId = headers.findIndex(h => h.toLowerCase() === 'index');
+			if (idxId === -1) idxId = 0; // fallback to first column
+
+			if (idxX === -1 || idxY === -1 || idxZ === -1 || idxDir === -1) {
+				console.error('Missing required columns (Position_X_Meters, Position_Y_Meters, Position_Z_Meters, Cardinal_Direction)');
+				console.error('Available headers:', headers);
+				return;
+			}
+
+			// Parse data and group by Z levels
+			for (let i = 1; i < rows.length; i++) {
+				const cols = rows[i].split(',');
+				const x = parseFloat(cols[idxX]);
+				const y = parseFloat(cols[idxY]);
+				const z = parseFloat(cols[idxZ]);
+				
+				// Convert cardinal direction to degrees
+				let dir = parseFloat(cols[idxDir]);
+				if (isNaN(dir)) {
+					const cardinalStr = cols[idxDir].trim().toUpperCase();
+					switch (cardinalStr) {
+						case 'NORTH': dir = 180; break;
+						case 'SOUTH': dir = 0; break;
+						case 'EAST': dir = 270; break;
+						case 'WEST': dir = 90; break;
+						default: 
+							console.log(`Row ${i} - unknown cardinal direction: ${cardinalStr}`);
+							continue;
+					}
+				}
+				
+				const id = cols[idxId];
+
+				console.log(`Row ${i}:`, { x, y, z, dir, id });
+
+				if (isNaN(x) || isNaN(y) || isNaN(z) || isNaN(dir)) {
+					console.log(`Row ${i} skipped - invalid data:`, cols[idxX], cols[idxY], cols[idxZ], cols[idxDir]);
+					continue;
+				}
+
+				const point = { x, y, z, dir, id, visible: true };
+				projectData.push(point);
+
+				// Group by Z level
+				if (!floorLevels.has(z)) {
+					floorLevels.set(z, { points: [], visible: true });
+				}
+				floorLevels.get(z).points.push(point);
+			}
+
+			console.log('Project CSV parsed:', projectData.length, 'points');
+			
+			// Create floor toggles using existing floor system
+			createProjectFloorToggles();
+			renderProjectTriangles();
+		}
+
+		function createProjectFloorToggles() {
+			const floorSection = document.getElementById("show-floors");
+			if (floorSection.classList.contains("hidden")) {
+				floorSection.classList.remove("hidden");
+			}
+
+			// Get unique Z levels
+			const sortedFloors = Array.from(floorLevels.keys()).sort((a, b) => b - a);
+			
+			// Track drag state for floor toggles
+			let isDraggingFloors = false;
+			let dragToggleState = null; // true for enabling, false for disabling
+			
+			// Add toggles for each floor level
+			sortedFloors.forEach((zLevel, index) => {
+				const pointCount = floorLevels.get(zLevel).points.length;
+				const div = document.createElement("div");
+				const checkbox = document.createElement("input");
+				const label = document.createElement("label");
+
+				label.innerText = `Floor ${index} (${zLevel}m)`;
+				label.htmlFor = `project-floor-${zLevel}-checkbox`;
+				checkbox.type = "checkbox";
+				checkbox.checked = true;
+				checkbox.id = `project-floor-${zLevel}-checkbox`;
+
+				div.appendChild(checkbox);
+				div.appendChild(label);
+
+				checkbox.addEventListener("change", (e) => {
+					toggleProjectFloorVisibility(zLevel, (e.target as HTMLInputElement).checked);
+				});
+
+				// Add drag-to-toggle functionality
+				div.addEventListener("mousedown", function(e) {
+					// Only start drag if NOT clicking directly on the checkbox
+					if (e.target === checkbox) return;
+					e.preventDefault();
+					isDraggingFloors = true;
+					dragToggleState = !checkbox.checked; // Toggle to opposite state
+					checkbox.checked = dragToggleState;
+					toggleProjectFloorVisibility(zLevel, dragToggleState);
+					div.classList.add('dragging');
+				});
+
+				div.addEventListener("mouseenter", function(e) {
+					if (isDraggingFloors && dragToggleState !== null) {
+						checkbox.checked = dragToggleState;
+						toggleProjectFloorVisibility(zLevel, dragToggleState);
+						div.classList.add('dragging');
+					}
+				});
+
+				div.addEventListener("mouseleave", function(e) {
+					div.classList.remove('dragging');
+				});
+
+				// Style the div for better drag interaction
+				div.style.cursor = 'pointer';
+				div.style.userSelect = 'none';
+				div.style.borderRadius = '4px';
+				div.style.transition = 'background-color 0.15s';
+				div.setAttribute('data-project-floor', zLevel.toString());
+
+				floorSection.appendChild(div);
+			});
+
+			// Global mouse up to end dragging
+			document.addEventListener("mouseup", function() {
+				if (isDraggingFloors) {
+					isDraggingFloors = false;
+					dragToggleState = null;
+					// Remove dragging class from all floor divs
+					const draggingDivs = floorSection.querySelectorAll('.dragging');
+					draggingDivs.forEach(div => div.classList.remove('dragging'));
+				}
+			});
+		}
+
+		function toggleProjectFloorVisibility(zLevel, visible) {
+			floorLevels.get(zLevel).visible = visible;
+			floorLevels.get(zLevel).points.forEach(point => {
+				point.visible = visible;
+			});
+			renderProjectTriangles();
+			spawnLabel(); // Update labels
+		}
+
+		function renderProjectTriangles() {
+			// Debug: Log entry
+			console.log('renderProjectTriangles called');
+
+			// Ensure main SVG exists
+			let mainSvg = svgContainer.querySelector('svg');
+			if (!mainSvg) {
+				console.log('No main SVG found, creating new SVG');
+				mainSvg = createNewSVG();
+				svgContainer.appendChild(mainSvg);
+			}
+
+			// Clear existing triangles in main SVG
+			let gInstance = mainSvg.querySelector('#g-instance');
+			if (!gInstance) {
+				// If not present, create and append to main SVG
+				gInstance = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+				gInstance.setAttribute('id', 'g-instance');
+				mainSvg.appendChild(gInstance);
+			}
+			gInstance.innerHTML = '';
+
+			// Debug: Log SVG and g-instance
+			console.log('mainSvg:', mainSvg);
+			console.log('gInstance:', gInstance);
+
+			// Get visible points
+			const visiblePoints = projectData.filter(p => p.visible);
+			console.log('visiblePoints:', visiblePoints.length);
+			if (visiblePoints.length === 0) return;
+
+			// Calculate bounds for normalization
+			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+			visiblePoints.forEach(pt => {
+				if (pt.x < minX) minX = pt.x;
+				if (pt.x > maxX) maxX = pt.x;
+				if (pt.y < minY) minY = pt.y;
+				if (pt.y > maxY) maxY = pt.y;
+			});
+
+			// Triangle shape (points down at 0deg) - bigger size
+			const tri = [
+				{ x: 0, y: 50 },
+				{ x: -30, y: -30 },
+				{ x: 30, y: -30 }
+			];
+
+			// Color map for different Z levels
+			const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e'];
+			const sortedZLevels = Array.from(floorLevels.keys()).sort();
+
+			const svgNS = 'http://www.w3.org/2000/svg';
+			const mainW = 4096, mainH = 4096;
+			const pad = 40;
+
+			visiblePoints.forEach(pt => {
+				// Convert cardinal direction to degrees
+				let angle = 0;
+				if (typeof pt.dir === 'string') {
+					switch (pt.dir.toUpperCase()) {
+						case 'NORTH': angle = 180; break;
+						case 'SOUTH': angle = 0; break;
+						case 'EAST': angle = 270; break;
+						case 'WEST': angle = 90; break;
+						default: angle = parseFloat(pt.dir) || 0;
+					}
+				} else {
+					angle = pt.dir;
+				}
+
+				// Map coordinates to main SVG coordinates (4096x4096)
+				const mainPx = ((pt.x - minX) / (maxX - minX || 1)) * (mainW - 2*pad) + pad;
+				const mainPy = mainH - (((pt.y - minY) / (maxY - minY || 1)) * (mainH - 2*pad) + pad);
+
+				// Log all parameters used for calculating mainPx and mainPy
+				console.log('[Triangle Center Calculation]', {
+					'pt.x': pt.x,
+					'pt.y': pt.y,
+					minX,
+					maxX,
+					minY,
+					maxY,
+					mainW,
+					mainH,
+					pad,
+					mainPx,
+					mainPy
+				});
+
+				// Guard: skip if center is invalid
+				if (isNaN(mainPx) || isNaN(mainPy)) {
+					console.error('Skipping triangle: Invalid center coordinates', {pt, minX, maxX, minY, maxY, mainPx, mainPy});
+					return;
+				}
+
+				const mainTri = tri.map(p => {
+					const rad = angle * Math.PI / 180;
+					const rx = p.x * Math.cos(rad) - p.y * Math.sin(rad);
+					const ry = p.x * Math.sin(rad) + p.y * Math.cos(rad);
+					return `${mainPx + rx},${mainPy + ry}`;
+				}).join(' ');
+				const mainPolygon = document.createElementNS(svgNS, 'polygon');
+				mainPolygon.setAttribute('points', mainTri);
+				const colorIndex = sortedZLevels.indexOf(pt.z) % colors.length;
+				mainPolygon.setAttribute('fill', colors[colorIndex]);
+				mainPolygon.setAttribute('stroke', '#333');
+				mainPolygon.setAttribute('stroke-width', '1');
+				
+				// Make triangles selectable like circles
+				mainPolygon.setAttribute('id', String(pt.id));
+				mainPolygon.setAttribute('data-floor', String(pt.z));
+				mainPolygon.setAttribute('data-fullname', String(pt.id));
+				mainPolygon.setAttribute('data-id', String(pt.id));
+				mainPolygon.setAttribute('data-dir', String(angle)); // Store the numeric angle, not the original string
+				mainPolygon.setAttribute('data-z', String(pt.z));
+				
+				// Add triangle-specific attributes for scaling/moving
+				mainPolygon.setAttribute('data-triangle', 'true');
+				mainPolygon.setAttribute('data-center-x', String(mainPx));
+				mainPolygon.setAttribute('data-center-y', String(mainPy));
+				mainPolygon.setAttribute('data-scale', '1');
+				
+				mainPolygon.style.cursor = 'pointer';
+				console.log('Adding triangle to gInstance:', mainPolygon);
+				gInstance.appendChild(mainPolygon);
+			});
+			
+			console.log('gInstance children count:', gInstance.children.length);
+		}
+
+		function showProjectLabel(x, y, id, dir, z) {
+			hideProjectLabel();
+			const label = document.createElement('div');
+			label.id = 'project-csv-label';
+			label.style.position = 'absolute';
+			label.style.left = `${x + 12}px`;
+			label.style.top = `${y - 12}px`;
+			label.style.background = 'rgba(0,0,0,0.85)';
+			label.style.color = '#fff';
+			label.style.padding = '6px 12px';
+			label.style.borderRadius = '6px';
+			label.style.fontSize = '12px';
+			label.style.pointerEvents = 'none';
+			label.style.zIndex = '10';
+			label.innerHTML = `<b>ID:</b> ${id}<br><b>Direction:</b> ${dir}<br><b>Level:</b> ${z}m`;
+			document.body.appendChild(label);
+		}
+
+		function hideProjectLabel() {
+			const label = document.getElementById('project-csv-label');
+			if (label) label.remove();
 		}
 	</script>
 </html>

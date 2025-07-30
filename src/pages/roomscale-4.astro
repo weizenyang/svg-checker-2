@@ -1161,29 +1161,29 @@ async function renderOverlayCanvas(cone) {
     }
     
     try {
-        // Set overlay canvas size to match the panel
-        const panel = document.getElementById("vr-image-panel");
+    // Set overlay canvas size to match the panel
+    const panel = document.getElementById("vr-image-panel");
         if (!panel) {
             console.warn('VR panel not found');
             return;
         }
         
-        vrOverlayCanvas.width = panel.offsetWidth;
-        vrOverlayCanvas.height = panel.offsetHeight;
+    vrOverlayCanvas.width = panel.offsetWidth;
+    vrOverlayCanvas.height = panel.offsetHeight;
         
         console.log(`Rendering overlay for cone: ${cone.name}`);
-        
-        // Generate a separate render for the overlay
-        const overlayRenderURL = await render360SnapshotForCone(cone);
-        
+    
+    // Generate a separate render for the overlay
+    const overlayRenderURL = await render360SnapshotForCone(cone);
+    
         // Load and draw the overlay image
         return new Promise((resolve, reject) => {
-            const overlayImg = new Image();
+    const overlayImg = new Image();
             
-            overlayImg.onload = function() {
+    overlayImg.onload = function() {
                 try {
-                    vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
-                    vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+        vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
+        vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
                     
                     // Ensure the overlay is visible
                     vrOverlayCanvas.style.display = 'block';
