@@ -1110,17 +1110,48 @@ declare const JSZip: any;
         const items = Array.from(e.dataTransfer.items);
         const files = [];
         
-        for (const item of items) {
+        // Process all items in parallel for better performance
+        const promises = items.map(async (item) => {
           if (item.kind === 'file') {
             const entry = item.webkitGetAsEntry();
             if (entry) {
-              const extractedFiles = await extractFilesFromEntry(entry);
-              files.push(...extractedFiles);
+              return await extractFilesFromEntry(entry);
             }
           }
-        }
+          return [];
+        });
         
-        addGroupingFiles(files);
+        const results = await Promise.all(promises);
+        const allFiles = results.flat();
+        
+        // Show loading indicator for large file sets
+        if (allFiles.length > 50) {
+          const loadingDiv = document.createElement('div');
+          loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 2px solid #4a90e2; border-radius: 10px; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+          loadingDiv.innerHTML = `<p>Processing ${allFiles.length} files...</p><div style="width: 200px; height: 4px; background: #f0f0f0; border-radius: 2px; overflow: hidden;"><div id="file-progress" style="width: 0%; height: 100%; background: #4a90e2; transition: width 0.3s;"></div></div>`;
+          document.body.appendChild(loadingDiv);
+          
+          // Process files in batches to avoid blocking the UI
+          const batchSize = 100;
+          for (let i = 0; i < allFiles.length; i += batchSize) {
+            const batch = allFiles.slice(i, i + batchSize);
+            addGroupingFiles(batch);
+            
+            // Update progress
+            const progress = ((i + batchSize) / allFiles.length) * 100;
+            const progressBar = document.getElementById('file-progress');
+            if (progressBar) {
+              progressBar.style.width = Math.min(progress, 100) + '%';
+            }
+            
+            // Yield control to allow UI updates
+            await new Promise(resolve => setTimeout(resolve, 1));
+          }
+          
+          document.body.removeChild(loadingDiv);
+        } else {
+          addGroupingFiles(allFiles);
+        }
       });
 
       groupingFileInput.addEventListener('change', (e) => {
@@ -1208,49 +1239,152 @@ declare const JSZip: any;
       function findCommonPatterns(filenames) {
         if (filenames.length < 2) return [];
 
-        // Try delimiter-based splitting first
-        const delimiterPatterns = findDelimiterPatterns(filenames);
-        if (delimiterPatterns.length > 0) {
-          return delimiterPatterns;
-        }
+        // Use LCS-based pattern detection
+        return findLCSPatterns(filenames);
+      }
 
-        // Fall back to the original algorithm
-        const first = filenames[0];
-        const last = filenames[filenames.length - 1];
+      function findLCSPatterns(filenames) {
+        if (filenames.length < 2) return [];
         
-        let commonPrefix = '';
-        let commonSuffix = '';
+        // Find all common substrings across all filenames
+        const commonSubstrings = findAllCommonSubstrings(filenames);
         
-        // Find common prefix
-        for (let i = 0; i < Math.min(first.length, last.length); i++) {
-          if (first[i] === last[i]) {
-            commonPrefix += first[i];
-          } else {
-            break;
+        // Sort by length (longest first) and filter out overlapping patterns
+        const sortedPatterns = commonSubstrings
+          .sort((a, b) => b.length - a.length)
+          .filter(pattern => pattern.length > 2); // Only consider patterns longer than 2 chars
+        
+        // Group patterns by their position and create columns
+        const patterns = [];
+        const usedPositions = new Set();
+        
+        for (const pattern of sortedPatterns) {
+          // Check if this pattern overlaps with already used positions
+          let overlaps = false;
+          for (const usedPattern of patterns) {
+            if (patternOverlaps({pattern: pattern}, usedPattern, filenames)) {
+              overlaps = true;
+              break;
+            }
+          }
+          
+          if (!overlaps) {
+            // Find all unique values at this pattern's position
+            const uniqueValues = findUniqueValuesAtPattern(filenames, pattern as string);
+            
+            if (uniqueValues.length > 1) {
+              patterns.push({
+                type: 'lcs',
+                pattern: pattern as string,
+                value: uniqueValues.join(', '),
+                unique: uniqueValues,
+                positions: findPatternPositions(filenames, pattern as string)
+              });
+            }
           }
         }
         
-        // Find common suffix
-        for (let i = 1; i <= Math.min(first.length, last.length); i++) {
-          if (first[first.length - i] === last[last.length - i]) {
-            commonSuffix = first[first.length - i] + commonSuffix;
-          } else {
-            break;
+        return patterns;
+      }
+
+      function findAllCommonSubstrings(filenames: string[]): string[] {
+        const commonSubstrings = new Set<string>();
+        
+        // Compare each pair of filenames
+        for (let i = 0; i < filenames.length; i++) {
+          for (let j = i + 1; j < filenames.length; j++) {
+            const substrings = findCommonSubstringsBetween(filenames[i], filenames[j]);
+            substrings.forEach(sub => commonSubstrings.add(sub));
           }
         }
+        
+        return Array.from(commonSubstrings);
+      }
 
-        // If we have a common prefix and suffix, analyze the middle parts
-        if (commonPrefix && commonSuffix) {
-          const middlePatterns = analyzeMiddlePatterns(filenames, commonPrefix, commonSuffix);
-          return [
-            { type: 'prefix', value: commonPrefix, unique: [commonPrefix] },
-            ...middlePatterns,
-            { type: 'suffix', value: commonSuffix, unique: [commonSuffix] }
-          ];
+      function findCommonSubstringsBetween(str1: string, str2: string): string[] {
+        const substrings = new Set<string>();
+        
+        // Find all common substrings of length 3 or more
+        for (let len = 3; len <= Math.min(str1.length, str2.length); len++) {
+          for (let i = 0; i <= str1.length - len; i++) {
+            const substr = str1.substring(i, i + len);
+            if (str2.includes(substr)) {
+              substrings.add(substr);
+            }
+          }
         }
         
-        // If no clear pattern, try to find common substrings
-        return findCommonSubstrings(filenames);
+        return Array.from(substrings);
+      }
+
+      function patternOverlaps(pattern1: any, pattern2: any, filenames: string[]) {
+        // Check if two patterns overlap in any filename
+        for (const filename of filenames) {
+          const pos1 = filename.indexOf(pattern1.pattern);
+          const pos2 = filename.indexOf(pattern2.pattern);
+          
+          if (pos1 !== -1 && pos2 !== -1) {
+            const end1 = pos1 + pattern1.pattern.length;
+            const end2 = pos2 + pattern2.pattern.length;
+            
+            // Check for overlap
+            if (pos1 < end2 && pos2 < end1) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function findUniqueValuesAtPattern(filenames, pattern) {
+        const values = new Set();
+        
+        for (const filename of filenames) {
+          const pos = filename.indexOf(pattern);
+          if (pos !== -1) {
+            // Extract the part before the pattern
+            const before = filename.substring(0, pos);
+            // Extract the part after the pattern
+            const after = filename.substring(pos + pattern.length);
+            
+            // Find the next common delimiter or end
+            const nextDelimiter = findNextDelimiter(after);
+            const value = after.substring(0, nextDelimiter);
+            
+            if (value) {
+              values.add(value);
+            }
+          }
+        }
+        
+        return Array.from(values);
+      }
+
+      function findNextDelimiter(str) {
+        const delimiters = ['_', '-', '.', ' '];
+        let minPos = str.length;
+        
+        for (const delimiter of delimiters) {
+          const pos = str.indexOf(delimiter);
+          if (pos !== -1 && pos < minPos) {
+            minPos = pos;
+          }
+        }
+        
+        return minPos;
+      }
+
+      function findPatternPositions(filenames, pattern) {
+        const positions = [];
+        
+        for (const filename of filenames) {
+          const pos = filename.indexOf(pattern);
+          if (pos !== -1) {
+            positions.push(pos);
+          }
+        }
+        
+        return positions;
       }
 
       function findDelimiterPatterns(filenames) {
@@ -1594,20 +1728,23 @@ declare const JSZip: any;
         
         // Handle both files and folders
         const items = Array.from(e.dataTransfer.items);
-        const files = [];
         
-        for (const item of items) {
+        // Process all items in parallel for better performance
+        const promises = items.map(async (item) => {
           if (item.kind === 'file') {
             const entry = item.webkitGetAsEntry();
             if (entry) {
-              const extractedFiles = await extractFilesFromEntry(entry);
-              files.push(...extractedFiles);
+              return await extractFilesFromEntry(entry);
             }
           }
-        }
+          return [];
+        });
+        
+        const results = await Promise.all(promises);
+        const allFiles = results.flat();
         
         // Filter for image files only
-        const imageFiles = files.filter(file => file.type.startsWith('image/'));
+        const imageFiles = allFiles.filter(file => file.type.startsWith('image/'));
         addBatchFiles(imageFiles);
       });
 
