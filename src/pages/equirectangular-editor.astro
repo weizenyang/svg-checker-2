@@ -1834,7 +1834,9 @@ declare const JSZip: any;
         }
         
         // Sort results by original index
+        console.log('🔄 Sorting results by original index...');
         allResults.sort((a, b) => a.index - b.index);
+        console.log('✅ Results sorted successfully');
         
         // Validate results
         console.log(`📊 Processing results: ${allResults.length} files processed, expected ${files.length} files`);
@@ -1842,17 +1844,27 @@ declare const JSZip: any;
           console.warn(`⚠️ Warning: Processed ${allResults.length} files but expected ${files.length} files`);
         }
         
+        // Check if we have any successful results
+        const successfulResults = allResults.filter(result => result.success);
+        console.log(`✅ Successful results: ${successfulResults.length}/${allResults.length}`);
+        
+        if (successfulResults.length === 0) {
+          throw new Error('No files were processed successfully');
+        }
+        
         // Create multiple ZIP files organized by folder structure
+        console.log('📦 Starting ZIP file organization...');
         const zipFiles = [];
         let currentZip = new JSZip();
         let filesInCurrentZip = 0;
         let zipIndex = 1;
         let currentFolder = '';
         
-        console.log(`📦 Organizing ${allResults.length} processed files into ZIP files by folder structure...`);
+        console.log(`📦 Organizing ${successfulResults.length} successful files into ZIP files by folder structure...`);
         
         // First, sort results by folder structure to keep related files together
-        const sortedResults = [...allResults].sort((a, b) => {
+        console.log('🔄 Sorting results by folder structure...');
+        const sortedResults = [...successfulResults].sort((a, b) => {
           const fileA = files[a.index];
           const fileB = files[b.index];
           
@@ -1873,58 +1885,66 @@ declare const JSZip: any;
           
           return folderA.localeCompare(folderB);
         });
+        console.log('✅ Results sorted by folder structure');
         
-        for (let i = 0; i < sortedResults.length; i++) {
-          const result = sortedResults[i];
-          if (result.success) {
-            const file = files[result.index];
-            const originalPath = (file as any).relativePath || file.name;
-            const pathParts = originalPath.split('/');
-            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
-            
-            let fullPath;
-            let currentFileFolder = '';
-            
-            if (batchGroupingColumn !== null) {
-              const groupKey = splitNames[result.index][batchGroupingColumn] || 'group';
-              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
-              currentFileFolder = groupKey;
-            } else if (preserveStructure && pathParts.length > 0) {
-              const directory = pathParts.join('/');
-              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
-              currentFileFolder = directory;
+        console.log('🔄 Starting ZIP file creation loop...');
+        try {
+          for (let i = 0; i < sortedResults.length; i++) {
+            const result = sortedResults[i];
+            if (result.success) {
+              const file = files[result.index];
+              const originalPath = (file as any).relativePath || file.name;
+              const pathParts = originalPath.split('/');
+              const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+              
+              let fullPath;
+              let currentFileFolder = '';
+              
+              if (batchGroupingColumn !== null) {
+                const groupKey = splitNames[result.index][batchGroupingColumn] || 'group';
+                fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+                currentFileFolder = groupKey;
+              } else if (preserveStructure && pathParts.length > 0) {
+                const directory = pathParts.join('/');
+                fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
+                currentFileFolder = directory;
+              } else {
+                fullPath = prefix ? `${prefix}${filename}` : filename;
+                currentFileFolder = '';
+              }
+              
+              // Check if we need to start a new ZIP (when folder changes or max files reached)
+              const maxFilesPerZip = 50; // Increased since we're organizing by folders
+              const shouldStartNewZip = (
+                filesInCurrentZip >= maxFilesPerZip || 
+                (currentFileFolder !== currentFolder && filesInCurrentZip > 0)
+              );
+              
+              if (shouldStartNewZip) {
+                console.log(`  📦 ZIP ${zipIndex} complete (${filesInCurrentZip} files, folder: ${currentFolder || 'root'}), creating next ZIP...`);
+                zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip, folder: currentFolder });
+                currentZip = new JSZip();
+                filesInCurrentZip = 0;
+                zipIndex++;
+                currentFolder = currentFileFolder;
+              }
+              
+              currentZip.file(fullPath, result.blob);
+              filesInCurrentZip++;
+              
+              // Log progress every 10 files
+              if (i % 10 === 0 || i === sortedResults.length - 1) {
+                const progress = ((i + 1) / sortedResults.length) * 100;
+                console.log(`  📁 Organizing files: ${i + 1}/${sortedResults.length} (${Math.round(progress)}%) - Current folder: ${currentFileFolder || 'root'}`);
+              }
             } else {
-              fullPath = prefix ? `${prefix}${filename}` : filename;
-              currentFileFolder = '';
+              console.error('❌ Error processing file:', result.filename, result.error);
             }
-            
-            // Check if we need to start a new ZIP (when folder changes or max files reached)
-            const maxFilesPerZip = 50; // Increased since we're organizing by folders
-            const shouldStartNewZip = (
-              filesInCurrentZip >= maxFilesPerZip || 
-              (currentFileFolder !== currentFolder && filesInCurrentZip > 0)
-            );
-            
-            if (shouldStartNewZip) {
-              console.log(`  📦 ZIP ${zipIndex} complete (${filesInCurrentZip} files, folder: ${currentFolder || 'root'}), creating next ZIP...`);
-              zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip, folder: currentFolder });
-              currentZip = new JSZip();
-              filesInCurrentZip = 0;
-              zipIndex++;
-              currentFolder = currentFileFolder;
-            }
-            
-            currentZip.file(fullPath, result.blob);
-            filesInCurrentZip++;
-            
-            // Log progress every 10 files
-            if (i % 10 === 0 || i === sortedResults.length - 1) {
-              const progress = ((i + 1) / sortedResults.length) * 100;
-              console.log(`  📁 Organizing files: ${i + 1}/${sortedResults.length} (${Math.round(progress)}%) - Current folder: ${currentFileFolder || 'root'}`);
-            }
-          } else {
-            console.error('❌ Error processing file:', result.filename, result.error);
           }
+          console.log('✅ ZIP file creation loop completed successfully');
+        } catch (error) {
+          console.error('❌ Error during ZIP file creation loop:', error);
+          throw new Error('ZIP file creation failed: ' + error.message);
         }
         
         // Add the last ZIP if it has files
