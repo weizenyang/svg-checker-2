@@ -1208,7 +1208,13 @@ declare const JSZip: any;
       function findCommonPatterns(filenames) {
         if (filenames.length < 2) return [];
 
-        // Find the longest common prefix and suffix
+        // Try delimiter-based splitting first
+        const delimiterPatterns = findDelimiterPatterns(filenames);
+        if (delimiterPatterns.length > 0) {
+          return delimiterPatterns;
+        }
+
+        // Fall back to the original algorithm
         const first = filenames[0];
         const last = filenames[filenames.length - 1];
         
@@ -1245,6 +1251,55 @@ declare const JSZip: any;
         
         // If no clear pattern, try to find common substrings
         return findCommonSubstrings(filenames);
+      }
+
+      function findDelimiterPatterns(filenames) {
+        const patterns = [];
+        
+        // Common delimiters to try
+        const delimiters = ['_', '-', '.', ' '];
+        
+        for (const delimiter of delimiters) {
+          const splitResults = filenames.map(name => name.split(delimiter));
+          
+          // Check if all filenames have the same number of parts
+          const partCounts = splitResults.map(parts => parts.length);
+          const uniquePartCounts = new Set(partCounts);
+          
+          if (uniquePartCounts.size === 1) {
+            const partCount = partCounts[0];
+            
+            // Analyze each position
+            for (let pos = 0; pos < partCount; pos++) {
+              const valuesAtPos = new Set();
+              
+              splitResults.forEach(parts => {
+                if (pos < parts.length) {
+                  valuesAtPos.add(parts[pos]);
+                }
+              });
+              
+              // If we have multiple unique values at this position, it's a variable column
+              if (valuesAtPos.size > 1) {
+                const uniqueValues = Array.from(valuesAtPos);
+                patterns.push({
+                  type: 'delimiter',
+                  delimiter: delimiter,
+                  position: pos,
+                  value: uniqueValues.join(', '),
+                  unique: uniqueValues
+                });
+              }
+            }
+            
+            // If we found patterns with this delimiter, return them
+            if (patterns.length > 0) {
+              return patterns;
+            }
+          }
+        }
+        
+        return [];
       }
 
       function analyzeMiddlePatterns(filenames, prefix, suffix) {
@@ -1319,7 +1374,12 @@ declare const JSZip: any;
           
           const title = document.createElement('h4');
           title.style.margin = '0 0 10px 0';
-          title.textContent = `Column ${index + 1} (${pattern.type})`;
+          
+          if (pattern.type === 'delimiter') {
+            title.textContent = `Column ${index + 1} (${pattern.delimiter}-separated, position ${pattern.position + 1})`;
+          } else {
+            title.textContent = `Column ${index + 1} (${pattern.type})`;
+          }
           
           const value = document.createElement('p');
           value.style.margin = '5px 0';
@@ -1375,6 +1435,9 @@ declare const JSZip: any;
             groupKey = filename.substring(start, end);
           } else if (pattern.type === 'position') {
             groupKey = filename[pattern.position] || '';
+          } else if (pattern.type === 'delimiter') {
+            const parts = filename.split(pattern.delimiter);
+            groupKey = parts[pattern.position] || '';
           }
           
           if (!groups.has(groupKey)) {
@@ -1444,6 +1507,9 @@ declare const JSZip: any;
             groupKey = filename.substring(start, end);
           } else if (pattern.type === 'position') {
             groupKey = filename[pattern.position] || '';
+          } else if (pattern.type === 'delimiter') {
+            const parts = filename.split(pattern.delimiter);
+            groupKey = parts[pattern.position] || '';
           }
           
           if (!groups.has(groupKey)) {
