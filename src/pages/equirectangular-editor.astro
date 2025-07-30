@@ -1823,8 +1823,15 @@ declare const JSZip: any;
         await Promise.all(batchPromises);
         console.log('✅ All workers completed! Processing results...');
         
-        // Sort results by original index and add to zip
+        // Sort results by original index
         allResults.sort((a, b) => a.index - b.index);
+        
+        // Create multiple ZIP files (max 50 files per ZIP)
+        const maxFilesPerZip = 50;
+        const zipFiles = [];
+        let currentZip = new JSZip();
+        let filesInCurrentZip = 0;
+        let zipIndex = 1;
         
         for (let i = 0; i < allResults.length; i++) {
           const result = allResults[i];
@@ -1845,13 +1852,28 @@ declare const JSZip: any;
               fullPath = prefix ? `${prefix}${filename}` : filename;
             }
             
-            zip.file(fullPath, result.blob);
+            currentZip.file(fullPath, result.blob);
+            filesInCurrentZip++;
+            
+            // Create new ZIP when current one is full
+            if (filesInCurrentZip >= maxFilesPerZip) {
+              zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip });
+              currentZip = new JSZip();
+              filesInCurrentZip = 0;
+              zipIndex++;
+            }
           } else {
             console.error('Error processing file:', result.filename, result.error);
           }
         }
         
-        return zip;
+        // Add the last ZIP if it has files
+        if (filesInCurrentZip > 0) {
+          zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip });
+        }
+        
+        console.log(`📦 Created ${zipFiles.length} ZIP files to avoid memory issues`);
+        return zipFiles;
       }
       
       // Replace the original batch processing with multithreaded version
@@ -1871,7 +1893,7 @@ declare const JSZip: any;
         (batchClearButton as HTMLButtonElement).disabled = true;
         
         try {
-          const zip = await processBatchMultithreaded(
+          const zipFiles = await processBatchMultithreaded(
             batchFiles, 
             rotationDegrees, 
             prefix, 
@@ -1879,22 +1901,33 @@ declare const JSZip: any;
             batchGroupingColumn
           );
           
-          // Generate and download zip file with streaming to avoid memory issues
-          console.log('Creating ZIP file with streaming...');
-          const content = await zip.generateAsync({ 
-            type: 'blob',
-            compression: 'DEFLATE',
-            compressionOptions: { level: 6 }
-          });
-          console.log('ZIP file created successfully! Size:', (content.size / 1024 / 1024).toFixed(2), 'MB');
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(content);
-          link.download = 'batch_rotated_images.zip';
-          link.click();
-          URL.revokeObjectURL(link.href);
+          // Generate and download multiple ZIP files
+          console.log(`📦 Generating ${zipFiles.length} ZIP files...`);
+          
+          for (let i = 0; i < zipFiles.length; i++) {
+            const zipFile = zipFiles[i];
+            console.log(`Creating ZIP file ${i + 1}/${zipFiles.length} with ${zipFile.fileCount} files...`);
+            
+            const content = await zipFile.zip.generateAsync({ 
+              type: 'blob',
+              compression: 'DEFLATE',
+              compressionOptions: { level: 6 }
+            });
+            
+            console.log(`ZIP file ${i + 1} created successfully! Size:`, (content.size / 1024 / 1024).toFixed(2), 'MB');
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `batch_rotated_images_part_${zipFile.index}.zip`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+            
+            // Small delay between downloads
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
           
           // Log completion
-          console.log(`Batch processing completed successfully! Downloaded: batch_rotated_images.zip`);
+          console.log(`✅ Batch processing completed successfully! Downloaded ${zipFiles.length} ZIP files`);
           
         } catch (error) {
           console.error('Error in batch processing:', error);
