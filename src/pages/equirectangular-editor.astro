@@ -1756,14 +1756,15 @@ declare const JSZip: any;
         const batchSize = Math.max(1, Math.floor(files.length / maxWorkers));
         const batches = [];
         
-        console.log(`Parallel processing setup: ${files.length} files, ${maxWorkers} workers, ${batchSize} files per batch`);
+        console.log(`🚀 Parallel processing setup: ${files.length} files, ${maxWorkers} workers, ${batchSize} files per batch`);
+        console.log('Starting multithreaded batch processing...');
         
         // Split files into batches
         for (let i = 0; i < files.length; i += batchSize) {
           batches.push(files.slice(i, i + batchSize));
         }
         
-        console.log(`Created ${batches.length} batches for parallel processing`);
+        console.log(`📦 Created ${batches.length} batches for parallel processing`);
         
         // Prepare grouping if enabled
         let splitNames = null;
@@ -1781,7 +1782,7 @@ declare const JSZip: any;
             const worker = workerPool[workerIndex];
             const batchId = batchCounter++;
             
-            console.log(`Starting batch ${batchId} with ${batch.length} files on worker ${workerIndex + 1}/${maxWorkers}`);
+            console.log(`⚡ Starting batch ${batchId} with ${batch.length} files on worker ${workerIndex + 1}/${maxWorkers}`);
             
             worker.onmessage = function(e) {
               if (e.data.type === 'progress') {
@@ -1818,7 +1819,9 @@ declare const JSZip: any;
         });
         
         // Wait for all batches to complete
+        console.log('⏳ Waiting for all workers to complete...');
         await Promise.all(batchPromises);
+        console.log('✅ All workers completed! Processing results...');
         
         // Sort results by original index and add to zip
         allResults.sort((a, b) => a.index - b.index);
@@ -1876,8 +1879,14 @@ declare const JSZip: any;
             batchGroupingColumn
           );
           
-          // Generate and download zip file
-          const content = await zip.generateAsync({ type: 'blob' });
+          // Generate and download zip file with streaming to avoid memory issues
+          console.log('Creating ZIP file with streaming...');
+          const content = await zip.generateAsync({ 
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
+          });
+          console.log('ZIP file created successfully! Size:', (content.size / 1024 / 1024).toFixed(2), 'MB');
           const link = document.createElement('a');
           link.href = URL.createObjectURL(content);
           link.download = 'batch_rotated_images.zip';
@@ -1889,7 +1898,11 @@ declare const JSZip: any;
           
         } catch (error) {
           console.error('Error in batch processing:', error);
-          alert('Error processing batch. Please try again.');
+          if (error.message.includes('Array buffer allocation failed')) {
+            alert('Error: ZIP file too large for browser memory. Try processing fewer files at once or use smaller images.');
+          } else {
+            alert('Error processing batch. Please try again.');
+          }
         }
         
         // Reset UI
