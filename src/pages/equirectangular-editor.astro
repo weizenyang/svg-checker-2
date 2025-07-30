@@ -1239,152 +1239,30 @@ declare const JSZip: any;
       function findCommonPatterns(filenames) {
         if (filenames.length < 2) return [];
 
-        // Use LCS-based pattern detection
-        return findLCSPatterns(filenames);
-      }
-
-      function findLCSPatterns(filenames) {
-        if (filenames.length < 2) return [];
-        
-        // Find all common substrings across all filenames
-        const commonSubstrings = findAllCommonSubstrings(filenames);
-        
-        // Sort by length (longest first) and filter out overlapping patterns
-        const sortedPatterns = commonSubstrings
-          .sort((a, b) => b.length - a.length)
-          .filter(pattern => pattern.length > 2); // Only consider patterns longer than 2 chars
-        
-        // Group patterns by their position and create columns
+        // Use delimiter-based columnar split (default: '_')
+        const delimiter = '_';
+        // Split all filenames into columns
+        const splitNames = filenames.map(name => name.split(delimiter));
+        // Find the max number of columns
+        const maxColumns = Math.max(...splitNames.map(parts => parts.length));
+        // For each column, collect unique values
         const patterns = [];
-        const usedPositions = new Set();
-        
-        for (const pattern of sortedPatterns) {
-          // Check if this pattern overlaps with already used positions
-          let overlaps = false;
-          for (const usedPattern of patterns) {
-            if (patternOverlaps({pattern: pattern}, usedPattern, filenames)) {
-              overlaps = true;
-              break;
-            }
-          }
-          
-          if (!overlaps) {
-            // Find all unique values at this pattern's position
-            const uniqueValues = findUniqueValuesAtPattern(filenames, pattern as string);
-            
-            if (uniqueValues.length > 1) {
-              patterns.push({
-                type: 'lcs',
-                pattern: pattern as string,
-                value: uniqueValues.join(', '),
-                unique: uniqueValues,
-                positions: findPatternPositions(filenames, pattern as string)
-              });
-            }
+        for (let col = 0; col < maxColumns; col++) {
+          const values = new Set();
+          splitNames.forEach(parts => {
+            if (col < parts.length) values.add(parts[col]);
+          });
+          if (values.size > 1) {
+            patterns.push({
+              type: 'column',
+              delimiter,
+              position: col,
+              value: Array.from(values).join(', '),
+              unique: Array.from(values)
+            });
           }
         }
-        
         return patterns;
-      }
-
-      function findAllCommonSubstrings(filenames: string[]): string[] {
-        const commonSubstrings = new Set<string>();
-        
-        // Compare each pair of filenames
-        for (let i = 0; i < filenames.length; i++) {
-          for (let j = i + 1; j < filenames.length; j++) {
-            const substrings = findCommonSubstringsBetween(filenames[i], filenames[j]);
-            substrings.forEach(sub => commonSubstrings.add(sub));
-          }
-        }
-        
-        return Array.from(commonSubstrings);
-      }
-
-      function findCommonSubstringsBetween(str1: string, str2: string): string[] {
-        const substrings = new Set<string>();
-        
-        // Find all common substrings of length 3 or more
-        for (let len = 3; len <= Math.min(str1.length, str2.length); len++) {
-          for (let i = 0; i <= str1.length - len; i++) {
-            const substr = str1.substring(i, i + len);
-            if (str2.includes(substr)) {
-              substrings.add(substr);
-            }
-          }
-        }
-        
-        return Array.from(substrings);
-      }
-
-      function patternOverlaps(pattern1: any, pattern2: any, filenames: string[]) {
-        // Check if two patterns overlap in any filename
-        for (const filename of filenames) {
-          const pos1 = filename.indexOf(pattern1.pattern);
-          const pos2 = filename.indexOf(pattern2.pattern);
-          
-          if (pos1 !== -1 && pos2 !== -1) {
-            const end1 = pos1 + pattern1.pattern.length;
-            const end2 = pos2 + pattern2.pattern.length;
-            
-            // Check for overlap
-            if (pos1 < end2 && pos2 < end1) {
-              return true;
-            }
-          }
-        }
-        return false;
-      }
-
-      function findUniqueValuesAtPattern(filenames, pattern) {
-        const values = new Set();
-        
-        for (const filename of filenames) {
-          const pos = filename.indexOf(pattern);
-          if (pos !== -1) {
-            // Extract the part before the pattern
-            const before = filename.substring(0, pos);
-            // Extract the part after the pattern
-            const after = filename.substring(pos + pattern.length);
-            
-            // Find the next common delimiter or end
-            const nextDelimiter = findNextDelimiter(after);
-            const value = after.substring(0, nextDelimiter);
-            
-            if (value) {
-              values.add(value);
-            }
-          }
-        }
-        
-        return Array.from(values);
-      }
-
-      function findNextDelimiter(str) {
-        const delimiters = ['_', '-', '.', ' '];
-        let minPos = str.length;
-        
-        for (const delimiter of delimiters) {
-          const pos = str.indexOf(delimiter);
-          if (pos !== -1 && pos < minPos) {
-            minPos = pos;
-          }
-        }
-        
-        return minPos;
-      }
-
-      function findPatternPositions(filenames, pattern) {
-        const positions = [];
-        
-        for (const filename of filenames) {
-          const pos = filename.indexOf(pattern);
-          if (pos !== -1) {
-            positions.push(pos);
-          }
-        }
-        
-        return positions;
       }
 
       function findDelimiterPatterns(filenames) {
@@ -1508,12 +1386,7 @@ declare const JSZip: any;
           
           const title = document.createElement('h4');
           title.style.margin = '0 0 10px 0';
-          
-          if (pattern.type === 'delimiter') {
-            title.textContent = `Column ${index + 1} (${pattern.delimiter}-separated, position ${pattern.position + 1})`;
-          } else {
-            title.textContent = `Column ${index + 1} (${pattern.type})`;
-          }
+          title.textContent = `Column ${pattern.position + 1} (delimiter: '${pattern.delimiter}')`;
           
           const value = document.createElement('p');
           value.style.margin = '5px 0';
@@ -1530,8 +1403,8 @@ declare const JSZip: any;
           
           // Add option to select dropdown
           const option = document.createElement('option');
-          option.value = index.toString();
-          option.textContent = `Column ${index + 1} (${pattern.unique.length} groups)`;
+          option.value = pattern.position.toString();
+          option.textContent = `Column ${pattern.position + 1} (${pattern.unique.length} groups)`;
           groupingColumnSelect.appendChild(option);
         });
       }
@@ -1539,7 +1412,7 @@ declare const JSZip: any;
       // Handle column selection for grouping
       groupingColumnSelect.addEventListener('change', function() {
         const selectedIndex = parseInt((this as HTMLSelectElement).value);
-        if (selectedIndex >= 0 && patternAnalysis) {
+        if (!isNaN(selectedIndex) && patternAnalysis) {
           showGroupingPreview(selectedIndex);
         } else {
           groupingPreview.style.display = 'none';
@@ -1547,33 +1420,17 @@ declare const JSZip: any;
       });
 
       function showGroupingPreview(columnIndex) {
-        const pattern = patternAnalysis[columnIndex];
+        const pattern = patternAnalysis.find(p => p.position === columnIndex);
         const filenames = groupingFiles.map(file => {
           const name = file.name;
           return name.substring(0, name.lastIndexOf('.')) || name;
         });
+        const splitNames = filenames.map(name => name.split(pattern.delimiter));
 
-        // Group files by the selected pattern
+        // Group files by the value at the selected column
         const groups = new Map();
-        
-        filenames.forEach((filename, fileIndex) => {
-          let groupKey = '';
-          
-          if (pattern.type === 'prefix') {
-            groupKey = pattern.value;
-          } else if (pattern.type === 'suffix') {
-            groupKey = pattern.value;
-          } else if (pattern.type === 'middle') {
-            const start = patternAnalysis[0]?.value?.length || 0;
-            const end = filename.length - (patternAnalysis[patternAnalysis.length - 1]?.value?.length || 0);
-            groupKey = filename.substring(start, end);
-          } else if (pattern.type === 'position') {
-            groupKey = filename[pattern.position] || '';
-          } else if (pattern.type === 'delimiter') {
-            const parts = filename.split(pattern.delimiter);
-            groupKey = parts[pattern.position] || '';
-          }
-          
+        splitNames.forEach((parts, fileIndex) => {
+          const groupKey = parts[pattern.position] || '';
           if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
           }
@@ -1617,35 +1474,18 @@ declare const JSZip: any;
 
       groupingProcessButton.addEventListener('click', async () => {
         const selectedIndex = parseInt((groupingColumnSelect as HTMLSelectElement).value);
-        if (selectedIndex < 0 || !patternAnalysis) return;
-
-        const pattern = patternAnalysis[selectedIndex];
+        if (isNaN(selectedIndex) || !patternAnalysis) return;
+        const pattern = patternAnalysis.find(p => p.position === selectedIndex);
         const filenames = groupingFiles.map(file => {
           const name = file.name;
           return name.substring(0, name.lastIndexOf('.')) || name;
         });
+        const splitNames = filenames.map(name => name.split(pattern.delimiter));
 
         // Group files
         const groups = new Map();
-        
-        filenames.forEach((filename, fileIndex) => {
-          let groupKey = '';
-          
-          if (pattern.type === 'prefix') {
-            groupKey = pattern.value;
-          } else if (pattern.type === 'suffix') {
-            groupKey = pattern.value;
-          } else if (pattern.type === 'middle') {
-            const start = patternAnalysis[0]?.value?.length || 0;
-            const end = filename.length - (patternAnalysis[patternAnalysis.length - 1]?.value?.length || 0);
-            groupKey = filename.substring(start, end);
-          } else if (pattern.type === 'position') {
-            groupKey = filename[pattern.position] || '';
-          } else if (pattern.type === 'delimiter') {
-            const parts = filename.split(pattern.delimiter);
-            groupKey = parts[pattern.position] || '';
-          }
-          
+        splitNames.forEach((parts, fileIndex) => {
+          const groupKey = parts[pattern.position] || '';
           if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
           }
@@ -1655,22 +1495,18 @@ declare const JSZip: any;
         // Create zip with grouped folders
         try {
           const zip = new JSZip();
-
           groups.forEach((files, groupName) => {
             const folder = zip.folder(groupName);
-            
             files.forEach(file => {
               folder.file(file.name, file);
             });
           });
-
           const content = await zip.generateAsync({ type: 'blob' });
           const link = document.createElement('a');
           link.href = URL.createObjectURL(content);
           link.download = 'grouped_files.zip';
           link.click();
           URL.revokeObjectURL(link.href);
-          
           alert(`Successfully created ${groups.size} folders with ${groupingFiles.length} total files!`);
         } catch (error) {
           console.error('Error creating grouped folders:', error);
