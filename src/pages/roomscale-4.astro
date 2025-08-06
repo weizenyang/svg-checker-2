@@ -3194,10 +3194,7 @@ async function renderOverlayCanvas(cone) {
                 const finalRotation = object.userData.originalRotation + offset;
                 object.rotation.y = finalRotation;
                 
-                // Update the cone's visual representation
-                object.updateMatrix();
-                object.geometry.applyMatrix4(object.matrix);
-                object.rotation.set(0, finalRotation, 0);
+                // Update the cone's visual representation (simpler approach)
                 object.updateMatrix();
                 
                 // Update the main rotation input to show the final value
