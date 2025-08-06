@@ -2596,21 +2596,16 @@ async function renderOverlayCanvas(cone) {
             return;
         }
 
-        let csvContent = "name,x,y,z,rotX,rotY,rotZ\n"; // CSV header
+        let csvContent = ""; // No header
 
         m_Group.children.forEach((child) => {
             if (child instanceof THREE.Mesh && child.cameraPos) {
-                // Get world position and rotation
+                // Get world position
                 const worldPosition = new THREE.Vector3();
-                const worldQuaternion = new THREE.Quaternion();
-                const worldEuler = new THREE.Euler();
-                
                 child.getWorldPosition(worldPosition);
-                child.getWorldQuaternion(worldQuaternion);
-                worldEuler.setFromQuaternion(worldQuaternion);
 
-                // Format the CSV line with the same format as input
-                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.y).toFixed(6)},${worldPosition.z.toFixed(6)},${worldEuler.x.toFixed(6)},${worldEuler.y.toFixed(6)},${worldEuler.z.toFixed(6)}\n`;
+                // Format: name,x,-z,-y,0,0,rotation_y_in_degrees
+                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${(-worldPosition.y).toFixed(6)},0,0,${THREE.MathUtils.radToDeg(child.rotation.y).toFixed(6)}\n`;
             }
         });
 
