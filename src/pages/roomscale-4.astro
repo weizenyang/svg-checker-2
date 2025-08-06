@@ -3138,17 +3138,18 @@ async function renderOverlayCanvas(cone) {
             rotationInput.type = "number";
             rotationInput.step = "0.1";
             rotationInput.className = "w-16 h-4 text-xs border border-gray-300 rounded px-1";
-            rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1);
+            // Use the same rotation value that appears in the hover label (Z rotation)
+            rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1);
             
             // Update cone rotation when input changes
             rotationInput.addEventListener("input", (e) => {
                 const newRotation = THREE.MathUtils.degToRad(parseFloat(e.target.value));
-                object.rotation.y = newRotation;
+                object.rotation.z = newRotation;
                 
                 // Update the cone's visual representation
                 object.updateMatrix();
                 object.geometry.applyMatrix4(object.matrix);
-                object.rotation.set(0, newRotation, 0);
+                object.rotation.set(0, 0, newRotation);
                 object.updateMatrix();
                 
                 // Update labels if they exist
@@ -3159,7 +3160,7 @@ async function renderOverlayCanvas(cone) {
             
             // Update input when cone rotation changes externally
             const updateRotationInput = () => {
-                rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1);
+                rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1);
             };
             
             // Store the update function for external use
