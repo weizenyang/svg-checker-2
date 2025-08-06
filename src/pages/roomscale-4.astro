@@ -2606,7 +2606,7 @@ async function renderOverlayCanvas(cone) {
                 child.getWorldPosition(worldPosition);
 
                 // Format: name,x,-z,-y,0,0,rotation_y_in_degrees
-                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${(-worldPosition.y).toFixed(6)},0,0,${THREE.MathUtils.radToDeg(child.rotation.y).toFixed(6)}\n`;
+                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${(worldPosition.y).toFixed(6)},0,0,${THREE.MathUtils.radToDeg(child.rotation.y).toFixed(6)}\n`;
             }
         });
 
