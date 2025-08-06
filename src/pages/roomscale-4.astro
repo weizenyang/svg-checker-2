@@ -186,6 +186,33 @@ import ObjectList from "../components/object-list.tsx";
                 Export Entire Scene
             </label>
 
+            <button
+                id="export-csv-rotations"
+                class="flex transition-all duration-75 drop-shadow-sm bg-green-600 text-white p-2 mt-3 rounded-md hover:drop-shadow-xl hover:bg-green-500 hover:text-white"
+                style="margin-bottom: 10px"
+            >
+                Export CSV with Rotations
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="ml-2"
+                >
+                    <path
+                        d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                        stroke-width="2"></path>
+                    <polyline points="7 10 12 15 17 10" stroke-width="2"
+                    ></polyline>
+                    <line x1="12" x2="12" y1="15" y2="3" stroke-width="2"
+                    ></line>
+                </svg></button
+            >
+
             <div class="rounded-md bg-zinc-300 max-w-52 p-5 pl-2 pr-2 mt-3">
                 <h2 class="font-bold">Floors:</h2>
                 <div class="flex flex-col" id="show-floors">
@@ -2562,6 +2589,51 @@ async function renderOverlayCanvas(cone) {
     const exportButton = document.getElementById("export-all-fbx");
     exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
+    // Function to export CSV with updated rotations
+    function exportCSVWithRotations() {
+        if (!m_Group || !m_Group.children || m_Group.children.length === 0) {
+            alert("error", "Please import a CSV file first to export rotations");
+            return;
+        }
+
+        let csvContent = "name,x,y,z,rotX,rotY,rotZ\n"; // CSV header
+
+        m_Group.children.forEach((child) => {
+            if (child instanceof THREE.Mesh && child.cameraPos) {
+                // Get world position and rotation
+                const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                const worldEuler = new THREE.Euler();
+                
+                child.getWorldPosition(worldPosition);
+                child.getWorldQuaternion(worldQuaternion);
+                worldEuler.setFromQuaternion(worldQuaternion);
+
+                // Format the CSV line with the same format as input
+                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.y).toFixed(6)},${worldPosition.z.toFixed(6)},${worldEuler.x.toFixed(6)},${worldEuler.y.toFixed(6)},${worldEuler.z.toFixed(6)}\n`;
+            }
+        });
+
+        // Create and download the CSV file
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${m_Group.name.split(".")[0]}_with_rotations.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        alert("notify", `Exported ${m_Group.children.length} cones with updated rotations`);
+    }
+
+    // Add event listener for CSV export button
+    const exportCsvButton = document.getElementById("export-csv-rotations");
+    if (exportCsvButton) {
+        exportCsvButton.addEventListener("click", exportCSVWithRotations);
+    }
+
     const logScene = document.getElementById("log-scene");
     logScene.addEventListener("click", (e) => {
         console.log(scene);
@@ -3056,6 +3128,51 @@ async function renderOverlayCanvas(cone) {
         const nameSpan = document.createElement("span");
         nameSpan.textContent = object.name || object.type || "Unnamed";
         container.appendChild(nameSpan);
+
+        // Add rotation input for cones (camera positions)
+        if (object.cameraPos) {
+            const rotationContainer = document.createElement("div");
+            rotationContainer.className = "flex items-center gap-1 ml-2";
+            
+            const rotationLabel = document.createElement("span");
+            rotationLabel.textContent = "Z:";
+            rotationLabel.className = "text-xs text-gray-600";
+            rotationContainer.appendChild(rotationLabel);
+            
+            const rotationInput = document.createElement("input");
+            rotationInput.type = "number";
+            rotationInput.step = "0.1";
+            rotationInput.className = "w-16 h-4 text-xs border border-gray-300 rounded px-1";
+            rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1);
+            
+            // Update cone rotation when input changes
+            rotationInput.addEventListener("input", (e) => {
+                const newRotation = THREE.MathUtils.degToRad(parseFloat(e.target.value));
+                object.rotation.z = newRotation;
+                
+                // Update the cone's visual representation
+                object.updateMatrix();
+                object.geometry.applyMatrix4(object.matrix);
+                object.rotation.set(0, newRotation, 0);
+                object.updateMatrix();
+                
+                // Update labels if they exist
+                if (typeof createLabels === "function") {
+                    createLabels();
+                }
+            });
+            
+            // Update input when cone rotation changes externally
+            const updateRotationInput = () => {
+                rotationInput.value = THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1);
+            };
+            
+            // Store the update function for external use
+            object.userData.updateRotationInput = updateRotationInput;
+            
+            rotationContainer.appendChild(rotationInput);
+            container.appendChild(rotationContainer);
+        }
 
         // Color picker
         const colorPicker = document.createElement("input");
