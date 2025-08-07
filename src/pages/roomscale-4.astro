@@ -3143,7 +3143,20 @@ async function renderOverlayCanvas(cone) {
             
             // Update cone rotation when input changes
             rotationInput.addEventListener("input", (e) => {
-                const newRotation = THREE.MathUtils.degToRad(parseFloat(e.target.value));
+                const inputValue = parseFloat(e.target.value);
+                
+                // Validate input
+                if (isNaN(inputValue)) {
+                    rotationInput.style.borderColor = "red";
+                    rotationInput.style.boxShadow = "0 0 5px red";
+                    return; // Don't apply invalid rotation
+                }
+                
+                // Clear error styling
+                rotationInput.style.borderColor = "";
+                rotationInput.style.boxShadow = "";
+                
+                const newRotation = THREE.MathUtils.degToRad(inputValue);
                 object.rotation.y = newRotation;
                 
                 // Update the cone's visual representation
@@ -3188,7 +3201,20 @@ async function renderOverlayCanvas(cone) {
             
             // Update offset when input changes
             offsetInput.addEventListener("input", (e) => {
-                const offset = THREE.MathUtils.degToRad(parseFloat(e.target.value));
+                const inputValue = parseFloat(e.target.value);
+                
+                // Validate input
+                if (isNaN(inputValue)) {
+                    offsetInput.style.borderColor = "red";
+                    offsetInput.style.boxShadow = "0 0 5px red";
+                    return; // Don't apply invalid offset
+                }
+                
+                // Clear error styling
+                offsetInput.style.borderColor = "";
+                offsetInput.style.boxShadow = "";
+                
+                const offset = THREE.MathUtils.degToRad(inputValue);
                 object.userData.offset = offset;
                 
                 // Calculate final rotation: original + offset

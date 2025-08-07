@@ -117,16 +117,15 @@ import "../styles.css";
 					<!-- <h3>2. Then, Import Files here</h3> -->
 					<!-- <button class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300" class="button-style">Import </button> -->
 					<label for="myFile" class="button-style"
-						>Import <svg
+						>Import 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="24"
 							height="24"
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							multiple
+							stroke-linecap="round"
+							stroke-linejoin="round"
 						>
 							<path
 								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
@@ -160,8 +159,8 @@ import "../styles.css";
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
-							strokeLinecap="round"
-							strokeLinejoin="round"
+							stroke-linecap="round"
+							stroke-linejoin="round"
 						>
 							<path
 								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
@@ -361,8 +360,8 @@ import "../styles.css";
 							viewBox="0 0 24 24"
 							fill="none"
 							stroke="currentColor"
-							strokeLinecap="round"
-							strokeLinejoin="round"
+							stroke-linecap="round"
+							stroke-linejoin="round"
 						>
 							<path
 								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
@@ -2593,7 +2592,10 @@ import "../styles.css";
 			}
 
 			if (e.key == "Delete" || e.key === "Backspace") {
-				document.querySelector("#delete-point").click();
+				// Only delete points if not typing in an input field
+				if (!typing) {
+					document.querySelector("#delete-point").click();
+				}
 			}
 
 			if (event.key === "ArrowLeft") {
@@ -2637,8 +2639,11 @@ import "../styles.css";
 			}
 
 			if (e.key == "Delete") {
-				document.querySelector("delete-point").click();
-				spawnLabel();
+				// Only delete points if not typing in an input field
+				if (!typing) {
+					document.querySelector("delete-point").click();
+					spawnLabel();
+				}
 			}
 
 			spawnLabel();
