@@ -291,42 +291,10 @@ import ObjectList from "../components/object-list.tsx";
             </div>
 
             <div class="flex flex-col pointer-events-auto">
-                <div
-                    class="right-0 max-w-2xl h-50 bg-neutral-100 text-xs"
-                    id="gizmo"
-                >
-                    <button
-                        id="camera-top"
-                        class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                        id="x-flip"
-                    >
-                        Top
-                    </button>
-                    <div class="flex">
-                        <button
-                            id="camera-left"
-                            class="bg-zinc-300 p-5 pr-1 pl-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                            id="x-flip"
-                        >
-                            L
-                        </button>
+                <div class="right-0 max-w-2xl text-xs" id="gizmo">
+                    <div class="p-2">
                         <div class="h-36 w-44" id="orthoView"></div>
-                        <button
-                            id="camera-right"
-                            class="bg-zinc-300 p-5 pl-1 pr-1 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                            id="x-flip"
-                        >
-                            R
-                        </button>
                     </div>
-
-                    <button
-                        id="camera-bottom"
-                        class="bg-zinc-300 w-full p-5 pt-0 pb-0 rounded-sm transition-all duration-75 hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
-                        id="x-flip"
-                    >
-                        Bottom
-                    </button>
                     <button id="open-align-popup"> Align Points </button>
                 </div>
 
@@ -399,8 +367,8 @@ import ObjectList from "../components/object-list.tsx";
     import gsap from "gsap";
 
     //Resizing image previewer
-    const panel = document.getElementById("vr-image-panel");
-    const handle = document.getElementById("vr-resize-handle");
+    const panel = document.getElementById("vr-image-panel") as HTMLDivElement;
+    const handle = document.getElementById("vr-resize-handle") as HTMLDivElement;
 
     let isResizing = false;
     let startX, startY, startWidth, startHeight;
@@ -871,7 +839,9 @@ import ObjectList from "../components/object-list.tsx";
     renderer.autoClear = false;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit pixel ratio
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = false; // Disable shadows for better performance
+    if ((renderer as any).shadowMap) {
+        (renderer as any).shadowMap.enabled = false; // Disable shadows for better performance
+    }
     document.body.appendChild(renderer.domElement);
 
     const orthoRenderer = new THREE.WebGLRenderer({
@@ -881,10 +851,186 @@ import ObjectList from "../components/object-list.tsx";
     });
     orthoRenderer.autoClear = false;
     orthoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit pixel ratio
-    orthoRenderer.shadowMap.enabled = false; // Disable shadows for better performance
-    const orthoView = document.getElementById("orthoView");
+    if ((orthoRenderer as any).shadowMap) {
+        (orthoRenderer as any).shadowMap.enabled = false; // Disable shadows for better performance
+    }
+    const orthoView = document.getElementById("orthoView") as HTMLDivElement;
     orthoRenderer.setSize(orthoView.clientWidth, orthoView.clientHeight);
     document.getElementById("orthoView").appendChild(orthoRenderer.domElement);
+
+    // Blender-like 3D Gizmo (rendered inside #orthoView)
+    const gizmoScene = new THREE.Scene();
+    const gizmoCamera = new THREE.PerspectiveCamera(
+        18,
+        Math.max(1, orthoView.clientWidth) / Math.max(1, orthoView.clientHeight),
+        0.1,
+        10
+    );
+    gizmoCamera.position.set(0, 0, 5.0);
+
+    const gizmoRoot = new THREE.Object3D();
+    gizmoRoot.scale.setScalar(0.75); // scale down slightly to avoid clipping
+    gizmoScene.add(gizmoRoot);
+
+    // 2D overlay for screen-space rendering
+    orthoView.style.position = 'relative';
+    const gizmoOverlay = document.createElement('canvas');
+    gizmoOverlay.style.position = 'absolute';
+    gizmoOverlay.style.left = '0';
+    gizmoOverlay.style.top = '0';
+    gizmoOverlay.style.width = '100%';
+    gizmoOverlay.style.height = '100%';
+    gizmoOverlay.style.pointerEvents = 'none';
+    orthoView.appendChild(gizmoOverlay);
+    const overlayCtx = gizmoOverlay.getContext('2d')!;
+
+    type SphereDesc = { mesh: THREE.Mesh, baseColor: number, axisKey: 'X'|'Y'|'Z', sign: '+'|'-', radiusWorld: number };
+    const handleSpheres: SphereDesc[] = [];
+    let gizmoLocalRadius = 0; // in gizmo local units
+    const positiveSphereByAxis: Record<string, THREE.Mesh> = {} as any;
+
+    function buildAxis(axis: THREE.Vector3, color: number, axisKey: 'X' | 'Y' | 'Z') {
+        const axisGroup = new THREE.Group();
+        const length = 0.65; // bring spheres even closer
+        const radius = 0.012; // thinner line
+        const sphereRadius = 0.085 * 2.0; // larger spheres
+
+        const cylinderGeo = new THREE.CylinderGeometry(radius, radius, length, 16);
+        const cylinderMat = new THREE.MeshBasicMaterial({ color });
+        const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+        cylinder.matrixAutoUpdate = true;
+        // orient cylinder (default +Y) to the desired axis
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
+        cylinder.quaternion.copy(q);
+        // shift so it starts at origin and extends to +axis direction only
+        const half = length / 2;
+        const dir = axis.clone().normalize();
+        cylinder.position.copy(dir.clone().multiplyScalar(half));
+        axisGroup.add(cylinder);
+
+        const sphereGeo = new THREE.SphereGeometry(sphereRadius, 24, 24);
+        const matPos = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.0 });
+        const matNeg = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.0 });
+
+        const posSphere = new THREE.Mesh(sphereGeo, matPos);
+        posSphere.position.copy(dir.clone().multiplyScalar(length));
+        posSphere.name = axisKey + '+';
+        posSphere.renderOrder = 10;
+        axisGroup.add(posSphere);
+
+        // add negative sphere (not connected by a line)
+        const negSphere = new THREE.Mesh(sphereGeo, matNeg);
+        negSphere.position.copy(dir.clone().multiplyScalar(-length));
+        negSphere.name = axisKey + '-';
+        negSphere.renderOrder = 10;
+        axisGroup.add(negSphere);
+
+        // track for gray tinting based on camera facing
+        handleSpheres.push({ mesh: posSphere, baseColor: color, axisKey, sign: '+', radiusWorld: sphereRadius });
+        handleSpheres.push({ mesh: negSphere, baseColor: color, axisKey, sign: '-', radiusWorld: sphereRadius });
+
+        positiveSphereByAxis[axisKey] = posSphere as any;
+
+        // track max radius (axis length + sphere radius) in local space
+        gizmoLocalRadius = Math.max(gizmoLocalRadius, length + sphereRadius);
+
+        gizmoRoot.add(axisGroup);
+    }
+
+    // Solid unlit axes with attached endpoint spheres
+    buildAxis(new THREE.Vector3(1, 0, 0), 0xff8080, 'X');
+    buildAxis(new THREE.Vector3(0, 1, 0), 0x80ff8c, 'Y');
+    buildAxis(new THREE.Vector3(0, 0, 1), 0x74c8ff, 'Z'); 
+
+    // Gizmo interaction: click on handles to snap camera
+    const gizmoRaycaster = new THREE.Raycaster();
+    const gizmoPointer = new THREE.Vector2();
+
+    function snapCameraTo(label) {
+        const target = orbitalControls.target.clone();
+        const currentDistance = (typeof orbitalControls.getDistance === 'function')
+            ? orbitalControls.getDistance()
+            : camera.position.distanceTo(target);
+        const pos = new THREE.Vector3();
+        switch (label) {
+            case "X+": pos.set( currentDistance, 0, 0); break;
+            case "X-": pos.set(-currentDistance, 0, 0); break;
+            case "Y+": pos.set(0,  currentDistance, 0); break;
+            case "Y-": pos.set(0, -currentDistance, 0); break;
+            case "Z+": pos.set(0, 0,  currentDistance); break;
+            case "Z-": pos.set(0, 0, -currentDistance); break;
+            default: return;
+        }
+        gsap.to(camera.position, {
+            x: target.x + pos.x,
+            y: target.y + pos.y,
+            z: target.z + pos.z,
+            duration: 0.5,
+            ease: "power2.out",
+            onUpdate: () => {
+                orbitalControls.target.copy(target);
+                orbitalControls.update();
+            }
+        });
+    }
+
+    orthoView.addEventListener('click', (ev) => {
+        if (gizmoDragging) return; // don't treat end of drag as a click
+        const rect = orthoView.getBoundingClientRect();
+        const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+        gizmoPointer.set(x, y);
+        gizmoRaycaster.setFromCamera(gizmoPointer, gizmoCamera);
+        const hits = gizmoRaycaster.intersectObjects(gizmoRoot.children, true);
+        const handle = hits.find(h => typeof h.object.name === 'string' && /^[XYZ][+-]$/.test(h.object.name));
+        if (handle) snapCameraTo(handle.object.name);
+    });
+
+    function updateGizmoSize() {
+        const rect = orthoView.getBoundingClientRect();
+        const w = Math.max(1, rect.width);
+        const h = Math.max(1, rect.height);
+        orthoRenderer.setSize(w, h);
+        gizmoCamera.aspect = w / h;
+        gizmoCamera.updateProjectionMatrix();
+    }
+    updateGizmoSize();
+
+    // Drag to orbit main camera using the gizmo area
+    let gizmoDragging = false;
+    let gizmoLast = { x: 0, y: 0 };
+    orthoView.style.cursor = 'grab';
+    orthoView.addEventListener('mousedown', (ev: MouseEvent) => {
+        gizmoDragging = true;
+        gizmoLast.x = ev.clientX;
+        gizmoLast.y = ev.clientY;
+        orthoView.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', (ev: MouseEvent) => {
+        if (!gizmoDragging) return;
+        const dx = ev.clientX - gizmoLast.x;
+        const dy = ev.clientY - gizmoLast.y;
+        gizmoLast.x = ev.clientX;
+        gizmoLast.y = ev.clientY;
+
+        const yaw = -dx * 0.005;
+        const pitch = -dy * 0.005;
+
+        const target = orbitalControls.target.clone();
+        const offset = (camera as any).position.clone().sub(target);
+        const spherical = new THREE.Spherical();
+        spherical.setFromVector3(offset);
+        spherical.theta += yaw;
+        spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi + pitch));
+        offset.setFromSpherical(spherical);
+        (camera as any).position.copy(target.clone().add(offset));
+        camera.lookAt(target);
+        orbitalControls.update();
+    });
+    window.addEventListener('mouseup', () => {
+        gizmoDragging = false;
+        orthoView.style.cursor = 'grab';
+    });
 
     //Manipulatable Group
     var m_Group;
@@ -940,9 +1086,9 @@ import ObjectList from "../components/object-list.tsx";
         0.1,
         800000,
     );
-    camera.position.x = -210.41;
-    camera.position.y = 1.31;
-    camera.position.z = 0;
+    (camera as any).position.x = -210.41;
+    (camera as any).position.y = 1.31;
+    (camera as any).position.z = 0;
 
     const orthoCamera = new THREE.OrthographicCamera(
         orthoView.clientWidth / -2,
@@ -952,9 +1098,9 @@ import ObjectList from "../components/object-list.tsx";
         0.1,
         80000,
     );
-    orthoCamera.position.x = -210.41;
-    orthoCamera.position.y = 1.31;
-    orthoCamera.position.z = 0;
+    (orthoCamera as any).position.x = -210.41;
+    (orthoCamera as any).position.y = 1.31;
+    (orthoCamera as any).position.z = 0;
     //Mouse Raycaster Perspective
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -1103,8 +1249,8 @@ async function reviewVR(event) {
 
     const cone       = hit.object;
     const panel      = document.getElementById("vr-image-panel");
-    const img        = document.getElementById("vr-img");
-    const flippedTag = document.getElementById("vr-flipped-tag");
+    const img        = document.getElementById("vr-img") as HTMLImageElement;
+    const flippedTag = document.getElementById("vr-flipped-tag") as HTMLDivElement;
     const targetName = cone.name.toLowerCase();
 
     // Helper function to apply flipping based on image name
@@ -1310,10 +1456,10 @@ async function renderOverlayCanvas(cone) {
     const debouncedDrawVRRotatedImage = debounce(drawVRRotatedImage, 16); // ~60fps max
 
     // VR Image Rotation DOM Elements
-    const vrOverlayCanvas = document.getElementById('vr-overlay-canvas');
-    const vrDragOverlay = document.getElementById('vr-drag-overlay');
-    const vrRotationDisplay = document.getElementById('vr-rotation-display');
-    const vrOverlayCtx = vrOverlayCanvas.getContext('2d');
+    const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
+    const vrDragOverlay = document.getElementById('vr-drag-overlay') as HTMLDivElement;
+    const vrRotationDisplay = document.getElementById('vr-rotation-display') as HTMLDivElement;
+    const vrOverlayCtx = vrOverlayCanvas.getContext('2d')!;
 
     // VR Image Rotation Event Handlers
     vrDragOverlay.addEventListener('mousedown', handleVRMouseDown);
@@ -1479,7 +1625,7 @@ async function renderOverlayCanvas(cone) {
     // 3. Put it in its own scene
     // 3. Build the EQ scene & camera
     const eqScene = new THREE.Scene();
-    const quadMesh = new THREE.Mesh(quadGeo, eqMaterial);
+    const quadMesh = new THREE.Mesh(quadGeo, eqMaterial as any);
     quadMesh.frustumCulled = false; // ensure it always draws
     eqScene.add(quadMesh);
 
@@ -1509,7 +1655,7 @@ async function renderOverlayCanvas(cone) {
     });
 
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
-    orbitalControls.enableKeys = false;
+    (orbitalControls as any).enableKeys = false;
 
     function fitCameraToObject(cam, controls, obj, padding = 2.5, duration = 0.6) {
     // 1. Get world-space bounding box & size
@@ -1812,10 +1958,8 @@ async function renderOverlayCanvas(cone) {
 
         // Ensure camera target is updated correctly after manual rotation
         orbitalControls.update();
-        orthoCamera.position.copy(camera.position);
-        orthoCamera.rotation.copy(camera.rotation);
-        orthoCamera.zoom = 100 / orbitalControls.getDistance();
-        orthoCamera.updateProjectionMatrix();
+        // Update gizmo orientation to match current camera
+        gizmoRoot.quaternion.copy(camera.quaternion).invert();
         // orthoCamera.left = (orthoView.clientWidth / -2) * orbitalControls.getDistance()
         // orthoCamera.right = (orthoView.clientWidth / 2) * orbitalControls.getDistance()
         // orthoCamera.top = (orthoView.clientHeight / 2) * orbitalControls.getDistance()
@@ -1858,30 +2002,105 @@ async function renderOverlayCanvas(cone) {
 
         updateLabelPositions();
 
-        // Render loop for orthographic camera - Optimized
+        // Tint spheres further from the camera to gray (unlit look)
+        const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(gizmoCamera.quaternion); // gizmo camera forward
+        handleSpheres.forEach(({ mesh, baseColor }) => {
+            // vector from gizmo camera to sphere
+            const toSphere = mesh.getWorldPosition(new THREE.Vector3()).sub(gizmoCamera.position).normalize();
+            // dot > 0 means in front of camera; < 0 means behind → tint more
+            const dot = camDir.dot(toSphere);
+            // map dot [-1,1] to tint [0.6, 0] where negative gets more gray
+            const t = Math.max(0, -dot); // only gray when behind
+            const base = new THREE.Color(baseColor);
+            const gray = new THREE.Color(0x808080);
+            const mixed = base.clone().lerp(gray, Math.min(0.7, t));
+            (mesh.material as any).color.copy(mixed);
+        });
+
+        // Render gizmo in the side viewport (unlit materials already used)
         orthoRenderer.clear();
-        orthoRenderer.render(scene, orthoCamera);
-        
-        if (VRSpheres.length > 0) {
-            orthoRenderer.clearDepth();
-            VRSpheres.forEach((e) => {
-                if (e.children.length > 0) orthoRenderer.render(e, orthoCamera);
-            });
-        }
+        orthoRenderer.render(gizmoScene, gizmoCamera);
 
-        if (objects.length > 0) {
-            orthoRenderer.clearDepth();
-            objects.forEach((e) => {
-                if (e.children.length > 0) orthoRenderer.render(e, orthoCamera);
-            });
+        // Draw screen-space spheres and outlines and labels
+        const w = (orthoRenderer.domElement as HTMLCanvasElement).width;
+        const h = (orthoRenderer.domElement as HTMLCanvasElement).height;
+        if (gizmoOverlay.width !== w || gizmoOverlay.height !== h) {
+            gizmoOverlay.width = w;
+            gizmoOverlay.height = h;
         }
+        overlayCtx.clearRect(0, 0, w, h);
+        const toScreen = (wp: THREE.Vector3) => {
+            const p = wp.clone().project(gizmoCamera);
+            return { x: (p.x * 0.5 + 0.5) * w, y: (-p.y * 0.5 + 0.5) * h, z: p.z };
+        };
+        const gizmoCenterW = gizmoRoot.getWorldPosition(new THREE.Vector3());
+        const gizmoScaleW = gizmoRoot.getWorldScale(new THREE.Vector3()).x;
+        const gizmoRadiusW = Math.max(1e-6, gizmoLocalRadius * gizmoScaleW);
+        const camFwd = gizmoCamera.getWorldDirection(new THREE.Vector3());
+        // Sort by projected depth so farther spheres render first, nearer last
+        const drawList = handleSpheres.map((desc) => {
+            const wp = desc.mesh.getWorldPosition(new THREE.Vector3());
+            const sp = toScreen(wp);
+            return { desc, wp, sp };
+        }).sort((a, b) => b.sp.z - a.sp.z); // far (z~1) first, near (z~-1) last
 
-        if (markers.length > 0) {
-            orthoRenderer.clearDepth();
-            markers.forEach((e) => {
-                if (e.children.length > 0) orthoRenderer.render(e, orthoCamera);
-            });
-        }
+        drawList.forEach(({ desc, wp, sp }) => {
+            const { baseColor, axisKey, sign, radiusWorld } = desc;
+            // constant pixel radius (no distance scaling)
+            const pxRadius = 10;
+
+            // Depth-based opacity taper and grey tint within gizmo radius only
+            const rel = wp.clone().sub(gizmoCenterW);
+            const depthAlong = THREE.MathUtils.clamp(rel.dot(camFwd), -gizmoRadiusW, gizmoRadiusW);
+            const depth01 = (depthAlong + gizmoRadiusW) / (2 * gizmoRadiusW); // 0 near, 1 far within gizmo radius
+            const farFactor = depth01; // 0 near, 1 far
+            // Opacity logic:
+            // - Positive-region spheres (sign '+') are fully opaque
+            // - Others taper with different rates for fill vs outline.
+            //   Fill: 1.0 (near) -> 0.3 (far)
+            //   Outline: 1.0 (near) -> 0.4 (far)
+            const nearFactor = 1 - farFactor; // 1 near, 0 far
+            const alphaFill = (sign === '+') ? 1.0 : (0.3 + 0.7 * nearFactor);
+            const alphaStroke = (sign === '+') ? 1.0 : (0.4 + 0.6 * nearFactor);
+
+            const base = new THREE.Color(baseColor);
+            const gray = new THREE.Color(0x404040); // gentle darkening tint
+            const extraDesat = (sign === '-') ? 0.2 : 0.0; // less saturated for negative spheres
+            const tintFactorFill = Math.min(0.5, 0.3 * farFactor + extraDesat);
+            const tintFactorStroke = Math.min(0.4, 0.25 * farFactor + extraDesat * 0.6);
+            const fillCol = base.clone().lerp(gray, tintFactorFill);
+            let strokeCol = base.clone().lerp(gray, tintFactorStroke);
+            // Negative spheres: keep solid fill but brighten outline color for contrast
+            if (sign === '-') {
+                const white = new THREE.Color(0xffffff);
+                // Pull outline back toward base color (less desaturated), then add a gentle white lift
+                strokeCol = strokeCol.lerp(base, 0.4).lerp(white, 0.22);
+            }
+            const fillAlpha = alphaFill;
+            const strokeAlpha = alphaFill;
+            const fill = `rgba(${Math.round(fillCol.r*255)}, ${Math.round(fillCol.g*255)}, ${Math.round(fillCol.b*255)}, ${fillAlpha})`;
+            const stroke = `rgba(${Math.round(strokeCol.r*255)}, ${Math.round(strokeCol.g*255)}, ${Math.round(strokeCol.b*255)}, ${strokeAlpha})`;
+
+            overlayCtx.beginPath();
+            overlayCtx.arc(sp.x, sp.y, pxRadius, 0, Math.PI*2);
+            overlayCtx.fillStyle = fill;
+            overlayCtx.fill();
+            overlayCtx.lineWidth = 1.25;
+            overlayCtx.strokeStyle = stroke;
+            overlayCtx.stroke();
+            // label: embed text centered on the sphere for positive sign
+            overlayCtx.font = `${Math.round(pxRadius)}px monospace`;
+            overlayCtx.textAlign = 'center';
+            overlayCtx.textBaseline = 'middle';
+            if (sign === '+') {
+                // subtle outline for readability
+                overlayCtx.lineWidth = 2;
+                overlayCtx.strokeStyle = 'rgba(0,0,0,0.35)';
+                overlayCtx.strokeText(axisKey, sp.x, sp.y);
+                overlayCtx.fillStyle = '#111';
+                overlayCtx.fillText(axisKey, sp.x, sp.y);
+            }
+        });
 
         // console.log(orbitalControls.getDistance())
 
@@ -4052,6 +4271,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        updateGizmoSize();
     }
 </script>
 
