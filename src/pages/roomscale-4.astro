@@ -239,56 +239,8 @@ import ObjectList from "../components/object-list.tsx";
         </div>
 
         <main class="fixed flex right-0 pointer-events-none">
-            <div
-                id="vr-image-panel"
-                class="relative right-0 w-[400px] h-[200px] resize overflow-auto border border-gray-400 min-w-[150px] min-h-[150px] pointer-events-auto"
-                style="resize: both;"
-            >
-                <img
-                    id="vr-img"
-                    src=""
-                    style="width:100%; height:100%; object-fit: contain;"
-                    alt="VR view"
-                />
 
-                <!-- Overlay canvas for rendered view -->
-                <canvas
-                    id="vr-overlay-canvas"
-                    class="absolute top-0 left-0 w-full h-full pointer-events-none"
-                    style="opacity: 0.3; object-fit: contain; display: none;"
-                ></canvas>
-
-                <!-- Draggable overlay for rotation interaction -->
-                <div
-                    id="vr-drag-overlay"
-                    class="absolute top-0 left-0 w-full h-full cursor-grab hidden"
-                    style="z-index: 8;"
-                ></div>
-
-                <!-- Flipped tag indicator -->
-                <div
-                    id="vr-flipped-tag"
-                    class="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 text-xs font-bold rounded hidden"
-                >
-                    FLIPPED
-                </div>
-
-                <!-- Rotation display -->
-                <div
-                    id="vr-rotation-display"
-                    class="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 text-white px-2 py-1 text-xs rounded hidden"
-                >
-                    Rotation: 0.0°
-                </div>
-
-                <!-- bottom-left resize handle -->
-                <div
-                    id="vr-resize-handle"
-                    class="absolute bottom-0 left-0 w-4 h-4 bg-white bg-opacity-50 rounded-tr-md"
-                    style="cursor: sw-resize;"
-                >
-                </div>
-            </div>
+            
 
             <div class="flex flex-col pointer-events-auto">
                 <div class="right-0 max-w-2xl text-xs" id="gizmo">
@@ -367,8 +319,167 @@ import ObjectList from "../components/object-list.tsx";
     import gsap from "gsap";
 
     //Resizing image previewer
-    const panel = document.getElementById("vr-image-panel") as HTMLDivElement;
-    const handle = document.getElementById("vr-resize-handle") as HTMLDivElement;
+    // Floating VR widget (chat-style)
+    const vrWidget = document.createElement('div');
+    vrWidget.id = 'vr-widget';
+    Object.assign(vrWidget.style, {
+        position: 'fixed',
+        right: '16px',
+        bottom: '16px',
+        width: '360px',
+        height: '180px',
+        display: 'none',
+        zIndex: '120',
+        pointerEvents: 'auto'
+    });
+    document.body.appendChild(vrWidget);
+
+    // Launcher (round button)
+    const vrLauncher = document.createElement('button');
+    vrLauncher.id = 'vr-launcher';
+    vrLauncher.title = 'Open VR View';
+    Object.assign(vrLauncher.style, {
+        position: 'fixed',
+        right: '16px',
+        bottom: '16px',
+        width: '44px',
+        height: '44px',
+        borderRadius: '9999px',
+        background: '#e5e7eb',
+        border: '1px solid #d4d4d8',
+        boxShadow: '0 6px 20px rgba(0,0,0,.15)',
+        cursor: 'pointer',
+        zIndex: '121'
+    } as CSSStyleDeclaration);
+    vrLauncher.innerHTML = '<span style="font-size:12px; font-family: monospace;">VR</span>';
+    document.body.appendChild(vrLauncher);
+
+    // Panel container anchored above the launcher
+    const panel = document.createElement('div');
+    panel.id = 'vr-image-panel';
+    Object.assign(panel.style, {
+        position: 'absolute',
+        right: '0',
+        bottom: '60px',
+        width: '360px',
+        height: '180px',
+        background: '#fff',
+        border: '1px solid #a1a1aa',
+        boxShadow: '0 10px 30px rgba(0,0,0,.18)',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        resize: 'none'
+    } as CSSStyleDeclaration);
+    vrWidget.appendChild(panel);
+
+    // Inner contents
+    const img = document.createElement('img');
+    img.id = 'vr-img';
+    Object.assign(img.style, { width: '100%', height: '100%', objectFit: 'contain' });
+    panel.appendChild(img);
+
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.id = 'vr-overlay-canvas';
+    Object.assign(overlayCanvas.style, { position:'absolute', inset:'0', opacity:'0.3', display:'none', pointerEvents:'none' });
+    panel.appendChild(overlayCanvas);
+
+    const dragOverlay = document.createElement('div');
+    dragOverlay.id = 'vr-drag-overlay';
+    dragOverlay.className = 'hidden';
+    Object.assign(dragOverlay.style, { position:'absolute', inset:'0', cursor:'grab', zIndex:'8', userSelect:'none' });
+    panel.appendChild(dragOverlay);
+
+    const flippedTag = document.createElement('div');
+    flippedTag.id = 'vr-flipped-tag';
+    flippedTag.className = 'hidden';
+    Object.assign(flippedTag.style, { position:'absolute', left:'8px', top:'8px', background:'#dc2626', color:'#fff', fontSize:'10px', fontWeight:'700', borderRadius:'4px', padding:'2px 6px' });
+    flippedTag.textContent = 'FLIPPED';
+    panel.appendChild(flippedTag);
+
+    const rotationDisplay = document.createElement('div');
+    rotationDisplay.id = 'vr-rotation-display';
+    rotationDisplay.className = 'hidden';
+    Object.assign(rotationDisplay.style, { position:'absolute', left:'50%', bottom:'8px', transform:'translateX(-50%)', background:'rgba(0,0,0,.7)', color:'#fff', fontSize:'10px', borderRadius:'4px', padding:'2px 6px', zIndex:'15', pointerEvents:'auto', cursor:'pointer' });
+    rotationDisplay.textContent = 'Rotation: 0.0°';
+    panel.appendChild(rotationDisplay);
+    // Tooltip for rotation apply action
+    const rotTooltip = document.createElement('div');
+    Object.assign(rotTooltip.style, { position:'absolute', left:'50%', bottom:'32px', transform:'translateX(-50%)', background:'rgba(0,0,0,.8)', color:'#fff', fontSize:'10px', borderRadius:'4px', padding:'3px 6px', opacity:'0', transition:'opacity .15s', pointerEvents:'none' });
+    rotTooltip.textContent = 'Click to apply as offset';
+    panel.appendChild(rotTooltip);
+
+    // Custom resize handle (bottom-left)
+    const handle = document.createElement('div');
+    handle.id = 'vr-resize-handle';
+    Object.assign(handle.style, { position:'absolute', left:'0', bottom:'0', width:'14px', height:'14px', background:'rgba(255,255,255,.6)', borderTopRightRadius:'6px', cursor:'sw-resize', zIndex:'20', pointerEvents:'auto' });
+    panel.appendChild(handle);
+
+    // Top-left resize handle + hover indicator (iPad-style)
+    const handleTL = document.createElement('div');
+    handleTL.id = 'vr-resize-handle-tl';
+    Object.assign(handleTL.style, { position:'absolute', left:'0', top:'0', width:'14px', height:'14px', background:'rgba(255,255,255,.6)', borderBottomRightRadius:'6px', cursor:'nw-resize', zIndex:'20', pointerEvents:'auto' });
+    panel.appendChild(handleTL);
+
+    const tlHoverIndicator = document.createElement('div');
+    Object.assign(tlHoverIndicator.style, {
+        position: 'absolute',
+        width: '34px',
+        height: '6px',
+        left: '-14px',
+        top: '-14px',
+        background: 'rgba(0,0,0,.18)',
+        borderRadius: '9999px',
+        transform: 'rotate(-45deg)',
+        opacity: '0',
+        transition: 'opacity .12s ease',
+        pointerEvents: 'none'
+    } as CSSStyleDeclaration);
+    panel.appendChild(tlHoverIndicator);
+
+    panel.addEventListener('mousemove', (e) => {
+        const rect = panel.getBoundingClientRect();
+        const dx = e.clientX - rect.left;
+        const dy = e.clientY - rect.top;
+        const nearTL = Math.hypot(dx, dy) < 28;
+        tlHoverIndicator.style.opacity = nearTL ? '1' : '0';
+        if (!isResizing) panel.style.cursor = nearTL ? 'nw-resize' : '';
+    });
+
+    handleTL.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        isResizing = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = panel.getBoundingClientRect();
+        startWidth = rect.width;
+        startHeight = rect.height;
+        window.addEventListener('mousemove', resizePanel);
+        window.addEventListener('mouseup', stopResize);
+    });
+
+    // Launcher toggles visibility and anchors panel
+    vrLauncher.addEventListener('click', () => {
+        const visible = vrWidget.style.display !== 'none';
+        vrWidget.style.display = visible ? 'none' : 'block';
+    });
+
+    // Drag to move the widget
+    let dragStart: { x: number; y: number; rx: number; by: number } | null = null;
+    vrLauncher.addEventListener('mousedown', (e) => {
+        dragStart = { x: e.clientX, y: e.clientY, rx: parseInt(vrWidget.style.right || '16'), by: parseInt(vrWidget.style.bottom || '16') };
+        (document.body as any).style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!dragStart) return;
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        vrWidget.style.right = Math.max(8, dragStart.rx - dx) + 'px';
+        vrWidget.style.bottom = Math.max(8, dragStart.by - dy) + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+        dragStart = null;
+        (document.body as any).style.userSelect = '';
+    });
 
     let isResizing = false;
     let startX, startY, startWidth, startHeight;
@@ -474,17 +585,20 @@ import ObjectList from "../components/object-list.tsx";
     // Wire up the navigation button
     document
         .getElementById("next-csv-point")
-        .addEventListener("click", () => navigateToNextCsvPoint().catch(console.error));
+        .addEventListener("click", () => {
+            const widget = document.getElementById('vr-widget') as HTMLDivElement;
+            if (widget) widget.style.display = 'block';
+            navigateToNextCsvPoint().catch(console.error);
+        });
 
     function resizePanel(e) {
         if (!isResizing) return;
-
-        // horizontal drag (to the left) increases width
-        const deltaX = startX - e.clientX;
+        const fromTL = (panel.style.cursor === 'nw-resize');
+        // delta width depends on which corner is dragged
+        const deltaX = fromTL ? (startX - e.clientX) : (startX - e.clientX);
         let newWidth = startWidth + deltaX;
         const minW = 150;
         if (newWidth < minW) newWidth = minW;
-
         // enforce 2:1 ratio → height = width / 2
         let newHeight = newWidth / 2;
         const minH = minW / 2;
@@ -492,7 +606,6 @@ import ObjectList from "../components/object-list.tsx";
             newHeight = minH;
             newWidth = newHeight * 2;
         }
-
         panel.style.width = `${newWidth}px`;
         panel.style.height = `${newHeight}px`;
     }
@@ -1281,6 +1394,9 @@ async function reviewVR(event) {
         
         // Set up rotation for generated view
         setVRImage(renderURL, cone.name);
+        // Ensure floating widget is visible when a cone is clicked
+        const widget = document.getElementById('vr-widget') as HTMLDivElement;
+        if (widget) widget.style.display = 'block';
         
         // Hide overlay for generated views (since we're already showing the rendered view)
         vrOverlayCanvas.style.display = 'none';
@@ -1301,6 +1417,9 @@ async function reviewVR(event) {
                 
                 // Set up rotation for equirectangular image
                 setVRImage(entry.image, entry.name);
+                // Ensure floating widget is visible when an image is loaded
+                const widget = document.getElementById('vr-widget') as HTMLDivElement;
+                if (widget) widget.style.display = 'block';
                 
                 // Prepare overlay and show it for comparison
                 await renderOverlayCanvas(cone);
@@ -1452,8 +1571,7 @@ async function renderOverlayCanvas(cone) {
     let vrLastMouseX = 0;
     let vrImageSize = { width: 0, height: 0 };
     
-    // Debounced version of drawVRRotatedImage for better performance
-    const debouncedDrawVRRotatedImage = debounce(drawVRRotatedImage, 16); // ~60fps max
+    // Draw on every mouse move for immediate response
 
     // VR Image Rotation DOM Elements
     const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
@@ -1468,6 +1586,8 @@ async function renderOverlayCanvas(cone) {
 
     function handleVRMouseDown(e) {
         if (!vrCurrentImage) return;
+        e.preventDefault();
+        (document.body as any).style.userSelect = 'none';
         
         vrIsDragging = true;
         vrLastMouseX = e.clientX;
@@ -1492,8 +1612,8 @@ async function renderOverlayCanvas(cone) {
         // Update display
         updateVRRotationDisplay();
         
-        // Redraw rotated image (debounced for better performance)
-        debouncedDrawVRRotatedImage();
+        // Redraw rotated image immediately
+        drawVRRotatedImage();
         
         vrLastMouseX = e.clientX;
     }
@@ -1501,6 +1621,7 @@ async function renderOverlayCanvas(cone) {
     function handleVRMouseUp() {
         vrIsDragging = false;
         vrDragOverlay.style.cursor = 'grab';
+        (document.body as any).style.userSelect = '';
         
         // Hide overlay when done dragging
         if (vrOverlayCanvas) {
@@ -1511,6 +1632,41 @@ async function renderOverlayCanvas(cone) {
     function updateVRRotationDisplay() {
         vrRotationDisplay.textContent = `Rotation: ${vrRotation.toFixed(1)}°`;
     }
+
+    // Make "Rotation:" clickable to apply as offset to the currently focused CSV cone
+    let rotHoverTimer: number | null = null;
+    vrRotationDisplay.addEventListener('mouseenter', () => {
+        rotHoverTimer = window.setTimeout(() => {
+            const tt = (panel.querySelector('div:nth-last-child(2)') as HTMLDivElement) || null;
+            if (tt) tt.style.opacity = '1';
+        }, 600);
+    });
+    vrRotationDisplay.addEventListener('mouseleave', () => {
+        if (rotHoverTimer) window.clearTimeout(rotHoverTimer);
+        rotHoverTimer = null;
+        const tt = (panel.querySelector('div:nth-last-child(2)') as HTMLDivElement) || null;
+        if (tt) tt.style.opacity = '0';
+    });
+    vrRotationDisplay.addEventListener('click', () => {
+        // Find current CSV point under navigation (currentCsvIndex)
+        const point = csvPoints[currentCsvIndex];
+        if (!point) return;
+        // Ensure userData.originalRotation exists
+        if (point.userData.originalRotation === undefined) {
+            point.userData.originalRotation = point.rotation.y;
+        }
+        // Apply offset in radians (vrRotation is degrees)
+        const offsetRad = THREE.MathUtils.degToRad(vrRotation);
+        point.userData.offset = (point.userData.offset || 0) + offsetRad;
+        point.rotation.y = point.userData.originalRotation + point.userData.offset;
+        point.updateMatrix();
+        // Update any outliner-linked rotation input if present
+        if (typeof point.userData.updateRotationInput === 'function') {
+            point.userData.updateRotationInput();
+        }
+        // Feedback
+        alert('notify', `Applied +${vrRotation.toFixed(1)}° to ${point.name}`);
+    });
 
     function drawVRRotatedImage() {
         if (!vrCurrentImage) return;
@@ -1707,6 +1863,8 @@ async function renderOverlayCanvas(cone) {
         // Handle arrow key navigation for CSV points
         if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
             event.preventDefault(); // Prevent default arrow key behavior
+            const widget = document.getElementById('vr-widget') as HTMLDivElement;
+            if (widget) widget.style.display = 'block';
             if (event.key === "ArrowRight") {
                 navigateToNextCsvPoint().catch(console.error);
             } else if (event.key === "ArrowLeft") {
