@@ -1830,14 +1830,21 @@ import "../styles.css";
 
 		function handleFileChange(files) {
 			console.log(files);
-			flipped = false;
-			object3dCount = 0;
-			globalFloors = [];
-			globalFloorsAggregated = [];
-			canvasFlipX = false;
-			canvasFlipY = false;
-			canvasRotate = 0;
 			const file = files[0];
+			// Determine if this is a raster image import (jpeg/png/webp)
+			const isRasterImage =
+				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp");
+
+			// Only reset global states when not importing a raster image
+			if (!isRasterImage) {
+				flipped = false;
+				object3dCount = 0;
+				globalFloors = [];
+				globalFloorsAggregated = [];
+				canvasFlipX = false;
+				canvasFlipY = false;
+				canvasRotate = 0;
+			}
 			// if(!document.getElementById("image-list-container").classList.contains("hidden")){
 			// 	document.getElementById("image-list-container").classList.add("hidden")
 			// }
@@ -1857,19 +1864,22 @@ import "../styles.css";
 			// 	return;
 			// }
 
-			updateResetButtons();
+			// Only reset UI/toggles when not importing a raster image (jpeg/png/webp)
+			if (!isRasterImage) {
+				updateResetButtons();
 
-			//Refresh show floors section
-			const floorSection = document.getElementById("show-floors");
-			floorSection.querySelectorAll("div").forEach((e) => {
-				e.remove();
-			});
-			if (!floorSection.classList.contains("hidden")) {
-				floorSection.classList.add("hidden");
-			}
+				// Refresh show floors section
+				const floorSection = document.getElementById("show-floors");
+				floorSection.querySelectorAll("div").forEach((e) => {
+					e.remove();
+				});
+				if (!floorSection.classList.contains("hidden")) {
+					floorSection.classList.add("hidden");
+				}
 
-			if (document.getElementById("showLabelsDiv")) {
-				document.getElementById("showLabelsDiv").remove();
+				if (document.getElementById("showLabelsDiv")) {
+					document.getElementById("showLabelsDiv").remove();
+				}
 			}
 			console.log(files.length)
 			if(files.length > 1){
@@ -1971,12 +1981,11 @@ import "../styles.css";
 					// img.style.borderRadius = "5px"
 					const svgContainer =
 						document.getElementById("svg-container");
-					var internalSVG = svgContainer.querySelector(
-						"svg[data-csv-editor='svg']",
-					);
+					// Use any existing SVG (including one created by CSV import). Do not clear container if found.
+					var internalSVG = svgContainer.querySelector("svg");
 
 					if (!internalSVG) {
-						svgContainer.innerHTML = "";
+						// No SVG yet; create a new one
 						const newSVG = createNewSVG();
 						svgContainer.appendChild(newSVG);
 						internalSVG = newSVG;
@@ -2551,6 +2560,14 @@ import "../styles.css";
 		});
 
 		document.addEventListener("keydown", (e) => {
+			// Guard: if focus is on an input-like element, let Backspace/Delete act normally
+			const targetEl = (e.target as HTMLElement) || null;
+			const activeEl = (document.activeElement as HTMLElement) || null;
+			const isInputLike = (el: HTMLElement | null) =>
+				!!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+			if ((e.key === "Backspace" || e.key === "Delete") && (isInputLike(targetEl) || isInputLike(activeEl))) {
+				return;
+			}
 			if (e.key == "Escape") {
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.classList.remove("svg-tool-selected");

@@ -414,6 +414,17 @@ import ObjectList from "../components/object-list.tsx";
     Object.assign(handle.style, { position:'absolute', left:'0', bottom:'0', width:'14px', height:'14px', background:'rgba(255,255,255,.6)', borderTopRightRadius:'6px', cursor:'sw-resize', zIndex:'20', pointerEvents:'auto' });
     panel.appendChild(handle);
 
+    // Helper: ensure VR widget is visible
+    function ensureVRWidgetVisible() {
+        const widget = document.getElementById('vr-widget') as HTMLDivElement | null;
+        if (widget) {
+            widget.style.display = 'block';
+        } else {
+            const launcher = document.getElementById('vr-launcher') as HTMLButtonElement | null;
+            launcher?.click();
+        }
+    }
+
     // Top-left resize handle + hover indicator (iPad-style)
     const handleTL = document.createElement('div');
     handleTL.id = 'vr-resize-handle-tl';
@@ -1878,6 +1889,7 @@ async function renderOverlayCanvas(cone) {
 
     // Function to navigate to the next CSV point
     async function navigateToNextCsvPoint() {
+        ensureVRWidgetVisible();
         if (csvPoints.length === 0) {
             updateCsvPointsList();
         }
@@ -1891,6 +1903,7 @@ async function renderOverlayCanvas(cone) {
 
     // Function to navigate to the previous CSV point
     async function navigateToPreviousCsvPoint() {
+        ensureVRWidgetVisible();
         if (csvPoints.length === 0) {
             updateCsvPointsList();
         }
