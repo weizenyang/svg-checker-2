@@ -810,10 +810,33 @@ import ObjectList from "../components/object-list.tsx";
         async findImageByName(targetName, quality = 'medium') {
             const lowerTarget = targetName.toLowerCase();
             
-            // Search through index (not cache)
+            // Search through index (not cache) with precise matching
             for (const [key, indexed] of this.imageIndex) {
-                if (key.includes(lowerTarget) || lowerTarget.includes(key.replace(/\.[^/.]+$/, ""))) {
+                const keyWithoutExt = key.replace(/\.[^/.]+$/, "");
+                const targetWithoutExt = lowerTarget.replace(/\.[^/.]+$/, "");
+                
+                // Exact match (with or without extension)
+                if (key === lowerTarget || keyWithoutExt === targetWithoutExt) {
                     return await this.getImageOnDemand(indexed.name, quality);
+                }
+                
+                // If exact match fails, try partial match but ensure word boundaries
+                // This prevents "1" from matching "10", "11", etc.
+                const keyParts = keyWithoutExt.split('_');
+                const targetParts = targetWithoutExt.split('_');
+                
+                // Check if all target parts match corresponding key parts exactly
+                if (targetParts.length <= keyParts.length) {
+                    let exactMatch = true;
+                    for (let i = 0; i < targetParts.length; i++) {
+                        if (keyParts[i] !== targetParts[i]) {
+                            exactMatch = false;
+                            break;
+                        }
+                    }
+                    if (exactMatch) {
+                        return await this.getImageOnDemand(indexed.name, quality);
+                    }
                 }
             }
             return null;
