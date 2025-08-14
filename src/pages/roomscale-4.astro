@@ -820,25 +820,34 @@ import ObjectList from "../components/object-list.tsx";
                     return await this.getImageOnDemand(indexed.name, quality);
                 }
                 
-                // If exact match fails, try partial match but ensure word boundaries
-                // This prevents "1" from matching "10", "11", etc.
+                // Check if the image filename ends with the target name
+                // This handles cases like "image_360_prefix_0_livingroom_10.jpg" matching "0_livingroom_10"
+                if (keyWithoutExt.endsWith('_' + targetWithoutExt) || keyWithoutExt.endsWith(targetWithoutExt)) {
+                    return await this.getImageOnDemand(indexed.name, quality);
+                }
+                
+                // Additional check: see if target appears as a complete segment in the key
+                // Split both by underscores and check for exact segment matches
                 const keyParts = keyWithoutExt.split('_');
                 const targetParts = targetWithoutExt.split('_');
                 
-                // Check if all target parts match corresponding key parts exactly
-                if (targetParts.length <= keyParts.length) {
-                    let exactMatch = true;
-                    for (let i = 0; i < targetParts.length; i++) {
-                        if (keyParts[i] !== targetParts[i]) {
-                            exactMatch = false;
+                // Look for a sequence in keyParts that exactly matches all targetParts
+                for (let i = 0; i <= keyParts.length - targetParts.length; i++) {
+                    let sequenceMatch = true;
+                    for (let j = 0; j < targetParts.length; j++) {
+                        if (keyParts[i + j] !== targetParts[j]) {
+                            sequenceMatch = false;
                             break;
                         }
                     }
-                    if (exactMatch) {
+                    if (sequenceMatch) {
                         return await this.getImageOnDemand(indexed.name, quality);
                     }
                 }
             }
+            
+            console.warn(`No image found for target: ${targetName}`);
+            console.log('Available images:', Array.from(this.imageIndex.keys()).slice(0, 10), '...');
             return null;
         }
 
