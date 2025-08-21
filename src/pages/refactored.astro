@@ -2370,7 +2370,7 @@ import "../styles.css";
 			} else {
 				label.textContent = "Custom Matching (Text replacement + substring)";
 			}
-			console.log("Matching mode changed to:", useDefaultMatching ? "Default" : "Custom");
+
 		});
 		
 		document.getElementById("check-floorplans-button").addEventListener("change", (e) => {
@@ -2508,13 +2508,9 @@ import "../styles.css";
 						const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
 						const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
 						
-						console.log("DEFAULT MATCHING - Path ID:", e.target.id, "-> Final 3 elements:", pathFinalThreeElements, "-> Normalized:", pathNormalized);
-						
 						selectedImage = imageList.filter((image) => {
 							// Normalize the entire image name
 							const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
-							console.log("Image:", image.name, "-> Normalized:", imageNormalized);
-							console.log("Comparing:", pathNormalized, "with", imageNormalized);
 							
 							// Check if normalized path appears in normalized image name
 							return imageNormalized.includes(pathNormalized);
@@ -2522,7 +2518,6 @@ import "../styles.css";
 						
 						// FALLBACK: Use custom logic if default matching fails
 						if (!selectedImage) {
-							console.log("Default matching failed, trying custom matching as fallback");
 							selectedImage = imageList.filter((image) => {
 								return image.name
 									.split("_")
@@ -2541,15 +2536,6 @@ import "../styles.css";
 						}
 					} else {
 						// CUSTOM MATCHING LOGIC (Original "To Remove" logic):
-						console.log("CUSTOM MATCHING - Using text replacement + substring matching");
-						console.log("Text replacement:", textReplacement);
-						console.log("Processed path ID:", e.target.id
-									.split("_")
-									.join("")
-									.split("-")
-									.join("")
-									.replace(textReplacement, ""));
-						
 						selectedImage = imageList.filter((image) => {
 							return image.name
 								.split("_")
@@ -2566,8 +2552,6 @@ import "../styles.css";
 								);
 						})[0];
 					}
-
-					console.log(selectedImage)
 
 					if (selectedImage) {
 						// console.log(selectedImage)
