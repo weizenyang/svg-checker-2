@@ -422,6 +422,17 @@ import "../styles.css";
 
 		<section class="container editor grid">
 			<div id="image-list-container" class="hidden flex-col">
+				<div class="flex items-center mb-2 p-2 bg-neutral-50 rounded-sm">
+					<input
+						type="checkbox"
+						id="matching-mode-toggle"
+						class="mr-2"
+						checked
+					/>
+					<label for="matching-mode-toggle" class="text-sm cursor-pointer">
+						<span id="matching-mode-label">Default Matching (Final element ↔ 4th element)</span>
+					</label>
+				</div>
 				<input
 					type="text"
 					placeholder="To Remove"
@@ -2348,6 +2359,20 @@ import "../styles.css";
 		}
 
 		const imageList = [];
+		let useDefaultMatching = true; // Default matching mode enabled by default
+		
+		// Toggle for matching mode
+		document.getElementById("matching-mode-toggle").addEventListener("change", (e) => {
+			useDefaultMatching = e.target.checked;
+			const label = document.getElementById("matching-mode-label");
+			if (useDefaultMatching) {
+				label.textContent = "Default Matching (Final element ↔ 4th element)";
+			} else {
+				label.textContent = "Custom Matching (Text replacement + substring)";
+			}
+			console.log("Matching mode changed to:", useDefaultMatching ? "Default" : "Custom");
+		});
+		
 		document.getElementById("check-floorplans-button").addEventListener("change", (e) => {
 			console.log("Change") 
 			uploadImages(e)
@@ -2470,28 +2495,78 @@ import "../styles.css";
 						"image-previewer-container",
 					).style.display = "block";
 					const textReplacement = document.getElementById("text-replacement").value;
-					console.log(textReplacement);
-					console.log(e.target.id
-								.split("_")
-								.join("")
-								.split("-")
-								.join("")
-								.replace(textReplacement, ""),);
-					const selectedImage = imageList.filter((image) => {
-						return image.name
-							.split("_")
-							.join("")
-							.split("-")
-							.join("")
-							.includes(
-								e.target.id
+					
+					let selectedImage;
+					
+					if (useDefaultMatching) {
+						// DEFAULT MATCHING LOGIC:
+						// Extract final element from Path ID (separated by _)
+						// Match to 4th element of image name (separated by _)
+						// Remove all separators (space, -, _) during matching
+						
+						const pathIdParts = e.target.id.split("_");
+						const pathFinalElement = pathIdParts[pathIdParts.length - 1];
+						const pathNormalized = pathFinalElement.replace(/[\s\-_]/g, "").toLowerCase();
+						
+						console.log("DEFAULT MATCHING - Path ID:", e.target.id, "-> Final element:", pathFinalElement, "-> Normalized:", pathNormalized);
+						
+						selectedImage = imageList.filter((image) => {
+							const imageNameParts = image.name.split("_");
+							if (imageNameParts.length >= 4) {
+								const imageFourthElement = imageNameParts[3]; // 4th element (0-indexed)
+								const imageNormalized = imageFourthElement.replace(/[\s\-_]/g, "").toLowerCase();
+								console.log("Image:", image.name, "-> 4th element:", imageFourthElement, "-> Normalized:", imageNormalized);
+								return imageNormalized === pathNormalized;
+							}
+							return false;
+						})[0];
+						
+						// FALLBACK: Use custom logic if default matching fails
+						if (!selectedImage) {
+							console.log("Default matching failed, trying custom matching as fallback");
+							selectedImage = imageList.filter((image) => {
+								return image.name
 									.split("_")
 									.join("")
 									.split("-")
 									.join("")
-									.replace(textReplacement, ""),
-							);
-					})[0];
+									.includes(
+										e.target.id
+											.split("_")
+											.join("")
+											.split("-")
+											.join("")
+											.replace(textReplacement, ""),
+									);
+							})[0];
+						}
+					} else {
+						// CUSTOM MATCHING LOGIC (Original "To Remove" logic):
+						console.log("CUSTOM MATCHING - Using text replacement + substring matching");
+						console.log("Text replacement:", textReplacement);
+						console.log("Processed path ID:", e.target.id
+									.split("_")
+									.join("")
+									.split("-")
+									.join("")
+									.replace(textReplacement, ""));
+						
+						selectedImage = imageList.filter((image) => {
+							return image.name
+								.split("_")
+								.join("")
+								.split("-")
+								.join("")
+								.includes(
+									e.target.id
+										.split("_")
+										.join("")
+										.split("-")
+										.join("")
+										.replace(textReplacement, ""),
+								);
+						})[0];
+					}
 
 					console.log(selectedImage)
 
