@@ -1795,14 +1795,30 @@ import "../styles.css";
 					console.log("Image File")
 					console.log(imageFile.name)
 					const imageBaseName = getBaseName(imageFile.name);
-					console.log(getBaseName(imageFile.name))
+					// Extract last 2 segments from image name
+					// Example: "backplate_image_tower-floorplate_b1_01.webp" -> "b1_01"
+					const imageNameParts = imageBaseName.split("_");
+					const imageLastTwoSegments = imageNameParts.length >= 2 
+						? imageNameParts.slice(-2).join("_")
+						: imageBaseName;
+					
+					console.log("Image name:", imageFile.name, "-> last 2 segments:", imageLastTwoSegments)
 					console.log(importedSVGs)
 					// Loop through the imported SVG objects to find a matching name
 					importedSVGs.forEach((svgObj) => {
 						console.log("SVGOBJ")
 						console.log(svgObj)
 						const svgBaseName = getBaseName(svgObj.name);
-						if (svgBaseName === imageBaseName) {
+						// Extract last 2 segments from SVG name
+						// Example: "fahidbeachresidencesii_b1_01.svg" -> "b1_01"
+						const svgNameParts = svgBaseName.split("_");
+						const svgLastTwoSegments = svgNameParts.length >= 2 
+							? svgNameParts.slice(-2).join("_")
+							: svgBaseName;
+						
+						console.log("SVG name:", svgObj.name, "-> last 2 segments:", svgLastTwoSegments);
+						
+						if (svgLastTwoSegments === imageLastTwoSegments) {
 							console.log(svgBaseName)
 							console.log(imageBaseName)
 							const svgElement = svgObj.element;
@@ -2454,27 +2470,27 @@ import "../styles.css";
 						"image-previewer-container",
 					).style.display = "block";
 					const textReplacement = document.getElementById("text-replacement").value;
-					
-					// Extract last 2 segments from path ID
-					const pathIdParts = e.target.id.split("_");
-					const pathLastTwoSegments = pathIdParts.length >= 2 
-						? pathIdParts.slice(-2).join("_")
-						: e.target.id;
-					
-					console.log("Path ID:", e.target.id);
-					console.log("Path last 2 segments:", pathLastTwoSegments);
-					
+					console.log(textReplacement);
+					console.log(e.target.id
+								.split("_")
+								.join("")
+								.split("-")
+								.join("")
+								.replace(textReplacement, ""),);
 					const selectedImage = imageList.filter((image) => {
-						// Extract last 2 segments from image name
-						const imageNameParts = image.name.replace(/\.[^/.]+$/, "").split("_");
-						const imageLastTwoSegments = imageNameParts.length >= 2 
-							? imageNameParts.slice(-2).join("_")
-							: image.name.replace(/\.[^/.]+$/, "");
-						
-						console.log("Image name:", image.name, "-> last 2 segments:", imageLastTwoSegments);
-						
-						// Compare the last 2 segments
-						return imageLastTwoSegments === pathLastTwoSegments;
+						return image.name
+							.split("_")
+							.join("")
+							.split("-")
+							.join("")
+							.includes(
+								e.target.id
+									.split("_")
+									.join("")
+									.split("-")
+									.join("")
+									.replace(textReplacement, ""),
+							);
 					})[0];
 
 					console.log(selectedImage)
