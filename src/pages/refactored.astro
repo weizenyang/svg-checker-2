@@ -430,7 +430,7 @@ import "../styles.css";
 						checked
 					/>
 					<label for="matching-mode-toggle" class="text-sm cursor-pointer">
-						<span id="matching-mode-label">Default Matching (Final element ↔ 4th element)</span>
+						<span id="matching-mode-label">Default Matching (Final 3 elements in image name)</span>
 					</label>
 				</div>
 				<input
@@ -2366,7 +2366,7 @@ import "../styles.css";
 			useDefaultMatching = e.target.checked;
 			const label = document.getElementById("matching-mode-label");
 			if (useDefaultMatching) {
-				label.textContent = "Default Matching (Final element ↔ 4th element)";
+				label.textContent = "Default Matching (Final 3 elements in image name)";
 			} else {
 				label.textContent = "Custom Matching (Text replacement + substring)";
 			}
@@ -2500,25 +2500,24 @@ import "../styles.css";
 					
 					if (useDefaultMatching) {
 						// DEFAULT MATCHING LOGIC:
-						// Extract final element from Path ID (separated by _)
+						// Extract final 3 elements from Path ID (separated by _)
 						// Match to 4th element of image name (separated by _)
 						// Remove all separators (space, -, _) during matching
 						
 						const pathIdParts = e.target.id.split("_");
-						const pathFinalElement = pathIdParts[pathIdParts.length - 1];
-						const pathNormalized = pathFinalElement.replace(/[\s\-_]/g, "").toLowerCase();
+						const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
+						const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
 						
-						console.log("DEFAULT MATCHING - Path ID:", e.target.id, "-> Final element:", pathFinalElement, "-> Normalized:", pathNormalized);
+						console.log("DEFAULT MATCHING - Path ID:", e.target.id, "-> Final 3 elements:", pathFinalThreeElements, "-> Normalized:", pathNormalized);
 						
 						selectedImage = imageList.filter((image) => {
-							const imageNameParts = image.name.split("_");
-							if (imageNameParts.length >= 4) {
-								const imageFourthElement = imageNameParts[3]; // 4th element (0-indexed)
-								const imageNormalized = imageFourthElement.replace(/[\s\-_]/g, "").toLowerCase();
-								console.log("Image:", image.name, "-> 4th element:", imageFourthElement, "-> Normalized:", imageNormalized);
-								return imageNormalized === pathNormalized;
-							}
-							return false;
+							// Normalize the entire image name
+							const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
+							console.log("Image:", image.name, "-> Normalized:", imageNormalized);
+							console.log("Comparing:", pathNormalized, "with", imageNormalized);
+							
+							// Check if normalized path appears in normalized image name
+							return imageNormalized.includes(pathNormalized);
 						})[0];
 						
 						// FALLBACK: Use custom logic if default matching fails
