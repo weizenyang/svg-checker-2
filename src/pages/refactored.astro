@@ -1806,6 +1806,21 @@ import "../styles.css";
 							console.log(svgBaseName)
 							console.log(imageBaseName)
 							const svgElement = svgObj.element;
+							
+							// Remove any existing background images before adding new one
+							const existingImages = svgElement.querySelectorAll("image");
+							existingImages.forEach(img => {
+								// Only remove images that appear to be background images (full size)
+								const imgWidth = img.getAttribute("width");
+								const imgHeight = img.getAttribute("height");
+								const viewBox = svgElement.getAttribute("viewBox").split(" ");
+								
+								if (imgWidth === viewBox[2] && imgHeight === viewBox[3]) {
+									img.remove();
+									console.log("Removed existing background image from SVG");
+								}
+							});
+							
 							// Create an <image> element for the SVG
 							const svgImage = document.createElementNS(
 								"http://www.w3.org/2000/svg",
@@ -1820,6 +1835,7 @@ import "../styles.css";
 							svgImage.setAttributeNS(null, "width", viewBox[2]);
 							svgImage.setAttributeNS(null, "height", viewBox[3]);
 							// Insert the image as the first child (or adjust position as needed)
+							console.log("Adding new background image to SVG");
 							svgElement.insertBefore(svgImage, svgElement.firstChild);
 						}
 					});
@@ -1991,6 +2007,20 @@ import "../styles.css";
 						internalSVG = newSVG;
 					}
 
+					// Remove any existing background images before adding new one
+					const existingImages = internalSVG.querySelectorAll("image");
+					existingImages.forEach(img => {
+						// Only remove images that appear to be background images (full size)
+						const imgWidth = img.getAttribute("width");
+						const imgHeight = img.getAttribute("height");
+						const svgViewbox = internalSVG.getAttribute("viewBox").split(" ");
+						
+						if (imgWidth === svgViewbox[2] && imgHeight === svgViewbox[3]) {
+							img.remove();
+							console.log("Removed existing background image");
+						}
+					});
+
 					const svgImage = document.createElementNS(
 						"http://www.w3.org/2000/svg",
 						"image",
@@ -2004,6 +2034,7 @@ import "../styles.css";
 					svgImage.setAttributeNS(null, "width", svgViewbox[2]);
 					svgImage.setAttributeNS(null, "height", svgViewbox[3]);
 
+					console.log("Adding new background image");
 					internalSVG.insertBefore(svgImage, internalSVG.firstChild);
 				};
 				reader.readAsDataURL(file);
@@ -2423,27 +2454,27 @@ import "../styles.css";
 						"image-previewer-container",
 					).style.display = "block";
 					const textReplacement = document.getElementById("text-replacement").value;
-					console.log(textReplacement);
-					console.log(e.target.id
-								.split("_")
-								.join("")
-								.split("-")
-								.join("")
-								.replace(textReplacement, ""),);
+					
+					// Extract last 2 segments from path ID
+					const pathIdParts = e.target.id.split("_");
+					const pathLastTwoSegments = pathIdParts.length >= 2 
+						? pathIdParts.slice(-2).join("_")
+						: e.target.id;
+					
+					console.log("Path ID:", e.target.id);
+					console.log("Path last 2 segments:", pathLastTwoSegments);
+					
 					const selectedImage = imageList.filter((image) => {
-						return image.name
-							.split("_")
-							.join("")
-							.split("-")
-							.join("")
-							.includes(
-								e.target.id
-									.split("_")
-									.join("")
-									.split("-")
-									.join("")
-									.replace(textReplacement, ""),
-							);
+						// Extract last 2 segments from image name
+						const imageNameParts = image.name.replace(/\.[^/.]+$/, "").split("_");
+						const imageLastTwoSegments = imageNameParts.length >= 2 
+							? imageNameParts.slice(-2).join("_")
+							: image.name.replace(/\.[^/.]+$/, "");
+						
+						console.log("Image name:", image.name, "-> last 2 segments:", imageLastTwoSegments);
+						
+						// Compare the last 2 segments
+						return imageLastTwoSegments === pathLastTwoSegments;
 					})[0];
 
 					console.log(selectedImage)
