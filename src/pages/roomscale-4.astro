@@ -1409,6 +1409,15 @@ async function reviewVR(event) {
     const flippedTag = document.getElementById("vr-flipped-tag") as HTMLDivElement;
     const targetName = cone.name.toLowerCase();
 
+    // Update currentCsvIndex to match the clicked cone
+    const coneIndex = csvPoints.findIndex(point => point === cone);
+    if (coneIndex !== -1) {
+        currentCsvIndex = coneIndex;
+        console.log(`Updated currentCsvIndex to ${currentCsvIndex} for cone: ${cone.name}`);
+        // Update the Next Point button text to reflect the current index
+        updateNavigationDisplay();
+    }
+
     // Helper function to apply flipping based on image name
     function applyImageFlipping(imageName) {
         const shouldFlip = imageName.toLowerCase().includes("bf");
@@ -1692,6 +1701,7 @@ async function renderOverlayCanvas(cone) {
     vrRotationDisplay.addEventListener('click', () => {
         // Find current CSV point under navigation (currentCsvIndex)
         const point = csvPoints[currentCsvIndex];
+        console.log(currentCsvIndex);
         if (!point) return;
         // Ensure userData.originalRotation exists
         if (point.userData.originalRotation === undefined) {
