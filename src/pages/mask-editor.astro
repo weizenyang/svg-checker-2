@@ -978,12 +978,12 @@ import "../styles.css";
 			let newWidth = currentWidth;
 			let newHeight = currentHeight;
 			
-			// Check if Ctrl key is pressed for center-based resizing
-			const isCtrlPressed = e.ctrlKey || e.metaKey;
+			// Check if Shift key is pressed for center-based resizing
+			const isShiftPressed = e.shiftKey;
 			
-			if (isCtrlPressed) {
+			if (isShiftPressed) {
 				// Center-based resizing: resize from center by moving both opposite edges/corners
-				console.log('Ctrl+resize: resizing from center');
+				console.log('Shift+resize: resizing from center');
 				
 				// Calculate center point
 				const centerX = currentX + currentWidth / 2;
@@ -1455,6 +1455,9 @@ import "../styles.css";
 			rect.style.userSelect = 'none';
 			rect.style.webkitUserSelect = 'none';
 			rect.style.webkitUserDrag = 'none';
+			
+			// Set opacity to 80% for transparency
+			rect.style.opacity = '0.8';
 			rect.style.webkitTouchCallout = 'none';
 			
 			// Prevent context menu
