@@ -978,45 +978,103 @@ import "../styles.css";
 			let newWidth = currentWidth;
 			let newHeight = currentHeight;
 			
-			// Handle different resize directions
-			switch (resizeHandle) {
-				// Corner handles
-				case 'nw':
-					newX = currentX + scaledDeltaX;
-					newY = currentY + scaledDeltaY;
-					newWidth = currentWidth - scaledDeltaX;
-					newHeight = currentHeight - scaledDeltaY;
-					break;
-				case 'ne':
-					newY = currentY + scaledDeltaY;
-					newWidth = currentWidth + scaledDeltaX;
-					newHeight = currentHeight - scaledDeltaY;
-					break;
-				case 'sw':
-					newX = currentX + scaledDeltaX;
-					newWidth = currentWidth - scaledDeltaX;
-					newHeight = currentHeight + scaledDeltaY;
-					break;
-				case 'se':
-					newWidth = currentWidth + scaledDeltaX;
-					newHeight = currentHeight + scaledDeltaY;
-					break;
+			// Check if Ctrl key is pressed for center-based resizing
+			const isCtrlPressed = e.ctrlKey || e.metaKey;
+			
+			if (isCtrlPressed) {
+				// Center-based resizing: resize from center by moving both opposite edges/corners
+				console.log('Ctrl+resize: resizing from center');
 				
-				// Edge handles
-				case 'n': // Top edge
-					newY = currentY + scaledDeltaY;
-					newHeight = currentHeight - scaledDeltaY;
-					break;
-				case 'e': // Right edge
-					newWidth = currentWidth + scaledDeltaX;
-					break;
-				case 's': // Bottom edge
-					newHeight = currentHeight + scaledDeltaY;
-					break;
-				case 'w': // Left edge
-					newX = currentX + scaledDeltaX;
-					newWidth = currentWidth - scaledDeltaX;
-					break;
+				// Calculate center point
+				const centerX = currentX + currentWidth / 2;
+				const centerY = currentY + currentHeight / 2;
+				
+				switch (resizeHandle) {
+					// Corner handles - resize both dimensions from center
+					case 'nw':
+						newWidth = currentWidth - (scaledDeltaX * 2);
+						newHeight = currentHeight - (scaledDeltaY * 2);
+						newX = centerX - newWidth / 2;
+						newY = centerY - newHeight / 2;
+						break;
+					case 'ne':
+						newWidth = currentWidth + (scaledDeltaX * 2);
+						newHeight = currentHeight - (scaledDeltaY * 2);
+						newX = centerX - newWidth / 2;
+						newY = centerY - newHeight / 2;
+						break;
+					case 'sw':
+						newWidth = currentWidth - (scaledDeltaX * 2);
+						newHeight = currentHeight + (scaledDeltaY * 2);
+						newX = centerX - newWidth / 2;
+						newY = centerY - newHeight / 2;
+						break;
+					case 'se':
+						newWidth = currentWidth + (scaledDeltaX * 2);
+						newHeight = currentHeight + (scaledDeltaY * 2);
+						newX = centerX - newWidth / 2;
+						newY = centerY - newHeight / 2;
+						break;
+					
+					// Edge handles - resize only one dimension from center
+					case 'n': // Top edge - resize height from center
+						newHeight = currentHeight - (scaledDeltaY * 2);
+						newY = centerY - newHeight / 2;
+						break;
+					case 'e': // Right edge - resize width from center
+						newWidth = currentWidth + (scaledDeltaX * 2);
+						newX = centerX - newWidth / 2;
+						break;
+					case 's': // Bottom edge - resize height from center
+						newHeight = currentHeight + (scaledDeltaY * 2);
+						newY = centerY - newHeight / 2;
+						break;
+					case 'w': // Left edge - resize width from center
+						newWidth = currentWidth - (scaledDeltaX * 2);
+						newX = centerX - newWidth / 2;
+						break;
+				}
+			} else {
+				// Normal resizing: resize from the selected edge/corner
+				switch (resizeHandle) {
+					// Corner handles
+					case 'nw':
+						newX = currentX + scaledDeltaX;
+						newY = currentY + scaledDeltaY;
+						newWidth = currentWidth - scaledDeltaX;
+						newHeight = currentHeight - scaledDeltaY;
+						break;
+					case 'ne':
+						newY = currentY + scaledDeltaY;
+						newWidth = currentWidth + scaledDeltaX;
+						newHeight = currentHeight - scaledDeltaY;
+						break;
+					case 'sw':
+						newX = currentX + scaledDeltaX;
+						newWidth = currentWidth - scaledDeltaX;
+						newHeight = currentHeight + scaledDeltaY;
+						break;
+					case 'se':
+						newWidth = currentWidth + scaledDeltaX;
+						newHeight = currentHeight + scaledDeltaY;
+						break;
+					
+					// Edge handles
+					case 'n': // Top edge
+						newY = currentY + scaledDeltaY;
+						newHeight = currentHeight - scaledDeltaY;
+						break;
+					case 'e': // Right edge
+						newWidth = currentWidth + scaledDeltaX;
+						break;
+					case 's': // Bottom edge
+						newHeight = currentHeight + scaledDeltaY;
+						break;
+					case 'w': // Left edge
+						newX = currentX + scaledDeltaX;
+						newWidth = currentWidth - scaledDeltaX;
+						break;
+				}
 			}
 			
 			// Prevent negative dimensions
