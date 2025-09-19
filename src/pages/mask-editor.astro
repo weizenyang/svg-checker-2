@@ -1851,8 +1851,8 @@ import "../styles.css";
 			const attributes = {};
 			for (let i = 0; i < rect.attributes.length; i++) {
 				const attr = rect.attributes[i];
-				if (typeof attr.value === 'number') {
-					attributes[attr.name] = attr.value.toFixed(2);
+				if (parseFloat(attr.value) != NaN) {
+					attributes[attr.name] = parseFloat(attr.value).toFixed(2);
 				} else {
 					attributes[attr.name] = attr.value;
 				}
