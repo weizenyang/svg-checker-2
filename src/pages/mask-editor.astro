@@ -1456,8 +1456,8 @@ import "../styles.css";
 			rect.style.webkitUserSelect = 'none';
 			rect.style.webkitUserDrag = 'none';
 			
-			// Set opacity to 80% for transparency
-			rect.style.opacity = '0.8';
+			// Set opacity to 80% for transparency using SVG attribute
+			rect.setAttribute('opacity', '0.8');
 			rect.style.webkitTouchCallout = 'none';
 			
 			// Prevent context menu
