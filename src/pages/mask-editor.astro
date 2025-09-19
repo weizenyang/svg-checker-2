@@ -1,0 +1,1894 @@
+---
+import "../styles.css";
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Image and SVG Viewer</title>
+		<style>
+			.rect-selected {
+				stroke: #007bff !important;
+				stroke-width: 2 !important;
+				stroke-dasharray: 5,5 !important;
+			}
+			
+			.transform-handle {
+				fill: white !important;
+				stroke: #666 !important;
+				stroke-width: 2 !important;
+				cursor: pointer;
+				opacity: 0.9;
+			}
+			
+			.transform-handle:hover {
+				opacity: 1;
+				fill: #f8f8f8 !important;
+				stroke: #333 !important;
+			}
+			
+			.transform-handle.nw-resize { cursor: nw-resize; }
+			.transform-handle.ne-resize { cursor: ne-resize; }
+			.transform-handle.sw-resize { cursor: sw-resize; }
+			.transform-handle.se-resize { cursor: se-resize; }
+			
+			.transform-group {
+				pointer-events: none;
+			}
+			
+			.transform-handle {
+				pointer-events: all;
+			}
+			
+			/* Prevent SVG dragging and selection - AGGRESSIVE */
+			svg {
+				-webkit-user-select: none !important;
+				-moz-user-select: none !important;
+				-ms-user-select: none !important;
+				user-select: none !important;
+				-webkit-user-drag: none !important;
+				-khtml-user-drag: none !important;
+				-moz-user-drag: none !important;
+				-o-user-drag: none !important;
+				user-drag: none !important;
+				-webkit-touch-callout: none !important;
+				-webkit-tap-highlight-color: transparent !important;
+				pointer-events: auto !important;
+			}
+			
+			svg * {
+				-webkit-user-select: none !important;
+				-moz-user-select: none !important;
+				-ms-user-select: none !important;
+				user-select: none !important;
+				-webkit-user-drag: none !important;
+				-khtml-user-drag: none !important;
+				-moz-user-drag: none !important;
+				-o-user-drag: none !important;
+				user-drag: none !important;
+				-webkit-touch-callout: none !important;
+			}
+			
+			/* Specifically target rect elements */
+			rect {
+				-webkit-user-drag: none !important;
+				user-drag: none !important;
+				-webkit-user-select: none !important;
+				user-select: none !important;
+			}
+			
+			/* Toolset section styling */
+			.toolsets {
+				position: relative;
+				z-index: 1000 !important; /* Above the viewer */
+			}
+			
+			.toolset-section {
+				background: transparent !important;
+				pointer-events: none; /* Make the container transparent to interactions */
+			}
+			
+			.toolset-section > * {
+				pointer-events: auto; /* But allow interactions with the modules inside */
+			}
+			
+			/* Ensure container sections have proper styling */
+			.container {
+				background: rgba(255, 255, 255, 0.95) !important;
+				backdrop-filter: blur(8px);
+				border: 1px solid rgba(0, 0, 0, 0.1);
+				border-radius: 6px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+			}
+			
+			/* Canvas background styling */
+			#scalable-canvas {
+				background-color: #808080; /* Grey background */
+			}
+			
+		#svg-container {
+			background-color: #808080; /* Grey background */
+		}
+		
+		/* Snap guides styling */
+		.snap-guide {
+			stroke: #ff0066 !important;
+			stroke-width: 2 !important;
+			stroke-dasharray: 5,5 !important;
+			fill: none !important;
+			pointer-events: none !important;
+			opacity: 0.9 !important;
+			z-index: 1000;
+		}
+		</style>
+	</head>
+	<body class="">
+		<div class="drag-drop-prompt">
+			<div class="animated-border">
+				<h1>Drag and Drop Images or SVG Files Here</h1>
+			</div>
+		</div>
+		
+		<main class="toolsets" style="display: flex">
+			<div class="toolset-section">
+				<a
+					href="/"
+					class="flex w-fit border-2 pl-2 pr-2 p-1 mb-2 text-center rounded-md content-center hover:bg-neutral-100"
+				>
+					<div class="align-center content-center">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="size-5"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
+							></path>
+						</svg>
+					</div>
+					<p class="ml-2">Home</p>
+				</a>
+
+				<section class="container">
+					<label for="myFile" class="button-style">
+						Import Files
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path
+								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+								stroke-width="2"></path>
+							<polyline points="17 8 12 3 7 8" stroke-width="2"></polyline>
+							<line
+								x1="12"
+								x2="12"
+								y1="3"
+								y2="15"
+								stroke-width="2"></line>
+						</svg>
+					</label>
+					<input
+						type="file"
+						class="input-style"
+						id="myFile"
+						name="filename"
+						accept="image/*,.svg"
+						multiple
+						style="display:none;"
+					/>
+				</section>
+
+				<!-- Properties Panel -->
+				<section class="container" id="properties-panel">
+					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Properties</h3>
+					<div id="properties-content" style="font-size: 12px;">
+						<p style="color: #666; margin: 10px 0;">Select a rect to view properties</p>
+						</div>
+				</section>
+
+				<!-- Tools Section -->
+				<section class="container">
+					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Tools</h3>
+							<button
+						id="add-rect-btn"
+						style="width: 100%; padding: 6px 8px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; margin-bottom: 8px;"
+					>
+						Add Rectangle (Ctrl+L)
+					</button>
+				</section>
+
+				<!-- Export Section -->
+				<section class="container">
+					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Export</h3>
+					<input
+						type="text"
+						placeholder="filename"
+						id="export-filename"
+						style="width: 100%; margin-bottom: 8px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;"
+						value="exported-svg"
+					/>
+					<button
+						id="export-svg-btn"
+						style="width: 100%; padding: 6px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;"
+					>
+						Export SVG
+					</button>
+				</section>
+
+				<!-- Instructions -->
+				<section class="container">
+					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Instructions</h3>
+					<div style="font-size: 11px; color: #666; line-height: 1.4;">
+						<p>• Click a rect to select it</p>
+						<p>• Drag to move selected rect</p>
+						<p><strong>• Ctrl+drag to snap to edges</strong></p>
+						<p>• Drag corner handles to resize</p>
+						<p>• Press Delete/Backspace to delete</p>
+						<p>• Ctrl+C/V to copy/paste rects</p>
+						<p>• Alt+drag to duplicate rects</p>
+					</div>
+				</section>
+			</div>
+		</main>
+
+		<section class="container editor grid">
+			<div
+				id="editor-button-container"
+				style="display: flex; flex-direction: row; justify-content: space-between;"
+			>
+				<h3>Viewer</h3>
+			</div>
+			<div
+				class="aspect-square max-h-[91vh] max-w-[91vh]"
+				id="scalable-canvas"
+			>
+				<div class="output" id="svg-container">
+					<p
+						style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
+					>
+						Import image or SVG file
+					</p>
+				</div>
+			</div>
+		</section>
+
+	</body>
+
+	<script>
+		// Global variables
+		var globalSvgContainer = document.getElementById("svg-container");
+		var importedSVGs = [];
+		var currentSVGIndex = 0;
+		var selectedRect = null;
+		var isDragging = false;
+		var isResizing = false;
+		var dragStartX = 0;
+		var dragStartY = 0;
+		var resizeHandle = null;
+		var currentFileName = "exported-svg"; // Store current file name
+		var copiedRect = null; // Store copied rect data
+		var isAddRectMode = false; // Add rectangle mode
+		var isDrawingRect = false; // Currently drawing a new rect
+		var snapThreshold = 10; // Snap threshold in SVG units
+		var snapGuides = []; // Store snap guide elements
+		var isDuplicating = false; // Duplication drag mode
+		var originalRect = null; // Original rect being duplicated
+		var duplicatedRect = null; // The duplicated rect
+
+		// Create new SVG element
+		var createNewSVG = () => {
+			const newSVG = document.createElementNS(
+				"http://www.w3.org/2000/svg",
+				"svg",
+			);
+			newSVG.style.width = "100%";
+			newSVG.style.height = "100%";
+			newSVG.setAttribute("viewBox", "0 0 4096 4096");
+			newSVG.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+			return newSVG;
+		};
+
+		// Basic zoom and pan functionality
+		const scalableCanvas = document.getElementById("scalable-canvas");
+		const svgContainer = document.getElementById("svg-container");
+
+		let isPanning = false;
+		let startX, startY;
+		let translateX = 0, translateY = 0;
+		let scale = 1;
+
+		// Handle zooming with the mouse wheel
+		scalableCanvas.addEventListener("wheel", (e) => {
+			e.preventDefault();
+			scale -= e.deltaY / 1000;
+			scale = Math.max(1.0, Math.min(scale, 10)); // Minimum scale of 1.0 (100%)
+			
+			if (scale > 1.2) {
+				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+			} else {
+				translateX = 0;
+				translateY = 0;
+				svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+			}
+		});
+
+		// Handle panning
+		scalableCanvas.addEventListener("mousedown", (e) => {
+			// Don't start panning if we're interacting with a rect or handle
+			const target = e.target as HTMLElement;
+			if (isDragging || isResizing || isDuplicating || target.tagName === 'rect' || target.classList?.contains('transform-handle')) {
+				return;
+			}
+			
+			isPanning = true;
+			startX = e.clientX - translateX;
+			startY = e.clientY - translateY;
+			scalableCanvas.style.cursor = "grabbing";
+		});
+
+		scalableCanvas.addEventListener("mousemove", (e) => {
+			if (!isPanning || isDragging || isResizing || isDuplicating) return;
+			translateX = e.clientX - startX;
+			translateY = e.clientY - startY;
+			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
+		});
+
+		scalableCanvas.addEventListener("mouseup", () => {
+			isPanning = false;
+			scalableCanvas.style.cursor = "default";
+		});
+
+		scalableCanvas.addEventListener("mouseleave", () => {
+			isPanning = false;
+		});
+
+		// File handling functionality
+		function handleFileChange(files) {
+			if (!files || files.length === 0) return;
+			
+			// Separate SVG files and image files
+			const svgFiles = [];
+			const imageFiles = [];
+			
+			Array.from(files).forEach(file => {
+				if (file instanceof File && file.type === "image/svg+xml") {
+					svgFiles.push(file);
+				} else if (file instanceof File && file.type.startsWith("image/")) {
+					imageFiles.push(file);
+				}
+			});
+			
+			// If we have SVG files, handle them first
+			if (svgFiles.length > 0) {
+				// Clear previous SVG content
+				globalSvgContainer.innerHTML = "";
+				importedSVGs = [];
+				currentSVGIndex = 0;
+
+				// Remove existing navigation
+				const existingNav = document.getElementById("svg-nav");
+				if (existingNav) existingNav.remove();
+
+				svgFiles.forEach((file, index) => {
+					handleSVGFile(file, index);
+				});
+			}
+			
+			// Handle image files as background (use the first one if multiple)
+			if (imageFiles.length > 0) {
+				handleImageFile(imageFiles[0]); // Use first image as background
+				if (imageFiles.length > 1) {
+					console.log(`Multiple images detected. Using "${imageFiles[0].name}" as background. Other images ignored.`);
+				}
+			}
+		}
+
+		function handleImageFile(file) {
+			const reader = new FileReader();
+			reader.onload = (event) => {
+				// Create background image container
+				let backgroundContainer = document.getElementById('background-image-container');
+				if (!backgroundContainer) {
+					backgroundContainer = document.createElement('div');
+					backgroundContainer.id = 'background-image-container';
+					backgroundContainer.style.position = 'absolute';
+					backgroundContainer.style.top = '0';
+					backgroundContainer.style.left = '0';
+					backgroundContainer.style.width = '100%';
+					backgroundContainer.style.height = '100%';
+					backgroundContainer.style.display = 'flex';
+					backgroundContainer.style.alignItems = 'center';
+					backgroundContainer.style.justifyContent = 'center';
+					backgroundContainer.style.zIndex = '-1'; // Behind SVG
+					backgroundContainer.style.pointerEvents = 'none'; // Don't interfere with SVG interactions
+					
+					// Make svg-container relative positioned to contain the absolute background
+					globalSvgContainer.style.position = 'relative';
+					globalSvgContainer.appendChild(backgroundContainer);
+				}
+				
+				// Clear any existing background image
+				backgroundContainer.innerHTML = '';
+				
+				// Create and add the new background image
+				const img = document.createElement("img");
+				img.src = event.target?.result as string;
+				img.style.maxWidth = "100%";
+				img.style.maxHeight = "100%";
+				img.style.objectFit = "contain";
+				img.style.opacity = "0.7"; // Make it slightly transparent so SVG is more visible
+				
+				backgroundContainer.appendChild(img);
+				
+				console.log('Background image added underneath SVG');
+			};
+			reader.readAsDataURL(file);
+		}
+
+		function handleSVGFile(file, index) {
+			const reader = new FileReader();
+			reader.onload = (event) => {
+				const parser = new DOMParser();
+				const svgDoc = parser.parseFromString(event.target?.result as string, "image/svg+xml");
+				const svgElement = svgDoc.documentElement;
+				
+				// Store SVG for navigation if multiple files
+				importedSVGs.push({
+					name: file.name,
+					element: svgElement
+				});
+
+				// Display first SVG or current SVG
+				if (index === 0 || importedSVGs.length === 1) {
+					displaySVG(svgElement);
+					// Update current filename for export
+					updateCurrentFileName(file.name);
+				}
+				
+				// Add navigation if multiple SVGs
+				if (importedSVGs.length > 1) {
+					createSVGNavigation();
+				}
+			};
+			reader.readAsText(file);
+		}
+
+		function displaySVG(svgElement) {
+			// Preserve background image if it exists
+			const backgroundContainer = document.getElementById('background-image-container');
+			let backgroundHTML = '';
+			if (backgroundContainer) {
+				backgroundHTML = backgroundContainer.outerHTML;
+			}
+			
+			globalSvgContainer.innerHTML = "";
+			
+			// Restore background image
+			if (backgroundHTML) {
+				globalSvgContainer.innerHTML = backgroundHTML;
+				globalSvgContainer.style.position = 'relative';
+			}
+			
+			svgElement.style.width = "100%";
+			svgElement.style.height = "100%";
+			
+			// Check and preserve original viewBox
+			const originalViewBox = svgElement.getAttribute('viewBox');
+			console.log('Original SVG viewBox:', originalViewBox);
+			
+			// Only set default viewBox if none exists
+			if (!originalViewBox) {
+				svgElement.setAttribute("viewBox", "0 0 4096 4096");
+				console.log('Set default viewBox: 0 0 4096 4096');
+				} else {
+				console.log('Preserving original viewBox:', originalViewBox);
+			}
+			
+			globalSvgContainer.appendChild(svgElement);
+			
+			// Prevent all drag behavior on the SVG and its children - COMPREHENSIVE APPROACH
+			svgElement.setAttribute('draggable', 'false');
+			svgElement.style.userSelect = 'none';
+			svgElement.style.webkitUserSelect = 'none';
+			svgElement.style.webkitUserDrag = 'none';
+			svgElement.style.webkitTouchCallout = 'none';
+			svgElement.style.webkitTapHighlightColor = 'transparent';
+			
+			// Prevent context menu which can trigger drag
+			svgElement.addEventListener('contextmenu', (e) => {
+				e.preventDefault();
+				return false;
+			});
+			
+			// Add comprehensive drag prevention to SVG - capture phase
+			svgElement.addEventListener('dragstart', (e) => {
+				console.log('SVG dragstart prevented');
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+			
+			svgElement.addEventListener('drag', (e) => {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+			
+			svgElement.addEventListener('dragover', (e) => {
+				e.stopPropagation();
+			});
+			
+			// Prevent mousedown from starting drag
+			svgElement.addEventListener('mousedown', (e) => {
+				// Only prevent if it's on SVG elements, not our custom interactions
+				if (e.target !== svgElement && e.target.tagName !== 'rect') {
+					e.preventDefault();
+				}
+			}, true);
+			
+			// Add event listeners to all rect elements
+			const rects = svgElement.querySelectorAll('rect');
+			console.log(`Found ${rects.length} rect elements`);
+			
+			rects.forEach((rect, index) => {
+				// Log rect coordinates for debugging
+				const x = rect.getAttribute('x');
+				const y = rect.getAttribute('y');
+				const width = rect.getAttribute('width');
+				const height = rect.getAttribute('height');
+				console.log(`Rect ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
+				
+				// Add event listeners using the reusable function
+				addRectEventListeners(rect);
+			});
+			
+			// Deselect when clicking on SVG background or handle Add Rectangle mode
+			svgElement.addEventListener('click', (e) => {
+				if (e.target === svgElement) {
+					if (isAddRectMode && !isDrawingRect) {
+						// Add new rectangle at click position
+						addRectangleAtPosition(e, svgElement);
+					} else {
+						deselectRect();
+						}
+					}
+				});
+		}
+
+		function createSVGNavigation() {
+			let navContainer = document.getElementById("svg-nav");
+			if (!navContainer) {
+				navContainer = document.createElement("div");
+				navContainer.id = "svg-nav";
+				navContainer.style.display = "flex";
+				navContainer.style.justifyContent = "center";
+				navContainer.style.marginTop = "1em";
+				navContainer.style.gap = "1em";
+
+				const leftArrow = document.createElement("button");
+				leftArrow.innerHTML = "← Previous";
+				leftArrow.style.padding = "0.5em 1em";
+				leftArrow.addEventListener("click", () => {
+					if (currentSVGIndex > 0) {
+						currentSVGIndex--;
+						displaySVG(importedSVGs[currentSVGIndex].element);
+						updateCurrentFileName(importedSVGs[currentSVGIndex].name);
+						updateCounter();
+					}
+				});
+
+				const rightArrow = document.createElement("button");
+				rightArrow.innerHTML = "Next →";
+				rightArrow.style.padding = "0.5em 1em";
+				rightArrow.addEventListener("click", () => {
+					if (currentSVGIndex < importedSVGs.length - 1) {
+						currentSVGIndex++;
+						displaySVG(importedSVGs[currentSVGIndex].element);
+						updateCurrentFileName(importedSVGs[currentSVGIndex].name);
+						updateCounter();
+					}
+				});
+
+				const counter = document.createElement("span");
+				counter.id = "svg-counter";
+				counter.style.padding = "0.5em";
+
+				navContainer.appendChild(leftArrow);
+				navContainer.appendChild(counter);
+				navContainer.appendChild(rightArrow);
+
+				globalSvgContainer.parentNode.insertBefore(navContainer, globalSvgContainer.nextSibling);
+			}
+			
+			updateCounter();
+		}
+
+		function updateCounter() {
+			const counter = document.getElementById("svg-counter");
+			if (counter) {
+				counter.textContent = `${currentSVGIndex + 1} / ${importedSVGs.length}`;
+			}
+		}
+
+		// Function to update current filename for export
+		function updateCurrentFileName(filename) {
+			// Remove the .svg extension to get the base name
+			const baseName = filename.replace(/\.svg$/i, '');
+			currentFileName = baseName;
+			
+			// Update the export filename input
+			const exportInput = document.getElementById('export-filename') as HTMLInputElement;
+			if (exportInput) {
+				exportInput.value = baseName;
+			}
+		}
+
+		// Rect selection and transform functionality
+		function selectRect(rect) {
+			// Deselect previous rect
+			deselectRect();
+			
+			selectedRect = rect;
+			rect.classList.add('rect-selected');
+			
+			console.log('Rect selected:', selectedRect);
+			
+			// Create transform handles
+			createTransformHandles(rect);
+			
+			// Update properties panel
+			updatePropertiesPanel(rect);
+		}
+
+		function deselectRect() {
+			if (selectedRect) {
+				selectedRect.classList.remove('rect-selected');
+				selectedRect = null;
+			}
+			
+			// Remove existing transform handles
+			const existingHandles = document.querySelector('.transform-group');
+			if (existingHandles) {
+				existingHandles.remove();
+			}
+			
+			// Clear snap guides
+			clearSnapGuides();
+			
+			// Update properties panel
+			updatePropertiesPanel(null);
+		}
+
+		function createTransformHandles(rect) {
+			const svg = rect.closest('svg');
+			if (!svg) return;
+			
+			const x = parseFloat(rect.getAttribute('x') || '0');
+			const y = parseFloat(rect.getAttribute('y') || '0');
+			const width = parseFloat(rect.getAttribute('width') || '0');
+			const height = parseFloat(rect.getAttribute('height') || '0');
+			
+			// Create transform group
+			const transformGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+			transformGroup.classList.add('transform-group');
+			
+			// Corner handle positions
+			const cornerHandles = [
+				{ id: 'nw', x: x, y: y, cursor: 'nw-resize', type: 'corner' },
+				{ id: 'ne', x: x + width, y: y, cursor: 'ne-resize', type: 'corner' },
+				{ id: 'sw', x: x, y: y + height, cursor: 'sw-resize', type: 'corner' },
+				{ id: 'se', x: x + width, y: y + height, cursor: 'se-resize', type: 'corner' }
+			];
+			
+			// Edge handle positions
+			const edgeHandles = [
+				{ id: 'n', x: x + width/2, y: y, cursor: 'n-resize', type: 'edge' },
+				{ id: 'e', x: x + width, y: y + height/2, cursor: 'e-resize', type: 'edge' },
+				{ id: 's', x: x + width/2, y: y + height, cursor: 's-resize', type: 'edge' },
+				{ id: 'w', x: x, y: y + height/2, cursor: 'w-resize', type: 'edge' }
+			];
+			
+			// Combine all handles
+			const allHandles = [...cornerHandles, ...edgeHandles];
+			
+			allHandles.forEach(handle => {
+				let handleElement;
+				
+				if (handle.type === 'corner') {
+					// Corner handles as circles
+					handleElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+					handleElement.setAttribute('cx', handle.x.toString());
+					handleElement.setAttribute('cy', handle.y.toString());
+					handleElement.setAttribute('r', '4');
+				} else {
+					// Edge handles as thin lines spanning full width/height
+					handleElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+					if (handle.id === 'n' || handle.id === 's') {
+						// Horizontal edge handles - span full width
+						handleElement.setAttribute('x', x.toString());
+						handleElement.setAttribute('y', (handle.y - 1).toString());
+						handleElement.setAttribute('width', width.toString());
+						handleElement.setAttribute('height', '2');
+					} else {
+						// Vertical edge handles - span full height
+						handleElement.setAttribute('x', (handle.x - 1).toString());
+						handleElement.setAttribute('y', y.toString());
+						handleElement.setAttribute('width', '2');
+						handleElement.setAttribute('height', height.toString());
+					}
+				}
+				
+				// Apply styling directly to SVG element
+				handleElement.setAttribute('fill', 'white');
+				if (handle.type === 'corner') {
+					handleElement.setAttribute('stroke', '#666');
+					handleElement.setAttribute('stroke-width', '2');
+				} else {
+					// Edge handles get thinner gray outline
+					handleElement.setAttribute('stroke', '#999');
+					handleElement.setAttribute('stroke-width', '1');
+				}
+				handleElement.setAttribute('opacity', '0.9');
+				handleElement.style.cursor = handle.cursor;
+				handleElement.style.pointerEvents = 'all';
+				
+				handleElement.classList.add('transform-handle', handle.cursor);
+				handleElement.dataset.handleId = handle.id;
+				handleElement.dataset.handleType = handle.type;
+				
+				// Add hover effects with JavaScript
+				handleElement.addEventListener('mouseenter', () => {
+					handleElement.setAttribute('fill', '#f8f8f8');
+					if (handle.type === 'corner') {
+						handleElement.setAttribute('stroke', '#333');
+					} else {
+						handleElement.setAttribute('stroke', '#666');
+					}
+					handleElement.setAttribute('opacity', '1');
+				});
+				
+				handleElement.addEventListener('mouseleave', () => {
+					handleElement.setAttribute('fill', 'white');
+					if (handle.type === 'corner') {
+						handleElement.setAttribute('stroke', '#666');
+					} else {
+						handleElement.setAttribute('stroke', '#999');
+					}
+					handleElement.setAttribute('opacity', '0.9');
+				});
+				
+				// Add resize event listeners
+				handleElement.addEventListener('mousedown', (e) => {
+					e.stopPropagation();
+					startResize(e, handle.id);
+				});
+				
+				transformGroup.appendChild(handleElement);
+			});
+			
+			// Drag functionality is now handled in the main rect mousedown listener above
+			
+			svg.appendChild(transformGroup);
+		}
+
+		function startDrag(e) {
+			if (!selectedRect) return;
+			
+			// Prevent any default drag behavior
+			e.preventDefault();
+			e.stopPropagation();
+			
+			isDragging = true;
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+			
+			document.addEventListener('mousemove', handleDrag);
+			document.addEventListener('mouseup', stopDrag);
+			
+			// Set cursor for dragging
+			document.body.style.cursor = 'move';
+		}
+
+		function handleDrag(e) {
+			if (!isDragging || !selectedRect) return;
+			
+			const deltaX = e.clientX - dragStartX;
+			const deltaY = e.clientY - dragStartY;
+			
+			// Get current position
+			const currentX = parseFloat(selectedRect.getAttribute('x') || '0');
+			const currentY = parseFloat(selectedRect.getAttribute('y') || '0');
+			const width = parseFloat(selectedRect.getAttribute('width') || '0');
+			const height = parseFloat(selectedRect.getAttribute('height') || '0');
+			
+			// Calculate scale factor based on SVG viewport
+			const svg = selectedRect.closest('svg') as SVGSVGElement;
+			const svgRect = svg.getBoundingClientRect();
+			const viewBox = svg.viewBox.baseVal;
+			const scaleX = viewBox.width / svgRect.width;
+			const scaleY = viewBox.height / svgRect.height;
+			
+			// Calculate new position
+			let newX = currentX + (deltaX * scaleX);
+			let newY = currentY + (deltaY * scaleY);
+			
+			// Apply snapping if Ctrl key is pressed
+			if (e.ctrlKey) {
+				console.log('Ctrl key detected for snapping');
+				const { xEdges, yEdges } = getAllRectEdges(selectedRect);
+				console.log('Found edges - X:', xEdges.length, 'Y:', yEdges.length);
+				
+				// Find all possible snaps with their distances
+				const snapCandidates = [];
+				
+				// Check snapping for left edge
+				const leftSnapDistance = findSnapDistance(newX, xEdges, snapThreshold);
+				if (leftSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'x',
+						edge: 'left',
+						snapValue: leftSnapDistance.snap,
+						distance: leftSnapDistance.distance,
+						newPos: leftSnapDistance.snap
+					});
+				}
+				
+				// Check snapping for right edge  
+				const rightSnapDistance = findSnapDistance(newX + width, xEdges, snapThreshold);
+				if (rightSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'x',
+						edge: 'right',
+						snapValue: rightSnapDistance.snap,
+						distance: rightSnapDistance.distance,
+						newPos: rightSnapDistance.snap - width
+					});
+				}
+				
+				// Check snapping for top edge
+				const topSnapDistance = findSnapDistance(newY, yEdges, snapThreshold);
+				if (topSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'y',
+						edge: 'top',
+						snapValue: topSnapDistance.snap,
+						distance: topSnapDistance.distance,
+						newPos: topSnapDistance.snap
+					});
+				}
+				
+				// Check snapping for bottom edge
+				const bottomSnapDistance = findSnapDistance(newY + height, yEdges, snapThreshold);
+				if (bottomSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'y',
+						edge: 'bottom',
+						snapValue: bottomSnapDistance.snap,
+						distance: bottomSnapDistance.distance,
+						newPos: bottomSnapDistance.snap - height
+					});
+				}
+				
+				// Find the closest snap (only one axis at a time)
+				console.log('Snap candidates found:', snapCandidates.length);
+				if (snapCandidates.length > 0) {
+					const closestSnap = snapCandidates.reduce((closest, candidate) => 
+						candidate.distance < closest.distance ? candidate : closest
+					);
+					
+					console.log('Snapping to:', closestSnap.axis, 'at', closestSnap.snapValue, 'distance:', closestSnap.distance);
+					
+					// Apply only the closest snap
+					if (closestSnap.axis === 'x') {
+						newX = closestSnap.newPos;
+						showSnapGuides(closestSnap.snapValue, null, selectedRect);
+					} else {
+						newY = closestSnap.newPos;
+						showSnapGuides(null, closestSnap.snapValue, selectedRect);
+					}
+				} else {
+					console.log('No snap candidates found');
+					clearSnapGuides();
+				}
+			} else {
+				// Clear snap guides when not snapping
+				clearSnapGuides();
+			}
+			
+			selectedRect.setAttribute('x', newX.toString());
+			selectedRect.setAttribute('y', newY.toString());
+			
+			// Update transform handles
+			updateTransformHandles();
+			
+			// Update properties panel with new values
+			updatePropertiesPanel(selectedRect);
+			
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+		}
+
+		function stopDrag() {
+			isDragging = false;
+			document.removeEventListener('mousemove', handleDrag);
+			document.removeEventListener('mouseup', stopDrag);
+			
+			// Clear snap guides
+			clearSnapGuides();
+			
+			// Reset cursor
+			document.body.style.cursor = 'default';
+		}
+
+		function startResize(e, handleId) {
+			if (!selectedRect) return;
+			
+			// Prevent any default drag behavior
+			e.preventDefault();
+			e.stopPropagation();
+			
+			isResizing = true;
+			resizeHandle = handleId;
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+			
+			document.addEventListener('mousemove', handleResize);
+			document.addEventListener('mouseup', stopResize);
+		}
+
+		function handleResize(e) {
+			if (!isResizing || !selectedRect || !resizeHandle) return;
+			
+			const deltaX = e.clientX - dragStartX;
+			const deltaY = e.clientY - dragStartY;
+			
+			// Get current rect properties
+			const currentX = parseFloat(selectedRect.getAttribute('x') || '0');
+			const currentY = parseFloat(selectedRect.getAttribute('y') || '0');
+			const currentWidth = parseFloat(selectedRect.getAttribute('width') || '0');
+			const currentHeight = parseFloat(selectedRect.getAttribute('height') || '0');
+			
+			// Calculate scale factor
+			const svg = selectedRect.closest('svg');
+			const svgRect = svg.getBoundingClientRect();
+			const viewBox = svg.viewBox.baseVal;
+			const scaleX = viewBox.width / svgRect.width;
+			const scaleY = viewBox.height / svgRect.height;
+			
+			const scaledDeltaX = deltaX * scaleX;
+			const scaledDeltaY = deltaY * scaleY;
+			
+			let newX = currentX;
+			let newY = currentY;
+			let newWidth = currentWidth;
+			let newHeight = currentHeight;
+			
+			// Handle different resize directions
+			switch (resizeHandle) {
+				// Corner handles
+				case 'nw':
+					newX = currentX + scaledDeltaX;
+					newY = currentY + scaledDeltaY;
+					newWidth = currentWidth - scaledDeltaX;
+					newHeight = currentHeight - scaledDeltaY;
+					break;
+				case 'ne':
+					newY = currentY + scaledDeltaY;
+					newWidth = currentWidth + scaledDeltaX;
+					newHeight = currentHeight - scaledDeltaY;
+					break;
+				case 'sw':
+					newX = currentX + scaledDeltaX;
+					newWidth = currentWidth - scaledDeltaX;
+					newHeight = currentHeight + scaledDeltaY;
+					break;
+				case 'se':
+					newWidth = currentWidth + scaledDeltaX;
+					newHeight = currentHeight + scaledDeltaY;
+					break;
+				
+				// Edge handles
+				case 'n': // Top edge
+					newY = currentY + scaledDeltaY;
+					newHeight = currentHeight - scaledDeltaY;
+					break;
+				case 'e': // Right edge
+					newWidth = currentWidth + scaledDeltaX;
+					break;
+				case 's': // Bottom edge
+					newHeight = currentHeight + scaledDeltaY;
+					break;
+				case 'w': // Left edge
+					newX = currentX + scaledDeltaX;
+					newWidth = currentWidth - scaledDeltaX;
+					break;
+			}
+			
+			// Prevent negative dimensions
+			if (newWidth > 5 && newHeight > 5) {
+				selectedRect.setAttribute('x', newX.toString());
+				selectedRect.setAttribute('y', newY.toString());
+				selectedRect.setAttribute('width', newWidth.toString());
+				selectedRect.setAttribute('height', newHeight.toString());
+				
+				// Update transform handles
+				updateTransformHandles();
+				
+				// Update properties panel with new values
+				updatePropertiesPanel(selectedRect);
+			}
+			
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+		}
+
+		function stopResize() {
+			isResizing = false;
+			resizeHandle = null;
+			document.removeEventListener('mousemove', handleResize);
+			document.removeEventListener('mouseup', stopResize);
+		}
+
+		function updateTransformHandles() {
+			const transformGroup = document.querySelector('.transform-group');
+			if (!transformGroup || !selectedRect) return;
+			
+			const x = parseFloat(selectedRect.getAttribute('x') || '0');
+			const y = parseFloat(selectedRect.getAttribute('y') || '0');
+			const width = parseFloat(selectedRect.getAttribute('width') || '0');
+			const height = parseFloat(selectedRect.getAttribute('height') || '0');
+			
+			const handles = transformGroup.querySelectorAll('.transform-handle');
+			handles.forEach(handle => {
+				const handleElement = handle as HTMLElement;
+				const handleId = handleElement.dataset.handleId;
+				const handleType = handleElement.dataset.handleType;
+				
+				if (handleType === 'corner') {
+					// Update corner handles (circles)
+					switch (handleId) {
+						case 'nw':
+							handle.setAttribute('cx', x.toString());
+							handle.setAttribute('cy', y.toString());
+							break;
+						case 'ne':
+							handle.setAttribute('cx', (x + width).toString());
+							handle.setAttribute('cy', y.toString());
+							break;
+						case 'sw':
+							handle.setAttribute('cx', x.toString());
+							handle.setAttribute('cy', (y + height).toString());
+							break;
+						case 'se':
+							handle.setAttribute('cx', (x + width).toString());
+							handle.setAttribute('cy', (y + height).toString());
+							break;
+					}
+				} else {
+					// Update edge handles (thin lines spanning full width/height)
+					switch (handleId) {
+						case 'n': // Top edge - spans full width
+							handle.setAttribute('x', x.toString());
+							handle.setAttribute('y', (y - 1).toString());
+							handle.setAttribute('width', width.toString());
+							handle.setAttribute('height', '2');
+							break;
+						case 'e': // Right edge - spans full height
+							handle.setAttribute('x', (x + width - 1).toString());
+							handle.setAttribute('y', y.toString());
+							handle.setAttribute('width', '2');
+							handle.setAttribute('height', height.toString());
+							break;
+						case 's': // Bottom edge - spans full width
+							handle.setAttribute('x', x.toString());
+							handle.setAttribute('y', (y + height - 1).toString());
+							handle.setAttribute('width', width.toString());
+							handle.setAttribute('height', '2');
+							break;
+						case 'w': // Left edge - spans full height
+							handle.setAttribute('x', (x - 1).toString());
+							handle.setAttribute('y', y.toString());
+							handle.setAttribute('width', '2');
+							handle.setAttribute('height', height.toString());
+							break;
+					}
+				}
+			});
+		}
+
+		// Global drag prevention as final safety net
+		document.addEventListener('dragstart', (e) => {
+			// Allow file drag-drop but prevent SVG element dragging
+			const target = e.target as HTMLElement;
+			if (target && (target.tagName === 'rect' || target.tagName === 'svg' || target.closest('svg'))) {
+				console.log('Global dragstart prevention triggered');
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}
+		}, true);
+
+		// Event listeners
+		const fileInput = document.getElementById("myFile");
+		
+		// File input change event
+		fileInput.addEventListener("change", (e) => {
+			const target = e.target as HTMLInputElement;
+			handleFileChange(target.files);
+		});
+
+		// Drag and drop functionality
+		document.body.addEventListener("dragover", (e) => {
+			// Only show drag prompt for actual file drag operations
+			if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+				e.preventDefault();
+				document.querySelector(".drag-drop-prompt")?.classList.add("appear");
+			}
+		});
+
+		document.body.addEventListener("dragleave", (e) => {
+			// Only hide if leaving the entire body and it's a file drag
+			if (e.dataTransfer && e.dataTransfer.types.includes('Files') && !document.body.contains(e.relatedTarget as Node)) {
+				document.querySelector(".drag-drop-prompt")?.classList.remove("appear");
+			}
+		});
+
+		document.body.addEventListener("drop", (e) => {
+			// Only handle file drops, not element drags
+			if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+			e.preventDefault();
+				document.querySelector(".drag-drop-prompt")?.classList.remove("appear");
+			handleFileChange(e.dataTransfer.files);
+			}
+		});
+
+		// Export SVG functionality
+		document.getElementById("export-svg-btn").addEventListener("click", () => {
+			exportCleanSVG();
+		});
+
+		// Add Rectangle button functionality
+		document.getElementById("add-rect-btn").addEventListener("click", () => {
+			toggleAddRectMode();
+		});
+
+		// Keyboard event listener for various shortcuts
+		document.addEventListener("keydown", (e) => {
+			// Debug logging for Delete/Backspace
+			if (e.key === "Delete" || e.key === "Backspace") {
+				console.log('Delete/Backspace key pressed');
+				console.log('isTypingInInput():', isTypingInInput());
+				console.log('selectedRect:', selectedRect);
+			}
+			
+			// Only process shortcuts if not typing in an input
+			if (isTypingInInput()) {
+				console.log('Ignoring key press - typing in input');
+				return;
+			}
+
+			// Delete or Backspace - delete selected rect
+			if (e.key === "Delete" || e.key === "Backspace") {
+				if (selectedRect) {
+					console.log('Attempting to delete selected rect');
+					e.preventDefault();
+					deleteSelectedRect();
+			} else {
+					console.log('No rect selected for deletion');
+				}
+			}
+			
+			// Ctrl+C - copy selected rect
+			if (e.ctrlKey && e.key === "c") {
+				if (selectedRect) {
+					e.preventDefault();
+					copySelectedRect();
+				}
+			}
+			
+			// Ctrl+V - paste copied rect
+			if (e.ctrlKey && e.key === "v") {
+				if (copiedRect) {
+					e.preventDefault();
+					pasteRect();
+				}
+			}
+			
+			// Ctrl+L - activate Add Rectangle mode
+			if (e.ctrlKey && e.key === "l") {
+				e.preventDefault();
+				toggleAddRectMode();
+			}
+			
+			// Escape - exit Add Rectangle mode
+			if (e.key === "Escape") {
+				if (isAddRectMode) {
+					e.preventDefault();
+					exitAddRectMode();
+					}
+				}
+			});
+
+		function exportCleanSVG() {
+			const currentSvg = globalSvgContainer.querySelector('svg');
+			if (!currentSvg) {
+				alert('No SVG loaded to export');
+				return;
+			}
+
+			// Clone the SVG to avoid modifying the original
+			const svgClone = currentSvg.cloneNode(true) as SVGElement;
+			
+			// Remove all transform handles and selection styling
+			const transformGroups = svgClone.querySelectorAll('.transform-group');
+			transformGroups.forEach(group => group.remove());
+			
+			// Remove selection classes from rects
+			const rects = svgClone.querySelectorAll('rect');
+			rects.forEach(rect => {
+				rect.classList.remove('rect-selected');
+				// Remove any inline styles that might have been added for selection
+				rect.removeAttribute('style');
+			});
+			
+			// Clean up any other unwanted attributes or classes
+			const allElements = svgClone.querySelectorAll('*');
+			allElements.forEach(element => {
+				// Remove draggable attributes we added
+				element.removeAttribute('draggable');
+				// Remove any selection-related classes
+				element.classList.remove('hovered');
+			});
+			
+			// Get filename from input, fallback to current filename, then default
+			const filename = (document.getElementById('export-filename') as HTMLInputElement).value || currentFileName || 'exported-svg';
+			
+			// Serialize the cleaned SVG
+			const serializer = new XMLSerializer();
+			const svgString = serializer.serializeToString(svgClone);
+			
+			// Create and download the file
+			const blob = new Blob([svgString], { type: 'image/svg+xml' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+				link.href = url;
+			link.download = filename.endsWith('.svg') ? filename : filename + '.svg';
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+			
+			console.log('SVG exported successfully');
+		}
+
+		// Move keyboard event listener to end of script
+
+		// Helper function to check if user is typing in an input field
+		function isTypingInInput() {
+			const activeElement = document.activeElement;
+			const isInInput = activeElement && (
+				activeElement.tagName === 'INPUT' || 
+				activeElement.tagName === 'TEXTAREA' || 
+				activeElement.isContentEditable
+			);
+			
+			if (isInInput) {
+				console.log('User is typing in input:', activeElement.tagName, activeElement.id || activeElement.className);
+			}
+			
+			return isInInput;
+		}
+
+		// Function to delete the selected rect
+		function deleteSelectedRect() {
+			console.log('deleteSelectedRect called, selectedRect:', selectedRect);
+			
+			if (!selectedRect) {
+				console.log('No selectedRect to delete');
+				return;
+			}
+			
+			console.log('Deleting selected rect');
+			
+			// Store reference before deselecting
+			const rectToDelete = selectedRect;
+			
+			// Remove transform handles
+			deselectRect();
+			
+			// Remove the rect from the DOM
+			rectToDelete.remove();
+			
+			console.log('Rect deleted successfully');
+			
+			// Update properties panel
+			updatePropertiesPanel(null);
+		}
+
+		// Function to copy the selected rect
+		function copySelectedRect() {
+			if (!selectedRect) return;
+			
+			// Store all attributes of the selected rect
+			copiedRect = {
+				x: selectedRect.getAttribute('x'),
+				y: selectedRect.getAttribute('y'),
+				width: selectedRect.getAttribute('width'),
+				height: selectedRect.getAttribute('height'),
+				fill: selectedRect.getAttribute('fill'),
+				stroke: selectedRect.getAttribute('stroke'),
+				strokeWidth: selectedRect.getAttribute('stroke-width'),
+				opacity: selectedRect.getAttribute('opacity'),
+				// Store any other attributes
+				attributes: {}
+			};
+			
+			// Copy all other attributes
+			for (let i = 0; i < selectedRect.attributes.length; i++) {
+				const attr = selectedRect.attributes[i];
+				if (!['x', 'y', 'width', 'height', 'fill', 'stroke', 'stroke-width', 'opacity'].includes(attr.name)) {
+					copiedRect.attributes[attr.name] = attr.value;
+				}
+			}
+			
+			console.log('Rect copied to clipboard');
+		}
+
+		// Function to paste the copied rect
+		function pasteRect() {
+			if (!copiedRect) return;
+			
+			const currentSvg = globalSvgContainer.querySelector('svg');
+			if (!currentSvg) {
+				console.log('No SVG available to paste rect into');
+				return;
+			}
+
+			// Create new rect element
+			const newRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			
+			// Apply stored attributes
+			newRect.setAttribute('x', parseFloat(copiedRect.x) + 20); // Offset by 20px
+			newRect.setAttribute('y', parseFloat(copiedRect.y) + 20); // Offset by 20px
+			newRect.setAttribute('width', copiedRect.width);
+			newRect.setAttribute('height', copiedRect.height);
+			
+			if (copiedRect.fill) newRect.setAttribute('fill', copiedRect.fill);
+			if (copiedRect.stroke) newRect.setAttribute('stroke', copiedRect.stroke);
+			if (copiedRect.strokeWidth) newRect.setAttribute('stroke-width', copiedRect.strokeWidth);
+			if (copiedRect.opacity) newRect.setAttribute('opacity', copiedRect.opacity);
+			
+			// Apply other attributes
+			Object.entries(copiedRect.attributes).forEach(([name, value]) => {
+				newRect.setAttribute(name, value);
+			});
+			
+			// Add the rect to the SVG
+			currentSvg.appendChild(newRect);
+			
+			// Add event listeners to the new rect
+			addRectEventListeners(newRect);
+			
+			// Select the new rect
+			selectRect(newRect);
+			
+			console.log('Rect pasted');
+		}
+
+		// Function to add event listeners to a rect element
+		function addRectEventListeners(rect) {
+			rect.style.cursor = 'pointer';
+			rect.setAttribute('draggable', 'false');
+			rect.style.userSelect = 'none';
+			rect.style.webkitUserSelect = 'none';
+			rect.style.webkitUserDrag = 'none';
+			rect.style.webkitTouchCallout = 'none';
+			
+			// Prevent context menu
+			rect.addEventListener('contextmenu', (e) => {
+				e.preventDefault();
+				return false;
+			});
+			
+			// Click event removed - selection now happens on mousedown for immediate drag
+			
+			// MOST IMPORTANT: Prevent dragstart in capture phase
+			rect.addEventListener('dragstart', (e) => {
+				console.log('Rect dragstart prevented');
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+			
+			rect.addEventListener('drag', (e) => {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+			
+			rect.addEventListener('selectstart', (e) => {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+			
+			// Prevent mousedown from starting browser drag
+			rect.addEventListener('mousedown', (e) => {
+				console.log('Rect mousedown');
+				e.preventDefault();
+				e.stopPropagation();
+				
+				// Select the rect and immediately start dragging
+				selectRect(rect);
+				
+				// Check for Alt/Option key for duplication mode
+				if (e.altKey) {
+					startDuplicationDrag(e, rect);
+				} else {
+					startDrag(e);
+				}
+				return false;
+			}, true);
+		}
+
+		// Function to start duplication drag mode
+		function startDuplicationDrag(e, rect) {
+			console.log('Starting duplication drag mode');
+			
+			// Store original rect reference
+			originalRect = rect;
+			
+			// Create duplicated rect but don't position it yet
+			const currentSvg = globalSvgContainer.querySelector('svg');
+			if (!currentSvg) return;
+			
+			duplicatedRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			
+			// Copy all attributes from the original rect
+			for (let i = 0; i < originalRect.attributes.length; i++) {
+				const attr = originalRect.attributes[i];
+				duplicatedRect.setAttribute(attr.name, attr.value);
+			}
+			
+			// Add to SVG
+			currentSvg.appendChild(duplicatedRect);
+			
+			// Add event listeners
+			addRectEventListeners(duplicatedRect);
+			
+			// Select the duplicated rect
+			selectRect(duplicatedRect);
+			
+			// Set duplication mode
+			isDuplicating = true;
+			isDragging = true;
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+			
+			// Add event listeners for duplication drag
+			document.addEventListener('mousemove', handleDuplicationDrag);
+			document.addEventListener('mouseup', stopDuplicationDrag);
+			
+			// Set cursor for dragging
+			document.body.style.cursor = 'copy';
+		}
+
+		// Function to handle duplication drag movement
+		function handleDuplicationDrag(e) {
+			if (!isDuplicating || !originalRect || !duplicatedRect) return;
+			
+			const deltaX = e.clientX - dragStartX;
+			const deltaY = e.clientY - dragStartY;
+			
+			// Get original rect position
+			const originalX = parseFloat(originalRect.getAttribute('x') || '0');
+			const originalY = parseFloat(originalRect.getAttribute('y') || '0');
+			
+			// Calculate scale factor based on SVG viewport
+			const svg = duplicatedRect.closest('svg') as SVGSVGElement;
+			const svgRect = svg.getBoundingClientRect();
+			const viewBox = svg.viewBox.baseVal;
+			const scaleX = viewBox.width / svgRect.width;
+			const scaleY = viewBox.height / svgRect.height;
+			
+			// Calculate new position based on cursor translation
+			const newX = originalX + (deltaX * scaleX);
+			const newY = originalY + (deltaY * scaleY);
+			
+			// Apply snapping if Ctrl key is pressed
+			let finalX = newX;
+			let finalY = newY;
+			
+			if (e.ctrlKey) {
+				console.log('Ctrl key detected for duplication snapping');
+				const { xEdges, yEdges } = getAllRectEdges(duplicatedRect);
+				console.log('Found edges for duplication - X:', xEdges.length, 'Y:', yEdges.length);
+				
+				const width = parseFloat(duplicatedRect.getAttribute('width') || '0');
+				const height = parseFloat(duplicatedRect.getAttribute('height') || '0');
+				
+				// Find all possible snaps with their distances
+				const snapCandidates = [];
+				
+				// Check snapping for left edge
+				const leftSnapDistance = findSnapDistance(newX, xEdges, snapThreshold);
+				if (leftSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'x',
+						edge: 'left',
+						snapValue: leftSnapDistance.snap,
+						distance: leftSnapDistance.distance,
+						newPos: leftSnapDistance.snap
+					});
+				}
+				
+				// Check snapping for right edge  
+				const rightSnapDistance = findSnapDistance(newX + width, xEdges, snapThreshold);
+				if (rightSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'x',
+						edge: 'right',
+						snapValue: rightSnapDistance.snap,
+						distance: rightSnapDistance.distance,
+						newPos: rightSnapDistance.snap - width
+					});
+				}
+				
+				// Check snapping for top edge
+				const topSnapDistance = findSnapDistance(newY, yEdges, snapThreshold);
+				if (topSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'y',
+						edge: 'top',
+						snapValue: topSnapDistance.snap,
+						distance: topSnapDistance.distance,
+						newPos: topSnapDistance.snap
+					});
+				}
+				
+				// Check snapping for bottom edge
+				const bottomSnapDistance = findSnapDistance(newY + height, yEdges, snapThreshold);
+				if (bottomSnapDistance.snap !== null) {
+					snapCandidates.push({
+						axis: 'y',
+						edge: 'bottom',
+						snapValue: bottomSnapDistance.snap,
+						distance: bottomSnapDistance.distance,
+						newPos: bottomSnapDistance.snap - height
+					});
+				}
+				
+				// Find the closest snap (only one axis at a time)
+				if (snapCandidates.length > 0) {
+					const closestSnap = snapCandidates.reduce((closest, candidate) => 
+						candidate.distance < closest.distance ? candidate : closest
+					);
+					
+					console.log('Duplication snapping to:', closestSnap.axis, 'at', closestSnap.snapValue);
+					
+					// Apply only the closest snap
+					if (closestSnap.axis === 'x') {
+						finalX = closestSnap.newPos;
+						showSnapGuides(closestSnap.snapValue, null, duplicatedRect);
+					} else {
+						finalY = closestSnap.newPos;
+						showSnapGuides(null, closestSnap.snapValue, duplicatedRect);
+					}
+				} else {
+					clearSnapGuides();
+				}
+			} else {
+				// Clear snap guides when not snapping
+				clearSnapGuides();
+			}
+			
+			// Update duplicated rect position
+			duplicatedRect.setAttribute('x', finalX.toString());
+			duplicatedRect.setAttribute('y', finalY.toString());
+			
+			// Update transform handles
+			updateTransformHandles();
+			
+			// Update properties panel
+			updatePropertiesPanel(duplicatedRect);
+		}
+
+		// Function to stop duplication drag
+		function stopDuplicationDrag() {
+			isDuplicating = false;
+			isDragging = false;
+			originalRect = null;
+			duplicatedRect = null;
+			
+			document.removeEventListener('mousemove', handleDuplicationDrag);
+			document.removeEventListener('mouseup', stopDuplicationDrag);
+			
+			// Clear snap guides
+			clearSnapGuides();
+			
+			// Reset cursor
+			document.body.style.cursor = 'default';
+			
+			console.log('Duplication drag completed');
+		}
+
+		// Function to toggle Add Rectangle mode
+		function toggleAddRectMode() {
+			isAddRectMode = !isAddRectMode;
+			const button = document.getElementById('add-rect-btn');
+			
+			if (isAddRectMode) {
+				button.style.background = '#dc3545'; // Red when active
+				button.textContent = 'Exit Add Mode (Esc)';
+				document.body.style.cursor = 'crosshair';
+				console.log('Add Rectangle mode activated');
+			} else {
+				exitAddRectMode();
+			}
+		}
+
+		// Function to exit Add Rectangle mode
+		function exitAddRectMode() {
+			isAddRectMode = false;
+			isDrawingRect = false;
+			const button = document.getElementById('add-rect-btn');
+			button.style.background = '#28a745'; // Green when inactive
+			button.textContent = 'Add Rectangle (Ctrl+L)';
+			document.body.style.cursor = 'default';
+			console.log('Add Rectangle mode deactivated');
+		}
+
+		// Function to get all rect edges for snapping
+		function getAllRectEdges(excludeRect) {
+			const currentSvg = globalSvgContainer.querySelector('svg');
+			if (!currentSvg) return { xEdges: [], yEdges: [] };
+			
+			// Get all rect elements but exclude transform handles
+			const rects = currentSvg.querySelectorAll('rect:not(.transform-handle)');
+			const xEdges = [];
+			const yEdges = [];
+			
+			console.log('getAllRectEdges: Found', rects.length, 'content rects (excluding handles)');
+			
+			rects.forEach(rect => {
+				if (rect === excludeRect) return; // Skip the rect being dragged
+				
+				const x = parseFloat(rect.getAttribute('x') || '0');
+				const y = parseFloat(rect.getAttribute('y') || '0');
+				const width = parseFloat(rect.getAttribute('width') || '0');
+				const height = parseFloat(rect.getAttribute('height') || '0');
+				
+				// Add all edges
+				xEdges.push(x, x + width); // left and right edges
+				yEdges.push(y, y + height); // top and bottom edges
+				
+				console.log('Added edges for rect:', x, y, width, height);
+			});
+			
+			return { xEdges, yEdges };
+		}
+		
+		// Function to find nearest snap position
+		function findSnapPosition(currentPos, edges, threshold) {
+			let nearestEdge = null;
+			let minDistance = threshold;
+			
+			edges.forEach(edge => {
+				const distance = Math.abs(currentPos - edge);
+				if (distance < minDistance) {
+					minDistance = distance;
+					nearestEdge = edge;
+				}
+			});
+			
+			return nearestEdge;
+		}
+
+		// Function to find nearest snap position with distance
+		function findSnapDistance(currentPos, edges, threshold) {
+			let nearestEdge = null;
+			let minDistance = threshold;
+			
+			edges.forEach(edge => {
+				const distance = Math.abs(currentPos - edge);
+				if (distance < minDistance) {
+					minDistance = distance;
+					nearestEdge = edge;
+				}
+			});
+			
+			return {
+				snap: nearestEdge,
+				distance: nearestEdge !== null ? minDistance : Infinity
+			};
+		}
+		
+		// Function to show snap guides
+		function showSnapGuides(xSnap, ySnap, draggedRect) {
+			console.log('showSnapGuides called with xSnap:', xSnap, 'ySnap:', ySnap);
+			clearSnapGuides();
+			
+			const currentSvg = globalSvgContainer.querySelector('svg');
+			if (!currentSvg) {
+				console.log('No SVG found for snap guides');
+				return;
+			}
+			
+			const viewBox = currentSvg.viewBox.baseVal;
+			console.log('SVG viewBox:', viewBox.x, viewBox.y, viewBox.width, viewBox.height);
+			
+			// Create snap guide group
+			const guideGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+			guideGroup.classList.add('snap-guides');
+			
+			// Show vertical guide for x-snap (full height red line)
+			if (xSnap !== null) {
+				const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+				vLine.setAttribute('x1', xSnap.toString());
+				vLine.setAttribute('y1', viewBox.y.toString());
+				vLine.setAttribute('x2', xSnap.toString());
+				vLine.setAttribute('y2', (viewBox.y + viewBox.height).toString());
+				vLine.classList.add('snap-guide');
+				
+				// Apply styles directly as well
+				vLine.setAttribute('stroke', '#ff0066');
+				vLine.setAttribute('stroke-width', '2');
+				vLine.setAttribute('stroke-dasharray', '5,5');
+				vLine.setAttribute('opacity', '0.9');
+				vLine.style.pointerEvents = 'none';
+				
+				guideGroup.appendChild(vLine);
+				console.log('Created vertical snap guide at x:', xSnap, 'from', viewBox.y, 'to', viewBox.y + viewBox.height);
+			}
+			
+			// Show horizontal guide for y-snap (full width red line)
+			if (ySnap !== null) {
+				const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+				hLine.setAttribute('x1', viewBox.x.toString());
+				hLine.setAttribute('y1', ySnap.toString());
+				hLine.setAttribute('x2', (viewBox.x + viewBox.width).toString());
+				hLine.setAttribute('y2', ySnap.toString());
+				hLine.classList.add('snap-guide');
+				
+				// Apply styles directly as well
+				hLine.setAttribute('stroke', '#ff0066');
+				hLine.setAttribute('stroke-width', '2');
+				hLine.setAttribute('stroke-dasharray', '5,5');
+				hLine.setAttribute('opacity', '0.9');
+				hLine.style.pointerEvents = 'none';
+				
+				guideGroup.appendChild(hLine);
+				console.log('Created horizontal snap guide at y:', ySnap, 'from', viewBox.x, 'to', viewBox.x + viewBox.width);
+			}
+			
+			if (guideGroup.children.length > 0) {
+				currentSvg.appendChild(guideGroup);
+				snapGuides.push(guideGroup);
+				console.log('Added snap guide group to SVG, total guides:', snapGuides.length);
+			}
+		}
+		
+		// Function to clear snap guides
+		function clearSnapGuides() {
+			console.log('Clearing', snapGuides.length, 'snap guides');
+			snapGuides.forEach(guide => {
+				if (guide.parentNode) {
+					guide.parentNode.removeChild(guide);
+				}
+			});
+			snapGuides = [];
+		}
+
+		// Function to add a rectangle at the clicked position
+		function addRectangleAtPosition(event, svgElement) {
+			// Get click position relative to SVG
+			const svgRect = svgElement.getBoundingClientRect();
+			const viewBox = svgElement.viewBox.baseVal;
+			
+			// Convert screen coordinates to SVG coordinates
+			const scaleX = viewBox.width / svgRect.width;
+			const scaleY = viewBox.height / svgRect.height;
+			
+			const clickX = (event.clientX - svgRect.left) * scaleX + viewBox.x;
+			const clickY = (event.clientY - svgRect.top) * scaleY + viewBox.y;
+			
+			// Create new rect element
+			const newRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			
+			// Set default size and position (centered on click)
+			const defaultWidth = 100;
+			const defaultHeight = 100;
+			newRect.setAttribute('x', (clickX - defaultWidth / 2).toString());
+			newRect.setAttribute('y', (clickY - defaultHeight / 2).toString());
+			newRect.setAttribute('width', defaultWidth.toString());
+			newRect.setAttribute('height', defaultHeight.toString());
+			
+			// Set default styling
+			newRect.setAttribute('fill', 'rgba(0, 123, 255, 0.3)');
+			newRect.setAttribute('stroke', '#007bff');
+			newRect.setAttribute('stroke-width', '2');
+			
+			// Add to SVG
+			svgElement.appendChild(newRect);
+			
+			// Add event listeners
+			addRectEventListeners(newRect);
+			
+			// Select the new rect
+			selectRect(newRect);
+			
+			// Exit Add Rectangle mode
+			exitAddRectMode();
+			
+			console.log('New rectangle added at position:', clickX, clickY);
+		}
+
+		// Function to update the properties panel
+		function updatePropertiesPanel(rect) {
+			const propertiesContent = document.getElementById('properties-content');
+			
+			if (!rect) {
+				propertiesContent.innerHTML = '<p style="color: #666; margin: 10px 0;">Select a rect to view properties</p>';
+				return;
+			}
+			
+			// Get all attributes of the rect
+			const attributes = {};
+			for (let i = 0; i < rect.attributes.length; i++) {
+				const attr = rect.attributes[i];
+				attributes[attr.name] = attr.value;
+			}
+			
+			// Create properties HTML
+			let html = '<div style="max-height: 300px; overflow-y: auto;">';
+			
+			// Core properties first
+			const coreProps = ['x', 'y', 'width', 'height'];
+			coreProps.forEach(prop => {
+				if (attributes[prop] !== undefined) {
+					html += `
+						<div style="margin-bottom: 8px; padding: 4px; background: #f5f5f5; border-radius: 3px;">
+							<strong style="color: #333; font-size: 11px;">${prop}:</strong>
+							<span style="color: #666; font-size: 11px; margin-left: 5px;">${attributes[prop]}</span>
+						</div>
+					`;
+					delete attributes[prop]; // Remove from remaining attributes
+				}
+			});
+			
+			// Add separator if there are more attributes
+			if (Object.keys(attributes).length > 0) {
+				html += '<hr style="margin: 10px 0; border: none; border-top: 1px solid #ddd;">';
+			}
+			
+			// Other attributes
+			Object.entries(attributes).forEach(([key, value]) => {
+				html += `
+					<div style="margin-bottom: 6px; padding: 3px; background: #fafafa; border-radius: 2px;">
+						<strong style="color: #555; font-size: 10px;">${key}:</strong>
+						<span style="color: #777; font-size: 10px; margin-left: 5px; word-break: break-all;">${value}</span>
+					</div>
+				`;
+			});
+			
+			html += '</div>';
+			propertiesContent.innerHTML = html;
+		}
+
+	</script>
+</html>
