@@ -831,7 +831,7 @@ import "../styles.css";
 			if (e.ctrlKey) {
 				console.log('Ctrl key detected for snapping');
 				const { xEdges, yEdges } = getAllRectEdges(selectedRect);
-				console.log('Found edges - X:', xEdges.length, 'Y:', yEdges.length);
+				console.log('Found edges - X:', xEdges.length.toFixed(2), 'Y:', yEdges.length.toFixed(2));
 				
 				// Find all possible snaps with their distances
 				const snapCandidates = [];
@@ -1851,7 +1851,12 @@ import "../styles.css";
 			const attributes = {};
 			for (let i = 0; i < rect.attributes.length; i++) {
 				const attr = rect.attributes[i];
-				attributes[attr.name] = attr.value;
+				if (typeof attr.value === 'number') {
+					attributes[attr.name] = attr.value.toFixed(2);
+				} else {
+					attributes[attr.name] = attr.value;
+				}
+				
 			}
 			
 			// Create properties HTML
