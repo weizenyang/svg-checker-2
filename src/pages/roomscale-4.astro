@@ -245,6 +245,16 @@ import ObjectList from "../components/object-list.tsx";
             <div class="flex flex-col pointer-events-auto">
                 <div class="right-0 max-w-2xl text-xs" id="gizmo">
                     <div class="p-2">
+                        <div id="rendering-mode" class="mb-2">
+                            <div class="flex bg-gray-100 rounded-lg p-1">
+                                <button id="perspective-tab" class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors bg-white text-gray-900 shadow-sm">
+                                    Perspective
+                                </button>
+                                <button id="orthographic-tab" class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:text-gray-900">
+                                    Orthographic
+                                </button>
+                            </div>
+                        </div>
                         <div class="h-36 w-44" id="orthoView"></div>
                     </div>
                     <button id="open-align-popup"> Align Points </button>
@@ -1195,17 +1205,28 @@ import ObjectList from "../components/object-list.tsx";
     function createInfiniteAxisLines() {
         const axisLength = 100000; // Large enough to appear infinite
         
-        // X-axis (Red)
-        const xGeometry = new THREE.BufferGeometry().setFromPoints([
+        // Create X-axis with unit indicators baked in
+        const xPoints = [
             new THREE.Vector3(-axisLength, 0, 0),
             new THREE.Vector3(axisLength, 0, 0)
-        ]);
+        ];
+        
+        // Add unit tick marks to X-axis geometry
+        const xUnits = [1, 10, 100];
+        xUnits.forEach(unit => {
+            [-unit, unit].forEach(value => {
+                xPoints.push(new THREE.Vector3(value, -0.5, 0));
+                xPoints.push(new THREE.Vector3(value, 0.5, 0));
+            });
+        });
+        
+        const xGeometry = new THREE.BufferGeometry().setFromPoints(xPoints);
         const xMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
         const xLine = new THREE.Line(xGeometry, xMaterial);
         xLine.name = "X-Axis";
         scene.add(xLine);
         
-        // Y-axis (Green)
+        // Y-axis (Green) - no unit indicators needed for top-down view
         const yGeometry = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, -axisLength, 0),
             new THREE.Vector3(0, axisLength, 0)
@@ -1215,11 +1236,22 @@ import ObjectList from "../components/object-list.tsx";
         yLine.name = "Y-Axis";
         scene.add(yLine);
         
-        // Z-axis (Blue)
-        const zGeometry = new THREE.BufferGeometry().setFromPoints([
+        // Create Z-axis with unit indicators baked in
+        const zPoints = [
             new THREE.Vector3(0, 0, -axisLength),
             new THREE.Vector3(0, 0, axisLength)
-        ]);
+        ];
+        
+        // Add unit tick marks to Z-axis geometry
+        const zUnits = [1, 10, 100];
+        zUnits.forEach(unit => {
+            [-unit, unit].forEach(value => {
+                zPoints.push(new THREE.Vector3(0, -0.5, value));
+                zPoints.push(new THREE.Vector3(0, 0.5, value));
+            });
+        });
+        
+        const zGeometry = new THREE.BufferGeometry().setFromPoints(zPoints);
         const zMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
         const zLine = new THREE.Line(zGeometry, zMaterial);
         zLine.name = "Z-Axis";
@@ -1247,16 +1279,68 @@ import ObjectList from "../components/object-list.tsx";
     (camera as any).position.z = 0;
 
     const orthoCamera = new THREE.OrthographicCamera(
-        orthoView.clientWidth / -2,
-        orthoView.clientWidth / 2,
-        orthoView.clientHeight / 2,
-        orthoView.clientHeight / -2,
+        window.innerWidth / -0.1,  // Even wider view (was -0.5)
+        window.innerWidth / 0.1,   // Even wider view (was 0.5)
+        window.innerHeight / 0.1,  // Even taller view (was 0.5)
+        window.innerHeight / -0.1, // Even taller view (was -0.5)
         0.1,
         80000,
     );
-    (orthoCamera as any).position.x = -210.41;
-    (orthoCamera as any).position.y = 1.31;
-    (orthoCamera as any).position.z = 0;
+    // Set initial top-down position
+    orthoCamera.position.set(0, 1000, 0); // High above the scene
+    orthoCamera.lookAt(0, 0, 0); // Look down at the origin
+    orthoCamera.up.set(0, 0, -1); // Set up vector for proper orientation
+
+    // Rendering mode tracking
+    let currentRenderingMode = 'perspective'; // 'perspective' or 'orthographic'
+    let currentCamera = camera; // Active camera for main rendering
+    
+    // Orthographic mode panning controls
+    let isOrthoPanning = false;
+    let orthoPanStart = { x: 0, y: 0, cameraX: 0, cameraZ: 0 };
+
+    // Function to switch rendering mode
+    function switchRenderingMode(mode) {
+        currentRenderingMode = mode;
+        
+        // Update tab UI
+        const perspectiveTab = document.getElementById('perspective-tab');
+        const orthographicTab = document.getElementById('orthographic-tab');
+        
+        if (mode === 'perspective') {
+            perspectiveTab.className = 'flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors bg-white text-gray-900 shadow-sm';
+            orthographicTab.className = 'flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:text-gray-900';
+            currentCamera = camera;
+            // Enable orbital controls for perspective mode
+            orbitalControls.enabled = true;
+            // Show orthoView gizmo in perspective mode
+            document.getElementById('orthoView').style.display = 'block';
+        } else {
+            perspectiveTab.className = 'flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 hover:text-gray-900';
+            orthographicTab.className = 'flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors bg-white text-gray-900 shadow-sm';
+            
+            // Set orthographic camera to top-down view
+            orthoCamera.position.set(0, 1000, 0); // High above the scene
+            orthoCamera.lookAt(0, 0, 0); // Look down at the origin
+            orthoCamera.up.set(0, 0, -1); // Set up vector for proper orientation
+            
+            currentCamera = orthoCamera;
+            // Disable orbital controls for orthographic mode
+            orbitalControls.enabled = false;
+            // Hide orthoView gizmo in orthographic mode
+            document.getElementById('orthoView').style.display = 'none';
+        }
+    }
+
+    // Add event listeners for tab switching
+    document.getElementById('perspective-tab').addEventListener('click', () => {
+        switchRenderingMode('perspective');
+    });
+
+    document.getElementById('orthographic-tab').addEventListener('click', () => {
+        switchRenderingMode('orthographic');
+    });
+
     //Mouse Raycaster Perspective
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -1845,6 +1929,58 @@ async function renderOverlayCanvas(cone) {
 
     window.addEventListener("click", reviewVR);
 
+    // Orthographic mode panning controls
+    window.addEventListener("mousedown", (event) => {
+        if (currentRenderingMode === 'orthographic' && event.button === 0) { // Left mouse button
+            isOrthoPanning = true;
+            orthoPanStart.x = event.clientX;
+            orthoPanStart.y = event.clientY;
+            orthoPanStart.cameraX = orthoCamera.position.x;
+            orthoPanStart.cameraZ = orthoCamera.position.z;
+            document.body.style.cursor = 'grabbing';
+        }
+    });
+
+    window.addEventListener("mousemove", (event) => {
+        if (isOrthoPanning && currentRenderingMode === 'orthographic') {
+            const deltaX = event.clientX - orthoPanStart.x;
+            const deltaY = event.clientY - orthoPanStart.y;
+            
+            // Convert screen movement to world movement (inverse of zoom level)
+            const zoomFactor = (orthoCamera.right - orthoCamera.left) / window.innerWidth;
+            const moveX = -deltaX * zoomFactor;
+            const moveZ = -deltaY * zoomFactor; // Fixed: Y screen movement maps to Z world movement (inverted)
+            
+            orthoCamera.position.x = orthoPanStart.cameraX + moveX;
+            orthoCamera.position.z = orthoPanStart.cameraZ + moveZ;
+            orthoCamera.lookAt(orthoCamera.position.x, 0, orthoCamera.position.z);
+        }
+    });
+
+    window.addEventListener("mouseup", (event) => {
+        if (isOrthoPanning) {
+            isOrthoPanning = false;
+            document.body.style.cursor = 'default';
+        }
+    });
+
+    // Orthographic zoom with mouse wheel
+    window.addEventListener("wheel", (event) => {
+        if (currentRenderingMode === 'orthographic') {
+            event.preventDefault();
+            const zoomFactor = event.deltaY > 0 ? 1.1 : 0.9;
+            
+            const currentSize = orthoCamera.right - orthoCamera.left;
+            const newSize = currentSize * zoomFactor;
+            
+            orthoCamera.left = -newSize / 2;
+            orthoCamera.right = newSize / 2;
+            orthoCamera.top = newSize / 2;
+            orthoCamera.bottom = -newSize / 2;
+            orthoCamera.updateProjectionMatrix();
+        }
+    });
+
     window.addEventListener("keydown", (e) => {
         if (e.key == "ArrowLeft") {
             console.log(e.key);
@@ -1864,6 +2000,17 @@ async function renderOverlayCanvas(cone) {
 
     const orbitalControls = new OrbitControls(camera, renderer.domElement);
     (orbitalControls as any).enableKeys = false;
+
+    // Check URL parameters for default rendering mode and initialize
+    const urlParams = new URLSearchParams(window.location.search);
+    const defaultMode = urlParams.get('view') || urlParams.get('mode');
+    if (defaultMode === 'orthographic' || defaultMode === 'ortho') {
+        currentRenderingMode = 'orthographic';
+        currentCamera = orthoCamera;
+    }
+    
+    // Initialize the UI based on URL parameter
+    switchRenderingMode(currentRenderingMode);
 
     function fitCameraToObject(cam, controls, obj, padding = 2.5, duration = 0.6) {
     // 1. Get world-space bounding box & size
@@ -2114,7 +2261,7 @@ async function renderOverlayCanvas(cone) {
         lastTime = currentTime;
 
         // Update raycaster for object intersections
-        raycaster.setFromCamera(pointer, camera);
+        raycaster.setFromCamera(pointer, currentCamera);
         const intersects = raycaster.intersectObjects(scene.children);
 
         orthoRaycaster.setFromCamera(orthoPointer, orthoCamera);
@@ -2187,27 +2334,27 @@ async function renderOverlayCanvas(cone) {
         });
         
         // Render scene with sorted children
-        renderer.render(scene, camera);
+        renderer.render(scene, currentCamera);
         
         // Only render VRSpheres, objects, and markers if they have visible content
         if (VRSpheres.length > 0) {
             renderer.clearDepth();
             VRSpheres.forEach((e) => {
-                if (e.children.length > 0) renderer.render(e, camera);
+                if (e.children.length > 0) renderer.render(e, currentCamera);
             });
         }
 
         if (objects.length > 0) {
             renderer.clearDepth();
             objects.forEach((e) => {
-                if (e.children.length > 0) renderer.render(e, camera);
+                if (e.children.length > 0) renderer.render(e, currentCamera);
             });
         }
 
         if (markers.length > 0) {
             renderer.clearDepth();
             markers.forEach((e) => {
-                if (e.children.length > 0) renderer.render(e, camera);
+                if (e.children.length > 0) renderer.render(e, currentCamera);
             });
         }
 
@@ -3157,7 +3304,7 @@ async function renderOverlayCanvas(cone) {
         const heightHalf = height / 2;
 
         const distances = markers.map((marker) =>
-            camera.position.distanceTo(marker.position),
+            currentCamera.position.distanceTo(marker.position),
         );
         const minDistance = Math.min(...distances);
         const maxDistance = Math.max(...distances);
@@ -3166,8 +3313,8 @@ async function renderOverlayCanvas(cone) {
         // Sort markers by distance from the camera (closest markers first)
         const sortedMarkers = markers
             .sort((a, b) => {
-                const distanceA = camera.position.distanceTo(a.position);
-                const distanceB = camera.position.distanceTo(b.position);
+                const distanceA = currentCamera.position.distanceTo(a.position);
+                const distanceB = currentCamera.position.distanceTo(b.position);
                 return distanceA - distanceB;
             })
             .filter((e) => e.visible);
@@ -3179,7 +3326,7 @@ async function renderOverlayCanvas(cone) {
 
             // Get the 3D position of the marker and project it to 2D
             const vector = new THREE.Vector3();
-            vector.setFromMatrixPosition(marker.matrixWorld).project(camera);
+            vector.setFromMatrixPosition(marker.matrixWorld).project(currentCamera);
 
             // Convert to 2D screen space
             const x = vector.x * widthHalf + widthHalf;
@@ -3191,7 +3338,7 @@ async function renderOverlayCanvas(cone) {
                 vector.z > -1 && vector.z < 1 ? "block" : "none";
 
             // Calculate distance and adjust opacity based on the relative distance
-            const distance = camera.position.distanceTo(marker.position);
+            const distance = currentCamera.position.distanceTo(marker.position);
             const normalizedDistance =
                 (distance - minDistance + 1) / distanceRange;
             const minOpacity = 0.6;
@@ -4479,10 +4626,20 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     window.addEventListener("resize", onWindowResize, false);
 
     function onWindowResize() {
+        // Update perspective camera
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        
+        // Update orthographic camera
+        orthoCamera.left = window.innerWidth / -0.1;
+        orthoCamera.right = window.innerWidth / 0.1;
+        orthoCamera.top = window.innerHeight / 0.1;
+        orthoCamera.bottom = window.innerHeight / -0.1;
+        orthoCamera.updateProjectionMatrix();
+        
         renderer.setSize(window.innerWidth, window.innerHeight);
         updateGizmoSize();
+        updateLabelPositions(); // Fix label drift on window resize
     }
 </script>
 
