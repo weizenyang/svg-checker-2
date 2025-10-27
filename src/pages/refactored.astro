@@ -448,7 +448,7 @@ import "../styles.css";
 					type="file"
 					class="input-style"
 					id="check-floorplans-button"
-					accept="image/jpeg, image/png, image/webp"
+					accept="image/jpeg, image/png, image/webp, video/mp4, video/webm, video/ogg"
 					name="filename"
 					multiple
 					style="display:none; "
@@ -1794,26 +1794,27 @@ import "../styles.css";
 		}
 
 		function handleDraggedImages(files) {
-			const imageFiles = Array.from(files).filter((file) =>
-				file.type.startsWith("image/"),
+			const mediaFiles = Array.from(files).filter((file) =>
+				file.type.startsWith("image/") || file.type.startsWith("video/"),
 			);
-			if (imageFiles.length === 0) return;
+			if (mediaFiles.length === 0) return;
 
-			imageFiles.forEach((imageFile) => {
+			mediaFiles.forEach((mediaFile) => {
 				const reader = new FileReader();
+				const isVideo = mediaFile.type.startsWith("video/");
 				reader.onload = (event) => {
 					const contents = event.target.result;
-					console.log("Image File")
-					console.log(imageFile.name)
-					const imageBaseName = getBaseName(imageFile.name);
-					// Extract last 2 segments from image name
+					console.log(isVideo ? "Video File" : "Image File")
+					console.log(mediaFile.name)
+					const mediaBaseName = getBaseName(mediaFile.name);
+					// Extract last 2 segments from media name
 					// Example: "backplate_image_tower-floorplate_b1_01.webp" -> "b1_01"
-					const imageNameParts = imageBaseName.split("_");
-					const imageLastTwoSegments = imageNameParts.length >= 2 
-						? imageNameParts.slice(-2).join("_")
-						: imageBaseName;
+					const mediaNameParts = mediaBaseName.split("_");
+					const mediaLastTwoSegments = mediaNameParts.length >= 2 
+						? mediaNameParts.slice(-2).join("_")
+						: mediaBaseName;
 					
-					console.log("Image name:", imageFile.name, "-> last 2 segments:", imageLastTwoSegments)
+					console.log(isVideo ? "Video name:" : "Image name:", mediaFile.name, "-> last 2 segments:", mediaLastTwoSegments)
 					console.log(importedSVGs)
 					// Loop through the imported SVG objects to find a matching name
 					importedSVGs.forEach((svgObj) => {
@@ -1829,18 +1830,18 @@ import "../styles.css";
 						
 						console.log("SVG name:", svgObj.name, "-> last 2 segments:", svgLastTwoSegments);
 						
-						if (svgLastTwoSegments === imageLastTwoSegments) {
+						if (svgLastTwoSegments === mediaLastTwoSegments) {
 							console.log(svgBaseName)
-							console.log(imageBaseName)
+							console.log(mediaBaseName)
 							const svgElement = svgObj.element;
+							const viewBox = svgElement.getAttribute("viewBox").split(" ");
 							
-							// Remove any existing background images before adding new one
+							// Remove any existing background media (images, videos, foreignObject) before adding new one
 							const existingImages = svgElement.querySelectorAll("image");
 							existingImages.forEach(img => {
 								// Only remove images that appear to be background images (full size)
 								const imgWidth = img.getAttribute("width");
 								const imgHeight = img.getAttribute("height");
-								const viewBox = svgElement.getAttribute("viewBox").split(" ");
 								
 								if (imgWidth === viewBox[2] && imgHeight === viewBox[3]) {
 									img.remove();
@@ -1848,38 +1849,73 @@ import "../styles.css";
 								}
 							});
 							
-							// Create an <image> element for the SVG
-							const svgImage = document.createElementNS(
-								"http://www.w3.org/2000/svg",
-								"image",
-							);
-							const viewBox = svgElement
-								.getAttribute("viewBox")
-								.split(" ");
-							svgImage.setAttributeNS(null, "href", contents);
-							svgImage.setAttributeNS(null, "x", "0");
-							svgImage.setAttributeNS(null, "y", "0");
-							svgImage.setAttributeNS(null, "width", viewBox[2]);
-							svgImage.setAttributeNS(null, "height", viewBox[3]);
-							// Insert the image as the first child (or adjust position as needed)
-							console.log("Adding new background image to SVG");
-							svgElement.insertBefore(svgImage, svgElement.firstChild);
+							// Remove existing foreignObject elements (videos)
+							const existingForeignObjects = svgElement.querySelectorAll("foreignObject");
+							existingForeignObjects.forEach(fo => {
+								const foWidth = fo.getAttribute("width");
+								const foHeight = fo.getAttribute("height");
+								if (foWidth === viewBox[2] && foHeight === viewBox[3]) {
+									fo.remove();
+									console.log("Removed existing background video from SVG");
+								}
+							});
+							
+							if (isVideo) {
+								// Create a <foreignObject> to contain HTML video element
+								const foreignObject = document.createElementNS(
+									"http://www.w3.org/2000/svg",
+									"foreignObject",
+								);
+								foreignObject.setAttributeNS(null, "x", "0");
+								foreignObject.setAttributeNS(null, "y", "0");
+								foreignObject.setAttributeNS(null, "width", viewBox[2]);
+								foreignObject.setAttributeNS(null, "height", viewBox[3]);
+								
+								// Create video element
+								const video = document.createElement("video");
+								video.src = contents;
+								video.style.width = "100%";
+								video.style.height = "100%";
+								video.style.objectFit = "cover";
+								video.setAttribute("loop", "");
+								video.setAttribute("muted", "");
+								video.setAttribute("autoplay", "");
+								video.setAttribute("playsinline", "");
+								
+								foreignObject.appendChild(video);
+								console.log("Adding new background video to SVG");
+								svgElement.insertBefore(foreignObject, svgElement.firstChild);
+							} else {
+								// Create an <image> element for the SVG
+								const svgImage = document.createElementNS(
+									"http://www.w3.org/2000/svg",
+									"image",
+								);
+								svgImage.setAttributeNS(null, "href", contents);
+								svgImage.setAttributeNS(null, "x", "0");
+								svgImage.setAttributeNS(null, "y", "0");
+								svgImage.setAttributeNS(null, "width", viewBox[2]);
+								svgImage.setAttributeNS(null, "height", viewBox[3]);
+								// Insert the image as the first child (or adjust position as needed)
+								console.log("Adding new background image to SVG");
+								svgElement.insertBefore(svgImage, svgElement.firstChild);
+							}
 						}
 					});
 				};
-				reader.readAsDataURL(imageFile);
+				reader.readAsDataURL(mediaFile);
 			});
 		}
 
 		function handleFileChange(files) {
 			console.log(files);
 			const file = files[0];
-			// Determine if this is a raster image import (jpeg/png/webp)
-			const isRasterImage =
-				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp");
+			// Determine if this is a raster image or video import (jpeg/png/webp/mp4/webm)
+			const isRasterMedia =
+				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp" || file.type.startsWith("video/"));
 
-			// Only reset global states when not importing a raster image
-			if (!isRasterImage) {
+			// Only reset global states when not importing a raster media (image/video)
+			if (!isRasterMedia) {
 				flipped = false;
 				object3dCount = 0;
 				globalFloors = [];
@@ -1907,8 +1943,8 @@ import "../styles.css";
 			// 	return;
 			// }
 
-			// Only reset UI/toggles when not importing a raster image (jpeg/png/webp)
-			if (!isRasterImage) {
+			// Only reset UI/toggles when not importing a raster media (jpeg/png/webp/video)
+			if (!isRasterMedia) {
 				updateResetButtons();
 
 				// Refresh show floors section
@@ -1963,7 +1999,8 @@ import "../styles.css";
 			} else if (
 				file.type === "image/jpeg" ||
 				file.type === "image/png" ||
-				file.type === "image/webp"
+				file.type === "image/webp" ||
+				file.type.startsWith("video/")
 			) {
 				handleDraggedImages(files)
 			} else if (file.type === "text/csv") {
@@ -2009,19 +2046,16 @@ import "../styles.css";
 			} else if (
 				file.type === "image/jpeg" ||
 				file.type === "image/png" ||
-				file.type === "image/webp"
+				file.type === "image/webp" ||
+				file.type.startsWith("video/")
 			) {
+				const isVideo = file.type.startsWith("video/");
 				fileNameGlobal = file.name;
 				document.getElementById("export-file-name").value =
 					fileNameGlobal;
 				const reader = new FileReader();
 				reader.onload = (event) => {
 					const contents = event.target.result;
-					// const img = document.createElement("img");
-					// img.src = contents;
-					// img.style.maxHeight = "100%";
-					// img.style.maxWidth = "100%";
-					// img.style.borderRadius = "5px"
 					const svgContainer =
 						document.getElementById("svg-container");
 					// Use any existing SVG (including one created by CSV import). Do not clear container if found.
@@ -2034,13 +2068,14 @@ import "../styles.css";
 						internalSVG = newSVG;
 					}
 
+					const svgViewbox = internalSVG.getAttribute("viewBox").split(" ");
+
 					// Remove any existing background images before adding new one
 					const existingImages = internalSVG.querySelectorAll("image");
 					existingImages.forEach(img => {
 						// Only remove images that appear to be background images (full size)
 						const imgWidth = img.getAttribute("width");
 						const imgHeight = img.getAttribute("height");
-						const svgViewbox = internalSVG.getAttribute("viewBox").split(" ");
 						
 						if (imgWidth === svgViewbox[2] && imgHeight === svgViewbox[3]) {
 							img.remove();
@@ -2048,21 +2083,56 @@ import "../styles.css";
 						}
 					});
 
-					const svgImage = document.createElementNS(
-						"http://www.w3.org/2000/svg",
-						"image",
-					);
-					const svgViewbox = internalSVG
-						.getAttribute("viewBox")
-						.split(" ");
-					svgImage.setAttributeNS(null, "href", contents);
-					svgImage.setAttributeNS(null, "x", "0");
-					svgImage.setAttributeNS(null, "y", "0");
-					svgImage.setAttributeNS(null, "width", svgViewbox[2]);
-					svgImage.setAttributeNS(null, "height", svgViewbox[3]);
+					// Remove existing foreignObject elements (videos)
+					const existingForeignObjects = internalSVG.querySelectorAll("foreignObject");
+					existingForeignObjects.forEach(fo => {
+						const foWidth = fo.getAttribute("width");
+						const foHeight = fo.getAttribute("height");
+						if (foWidth === svgViewbox[2] && foHeight === svgViewbox[3]) {
+							fo.remove();
+							console.log("Removed existing background video");
+						}
+					});
 
-					console.log("Adding new background image");
-					internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+					if (isVideo) {
+						// Create a <foreignObject> to contain HTML video element
+						const foreignObject = document.createElementNS(
+							"http://www.w3.org/2000/svg",
+							"foreignObject",
+						);
+						foreignObject.setAttributeNS(null, "x", "0");
+						foreignObject.setAttributeNS(null, "y", "0");
+						foreignObject.setAttributeNS(null, "width", svgViewbox[2]);
+						foreignObject.setAttributeNS(null, "height", svgViewbox[3]);
+						
+						// Create video element
+						const video = document.createElement("video");
+						video.src = contents;
+						video.style.width = "100%";
+						video.style.height = "100%";
+						video.style.objectFit = "cover";
+						video.setAttribute("loop", "");
+						video.setAttribute("muted", "");
+						video.setAttribute("autoplay", "");
+						video.setAttribute("playsinline", "");
+						
+						foreignObject.appendChild(video);
+						console.log("Adding new background video");
+						internalSVG.insertBefore(foreignObject, internalSVG.firstChild);
+					} else {
+						const svgImage = document.createElementNS(
+							"http://www.w3.org/2000/svg",
+							"image",
+						);
+						svgImage.setAttributeNS(null, "href", contents);
+						svgImage.setAttributeNS(null, "x", "0");
+						svgImage.setAttributeNS(null, "y", "0");
+						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
+						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
+
+						console.log("Adding new background image");
+						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+					}
 				};
 				reader.readAsDataURL(file);
 			} else if (file.type === "text/csv") {
