@@ -1564,7 +1564,7 @@ async function reviewVR(event) {
 
     // Helper function to apply flipping based on image name
     function applyImageFlipping(imageName) {
-        const shouldFlip = imageName.toLowerCase().includes("bf");
+        const shouldFlip = imageName.toLowerCase().includes("bf") || imageName.toLowerCase().includes("sf");
         
         if (shouldFlip) {
             img.style.transform = "scaleX(-1)";
@@ -2211,7 +2211,7 @@ async function renderOverlayCanvas(cone) {
 
         // Helper function to apply flipping based on image name
         function applyImageFlipping(imageName) {
-            const shouldFlip = imageName.toLowerCase().includes("bf");
+            const shouldFlip = imageName.toLowerCase().includes("bf") || imageName.toLowerCase().includes("sf");
             
             if (shouldFlip) {
                 img.style.transform = "scaleX(-1)";
