@@ -3191,7 +3191,7 @@ async function renderOverlayCanvas(cone) {
         const originalScale = object.scale.clone();
         
         // Temporarily reset scale to 1:1 for export (remove the 100x scaling)
-        object.scale.set(0.01, 0.01, 0.01);
+        object.scale.set(1, 1, 1);
         object.updateMatrixWorld(true);
         
         const exporter = new GLTFExporter();
