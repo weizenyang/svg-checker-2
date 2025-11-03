@@ -3187,10 +3187,21 @@ async function renderOverlayCanvas(cone) {
 
     // Function to export a Three.js object to a GLB file
     function exportToGLB(object, filename) {
+        // Store original scale
+        const originalScale = object.scale.clone();
+        
+        // Temporarily reset scale to 1:1 for export (remove the 100x scaling)
+        object.scale.set(0.01, 0.01, 0.01);
+        object.updateMatrixWorld(true);
+        
         const exporter = new GLTFExporter();
         exporter.parse(
             object,
             (result) => {
+                // Restore original scale after export
+                object.scale.copy(originalScale);
+                object.updateMatrixWorld(true);
+                
                 let blob;
                 if (result instanceof ArrayBuffer) {
                     blob = new Blob([result], {
@@ -3208,6 +3219,9 @@ async function renderOverlayCanvas(cone) {
                 saveBlob(blob, filename);
             },
             (error) => {
+                // Restore original scale even if export fails
+                object.scale.copy(originalScale);
+                object.updateMatrixWorld(true);
                 console.error("An error occurred during the GLB export", error);
             },
             { binary: true }, // Options object with binary set to true
