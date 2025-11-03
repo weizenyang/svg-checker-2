@@ -89,7 +89,7 @@ import ObjectList from "../components/object-list.tsx";
                 
             </div>
             <div class="flex mt-3">
-                <p class="font-medium">Flip:</p>
+                <p class="font-medium">Flip Points:</p>
             </div>
             <div class="flex space-x-1">
                 
@@ -116,6 +116,30 @@ import ObjectList from "../components/object-list.tsx";
                     id="y-up"
                 >
                     -Y Coord
+                </button>
+            </div>
+
+            <div class="flex mt-3">
+                <p class="font-medium">Flip Models:</p>
+            </div>
+            <div class="flex space-x-1">
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="model-x-flip"
+                >
+                    X-Axis
+                </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="model-y-flip"
+                >
+                    Y-Axis
+                </button>
+                <button
+                    class="bg-zinc-300 p-1 pt-0 pb-0 rounded-sm transition-all duration-75 drop-shadow-sm hover:text-lime-700 hover:bg-zinc-200 hover:drop-shadow-lg active:bg-zinc-300"
+                    id="model-z-flip"
+                >
+                    Z-Axis
                 </button>
             </div>
 
@@ -3646,6 +3670,34 @@ async function renderOverlayCanvas(cone) {
         m_Group.children.forEach((e) => {
             const initYPos = e.position.y;
             e.position.y = -initYPos;
+        });
+    });
+
+    // Model flip event listeners
+    document.getElementById("model-x-flip").addEventListener("click", (e) => {
+        objects.forEach((obj) => {
+            obj.rotateOnWorldAxis(
+                new THREE.Vector3(1, 0, 0),
+                THREE.MathUtils.degToRad(180),
+            );
+        });
+    });
+
+    document.getElementById("model-y-flip").addEventListener("click", (e) => {
+        objects.forEach((obj) => {
+            obj.rotateOnWorldAxis(
+                new THREE.Vector3(0, 1, 0),
+                THREE.MathUtils.degToRad(180),
+            );
+        });
+    });
+
+    document.getElementById("model-z-flip").addEventListener("click", (e) => {
+        objects.forEach((obj) => {
+            obj.rotateOnWorldAxis(
+                new THREE.Vector3(0, 0, 1),
+                THREE.MathUtils.degToRad(180),
+            );
         });
     });
 
