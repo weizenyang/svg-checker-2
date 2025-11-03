@@ -3231,7 +3231,7 @@ async function renderOverlayCanvas(cone) {
         }, 100);
     }
 
-    // Function to export all FBX files in fbxFiles array
+    // Function to export all models (GLB and FBX) in objects array
     function exportAllFBXFilesToGLB() {
         const exportEntireScene = document.getElementById(
             "export-all-scene-checkbox",
@@ -3240,11 +3240,14 @@ async function renderOverlayCanvas(cone) {
             // Export the entire scene
             exportToGLB(scene, "scene.glb");
         } else {
-            // Export only the FBX models
-            fbxFiles.forEach((fbxFile) => {
-                const object = scene.getObjectByName(fbxFile.fileName);
-                if (object) {
-                    const filename = `${fbxFile.fileName.split(".")[0]}.glb`;
+            // Export all loaded models
+            if (objects.length === 0) {
+                alert("error", "No models loaded to export");
+                return;
+            }
+            objects.forEach((object) => {
+                if (object && object.name) {
+                    const filename = `${object.name.split(".")[0]}.glb`;
                     exportToGLB(object, filename);
                 }
             });
