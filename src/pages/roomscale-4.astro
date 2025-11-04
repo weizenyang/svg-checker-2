@@ -3203,8 +3203,14 @@ async function renderOverlayCanvas(cone) {
             }
         });
         
-        // Temporarily reset scale to 1:1 for export (remove the 100x scaling)
-        object.scale.set(1, 1, 1);
+        // Temporarily reset scale to 1:1 but preserve flips (negative scale)
+        // If scale is 100, set to 1; if scale is -100, set to -1 (preserve the flip)
+        const normalizedScale = new THREE.Vector3(
+            originalScale.x >= 0 ? 1 : -1,
+            originalScale.y >= 0 ? 1 : -1,
+            originalScale.z >= 0 ? 1 : -1
+        );
+        object.scale.copy(normalizedScale);
         object.updateMatrixWorld(true);
         
         const exporter = new GLTFExporter();
