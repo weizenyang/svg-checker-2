@@ -4079,10 +4079,12 @@ async function render360SnapshotForCone(cone, allCones = markers) {
 
 
 
-    // 2) add a light at every cone in the group
+    // 2) add a light at every cone in the group - use world positions
     const lights = markers.map((mark) => {
         const light = new THREE.PointLight(0xffffff, 10, 0, 0.8);
-        light.position.copy(mark.position);
+        const worldPos = new THREE.Vector3();
+        mark.getWorldPosition(worldPos);
+        light.position.copy(worldPos);
         scene.add(light);
         return light;
     });
@@ -4104,9 +4106,14 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     const prevOverride = scene.overrideMaterial;
     scene.overrideMaterial = whiteMat;
 
-    // Capture cube map
-    cubeCamera.position.copy(cone.position);
-    cubeCamera.quaternion.copy(cone.quaternion);
+    // Capture cube map - use world position and quaternion to handle flipped parents
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
+    cone.getWorldPosition(worldPos);
+    cone.getWorldQuaternion(worldQuat);
+    
+    cubeCamera.position.copy(worldPos);
+    cubeCamera.quaternion.copy(worldQuat);
     cubeCamera.quaternion.multiply(
       new THREE.Quaternion().setFromAxisAngle(
         new THREE.Vector3(0,1,0),
@@ -4187,10 +4194,12 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         const cones = groupObj.children.filter((ch) => ch.cameraPos);
         console.log(`Found ${cones.length} cones for group ${prefix}`);
 
-        // Add lights once
+        // Add lights once - use world positions to handle flipped parents
         const lights = cones.map((cone) => {
             const light = new THREE.PointLight(0xffffff, 20, 0, 0.8);
-            light.position.copy(cone.position);
+            const worldPos = new THREE.Vector3();
+            cone.getWorldPosition(worldPos);
+            light.position.copy(worldPos);
             scene.add(light);
             return light;
         });
@@ -4216,10 +4225,15 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             const prevOverride = scene.overrideMaterial;
             scene.overrideMaterial = whiteMat;
 
-            // Capture cube map
-            cubeCamera.position.copy(cone.position);
-            console.log(cone.quaternion)
-            cubeCamera.quaternion.copy(cone.quaternion);
+            // Capture cube map - use world position and quaternion to handle flipped parents
+            const worldPos = new THREE.Vector3();
+            const worldQuat = new THREE.Quaternion();
+            cone.getWorldPosition(worldPos);
+            cone.getWorldQuaternion(worldQuat);
+            
+            cubeCamera.position.copy(worldPos);
+            console.log(worldQuat)
+            cubeCamera.quaternion.copy(worldQuat);
                // add a 90° clockwise offset about world-Y
                cubeCamera.quaternion.multiply(
                  new THREE.Quaternion().setFromAxisAngle(
