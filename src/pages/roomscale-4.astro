@@ -3190,6 +3190,19 @@ async function renderOverlayCanvas(cone) {
         // Store original scale
         const originalScale = object.scale.clone();
         
+        // Store original wireframe states and temporarily disable wireframe
+        const wireframeStates = [];
+        object.traverse((child) => {
+            if (child.isMesh && child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((mat) => {
+                    wireframeStates.push({ material: mat, wireframe: mat.wireframe });
+                    mat.wireframe = false;
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+        
         // Temporarily reset scale to 1:1 for export (remove the 100x scaling)
         object.scale.set(1, 1, 1);
         object.updateMatrixWorld(true);
@@ -3201,6 +3214,12 @@ async function renderOverlayCanvas(cone) {
                 // Restore original scale after export
                 object.scale.copy(originalScale);
                 object.updateMatrixWorld(true);
+                
+                // Restore original wireframe states
+                wireframeStates.forEach(({ material, wireframe }) => {
+                    material.wireframe = wireframe;
+                    material.needsUpdate = true;
+                });
                 
                 let blob;
                 if (result instanceof ArrayBuffer) {
@@ -3219,9 +3238,15 @@ async function renderOverlayCanvas(cone) {
                 saveBlob(blob, filename);
             },
             (error) => {
-                // Restore original scale even if export fails
+                // Restore original scale and wireframe states even if export fails
                 object.scale.copy(originalScale);
                 object.updateMatrixWorld(true);
+                
+                wireframeStates.forEach(({ material, wireframe }) => {
+                    material.wireframe = wireframe;
+                    material.needsUpdate = true;
+                });
+                
                 console.error("An error occurred during the GLB export", error);
             },
             { binary: true }, // Options object with binary set to true
