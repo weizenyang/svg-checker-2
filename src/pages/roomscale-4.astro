@@ -3688,24 +3688,21 @@ async function renderOverlayCanvas(cone) {
     });
 
     document.getElementById("x-flip").addEventListener("click", (e) => {
-        m_Group.rotateOnWorldAxis(
-            new THREE.Vector3(1, 0, 0),
-            THREE.MathUtils.degToRad(180),
-        );
+        // Flip by inverting scale on X axis
+        m_Group.scale.x *= -1;
+        m_Group.updateMatrixWorld(true);
     });
 
     document.getElementById("y-flip").addEventListener("click", (e) => {
-        m_Group.rotateOnWorldAxis(
-            new THREE.Vector3(0, 1, 0),
-            THREE.MathUtils.degToRad(180),
-        );
+        // Flip by inverting scale on Y axis
+        m_Group.scale.y *= -1;
+        m_Group.updateMatrixWorld(true);
     });
 
     document.getElementById("z-flip").addEventListener("click", (e) => {
-        m_Group.rotateOnWorldAxis(
-            new THREE.Vector3(0, 0, 1),
-            THREE.MathUtils.degToRad(180),
-        );
+        // Flip by inverting scale on Z axis
+        m_Group.scale.z *= -1;
+        m_Group.updateMatrixWorld(true);
     });
 
     document.getElementById("y-up").addEventListener("click", (e) => {
@@ -3718,28 +3715,25 @@ async function renderOverlayCanvas(cone) {
     // Model flip event listeners
     document.getElementById("model-x-flip").addEventListener("click", (e) => {
         objects.forEach((obj) => {
-            obj.rotateOnWorldAxis(
-                new THREE.Vector3(1, 0, 0),
-                THREE.MathUtils.degToRad(180),
-            );
+            // Flip by inverting scale on X axis
+            obj.scale.x *= -1;
+            obj.updateMatrixWorld(true);
         });
     });
 
     document.getElementById("model-y-flip").addEventListener("click", (e) => {
         objects.forEach((obj) => {
-            obj.rotateOnWorldAxis(
-                new THREE.Vector3(0, 1, 0),
-                THREE.MathUtils.degToRad(180),
-            );
+            // Flip by inverting scale on Y axis
+            obj.scale.y *= -1;
+            obj.updateMatrixWorld(true);
         });
     });
 
     document.getElementById("model-z-flip").addEventListener("click", (e) => {
         objects.forEach((obj) => {
-            obj.rotateOnWorldAxis(
-                new THREE.Vector3(0, 0, 1),
-                THREE.MathUtils.degToRad(180),
-            );
+            // Flip by inverting scale on Z axis
+            obj.scale.z *= -1;
+            obj.updateMatrixWorld(true);
         });
     });
 
