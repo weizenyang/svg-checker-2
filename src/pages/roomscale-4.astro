@@ -3308,12 +3308,17 @@ async function renderOverlayCanvas(cone) {
 
         m_Group.children.forEach((child) => {
             if (child instanceof THREE.Mesh && child.cameraPos) {
-                // Get world position
+                // Get world position and quaternion to account for flipped parents
                 const worldPosition = new THREE.Vector3();
+                const worldQuaternion = new THREE.Quaternion();
+                const worldEuler = new THREE.Euler();
+                
                 child.getWorldPosition(worldPosition);
+                child.getWorldQuaternion(worldQuaternion);
+                worldEuler.setFromQuaternion(worldQuaternion, 'XYZ');
 
                 // Format: name,x,-z,y,0,0,rotation_y_in_degrees
-                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${worldPosition.y.toFixed(6)},0,0,${THREE.MathUtils.radToDeg(child.rotation.y).toFixed(6)}\n`;
+                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${worldPosition.y.toFixed(6)},0,0,${THREE.MathUtils.radToDeg(worldEuler.y).toFixed(6)}\n`;
             }
         });
 
