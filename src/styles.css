@@ -372,11 +372,11 @@ h3 {
 }
 
 .svg-tool-selected {
-    fill: #ff0000;
+    fill: #87CEEB;
 }
 
 .hovered {
-    fill: #ff000066;
+    fill: #87CEEB66;
 }
 
 .sub-item {

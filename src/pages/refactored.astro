@@ -11,6 +11,7 @@ import "../styles.css";
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Astro</title>
+		<link rel="stylesheet" href="/fonts/poppins.css" />
 		<style>
 			/* Floor toggle drag styles */
 			[data-project-floor] {
@@ -543,6 +544,92 @@ import "../styles.css";
 		let aggregatePoints = false;
 		let checkboxesId = [];
 
+		// Undo/Redo system
+		let undoStack = [];
+		let redoStack = [];
+		const MAX_HISTORY = 50; // Limit history size
+		let hasSavedStateForCurrentOperation = false; // Track if we've saved state for current drag/operation
+		let hasMovedDuringDrag = false; // Track if we actually moved elements during the current drag
+
+		// Save current SVG state to history
+		function saveState() {
+			const svgElement = globalSvgContainer.querySelector("svg");
+			if (svgElement) {
+				const svgClone = svgElement.cloneNode(true) as SVGElement;
+				const state = new XMLSerializer().serializeToString(svgClone);
+				undoStack.push(state);
+				// Limit stack size
+				if (undoStack.length > MAX_HISTORY) {
+					undoStack.shift();
+				}
+				// Clear redo stack when new action is performed
+				redoStack = [];
+			}
+		}
+
+		// Restore SVG state from history
+		function restoreState(state: string) {
+			const svgElement = globalSvgContainer.querySelector("svg");
+			if (svgElement && state) {
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(state, "image/svg+xml");
+				const newSvg = doc.querySelector("svg");
+				if (newSvg) {
+					// Preserve viewBox and other attributes
+					const viewBox = svgElement.getAttribute("viewBox");
+					const width = svgElement.getAttribute("width");
+					const height = svgElement.getAttribute("height");
+					
+					// Replace the SVG content
+					svgElement.innerHTML = newSvg.innerHTML;
+					
+					// Restore attributes
+					if (viewBox) svgElement.setAttribute("viewBox", viewBox);
+					if (width) svgElement.setAttribute("width", width);
+					if (height) svgElement.setAttribute("height", height);
+					
+					// Update labels and other UI
+					spawnLabel();
+				}
+			}
+		}
+
+		// Undo function
+		function undo() {
+			if (undoStack.length > 0) {
+				const currentState = new XMLSerializer().serializeToString(
+					globalSvgContainer.querySelector("svg")?.cloneNode(true) as SVGElement
+				);
+				redoStack.push(currentState);
+				if (redoStack.length > MAX_HISTORY) {
+					redoStack.shift();
+				}
+				
+				const previousState = undoStack.pop();
+				if (previousState) {
+					restoreState(previousState);
+				}
+			}
+		}
+
+		// Redo function
+		function redo() {
+			if (redoStack.length > 0) {
+				const currentState = new XMLSerializer().serializeToString(
+					globalSvgContainer.querySelector("svg")?.cloneNode(true) as SVGElement
+				);
+				undoStack.push(currentState);
+				if (undoStack.length > MAX_HISTORY) {
+					undoStack.shift();
+				}
+				
+				const nextState = redoStack.pop();
+				if (nextState) {
+					restoreState(nextState);
+				}
+			}
+		}
+
 		//Multiple SVGs
 		var importedSVGs = [];
 		var currentSVGIndex = 0;
@@ -730,7 +817,7 @@ import "../styles.css";
 		if (!el || el.nodeName.toLowerCase() === 'svg') return;        // ignore root SVG
 			if (!el.classList.contains('svg-tool-selected')) {             // not already in set
 				el.classList.add('svg-tool-selected');
-				el.style.fill = '#ff0000';
+				el.style.fill = '#87CEEB';
 				groupGlobal.push(el);
 			}
 		}
@@ -774,7 +861,7 @@ import "../styles.css";
 						) {
 							currentSelected.style.fill = "";
 						} else {
-							currentSelected.style.fill = "#ff0000";
+							currentSelected.style.fill = "#87CEEB";
 						}
 					}
 					document.getElementById("tag").style.display = "flex";
@@ -842,7 +929,7 @@ import "../styles.css";
 				}
 
 				document.querySelectorAll(".hovered").forEach((e) => {
-					e.style.fill = "#ff000066";
+					e.style.fill = "#87CEEB66";
 				});
 			});
 
@@ -952,7 +1039,7 @@ import "../styles.css";
 				}
 
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
-					e.style.fill = "#ff0000";
+					e.style.fill = "#87CEEB";
 				});
 			});
 
@@ -994,9 +1081,11 @@ import "../styles.css";
 		document
 			.getElementById("delete-point")
 			.addEventListener("click", (e) => {
+				saveState();
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.remove();
 				});
+				spawnLabel();
 			});
 
 		document.getElementById("set-id").addEventListener("click", (e) => {
@@ -1132,6 +1221,7 @@ import "../styles.css";
 					) {
 						console.log("Moving single item");
 						moveElement(tempSelected, deltaX, deltaY);
+						hasMovedDuringDrag = true; // Track that we moved something
 					}
 					// Move multiple selected items
 					else if (multiSelect && groupGlobal.length > 0) {
@@ -1139,6 +1229,7 @@ import "../styles.css";
 						groupGlobal.forEach((item) =>
 							moveElement(item, deltaX, deltaY),
 						);
+						hasMovedDuringDrag = true; // Track that we moved something
 					}
 
 					// console.log("Mouse Down + Move");
@@ -1164,6 +1255,7 @@ import "../styles.css";
 					groupGlobal.forEach((item) =>
 						scaleElement(item, scaleFactor, anchorPoint),
 					);
+					hasMovedDuringDrag = true; // Track that we scaled something
 
 					console.log("Scaling all items");
 				}
@@ -1175,10 +1267,18 @@ import "../styles.css";
 			spawnLabel();
 			if (mouseInContainer && tempSelected != null) {
 				if (e.button === 0) {
-					// Left mouse button
+					// Left mouse button - save state before starting drag
+					if (!hasSavedStateForCurrentOperation) {
+						saveState();
+						hasSavedStateForCurrentOperation = true;
+					}
 					mouseDown = true;
 				} else if (e.button === 2) {
-					// Right mouse button
+					// Right mouse button - save state before starting scale
+					if (!hasSavedStateForCurrentOperation) {
+						saveState();
+						hasSavedStateForCurrentOperation = true;
+					}
 					rightMouseDown = true;
 					prevMouseX = e.clientX;
 					prevMouseY = e.clientY;
@@ -1258,7 +1358,7 @@ import "../styles.css";
 			}
 
 			document.querySelectorAll(".selected").forEach((e) => {
-				e.style.fill = "#ff0000";
+				e.style.fill = "#87CEEB";
 			});
 		});
 
@@ -1404,9 +1504,24 @@ import "../styles.css";
 		}
 
 		document.addEventListener("mouseup", (e) => {
+			// If we moved or scaled something during the drag, save the final state
+			// This creates the "after" state for undo/redo
+			if (hasMovedDuringDrag) {
+				// Save the state after the move/scale operation completes
+				saveState();
+			} else if (hasSavedStateForCurrentOperation) {
+				// If we saved state on mouse down but didn't move, remove it to avoid clutter
+				// (user just clicked without dragging)
+				if (undoStack.length > 0) {
+					undoStack.pop();
+				}
+			}
+			
 			tempSelected = null;
 			mouseDown = false;
 			rightMouseDown = false;
+			hasSavedStateForCurrentOperation = false; // Reset flag for next operation
+			hasMovedDuringDrag = false; // Reset move tracking flag
 		});
 
 		document.getElementById("add-point").addEventListener("click", (e) => {
@@ -2050,7 +2165,10 @@ import "../styles.css";
 				file.type.startsWith("video/")
 			) {
 				const isVideo = file.type.startsWith("video/");
-				fileNameGlobal = file.name;
+				fileNameGlobal = file.name
+					.replace("backplate_image_camera", "csv_floorplan")
+					.replace("backplate_image_floorplan", "csv_floorplan")
+					.replace("camera", "floorplan");
 				document.getElementById("export-file-name").value =
 					fileNameGlobal;
 				const reader = new FileReader();
@@ -2150,7 +2268,10 @@ import "../styles.css";
 					});
 				}
 
-				fileNameGlobal = file.name.replace("camera", "floorplan");
+				fileNameGlobal = file.name
+					.replace("backplate_image_camera", "csv_floorplan")
+					.replace("backplate_image_floorplan", "csv_floorplan")
+					.replace("camera", "floorplan");
 
 				document.getElementById("export-file-name").value =
 					fileNameGlobal;
@@ -2351,11 +2472,16 @@ import "../styles.css";
 					label.classList.add("ml-1");
 					label.htmlFor = `aggregate-points`;
 					aggregateOptionsCheckbox.type = "checkbox";
-					aggregateOptionsCheckbox.checked = false;
+					aggregateOptionsCheckbox.checked = true; // Default to checked
 					aggregateOptionsCheckbox.id = `aggregate-points`;
 					div.appendChild(aggregateOptionsCheckbox);
 					div.appendChild(label);
 					editOptions.appendChild(div);
+
+					// Set aggregate points to true by default and apply it
+					aggregatePoints = true;
+					toggleFloors(aggregatePoints);
+					spawnLabel();
 
 					aggregateOptionsCheckbox.addEventListener("change", (e) => {
 						aggregatePoints = e.target.checked;
@@ -2735,6 +2861,36 @@ import "../styles.css";
 		});
 
 		document.addEventListener("keydown", (e) => {
+			// Undo/Redo handlers
+			if (e.ctrlKey || e.metaKey) {
+				if (e.key === "z" || e.key === "Z") {
+					// Check if input is focused - don't override browser undo in inputs
+					const activeEl = document.activeElement as HTMLElement;
+					const isInputLike = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable);
+					
+					if (!isInputLike) {
+						e.preventDefault();
+						if (e.shiftKey) {
+							redo(); // Ctrl+Shift+Z for redo
+						} else {
+							undo(); // Ctrl+Z for undo
+						}
+						return;
+					}
+				}
+				if (e.key === "y" || e.key === "Y") {
+					// Check if input is focused
+					const activeEl = document.activeElement as HTMLElement;
+					const isInputLike = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable);
+					
+					if (!isInputLike) {
+						e.preventDefault();
+						redo(); // Ctrl+Y for redo
+						return;
+					}
+				}
+			}
+
 			// Guard: if focus is on an input-like element, let Backspace/Delete act normally
 			const targetEl = (e.target as HTMLElement) || null;
 			const activeEl = (document.activeElement as HTMLElement) || null;
@@ -2820,7 +2976,7 @@ import "../styles.css";
 
 					groupGlobal.forEach((element) => {
 						element.classList.add("svg-tool-selected");
-						element.style.fill = "#ff0000";
+						element.style.fill = "#87CEEB";
 					});
 
 					// Indicate multi-selection mode
@@ -3143,6 +3299,83 @@ import "../styles.css";
 				exportFloorNamePosition2048();
 			});
 
+		// Helper function to get selected floor number
+		function getSelectedFloorNumber() {
+			let selectedFloors = [];
+			
+			// Check for floor checkboxes (floor-0-checkbox, floor-1-checkbox, etc.)
+			if (typeof checkboxesId !== 'undefined' && checkboxesId && checkboxesId.length > 0) {
+				for (const checkboxId of checkboxesId) {
+					const checkbox = document.getElementById(checkboxId) as HTMLInputElement;
+					if (checkbox && checkbox.checked) {
+						const floor = checkboxId.split("-")[1]; // Extract floor number from "floor-0-checkbox"
+						const floorNum = parseInt(floor, 10);
+						if (!isNaN(floorNum)) {
+							selectedFloors.push(floorNum);
+						}
+					}
+				}
+			}
+			
+			// Check for project floor checkboxes (project-floor-${zLevel}-checkbox)
+			const projectFloorCheckboxes = document.querySelectorAll('[id^="project-floor-"][id$="-checkbox"]');
+			if (projectFloorCheckboxes.length > 0) {
+				for (const checkbox of projectFloorCheckboxes) {
+					const inputCheckbox = checkbox as HTMLInputElement;
+					if (inputCheckbox && inputCheckbox.checked) {
+						const id = inputCheckbox.id;
+						const match = id.match(/project-floor-([\d.]+)-checkbox/);
+						if (match) {
+							// Get the index of this floor in sorted order
+							const zLevel = parseFloat(match[1]);
+							if (!isNaN(zLevel) && typeof floorLevels !== 'undefined' && floorLevels) {
+								const sortedFloors = Array.from(floorLevels.keys()).sort((a, b) => b - a);
+								const index = sortedFloors.indexOf(zLevel);
+								if (index !== -1 && index >= 0) {
+									selectedFloors.push(index);
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			// Filter out any NaN values and return the lowest floor number, or default to 0
+			const validFloors = selectedFloors.filter(f => !isNaN(f) && typeof f === 'number');
+			if (validFloors.length > 0) {
+				const minFloor = Math.min(...validFloors);
+				return isNaN(minFloor) ? 0 : minFloor;
+			}
+			
+			// Default to 0 if no floor is selected
+			return 0;
+		}
+
+		// Helper function to format filename with proper segments
+		function formatExportFilename(baseFilename) {
+			// Remove file extension
+			const nameWithoutExt = baseFilename.replace(/\.[^/.]+$/, "");
+			
+			// Split by underscore to count segments
+			const segments = nameWithoutExt.split("_");
+			
+			// Get selected floor number, default to 0 if invalid
+			let floorNumber = getSelectedFloorNumber();
+			if (isNaN(floorNumber) || typeof floorNumber !== 'number') {
+				floorNumber = 0;
+			}
+			
+			// Check if we have 8 segments
+			if (segments.length < 8) {
+				// Add floor number suffix
+				return nameWithoutExt + `_${floorNumber}`;
+			} else {
+				// Replace the last segment with floor number
+				segments[segments.length - 1] = floorNumber.toString();
+				return segments.join("_");
+			}
+		}
+
 		//SVG Conversion
 		function exportSVG() {
 			const file = fileNameGlobal;
@@ -3293,9 +3526,7 @@ import "../styles.css";
 				var blob = new Blob([csv], { type: "text/csv" });
 				var link = document.createElement("a");
 				link.href = URL.createObjectURL(blob);
-				link.download =
-					file.replace(/\.[^/.]+$/, "") + (flipped ? "-flipped" : "");
-				(".csv");
+				link.download = formatExportFilename(file) + ".csv";
 				link.click();
 			} else {
 				alert("Import an SVG to start!");
@@ -3399,9 +3630,7 @@ import "../styles.css";
 				var blob = new Blob([csv], { type: "text/csv" });
 				var link = document.createElement("a");
 				link.href = URL.createObjectURL(blob);
-				link.download =
-					file.replace(/\.[^/.]+$/, "") + (flipped ? "-flipped" : "");
-				(".csv");
+				link.download = formatExportFilename(file) + ".csv";
 				link.click();
 			} else {
 				alert("Import an SVG to start!");
@@ -3704,9 +3933,14 @@ import "../styles.css";
 					// );
 					if (!group) {
 					} else if (group instanceof SVGGElement) {
-						circles = [].slice.call(
+						// Get both circles and triangles (polygons with data-triangle attribute)
+						const circleElements = [].slice.call(
 							group.getElementsByTagName("circle"),
 						);
+						const triangleElements = [].slice.call(
+							group.querySelectorAll("polygon[data-triangle='true']"),
+						);
+						circles = [...circleElements, ...triangleElements];
 					}
 					// console.log(circles);
 
@@ -3743,8 +3977,11 @@ import "../styles.css";
 							margin: "0px",
 							pointerEvents: "none",
 							lineHeight: "1.2em",
-							display,
 						});
+						// Only set display if className doesn't include Tailwind display classes
+						if (!className.includes("hidden") && !className.includes("block")) {
+							p.style.display = display;
+						}
 						p.className = className;
 						p.innerHTML = text; // Changed from textContent to innerHTML to support line breaks
 						return p;
@@ -3794,34 +4031,48 @@ import "../styles.css";
 							"data-fullname",
 							e.getAttribute("data-fullname"),
 						);
+						
+						// Handle both circles (cx/cy) and triangles (data-center-x/y)
+						const cx = e.getAttribute("cx") || e.getAttribute("data-center-x");
+						const cy = e.getAttribute("cy") || e.getAttribute("data-center-y");
+						
 						Object.assign(div.style, {
 							position: "absolute",
-							left: `${e.getAttribute("cx")}px`,
-							top: `${e.getAttribute("cy")}px`,
-							transform: "translate(-50%, -1%)",
+							left: `${cx}px`,
+							top: `${cy}px`,
+							transform: "translate(-50%, 0.25rem)",
 							backgroundColor: "rgba(0, 0, 0, 0.5)",
 							border: "2px solid rgba(255, 255, 255, 0.1)",
-							padding: "4px 24px",
+							padding: "0.5rem 1rem",
 							borderRadius: "0.75rem",
 							marginBottom: "0.25rem",
 							zIndex: "10",
 							backdropFilter: "blur(10px)",
 							pointerEvents: "none",
-							cursor: "pointer",
 							textAlign: "center",
-							fontSize: "2.25rem",
+							fontSize: "36px",
+							fontWeight: "400",
+							whiteSpace: "nowrap",
+							width: "auto",
 						});
+						
+						// Set font-family with !important to override global Gabarito font
+						div.style.setProperty("font-family", "Poppins, sans-serif", "important");
 
 						const formattedText = formatTextWithLineBreaks(e.id);
-						div.appendChild(
-							createParagraph("text-normal", formattedText, "block"),
-						);
-						div.appendChild(
-							createParagraph("text-hover", formattedText, "none"),
-						);
-
-						div.onmouseover = () => toggleHover(div, true);
-						div.onmouseout = () => toggleHover(div, false);
+						
+						// Create paragraph with text
+						const p = document.createElement("p");
+						p.style.color = "white";
+						p.style.margin = "0px";
+						p.style.pointerEvents = "none";
+						p.style.lineHeight = "40px";
+						p.style.textAlign = "center";
+						// Set font-family with !important on paragraph as well
+						p.style.setProperty("font-family", "Poppins, sans-serif", "important");
+						p.innerHTML = formattedText;
+						div.appendChild(p);
+						
 						return div;
 					};
 
@@ -3831,11 +4082,16 @@ import "../styles.css";
 							"data-fullname",
 							e.getAttribute("data-fullname"),
 						);
+						
+						// Handle both circles (cx/cy) and triangles (data-center-x/y)
+						const cx = e.getAttribute("cx") || e.getAttribute("data-center-x");
+						const cy = e.getAttribute("cy") || e.getAttribute("data-center-y");
+						
 						Object.assign(div.style, {
 							position: "absolute",
 							color: "rgba(0, 0, 0, 255)",
-							left: `${e.getAttribute("cx")}px`,
-							top: `${e.getAttribute("cy")}px`,
+							left: `${cx}px`,
+							top: `${cy}px`,
 							transform: "translate(-50%, -101%)",
 							backgroundColor: "rgba(0, 0, 0, 0)",
 							border: "2px solid rgba(0, 0, 0, 1)",
@@ -3868,8 +4124,9 @@ import "../styles.css";
 							e.getAttribute("data-fullname"),
 						);
 
-						const cx = parseFloat(e.getAttribute("cx"));
-						const cy = parseFloat(e.getAttribute("cy"));
+						// Handle both circles (cx/cy) and triangles (data-center-x/y)
+						const cx = parseFloat(e.getAttribute("cx") || e.getAttribute("data-center-x"));
+						const cy = parseFloat(e.getAttribute("cy") || e.getAttribute("data-center-y"));
 
 						// Apply initial styles for measurement
 						Object.assign(div.style, {
@@ -3931,8 +4188,9 @@ import "../styles.css";
 							e.getAttribute("data-fullname"),
 						);
 
-						const cx = parseFloat(e.getAttribute("cx"));
-						const cy = parseFloat(e.getAttribute("cy"));
+						// Handle both circles (cx/cy) and triangles (data-center-x/y)
+						const cx = parseFloat(e.getAttribute("cx") || e.getAttribute("data-center-x"));
+						const cy = parseFloat(e.getAttribute("cy") || e.getAttribute("data-center-y"));
 
 						// Apply initial styles for measurement
 						Object.assign(div.style, {
@@ -3997,16 +4255,159 @@ import "../styles.css";
 							isHovered ? "block" : "none";
 					};
 
+					// Helper function to get bounding box of an element relative to labelDiv
+					function getBoundingBox(element) {
+						// Get position from style (in labelDiv coordinate system, before labelDiv's scale transform)
+						const left = parseFloat(element.style.left) || 0;
+						const top = parseFloat(element.style.top) || 0;
+						
+						// Get the canvas zoom scale from svgContainer's transform
+						const svgContainerTransform = svgContainer.style.transform || '';
+						const canvasZoomScale = parseFloat(
+							svgContainerTransform.match(/scale\(([^)]+)\)/)?.[1]
+						) || 1;
+						
+						// Get dimensions from getBoundingClientRect (screen coordinates)
+						const rect = element.getBoundingClientRect();
+						
+						// Convert screen dimensions back to labelDiv coordinate system
+						// labelDiv has transform: scale(1/scaleX), and svgContainer has zoom scale
+						// So we need to multiply by scaleX and divide by canvasZoomScale
+						// to get the dimensions in labelDiv's coordinate system
+						const width = (rect.width * scaleX) / canvasZoomScale;
+						const height = (rect.height * scaleX) / canvasZoomScale;
+						
+						// Parse transform to get offset (translate affects position)
+						const transform = element.style.transform || '';
+						let offsetX = 0, offsetY = 0;
+						
+						if (transform.includes('translate')) {
+							const translateMatch = transform.match(/translate\(([^)]+)\)/);
+							if (translateMatch) {
+								const parts = translateMatch[1].split(',').map(s => s.trim());
+								const xVal = parts[0];
+								const yVal = parts[1] || parts[0];
+								
+								// Handle percentage or pixel values
+								// For percentages, use the element's width/height in labelDiv coordinates
+								if (xVal.includes('%')) {
+									offsetX = (parseFloat(xVal) / 100) * width;
+								} else {
+									offsetX = parseFloat(xVal.replace('px', '')) || 0;
+								}
+								
+								if (yVal.includes('%')) {
+									offsetY = (parseFloat(yVal) / 100) * height;
+								} else {
+									offsetY = parseFloat(yVal.replace('px', '')) || 0;
+								}
+							}
+						}
+						
+						// Calculate actual bounding box in labelDiv coordinate system
+						const actualLeft = left + offsetX;
+						const actualTop = top + offsetY;
+						
+						return {
+							left: actualLeft,
+							top: actualTop,
+							right: actualLeft + width,
+							bottom: actualTop + height,
+							width: width,
+							height: height
+						};
+					}
+
+					// Helper function to check if two bounding boxes overlap
+					function boxesOverlap(box1, box2, padding = 8) {
+						return !(
+							box1.right + padding < box2.left ||
+							box1.left - padding > box2.right ||
+							box1.bottom + padding < box2.top ||
+							box1.top - padding > box2.bottom
+						);
+					}
+
+					// Function to highlight colliding labels in red
+					function highlightCollisions(labelCircleMap) {
+						if (labelCircleMap.length === 0) return;
+						
+						// Track which labels are colliding
+						const collidingLabels = new Set();
+						
+						// Check for collisions
+						for (let i = 0; i < labelCircleMap.length; i++) {
+							const currentLabel = labelCircleMap[i].label;
+							const currentBox = getBoundingBox(currentLabel);
+							
+							for (let j = i + 1; j < labelCircleMap.length; j++) {
+								const otherLabel = labelCircleMap[j].label;
+								const otherBox = getBoundingBox(otherLabel);
+								
+								if (boxesOverlap(currentBox, otherBox)) {
+									// Mark both labels as colliding
+									collidingLabels.add(currentLabel);
+									collidingLabels.add(otherLabel);
+								}
+							}
+						}
+						
+						// Apply highlighting to colliding labels, restore original styles for others
+						labelCircleMap.forEach(({ label }) => {
+							if (collidingLabels.has(label)) {
+								// Highlight colliding labels in red
+								label.style.borderColor = "red";
+								label.style.borderWidth = "3px";
+								label.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
+							} else {
+								// Restore original border width
+								label.style.borderWidth = "2px";
+								// Border color and background will be restored by their original styles
+								// or by the toggleHover function for bottom labels
+							}
+						});
+					}
+
+					// Create all labels and group them by position type
+					const labelGroups = {
+						top: [],
+						bottom: [],
+						left: [],
+						right: []
+					};
+
 					circles.forEach((e) => {
-						const div = createDiv(e);
-						const previewDiv1 = createPreviewDiv1(e);
-						const previewDiv2 = createPreviewDiv2(e);
-						const previewDiv3 = createPreviewDiv3(e);
+						const div = createDiv(e); // Bottom label
+						const previewDiv1 = createPreviewDiv1(e); // Top label
+						const previewDiv2 = createPreviewDiv2(e); // Right label
+						const previewDiv3 = createPreviewDiv3(e); // Left label
+						
+						// Add to labelDiv
 						labelDiv.appendChild(div);
 						labelDiv.appendChild(previewDiv1);
 						labelDiv.appendChild(previewDiv2);
 						labelDiv.appendChild(previewDiv3);
-						svgContainer.prepend(labelDiv);
+						
+						// Group labels by position type for collision detection
+						labelGroups.bottom.push({ label: div });
+						labelGroups.top.push({ label: previewDiv1 });
+						labelGroups.right.push({ label: previewDiv2 });
+						labelGroups.left.push({ label: previewDiv3 });
+					});
+
+					// Append labelDiv to container so measurements work
+					svgContainer.prepend(labelDiv);
+
+					// Highlight collisions after labels are fully rendered
+					// Use double RAF to ensure layout is complete
+					requestAnimationFrame(() => {
+						requestAnimationFrame(() => {
+							// Highlight collisions for each group
+							highlightCollisions(labelGroups.top);
+							highlightCollisions(labelGroups.bottom);
+							highlightCollisions(labelGroups.left);
+							highlightCollisions(labelGroups.right);
+						});
 					});
 				}
 			} else {
