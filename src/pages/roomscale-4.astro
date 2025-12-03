@@ -1075,6 +1075,8 @@ import ObjectList from "../components/object-list.tsx";
     if ((renderer as any).shadowMap) {
         (renderer as any).shadowMap.enabled = false; // Disable shadows for better performance
     }
+    // Ensure canvas displays correctly
+    renderer.domElement.style.display = 'block';
     document.body.appendChild(renderer.domElement);
 
     const orthoRenderer = new THREE.WebGLRenderer({
@@ -1090,6 +1092,28 @@ import ObjectList from "../components/object-list.tsx";
     const orthoView = document.getElementById("orthoView") as HTMLDivElement;
     orthoRenderer.setSize(orthoView.clientWidth, orthoView.clientHeight);
     document.getElementById("orthoView").appendChild(orthoRenderer.domElement);
+
+    // Explicit resize listener for renderer pixel ratio and size updates
+    window.addEventListener("resize", () => {
+        // Update renderer pixel ratio and size
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Update camera aspect ratio to prevent squashing
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        
+        // Update orthographic camera
+        orthoCamera.left = window.innerWidth / -0.1;
+        orthoCamera.right = window.innerWidth / 0.1;
+        orthoCamera.top = window.innerHeight / 0.1;
+        orthoCamera.bottom = window.innerHeight / -0.1;
+        orthoCamera.updateProjectionMatrix();
+        
+        // Update orthographic renderer
+        orthoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        updateGizmoSize();
+    });
 
     // Blender-like 3D Gizmo (rendered inside #orthoView)
     const gizmoScene = new THREE.Scene();
@@ -1223,6 +1247,7 @@ import ObjectList from "../components/object-list.tsx";
         const rect = orthoView.getBoundingClientRect();
         const w = Math.max(1, rect.width);
         const h = Math.max(1, rect.height);
+        orthoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit pixel ratio
         orthoRenderer.setSize(w, h);
         gizmoCamera.aspect = w / h;
         gizmoCamera.updateProjectionMatrix();
@@ -2426,6 +2451,37 @@ async function renderOverlayCanvas(cone) {
 
         requestAnimationFrame(animate);
 
+        // Ensure renderer size and camera aspect ratio are up-to-date before rendering
+        const currentWidth = window.innerWidth;
+        const currentHeight = window.innerHeight;
+        const rendererSize = renderer.getSize(new THREE.Vector2());
+        
+        if (rendererSize.width !== currentWidth || rendererSize.height !== currentHeight) {
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            renderer.setSize(currentWidth, currentHeight);
+        }
+        
+        // Update camera aspect ratio if needed
+        if (currentCamera instanceof THREE.PerspectiveCamera && camera.aspect !== currentWidth / currentHeight) {
+            camera.aspect = currentWidth / currentHeight;
+            camera.updateProjectionMatrix();
+        } else if (currentCamera instanceof THREE.OrthographicCamera) {
+            // Update orthographic camera bounds if needed
+            const expectedLeft = currentWidth / -0.1;
+            const expectedRight = currentWidth / 0.1;
+            const expectedTop = currentHeight / 0.1;
+            const expectedBottom = currentHeight / -0.1;
+            
+            if (orthoCamera.left !== expectedLeft || orthoCamera.right !== expectedRight ||
+                orthoCamera.top !== expectedTop || orthoCamera.bottom !== expectedBottom) {
+                orthoCamera.left = expectedLeft;
+                orthoCamera.right = expectedRight;
+                orthoCamera.top = expectedTop;
+                orthoCamera.bottom = expectedBottom;
+                orthoCamera.updateProjectionMatrix();
+            }
+        }
+
         // Render loop - Optimized to reduce render calls
         renderer.clear();
         
@@ -2475,6 +2531,22 @@ async function renderOverlayCanvas(cone) {
             const mixed = base.clone().lerp(gray, Math.min(0.7, t));
             (mesh.material as any).color.copy(mixed);
         });
+
+        // Ensure orthographic renderer size is up-to-date before rendering
+        const orthoView = document.getElementById("orthoView") as HTMLDivElement;
+        if (orthoView) {
+            const orthoRect = orthoView.getBoundingClientRect();
+            const orthoWidth = Math.max(1, orthoRect.width);
+            const orthoHeight = Math.max(1, orthoRect.height);
+            const orthoRendererSize = orthoRenderer.getSize(new THREE.Vector2());
+            
+            if (orthoRendererSize.width !== orthoWidth || orthoRendererSize.height !== orthoHeight) {
+                orthoRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                orthoRenderer.setSize(orthoWidth, orthoHeight);
+                gizmoCamera.aspect = orthoWidth / orthoHeight;
+                gizmoCamera.updateProjectionMatrix();
+            }
+        }
 
         // Render gizmo in the side viewport (unlit materials already used)
         orthoRenderer.clear();
@@ -5093,8 +5165,6 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         orthoCamera.bottom = window.innerHeight / -0.1;
         orthoCamera.updateProjectionMatrix();
         
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        updateGizmoSize();
         updateLabelPositions(); // Fix label drift on window resize
     }
 </script>
