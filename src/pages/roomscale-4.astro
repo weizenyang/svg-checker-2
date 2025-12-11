@@ -4746,6 +4746,14 @@ async function renderOverlayCanvas(cone) {
         // Create a new geometry with duplicated vertices for flat shading
         const originalMaterials = new Map();
         const originalGeometries = new Map();
+        // Track geometries that have been processed to handle shared geometries
+        const processedGeometries = new Map();
+        
+        // Update all matrix worlds before processing
+        objects.forEach(obj => {
+            obj.updateMatrixWorld(true);
+        });
+        
         objects.forEach(obj => {
             obj.traverse((child) => {
                 if (!child.isMesh || !child.geometry || !child.material) return;
@@ -4754,8 +4762,22 @@ async function renderOverlayCanvas(cone) {
                 const geometry = child.geometry;
                 if (!geometry.attributes.position) return;
                 
-                const positions = geometry.attributes.position;
-                const hasIndex = geometry.index !== null;
+                // Check if this geometry has already been processed (shared geometry)
+                // If so, we need to clone it for this mesh to avoid affecting other meshes
+                let geometryToUse = geometry;
+                if (processedGeometries.has(geometry)) {
+                    // Geometry is shared - clone it for this mesh
+                    geometryToUse = geometry.clone();
+                    child.geometry = geometryToUse;
+                    console.log(`Cloned shared geometry for mesh ${child.uuid} in face ID render`);
+                }
+                processedGeometries.set(geometry, true);
+                
+                // Ensure matrixWorld is up to date
+                child.updateMatrixWorld(true);
+                
+                const positions = geometryToUse.attributes.position;
+                const hasIndex = geometryToUse.index !== null;
                 
                 // Create new arrays for duplicated vertices (non-indexed)
                 const newPositions = [];
@@ -4860,7 +4882,7 @@ async function renderOverlayCanvas(cone) {
                 }
                 
                 // Store original geometry and create new non-indexed geometry
-                originalGeometries.set(child, geometry);
+                originalGeometries.set(child, geometryToUse);
                 const flatGeometry = new THREE.BufferGeometry();
                 flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                 flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
@@ -5024,6 +5046,14 @@ async function renderOverlayCanvas(cone) {
         if (showNormals) {
             // Store original materials and geometries, then replace with face-orientation materials
             // Use duplicated vertices to prevent color interpolation (flat shading)
+            // Track geometries that have been processed to handle shared geometries
+            const processedGeometries = new Map();
+            
+            // Update all matrix worlds before processing
+            objects.forEach(obj => {
+                obj.updateMatrixWorld(true);
+            });
+            
             objects.forEach(obj => {
                 obj.traverse((child) => {
                     if (child.isMesh && child.material && child.geometry) {
@@ -5032,8 +5062,22 @@ async function renderOverlayCanvas(cone) {
                         const geometry = child.geometry;
                         if (!geometry.attributes.position) return;
                         
-                        const positions = geometry.attributes.position;
-                        const hasIndex = geometry.index !== null;
+                        // Check if this geometry has already been processed (shared geometry)
+                        // If so, we need to clone it for this mesh to avoid affecting other meshes
+                        let geometryToUse = geometry;
+                        if (processedGeometries.has(geometry)) {
+                            // Geometry is shared - clone it for this mesh
+                            geometryToUse = geometry.clone();
+                            child.geometry = geometryToUse;
+                            console.log(`Cloned shared geometry for mesh ${child.uuid}`);
+                        }
+                        processedGeometries.set(geometry, true);
+                        
+                        // Ensure matrixWorld is up to date
+                        child.updateMatrixWorld(true);
+                        
+                        const positions = geometryToUse.attributes.position;
+                        const hasIndex = geometryToUse.index !== null;
                         
                         // Create new arrays for duplicated vertices (non-indexed for flat shading)
                         const newPositions = [];
@@ -5041,7 +5085,7 @@ async function renderOverlayCanvas(cone) {
                         const newColors = [];
                         
                         if (hasIndex) {
-                            const index = geometry.index;
+                            const index = geometryToUse.index;
                             const faceCount = index.count / 3;
                             
                             for (let i = 0; i < faceCount; i++) {
@@ -5185,7 +5229,7 @@ async function renderOverlayCanvas(cone) {
                         }
                         
                         // Store original geometry and create new non-indexed geometry with flat shading
-                        originalGeometries.set(child, geometry);
+                        originalGeometries.set(child, geometryToUse);
                         const flatGeometry = new THREE.BufferGeometry();
                         flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                         flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
@@ -6136,6 +6180,14 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
     if (showNormals) {
         // Store original materials and geometries, then replace with face-orientation materials
         // Use duplicated vertices to prevent color interpolation (flat shading)
+        // Track geometries that have been processed to handle shared geometries
+        const processedGeometries = new Map();
+        
+        // Update all matrix worlds before processing
+        objects.forEach(obj => {
+            obj.updateMatrixWorld(true);
+        });
+        
         objects.forEach(obj => {
             obj.traverse((child) => {
                 if (child.isMesh && child.material && child.geometry) {
@@ -6144,8 +6196,22 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                     const geometry = child.geometry;
                     if (!geometry.attributes.position) return;
                     
-                    const positions = geometry.attributes.position;
-                    const hasIndex = geometry.index !== null;
+                    // Check if this geometry has already been processed (shared geometry)
+                    // If so, we need to clone it for this mesh to avoid affecting other meshes
+                    let geometryToUse = geometry;
+                    if (processedGeometries.has(geometry)) {
+                        // Geometry is shared - clone it for this mesh
+                        geometryToUse = geometry.clone();
+                        child.geometry = geometryToUse;
+                        console.log(`Cloned shared geometry for mesh ${child.uuid} in render360SnapshotForCone`);
+                    }
+                    processedGeometries.set(geometry, true);
+                    
+                    // Ensure matrixWorld is up to date
+                    child.updateMatrixWorld(true);
+                    
+                    const positions = geometryToUse.attributes.position;
+                    const hasIndex = geometryToUse.index !== null;
                     
                     // Create new arrays for duplicated vertices (non-indexed for flat shading)
                     const newPositions = [];
@@ -6153,7 +6219,7 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                     const newColors = [];
                     
                     if (hasIndex) {
-                        const index = geometry.index;
+                        const index = geometryToUse.index;
                         const faceCount = index.count / 3;
                         
                         for (let i = 0; i < faceCount; i++) {
@@ -6297,7 +6363,7 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                     }
                     
                     // Store original geometry and create new non-indexed geometry with flat shading
-                    originalGeometries.set(child, geometry);
+                    originalGeometries.set(child, geometryToUse);
                     const flatGeometry = new THREE.BufferGeometry();
                     flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                     flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
