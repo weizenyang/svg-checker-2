@@ -143,13 +143,31 @@ import ObjectList from "../components/object-list.tsx";
                 </button>
             </div>
 
-            <div class="flex mt-3">
+            <div class="flex flex-col mt-3">
                 <button
-                    class="bg-red-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-red-600 hover:drop-shadow-lg active:bg-red-700"
-                    id="check-reversed-normals"
+                    id="select-reversed-faces" 
+                    class="bg-purple-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-600 hover:drop-shadow-lg active:bg-purple-700"
                 >
-                    Check Reversed Normals
+                    Select Reversed Faces
                 </button>
+                <button
+                    id="select-reversed-faces-current"
+                    class="bg-purple-200 text-purple-900 p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-300 hover:drop-shadow-lg active:bg-purple-400 mt-2"
+                    style="display: none;"
+                >
+                    Select This Camera's Reversed Faces
+                </button>
+                <button
+                    id="flip-selected-normals"
+                    class="bg-red-200 text-red-900 p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-red-300 hover:drop-shadow-lg active:bg-red-400 mt-2"
+                    style="display: none;"
+                >
+                    Flip Selected Normals
+                </button>
+                <label class="mt-2 flex items-center space-x-2 text-sm">
+                    <input type="checkbox" id="toggle-export-logs" class="accent-purple-600" />
+                    <span>Export logs & screengrabs (first 3 cameras)</span>
+                </label>
             </div>
 
             <div class="rounded-md bg-white max-w-60 mt-3">
@@ -473,6 +491,25 @@ import ObjectList from "../components/object-list.tsx";
     rotationDisplay.id = 'vr-rotation-display';
     rotationDisplay.className = 'hidden';
     Object.assign(rotationDisplay.style, { position:'absolute', left:'50%', bottom:'8px', transform:'translateX(-50%)', background:'rgba(0,0,0,.7)', color:'#fff', fontSize:'10px', borderRadius:'4px', padding:'2px 6px', zIndex:'15', pointerEvents:'auto', cursor:'pointer' });
+    
+    // Middle mouse click handler to toggle normal visualization
+    panel.addEventListener('mousedown', async (e) => {
+        if (e.button === 1) { // Middle mouse button
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Only toggle if we're in generated view mode and have a rendered cone
+            if (showGeneratedView && currentRenderedCone) {
+                showNormalsMode = !showNormalsMode;
+                
+                // Re-render with the new mode
+                const renderResult = await render360SnapshotForCone(currentRenderedCone, markers, showNormalsMode);
+                const renderURL = renderResult.dataURL;
+                img.src = renderURL;
+                setVRImage(renderURL, currentRenderedCone.name);
+            }
+        }
+    });
     rotationDisplay.textContent = 'Rotation: 0.0°';
     panel.appendChild(rotationDisplay);
     // Tooltip for rotation apply action
@@ -618,6 +655,13 @@ import ObjectList from "../components/object-list.tsx";
     // }
 
     function clearAllData() {
+        // Clear selected reversed faces
+        selectedReversedFaceIds.clear();
+        selectedReversedFacesGroup.children.slice().forEach(child => {
+            selectedReversedFacesGroup.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
         // 1) Remove all dynamic scene children except axes & lights
         scene.children.slice().forEach((child) => {
             const t = child.type;
@@ -628,7 +672,8 @@ import ObjectList from "../components/object-list.tsx";
                 t !== "DirectionalLight" &&
                 n !== "X-Axis" &&
                 n !== "Y-Axis" &&
-                n !== "Z-Axis"
+                n !== "Z-Axis" &&
+                n !== "SelectedReversedFacesHighlights"
             ) {
                 scene.remove(child);
             }
@@ -653,9 +698,6 @@ import ObjectList from "../components/object-list.tsx";
         document.getElementById("alignment-popup").classList.add("hidden");
         canvasPool.cleanup(); // Clean up canvas pool
 
-        // 4) Clear reversed normals state
-        originalMaterials.clear();
-        reversedNormalsHighlighted = false;
 
         console.log("Scene and data cleared.");
     }
@@ -723,6 +765,17 @@ import ObjectList from "../components/object-list.tsx";
     });
 
     const scene = new THREE.Scene();
+    
+    // Group for selected reversed face highlights
+    const selectedReversedFacesGroup = new THREE.Group();
+    selectedReversedFacesGroup.name = "SelectedReversedFacesHighlights";
+    selectedReversedFacesGroup.visible = true;
+    scene.add(selectedReversedFacesGroup);
+    
+    // Store selected reversed face IDs
+    let selectedReversedFaceIds = new Set();
+    // Track last clicked/selected camera marker
+    let currentSelectedCone = null;
     
     // Persistent image storage system for random access
     class ImageManager {
@@ -1603,6 +1656,98 @@ import ObjectList from "../components/object-list.tsx";
 
 let lastConeClicked = null;   // remembers which cone we clicked last
 let showGeneratedView   = false;  // toggle state *for that cone only*
+let showNormalsMode = false;  // toggle state for showing normals in equirectangular render
+let currentRenderedCone = null;  // store the currently rendered cone for re-rendering
+
+    // Function to add hoverable HTML elements over reversed faces
+    function addReversedFaceHoverElements(panel, img, facePositions) {
+        // Remove existing hover elements
+        const existingHovers = panel.querySelectorAll('.reversed-face-hover');
+        existingHovers.forEach(el => el.remove());
+        
+        if (!facePositions || facePositions.length === 0) return;
+        
+        // Wait for image to load to get actual dimensions
+        const setupHovers = () => {
+            const imgRect = img.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            
+            // Calculate scale factors
+            const imgNaturalWidth = img.naturalWidth || 1024;
+            const imgNaturalHeight = img.naturalHeight || 512;
+            const imgDisplayWidth = imgRect.width;
+            const imgDisplayHeight = imgRect.height;
+            
+            facePositions.forEach((facePos, index) => {
+                // Create hover element
+                const hoverEl = document.createElement('div');
+                hoverEl.className = 'reversed-face-hover';
+                hoverEl.style.position = 'absolute';
+                hoverEl.style.width = '8px';
+                hoverEl.style.height = '8px';
+                hoverEl.style.borderRadius = '50%';
+                hoverEl.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
+                hoverEl.style.border = '1px solid rgba(255, 0, 0, 0.9)';
+                hoverEl.style.cursor = 'pointer';
+                hoverEl.style.zIndex = '10';
+                hoverEl.style.transition = 'all 0.2s ease';
+                hoverEl.style.pointerEvents = 'auto';
+                
+                // Position relative to image
+                const x = (facePos.x / imgNaturalWidth) * imgDisplayWidth;
+                const y = (facePos.y / imgNaturalHeight) * imgDisplayHeight;
+                
+                // Account for image positioning within panel
+                const imgOffsetX = (imgRect.left - panelRect.left);
+                const imgOffsetY = (imgRect.top - panelRect.top);
+                
+                hoverEl.style.left = `${imgOffsetX + x - 4}px`;
+                hoverEl.style.top = `${imgOffsetY + y - 4}px`;
+                
+                // Tooltip content
+                const tooltip = document.createElement('div');
+                tooltip.className = 'reversed-face-tooltip';
+                tooltip.style.position = 'absolute';
+                tooltip.style.bottom = '100%';
+                tooltip.style.left = '50%';
+                tooltip.style.transform = 'translateX(-50%)';
+                tooltip.style.marginBottom = '5px';
+                tooltip.style.padding = '4px 8px';
+                tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+                tooltip.style.color = '#fff';
+                tooltip.style.fontSize = '10px';
+                tooltip.style.borderRadius = '4px';
+                tooltip.style.whiteSpace = 'nowrap';
+                tooltip.style.pointerEvents = 'none';
+                tooltip.style.opacity = '0';
+                tooltip.style.transition = 'opacity 0.2s ease';
+                tooltip.textContent = `Reversed Normal ${index + 1}`;
+                hoverEl.appendChild(tooltip);
+                
+                // Hover effects
+                hoverEl.addEventListener('mouseenter', () => {
+                    hoverEl.style.backgroundColor = 'rgba(255, 0, 0, 0.9)';
+                    hoverEl.style.transform = 'scale(1.5)';
+                    tooltip.style.opacity = '1';
+                });
+                
+                hoverEl.addEventListener('mouseleave', () => {
+                    hoverEl.style.backgroundColor = 'rgba(255, 0, 0, 0.6)';
+                    hoverEl.style.transform = 'scale(1)';
+                    tooltip.style.opacity = '0';
+                });
+                
+                panel.appendChild(hoverEl);
+            });
+        };
+        
+        // Setup hovers when image loads or if already loaded
+        if (img.complete && img.naturalWidth > 0) {
+            setupHovers();
+        } else {
+            img.onload = setupHovers;
+        }
+    }
 
 async function reviewVR(event) {
     const intersects = raycaster.intersectObjects(markers);
@@ -1641,13 +1786,21 @@ async function reviewVR(event) {
     if (cone !== lastConeClicked) {          // new cone → always start in photo mode
         lastConeClicked = cone;
         showGeneratedView = false;
+        showNormalsMode = false;  // Reset normals mode when switching cones
     } else {
         showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
+        if (!showGeneratedView) {
+            showNormalsMode = false;  // Reset normals mode when switching to photo view
+        }
     }
 
     if (showGeneratedView) {
         console.log(cone)
-        const renderURL = await render360SnapshotForCone(cone);
+        currentRenderedCone = cone;  // Store the current cone for re-rendering
+        const renderResult = await render360SnapshotForCone(cone, markers, showNormalsMode);
+        const renderURL = renderResult.dataURL;
+        const facePositions = renderResult.facePositions || [];
+        
         img.src = renderURL;
         
         // Set up rotation for generated view
@@ -1658,6 +1811,9 @@ async function reviewVR(event) {
         
         // Hide overlay for generated views (since we're already showing the rendered view)
         vrOverlayCanvas.style.display = 'none';
+        
+        // Add hoverable elements for reversed faces (disabled for performance)
+        // addReversedFaceHoverElements(panel, img, facePositions);
         
         // For generated views, check cone name for flipping
         applyImageFlipping(cone.name);
@@ -1724,7 +1880,8 @@ async function renderOverlayCanvas(cone) {
         console.log(`Rendering overlay for cone: ${cone.name}`);
     
     // Generate a separate render for the overlay
-    const overlayRenderURL = await render360SnapshotForCone(cone);
+    const overlayRenderResult = await render360SnapshotForCone(cone);
+    const overlayRenderURL = overlayRenderResult.dataURL;
     
         // Load and draw the overlay image
         return new Promise((resolve, reject) => {
@@ -1986,6 +2143,71 @@ async function renderOverlayCanvas(cone) {
             updateVRRotationDisplay();
         };
         tempImg.src = imageSrc;
+    }
+
+    // Helper function to show preview from ImageData
+    function showRenderPreview(imageData, coneName = 'Render Preview') {
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+            const panel = document.getElementById("vr-image-panel");
+            const img = document.getElementById("vr-img") as HTMLImageElement;
+            const widget = document.getElementById('vr-widget') as HTMLDivElement;
+            
+            if (!panel || !img || !widget) {
+                console.warn('VR panel elements not found:', { panel: !!panel, img: !!img, widget: !!widget });
+                return;
+            }
+            
+            // Convert ImageData to data URL
+            const canvas = document.createElement('canvas');
+            canvas.width = imageData.width;
+            canvas.height = imageData.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.putImageData(imageData, 0, 0);
+                const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+                
+                console.log('Setting up render preview from ImageData...', { 
+                    width: imageData.width, 
+                    height: imageData.height, 
+                    dataURLLength: dataURL.length,
+                    coneName 
+                });
+                
+                // Ensure image element is visible and properly styled
+                img.style.display = 'block';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'contain';
+                
+                // Set image source and wait for it to load
+                img.onload = function() {
+                    console.log('Render preview image loaded successfully in vr-img for:', coneName);
+                };
+                img.onerror = function(e) {
+                    console.error('Error loading render preview image for:', coneName, e);
+                };
+                
+                // Display in VR panel
+                img.src = dataURL;
+                setVRImage(dataURL, coneName);
+                
+                // Show widget and panel - ensure they're visible
+                widget.style.display = 'block';
+                panel.style.display = 'block';
+                panel.classList.remove("hidden");
+                
+                // Hide overlay for rendered views
+                const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
+                if (vrOverlayCanvas) {
+                    vrOverlayCanvas.style.display = 'none';
+                }
+                
+                console.log(`Render preview setup complete for: ${coneName}`);
+            } else {
+                console.error('Failed to get 2D context for preview canvas');
+            }
+        }, 0);
     }
     
 
@@ -2259,6 +2481,8 @@ async function renderOverlayCanvas(cone) {
         });
         
         // Update VR image panel to match the selected point
+        currentSelectedCone = point;
+        updateSelectCurrentButtonVisibility();
         await updateVRPanelForPoint(point);
         
         console.log(`Navigated to CSV point: ${point.name}`);
@@ -2270,6 +2494,9 @@ async function renderOverlayCanvas(cone) {
         const img = document.getElementById("vr-img");
         const flippedTag = document.getElementById("vr-flipped-tag");
         const targetName = point.name.toLowerCase();
+        
+        currentSelectedCone = point;
+        updateSelectCurrentButtonVisibility();
 
         // Helper function to apply flipping based on image name
         function applyImageFlipping(imageName) {
@@ -2493,7 +2720,7 @@ async function renderOverlayCanvas(cone) {
         // Render scene with sorted children
         renderer.render(scene, currentCamera);
         
-        // Only render VRSpheres, objects, and markers if they have visible content
+        // Only render VRSpheres if they have visible content
         if (VRSpheres.length > 0) {
             renderer.clearDepth();
             VRSpheres.forEach((e) => {
@@ -2501,6 +2728,7 @@ async function renderOverlayCanvas(cone) {
             });
         }
 
+        // Render objects (wireframes)
         if (objects.length > 0) {
             renderer.clearDepth();
             objects.forEach((e) => {
@@ -2508,6 +2736,28 @@ async function renderOverlayCanvas(cone) {
             });
         }
 
+        // Render selected reversed faces on top of wireframes
+        if (selectedReversedFacesGroup.children.length > 0) {
+            // Update highlight mesh transforms to match their parent meshes
+            selectedReversedFacesGroup.children.forEach(highlightMesh => {
+                const parentMesh = highlightMesh.userData.parentMesh;
+                if (parentMesh) {
+                    parentMesh.updateMatrixWorld(true);
+                    parentMesh.matrixWorld.decompose(
+                        highlightMesh.position,
+                        highlightMesh.quaternion,
+                        highlightMesh.scale
+                    );
+                    highlightMesh.updateMatrix();
+                    highlightMesh.updateMatrixWorld(true);
+                }
+            });
+            
+            renderer.clearDepth();
+            renderer.render(selectedReversedFacesGroup, currentCamera);
+        }
+
+        // Render markers (camera cones) on top of everything
         if (markers.length > 0) {
             renderer.clearDepth();
             markers.forEach((e) => {
@@ -3277,12 +3527,29 @@ async function renderOverlayCanvas(cone) {
         
         // Store original wireframe states and temporarily disable wireframe
         const wireframeStates = [];
+        // Store original material colors and set to white
+        const materialStates = [];
+        
         object.traverse((child) => {
             if (child.isMesh && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach((mat) => {
                     wireframeStates.push({ material: mat, wireframe: mat.wireframe });
                     mat.wireframe = false;
+                    
+                    // Store original material color and set to white
+                    if (mat.color) {
+                        materialStates.push({ 
+                            material: mat, 
+                            originalColor: mat.color.clone(),
+                            originalEmissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000)
+                        });
+                        mat.color.setHex(0xffffff);
+                        if (mat.emissive) {
+                            mat.emissive.setHex(0x000000);
+                        }
+                    }
+                    
                     mat.needsUpdate = true;
                 });
             }
@@ -3312,6 +3579,15 @@ async function renderOverlayCanvas(cone) {
                     material.needsUpdate = true;
                 });
                 
+                // Restore original material colors
+                materialStates.forEach(({ material, originalColor, originalEmissive }) => {
+                    material.color.copy(originalColor);
+                    if (material.emissive) {
+                        material.emissive.copy(originalEmissive);
+                    }
+                    material.needsUpdate = true;
+                });
+                
                 let blob;
                 if (result instanceof ArrayBuffer) {
                     blob = new Blob([result], {
@@ -3335,6 +3611,15 @@ async function renderOverlayCanvas(cone) {
                 
                 wireframeStates.forEach(({ material, wireframe }) => {
                     material.wireframe = wireframe;
+                    material.needsUpdate = true;
+                });
+                
+                // Restore original material colors
+                materialStates.forEach(({ material, originalColor, originalEmissive }) => {
+                    material.color.copy(originalColor);
+                    if (material.emissive) {
+                        material.emissive.copy(originalEmissive);
+                    }
                     material.needsUpdate = true;
                 });
                 
@@ -3833,280 +4118,73 @@ async function renderOverlayCanvas(cone) {
         });
     });
 
-    // Store original materials for reversed normals detection
-    const originalMaterials = new WeakMap();
-    let reversedNormalsHighlighted = false;
-
-    // Function to check and highlight faces with reversed normals
-    function checkReversedNormals() {
-        if (markers.length === 0) {
-            alert("error", "Please import a CSV file with camera points first");
-            return;
-        }
-
-        if (objects.length === 0) {
-            alert("error", "Please import a GLB model first");
-            return;
-        }
-
-        // Get all camera positions (world positions)
-        const cameraPositions = markers
-            .filter(m => m.cameraPos && m.parent && m.parent.visible)
-            .map(marker => {
-                const worldPos = new THREE.Vector3();
-                marker.getWorldPosition(worldPos);
-                return worldPos;
-            });
-
-        if (cameraPositions.length === 0) {
-            alert("error", "No visible camera points found");
-            return;
-        }
-
-        if (reversedNormalsHighlighted) {
-            // Restore original materials
-            objects.forEach(obj => {
-                obj.traverse((child) => {
-                    if (child.isMesh) {
-                        // Restore original material if stored
-                        if (originalMaterials.has(child)) {
-                            child.material = originalMaterials.get(child);
-                            child.material.needsUpdate = true;
-                            delete child.userData.hasReversedNormals;
-                        }
-                    }
-                });
-            });
-            originalMaterials.clear();
-            reversedNormalsHighlighted = false;
-            alert("notify", "Reversed normals highlight cleared");
-            return;
-        }
-
-        let reversedFaceCount = 0;
-        const reversedFaces = new Map(); // Map mesh -> array of face indices
-
-        // Check each object
-        objects.forEach(obj => {
-            obj.traverse((child) => {
-                if (!child.isMesh || !child.geometry) return;
-
-                const geometry = child.geometry;
-                if (!geometry.attributes.position) return;
-
-                // Store original material if not already stored
-                if (!originalMaterials.has(child)) {
-                    originalMaterials.set(child, child.material);
-                }
-
-                // Get positions and normals
-                const positions = geometry.attributes.position;
-                const normals = geometry.attributes.normal;
-                
-                if (!normals) {
-                    geometry.computeVertexNormals();
-                    if (!geometry.attributes.normal) return;
-                }
-
-                // Check if geometry has index (triangles) or not (non-indexed)
-                const hasIndex = geometry.index !== null;
-                const index = hasIndex ? geometry.index : null;
-                const positionArray = positions.array;
-                const normalArray = geometry.attributes.normal.array;
-
-                const meshReversedFaces = [];
-
-                // Process faces
-                if (hasIndex) {
-                    // Indexed geometry
-                    for (let i = 0; i < index.count; i += 3) {
-                        const i0 = index.getX(i) * 3;
-                        const i1 = index.getX(i + 1) * 3;
-                        const i2 = index.getX(i + 2) * 3;
-
-                        // Get face center
-                        const v0 = new THREE.Vector3(
-                            positionArray[i0],
-                            positionArray[i0 + 1],
-                            positionArray[i0 + 2]
-                        );
-                        const v1 = new THREE.Vector3(
-                            positionArray[i1],
-                            positionArray[i1 + 1],
-                            positionArray[i1 + 2]
-                        );
-                        const v2 = new THREE.Vector3(
-                            positionArray[i2],
-                            positionArray[i2 + 1],
-                            positionArray[i2 + 2]
-                        );
-
-                        // Transform to world space
-                        v0.applyMatrix4(child.matrixWorld);
-                        v1.applyMatrix4(child.matrixWorld);
-                        v2.applyMatrix4(child.matrixWorld);
-
-                        const faceCenter = new THREE.Vector3()
-                            .addVectors(v0, v1)
-                            .add(v2)
-                            .multiplyScalar(1/3);
-
-                        // Get face normal (average of vertex normals)
-                        const n0 = new THREE.Vector3(
-                            normalArray[i0],
-                            normalArray[i0 + 1],
-                            normalArray[i0 + 2]
-                        );
-                        const n1 = new THREE.Vector3(
-                            normalArray[i1],
-                            normalArray[i1 + 1],
-                            normalArray[i1 + 2]
-                        );
-                        const n2 = new THREE.Vector3(
-                            normalArray[i2],
-                            normalArray[i2 + 1],
-                            normalArray[i2 + 2]
-                        );
-
-                        // Transform normals to world space
-                        const normalMatrix = new THREE.Matrix3().getNormalMatrix(child.matrixWorld);
-                        n0.applyMatrix3(normalMatrix).normalize();
-                        n1.applyMatrix3(normalMatrix).normalize();
-                        n2.applyMatrix3(normalMatrix).normalize();
-
-                        const faceNormal = new THREE.Vector3()
-                            .addVectors(n0, n1)
-                            .add(n2)
-                            .normalize();
-
-                        // Check if normal is facing away from all camera points
-                        let facingAwayFromAll = true;
-                        for (const camPos of cameraPositions) {
-                            const toCamera = new THREE.Vector3()
-                                .subVectors(camPos, faceCenter)
-                                .normalize();
-                            const dot = faceNormal.dot(toCamera);
-                            
-                            // If any camera can see this face (dot > 0), it's not reversed
-                            if (dot > 0) {
-                                facingAwayFromAll = false;
-                                break;
-                            }
-                        }
-
-                        if (facingAwayFromAll) {
-                            meshReversedFaces.push(i / 3); // Store face index
-                            reversedFaceCount++;
-                        }
-                    }
-                } else {
-                    // Non-indexed geometry
-                    const faceCount = positions.count / 3;
-                    for (let i = 0; i < faceCount; i++) {
-                        const i0 = i * 9;
-                        const i1 = i * 9 + 3;
-                        const i2 = i * 9 + 6;
-
-                        const v0 = new THREE.Vector3(
-                            positionArray[i0],
-                            positionArray[i0 + 1],
-                            positionArray[i0 + 2]
-                        );
-                        const v1 = new THREE.Vector3(
-                            positionArray[i1],
-                            positionArray[i1 + 1],
-                            positionArray[i1 + 2]
-                        );
-                        const v2 = new THREE.Vector3(
-                            positionArray[i2],
-                            positionArray[i2 + 1],
-                            positionArray[i2 + 2]
-                        );
-
-                        v0.applyMatrix4(child.matrixWorld);
-                        v1.applyMatrix4(child.matrixWorld);
-                        v2.applyMatrix4(child.matrixWorld);
-
-                        const faceCenter = new THREE.Vector3()
-                            .addVectors(v0, v1)
-                            .add(v2)
-                            .multiplyScalar(1/3);
-
-                        const n0 = new THREE.Vector3(
-                            normalArray[i0],
-                            normalArray[i0 + 1],
-                            normalArray[i0 + 2]
-                        );
-                        const normalMatrix = new THREE.Matrix3().getNormalMatrix(child.matrixWorld);
-                        n0.applyMatrix3(normalMatrix).normalize();
-
-                        let facingAwayFromAll = true;
-                        for (const camPos of cameraPositions) {
-                            const toCamera = new THREE.Vector3()
-                                .subVectors(camPos, faceCenter)
-                                .normalize();
-                            const dot = n0.dot(toCamera);
-                            
-                            if (dot > 0) {
-                                facingAwayFromAll = false;
-                                break;
-                            }
-                        }
-
-                        if (facingAwayFromAll) {
-                            meshReversedFaces.push(i);
-                            reversedFaceCount++;
-                        }
-                    }
-                }
-
-                if (meshReversedFaces.length > 0) {
-                    reversedFaces.set(child, meshReversedFaces);
-                }
-            });
-        });
-
-        // Highlight reversed faces
-        if (reversedFaceCount > 0) {
-            reversedFaces.forEach((faceIndices, mesh) => {
-                // Store original material if not already stored
-                if (!originalMaterials.has(mesh)) {
-                    originalMaterials.set(mesh, mesh.material);
-                }
-
-                // Create a red highlight material that shows both sides
-                const highlightMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xff0000,
-                    emissive: 0x330000,
-                    side: THREE.DoubleSide,
-                    wireframe: mesh.material.wireframe || false,
-                    transparent: true,
-                    opacity: 0.7
-                });
-
-                // Change material to highlight
-                mesh.material = highlightMaterial;
-                mesh.userData.hasReversedNormals = true;
-            });
-
-            reversedNormalsHighlighted = true;
-            alert("notify", `Found ${reversedFaceCount} faces with reversed normals in ${reversedFaces.size} mesh(es) (highlighted in red)`);
-        } else {
-            alert("notify", "No reversed normals detected! All faces are facing camera points correctly.");
-        }
-    }
-
-    // Event listener for reversed normals button
-    document.getElementById("check-reversed-normals").addEventListener("click", checkReversedNormals);
-
     document.getElementById("center-csv").addEventListener("change", (e) => {
         if (e.target.checked) {
             calculateGroupCenter(m_Group);
             translateGroupToOrigin(m_Group);
             alert("notify", "csv-centered");
-        } else {
+            } else {
             m_Group.position.set(0, 0, 0);
             alert("notify", "csv-centered");
+        }
+    });
+
+    document.getElementById("show-labels").addEventListener("change", (e) => {
+        createLabels();
+        if (e.target.checked) {
+            document.getElementById("marker-label-container").style.display =
+                "block";
+                } else {
+            document.getElementById("marker-label-container").style.display =
+                "none";
+        }
+    });
+
+    document
+        .getElementById("show-face-orientation")
+        .addEventListener("change", (e) => {
+            if (e.target.checked) {
+                console.log(glbFiles);
+                console.log(markers);
+                scene.traverse(function (child) {
+                    console.log(child.name);
+                    if (
+                        child.isMesh &&
+                        !(child.userData && child.userData.label) &&
+                        !child.name.toLowerCase().includes("sphere")
+                    ) {
+                        child.material = new THREE.ShaderMaterial({
+                    vertexShader: `
+                        varying vec3 vNormal;
+                        void main() {
+                            vNormal = normalize(normalMatrix * normal);
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                                }`,
+                    fragmentShader: `
+                        varying vec3 vNormal;
+                        void main() {
+                                    float facingRatio = dot(vNormal, vec3(0.0, 0.0, 1.0));
+                                    float blueIntensity = 0.5 + 0.5 * facingRatio; // Blue becomes more intense as the normal faces the viewer
+                                    float redIntensity = 0.5 - 0.5 * facingRatio; // Red becomes more intense as the normal faces away
+                                    gl_FragColor = vec4(redIntensity, 0.0, blueIntensity, 0.5); // Semi-transparent
+                                }`,
+                            side: THREE.FrontSide,
+                            transparent: true,
+                        });
+                    }
+                });
+        } else {
+                scene.traverse((child) => {
+                    if (
+                        child.isMesh &&
+                        !(child.userData && child.userData.label) &&
+                        !child.name.toLowerCase().includes("sphere")
+                    ) {
+                        child.material = material;
+                        child.material.wireframe = true; // Ensure wireframe is initially false
+                        originalWireframeMeshes.push(child);
+                    }
+                });
         }
     });
 
@@ -4431,7 +4509,1591 @@ async function renderOverlayCanvas(cone) {
         link.click();
     }
 
-async function render360SnapshotForCone(cone, allCones = markers) {
+    // Helper function to get unique face identifier
+    function getFaceId(mesh, faceIndex) {
+        return `${mesh.uuid}-${faceIndex}`;
+    }
+    
+    // Helper function to detect reversed normals relative to camera position
+    function detectReversedNormalsFromCamera(cameraPosition) {
+        const reversedFaces = [];
+        
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position || !geometry.attributes.normal) return;
+                
+                const positions = geometry.attributes.position;
+                const normals = geometry.attributes.normal;
+                const hasIndex = geometry.index !== null;
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    for (let i = 0; i < index.count; i += 3) {
+                        const i0 = index.getX(i) * 3;
+                        const i1 = index.getX(i + 1) * 3;
+                        const i2 = index.getX(i + 2) * 3;
+                        
+                        // Get face center
+                        const v0 = new THREE.Vector3(
+                            positions.array[i0],
+                            positions.array[i0 + 1],
+                            positions.array[i0 + 2]
+                        );
+                        const v1 = new THREE.Vector3(
+                            positions.array[i1],
+                            positions.array[i1 + 1],
+                            positions.array[i1 + 2]
+                        );
+                        const v2 = new THREE.Vector3(
+                            positions.array[i2],
+                            positions.array[i2 + 1],
+                            positions.array[i2 + 2]
+                        );
+                        
+                        // Transform to world space
+                        v0.applyMatrix4(child.matrixWorld);
+                        v1.applyMatrix4(child.matrixWorld);
+                        v2.applyMatrix4(child.matrixWorld);
+                        
+                        const faceCenter = new THREE.Vector3()
+                            .addVectors(v0, v1)
+                            .add(v2)
+                            .multiplyScalar(1/3);
+                        
+                        // Get face normal
+                        const n0 = new THREE.Vector3(
+                            normals.array[i0],
+                            normals.array[i0 + 1],
+                            normals.array[i0 + 2]
+                        );
+                        const normalMatrix = new THREE.Matrix3().getNormalMatrix(child.matrixWorld);
+                        n0.applyMatrix3(normalMatrix).normalize();
+                        
+                        // Check if normal points away from camera (reversed)
+                        const toCamera = new THREE.Vector3().subVectors(cameraPosition, faceCenter).normalize();
+                        const dot = n0.dot(toCamera);
+                        
+                        // If dot <= 0, normal points away from camera (reversed)
+                        if (dot <= 0) {
+                            reversedFaces.push({
+                                mesh: child,
+                                faceIndex: i / 3,
+                                faceCenter: faceCenter.clone(),
+                                normal: n0.clone(),
+                                faceId: getFaceId(child, i / 3)
+                            });
+                        }
+                    }
+                } else {
+                    // Non-indexed geometry
+                    const faceCount = positions.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const i0 = i * 9;
+                        const i1 = i * 9 + 3;
+                        const i2 = i * 9 + 6;
+                        
+                        const v0 = new THREE.Vector3(
+                            positions.array[i0],
+                            positions.array[i0 + 1],
+                            positions.array[i0 + 2]
+                        );
+                        const v1 = new THREE.Vector3(
+                            positions.array[i1],
+                            positions.array[i1 + 1],
+                            positions.array[i1 + 2]
+                        );
+                        const v2 = new THREE.Vector3(
+                            positions.array[i2],
+                            positions.array[i2 + 1],
+                            positions.array[i2 + 2]
+                        );
+                        
+                        v0.applyMatrix4(child.matrixWorld);
+                        v1.applyMatrix4(child.matrixWorld);
+                        v2.applyMatrix4(child.matrixWorld);
+                        
+                        const faceCenter = new THREE.Vector3()
+                            .addVectors(v0, v1)
+                            .add(v2)
+                            .multiplyScalar(1/3);
+                        
+                        const n0 = new THREE.Vector3(
+                            normals.array[i0],
+                            normals.array[i0 + 1],
+                            normals.array[i0 + 2]
+                        );
+                        const normalMatrix = new THREE.Matrix3().getNormalMatrix(child.matrixWorld);
+                        n0.applyMatrix3(normalMatrix).normalize();
+                        
+                        const toCamera = new THREE.Vector3().subVectors(cameraPosition, faceCenter).normalize();
+                        const dot = n0.dot(toCamera);
+                        
+                        if (dot <= 0) {
+                            reversedFaces.push({
+                                mesh: child,
+                                faceIndex: i,
+                                faceCenter: faceCenter.clone(),
+                                normal: n0.clone(),
+                                faceId: getFaceId(child, i)
+                            });
+                        }
+                    }
+                }
+            });
+        });
+        
+        return reversedFaces;
+    }
+    
+    // Helper function to encode face ID as RGB color
+    function faceIdToColor(faceId) {
+        // Use a hash function to convert faceId string to a color
+        let hash = 0;
+        for (let i = 0; i < faceId.length; i++) {
+            hash = faceId.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        // Convert to RGB (avoid pure black/white for better detection)
+        const r = ((hash & 0xFF0000) >> 16) % 240 + 8; // 8-247
+        const g = ((hash & 0x00FF00) >> 8) % 240 + 8;
+        const b = (hash & 0x0000FF) % 240 + 8;
+        return new THREE.Color(r / 255, g / 255, b / 255);
+    }
+    
+    // Helper function to decode color back to face ID (approximate)
+    function colorToFaceId(r, g, b) {
+        // This is approximate - we'll need to maintain a mapping
+        // For now, we'll use a different approach: store face ID -> color mapping
+        return null; // Not used directly
+    }
+    
+    // Function to render with face ID encoding (each face gets unique color)
+    async function renderFaceIdsAt8K(cone) {
+        const origSize = renderer.getSize(new THREE.Vector2());
+        const origDPR = renderer.getPixelRatio();
+        const origClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+        const origClearAlpha = renderer.getClearAlpha();
+        const origAutoClear = renderer.autoClear;
+        const origToneMapping = renderer.toneMapping;
+        const origOutputColorSpace = renderer.outputColorSpace || renderer.outputEncoding;
+        
+        // Create mapping: faceId -> color and faceId -> mesh UUID
+        const faceIdToColorMap = new Map();
+        const colorToFaceIdMap = new Map();
+        const faceIdToMeshMap = new Map();
+        const colorBuckets = new Map(); // quantized color buckets for fast tolerance lookup
+
+        function addToColorBuckets(rInt, gInt, bInt, faceId) {
+            const key = `${rInt >> 2},${gInt >> 2},${bInt >> 2}`; // bucket size 4 per channel
+            if (!colorBuckets.has(key)) colorBuckets.set(key, []);
+            colorBuckets.get(key).push({ r: rInt, g: gInt, b: bInt, faceId });
+        }
+        let faceIdCounter = 0;
+        
+        // Build face ID to color mapping
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                const geometry = child.geometry;
+                if (!geometry.attributes.position) return;
+                
+                const positions = geometry.attributes.position;
+                const hasIndex = geometry.index !== null;
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    for (let i = 0; i < index.count; i += 3) {
+                        const faceId = getFaceId(child, i / 3);
+                        if (!faceIdToColorMap.has(faceId)) {
+                            // Generate unique color for this face ID using hash (full 24-bit space)
+                            const color = faceIdToColor(faceId);
+                            const rInt = Math.max(1, Math.min(254, Math.round(color.r * 255)));
+                            const gInt = Math.max(1, Math.min(254, Math.round(color.g * 255)));
+                            const bInt = Math.max(1, Math.min(254, Math.round(color.b * 255)));
+                            
+                            faceIdToColorMap.set(faceId, new THREE.Color(rInt / 255, gInt / 255, bInt / 255));
+                            colorToFaceIdMap.set(`${rInt},${gInt},${bInt}`, faceId);
+                            addToColorBuckets(rInt, gInt, bInt, faceId);
+                            faceIdToMeshMap.set(faceId, child.uuid);
+                            faceIdCounter++;
+                        }
+                    }
+                } else {
+                    const faceCount = positions.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (!faceIdToColorMap.has(faceId)) {
+                            // Generate unique color for this face ID using hash (full 24-bit space)
+                            const color = faceIdToColor(faceId);
+                            const rInt = Math.max(1, Math.min(254, Math.round(color.r * 255)));
+                            const gInt = Math.max(1, Math.min(254, Math.round(color.g * 255)));
+                            const bInt = Math.max(1, Math.min(254, Math.round(color.b * 255)));
+                            
+                            faceIdToColorMap.set(faceId, new THREE.Color(rInt / 255, gInt / 255, bInt / 255));
+                            colorToFaceIdMap.set(`${rInt},${gInt},${bInt}`, faceId);
+                            addToColorBuckets(rInt, gInt, bInt, faceId);
+                            faceIdToMeshMap.set(faceId, child.uuid);
+                            faceIdCounter++;
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Store original materials and replace with face ID colors
+        // Create a new geometry with duplicated vertices for flat shading
+        const originalMaterials = new Map();
+        const originalGeometries = new Map();
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry || !child.material) return;
+                originalMaterials.set(child, child.material);
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position) return;
+                
+                const positions = geometry.attributes.position;
+                const hasIndex = geometry.index !== null;
+                
+                // Create new arrays for duplicated vertices (non-indexed)
+                const newPositions = [];
+                const newNormals = [];
+                const newColors = [];
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    const faceCount = index.count / 3;
+                    
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        const color = faceIdToColorMap.get(faceId) || new THREE.Color(0.5, 0.5, 0.5);
+                        
+                        const i0 = index.getX(i * 3);
+                        const i1 = index.getX(i * 3 + 1);
+                        const i2 = index.getX(i * 3 + 2);
+                        
+                        // Get face vertices
+                        const v0 = new THREE.Vector3(
+                            positions.array[i0 * 3],
+                            positions.array[i0 * 3 + 1],
+                            positions.array[i0 * 3 + 2]
+                        );
+                        const v1 = new THREE.Vector3(
+                            positions.array[i1 * 3],
+                            positions.array[i1 * 3 + 1],
+                            positions.array[i1 * 3 + 2]
+                        );
+                        const v2 = new THREE.Vector3(
+                            positions.array[i2 * 3],
+                            positions.array[i2 * 3 + 1],
+                            positions.array[i2 * 3 + 2]
+                        );
+                        
+                        // Compute face normal
+                        const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                        const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                        const faceNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                        
+                        // Duplicate vertices for this face (each face gets its own vertices)
+                        // Vertex 0
+                        newPositions.push(v0.x, v0.y, v0.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                        
+                        // Vertex 1
+                        newPositions.push(v1.x, v1.y, v1.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                        
+                        // Vertex 2
+                        newPositions.push(v2.x, v2.y, v2.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                    }
+                } else {
+                    // Non-indexed geometry - already has separate vertices per face
+                    const faceCount = positions.count / 3;
+                    
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        const color = faceIdToColorMap.get(faceId) || new THREE.Color(0.5, 0.5, 0.5);
+                        
+                        const baseIdx = i * 9;
+                        
+                        // Get face vertices
+                        const v0 = new THREE.Vector3(
+                            positions.array[baseIdx],
+                            positions.array[baseIdx + 1],
+                            positions.array[baseIdx + 2]
+                        );
+                        const v1 = new THREE.Vector3(
+                            positions.array[baseIdx + 3],
+                            positions.array[baseIdx + 4],
+                            positions.array[baseIdx + 5]
+                        );
+                        const v2 = new THREE.Vector3(
+                            positions.array[baseIdx + 6],
+                            positions.array[baseIdx + 7],
+                            positions.array[baseIdx + 8]
+                        );
+                        
+                        // Compute face normal
+                        const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                        const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                        const faceNormal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                        
+                        // Add vertices (already separate, but ensure same color and normal)
+                        newPositions.push(v0.x, v0.y, v0.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                        
+                        newPositions.push(v1.x, v1.y, v1.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                        
+                        newPositions.push(v2.x, v2.y, v2.z);
+                        newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
+                        newColors.push(color.r, color.g, color.b);
+                    }
+                }
+                
+                // Store original geometry and create new non-indexed geometry
+                originalGeometries.set(child, geometry);
+                const flatGeometry = new THREE.BufferGeometry();
+                flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+                flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
+                flatGeometry.setAttribute('color', new THREE.Float32BufferAttribute(newColors, 3));
+                
+                // Replace geometry with flat version
+                child.geometry = flatGeometry;
+                
+                const faceIdMaterial = new THREE.MeshBasicMaterial({
+                    vertexColors: true,
+                    side: THREE.DoubleSide
+                });
+                child.material = faceIdMaterial;
+            });
+        });
+        
+        // Add lights
+        const lights = markers.map((mark) => {
+            const light = new THREE.PointLight(0xffffff, 10, 0, 0.8);
+            const worldPos = new THREE.Vector3();
+            mark.getWorldPosition(worldPos);
+            light.position.copy(worldPos);
+            scene.add(light);
+            return light;
+        });
+        
+        markers.forEach((m) => (m.visible = false));
+        
+        // Get camera position
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        cone.getWorldPosition(worldPos);
+        cone.getWorldQuaternion(worldQuat);
+        
+        // Create 8K cube render target
+        const cubeRenderTarget8K = new THREE.WebGLCubeRenderTarget(4096, {
+            format: THREE.RGBAFormat,
+            generateMipmaps: false,
+            minFilter: THREE.LinearFilter,
+        });
+        const cubeCamera8K = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget8K);
+        cubeCamera8K.position.copy(worldPos);
+        cubeCamera8K.quaternion.copy(worldQuat);
+        cubeCamera8K.quaternion.multiply(
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2)
+        );
+        scene.add(cubeCamera8K);
+        
+        cubeCamera8K.update(renderer, scene);
+        
+        // Render equirectangular at 8K (8192x4096)
+        const eqWidth = 8192;
+        const eqHeight = 4096;
+        renderer.setPixelRatio(1);
+        renderer.setSize(eqWidth, eqHeight);
+        renderer.setRenderTarget(null);
+        renderer.autoClear = true;
+        renderer.toneMapping = THREE.NoToneMapping;
+        if (renderer.outputColorSpace !== undefined) {
+            renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+        } else {
+            renderer.outputEncoding = THREE.LinearEncoding;
+        }
+        renderer.setClearColor(0x000000, 1);
+        renderer.clear(true, true, true);
+        
+        // Update equirectangular material to use 8K cubemap
+        const originalEnvMap = eqMaterial.uniforms.envMap.value;
+        eqMaterial.uniforms.envMap.value = cubeRenderTarget8K.texture;
+        eqMaterial.needsUpdate = true;
+        
+        renderer.render(eqScene, eqCam);
+        
+        // Read pixels from WebGL canvas
+        const idCanvas = renderer.domElement;
+        const gl = renderer.getContext();
+        const pixels = new Uint8Array(eqWidth * eqHeight * 4);
+        gl.readPixels(0, 0, eqWidth, eqHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        
+        // Flip Y axis (WebGL has origin at bottom-left, ImageData has origin at top-left)
+        const flippedPixels = new Uint8Array(eqWidth * eqHeight * 4);
+        for (let y = 0; y < eqHeight; y++) {
+            const srcRow = (eqHeight - 1 - y) * eqWidth * 4;
+            const dstRow = y * eqWidth * 4;
+            flippedPixels.set(pixels.subarray(srcRow, srcRow + eqWidth * 4), dstRow);
+        }
+        
+        const idImageData = new ImageData(
+            new Uint8ClampedArray(flippedPixels),
+            eqWidth,
+            eqHeight
+        );
+        
+        // Restore materials and geometries
+        originalMaterials.forEach((originalMaterial, mesh) => {
+            mesh.material = originalMaterial;
+        });
+        originalGeometries.forEach((originalGeometry, mesh) => {
+            mesh.geometry = originalGeometry;
+        });
+        
+        // Restore equirectangular material
+        eqMaterial.uniforms.envMap.value = originalEnvMap;
+        eqMaterial.needsUpdate = true;
+        
+        lights.forEach((l) => scene.remove(l));
+        markers.forEach((m) => (m.visible = true));
+        
+        // Cleanup 8K cube camera
+        scene.remove(cubeCamera8K);
+        cubeRenderTarget8K.dispose();
+        
+        // Restore renderer state
+        renderer.setPixelRatio(origDPR);
+        renderer.setSize(origSize.x, origSize.y, true);
+        renderer.setClearColor(origClearColor, origClearAlpha);
+        renderer.autoClear = origAutoClear;
+        renderer.toneMapping = origToneMapping;
+        if (renderer.outputColorSpace !== undefined) {
+            renderer.outputColorSpace = origOutputColorSpace;
+        } else {
+            renderer.outputEncoding = origOutputColorSpace;
+        }
+        
+        // Show preview in render window
+        showRenderPreview(idImageData, (cone.name || 'Face ID Render') + ' - Face IDs');
+        
+        return { imageData: idImageData, colorToFaceIdMap, colorBuckets, faceIdToColorMap, faceIdToMeshMap, width: eqWidth, height: eqHeight };
+    }
+    
+    // Function to render normals at 8K resolution
+    async function render360SnapshotForConeAt8K(cone, showNormals = false) {
+        const origSize = renderer.getSize(new THREE.Vector2());
+        const origDPR = renderer.getPixelRatio();
+        const origClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+        const origClearAlpha = renderer.getClearAlpha();
+        const origAutoClear = renderer.autoClear;
+        
+        // Add lights
+        const lights = markers.map((mark) => {
+            const light = new THREE.PointLight(0xffffff, 10, 0, 0.8);
+            const worldPos = new THREE.Vector3();
+            mark.getWorldPosition(worldPos);
+            light.position.copy(worldPos);
+            scene.add(light);
+            return light;
+        });
+        
+        markers.forEach((m) => (m.visible = false));
+        
+        // Get camera position
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        cone.getWorldPosition(worldPos);
+        cone.getWorldQuaternion(worldQuat);
+        
+        let prevOverride = scene.overrideMaterial;
+        let originalMaterials = new Map();
+        let originalGeometries = new Map();
+        
+        if (showNormals) {
+            // Store original materials and geometries, then replace with face-orientation materials
+            // Use duplicated vertices to prevent color interpolation (flat shading)
+            objects.forEach(obj => {
+                obj.traverse((child) => {
+                    if (child.isMesh && child.material && child.geometry) {
+                        originalMaterials.set(child, child.material);
+                        
+                        const geometry = child.geometry;
+                        if (!geometry.attributes.position) return;
+                        
+                        const positions = geometry.attributes.position;
+                        const hasIndex = geometry.index !== null;
+                        
+                        // Create new arrays for duplicated vertices (non-indexed for flat shading)
+                        const newPositions = [];
+                        const newNormals = [];
+                        const newColors = [];
+                        
+                        if (hasIndex) {
+                            const index = geometry.index;
+                            const faceCount = index.count / 3;
+                            
+                            for (let i = 0; i < faceCount; i++) {
+                                const i0 = index.getX(i * 3);
+                                const i1 = index.getX(i * 3 + 1);
+                                const i2 = index.getX(i * 3 + 2);
+                                
+                                // Get face vertices in local space
+                                const v0Local = new THREE.Vector3(
+                                    positions.array[i0 * 3],
+                                    positions.array[i0 * 3 + 1],
+                                    positions.array[i0 * 3 + 2]
+                                );
+                                const v1Local = new THREE.Vector3(
+                                    positions.array[i1 * 3],
+                                    positions.array[i1 * 3 + 1],
+                                    positions.array[i1 * 3 + 2]
+                                );
+                                const v2Local = new THREE.Vector3(
+                                    positions.array[i2 * 3],
+                                    positions.array[i2 * 3 + 1],
+                                    positions.array[i2 * 3 + 2]
+                                );
+                                
+                                // Transform to world space for orientation check only
+                                const v0 = v0Local.clone().applyMatrix4(child.matrixWorld);
+                                const v1 = v1Local.clone().applyMatrix4(child.matrixWorld);
+                                const v2 = v2Local.clone().applyMatrix4(child.matrixWorld);
+                                
+                                // Compute face center and flat normal in world space
+                                const faceCenter = new THREE.Vector3()
+                                    .addVectors(v0, v1)
+                                    .add(v2)
+                                    .multiplyScalar(1/3);
+                                
+                                // Compute flat face normal in world space
+                                const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                                const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                                const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                                
+                                // Determine face orientation relative to camera
+                                const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
+                                const dot = faceNormalWorld.dot(toCamera);
+                                
+                                // Assign color based on orientation (same for all vertices of this face)
+                                let faceColor;
+                                if (dot > 0.0) {
+                                    faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                } else {
+                                    faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                }
+                                
+                                // Compute local space normal for the geometry
+                                const edge1Local = new THREE.Vector3().subVectors(v1Local, v0Local);
+                                const edge2Local = new THREE.Vector3().subVectors(v2Local, v0Local);
+                                const faceNormalLocal = new THREE.Vector3().crossVectors(edge1Local, edge2Local).normalize();
+                                
+                                // Store vertices in LOCAL space (mesh transform will be applied during render)
+                                newPositions.push(v0Local.x, v0Local.y, v0Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                                
+                                newPositions.push(v1Local.x, v1Local.y, v1Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                                
+                                newPositions.push(v2Local.x, v2Local.y, v2Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            }
+                        } else {
+                            // Non-indexed geometry - already has separate vertices per face
+                            const faceCount = positions.count / 3;
+                            
+                            for (let i = 0; i < faceCount; i++) {
+                                const baseIdx = i * 9;
+                                
+                                // Get face vertices in local space
+                                const v0Local = new THREE.Vector3(
+                                    positions.array[baseIdx],
+                                    positions.array[baseIdx + 1],
+                                    positions.array[baseIdx + 2]
+                                );
+                                const v1Local = new THREE.Vector3(
+                                    positions.array[baseIdx + 3],
+                                    positions.array[baseIdx + 4],
+                                    positions.array[baseIdx + 5]
+                                );
+                                const v2Local = new THREE.Vector3(
+                                    positions.array[baseIdx + 6],
+                                    positions.array[baseIdx + 7],
+                                    positions.array[baseIdx + 8]
+                                );
+                                
+                                // Transform to world space for orientation check only
+                                const v0 = v0Local.clone().applyMatrix4(child.matrixWorld);
+                                const v1 = v1Local.clone().applyMatrix4(child.matrixWorld);
+                                const v2 = v2Local.clone().applyMatrix4(child.matrixWorld);
+                                
+                                // Compute face center and flat normal in world space
+                                const faceCenter = new THREE.Vector3()
+                                    .addVectors(v0, v1)
+                                    .add(v2)
+                                    .multiplyScalar(1/3);
+                                
+                                // Compute flat face normal in world space
+                                const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                                const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                                const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                                
+                                // Determine face orientation relative to camera
+                                const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
+                                const dot = faceNormalWorld.dot(toCamera);
+                                
+                                // Assign color based on orientation (same for all vertices of this face)
+                                let faceColor;
+                                if (dot > 0.0) {
+                                    faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                } else {
+                                    faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                }
+                                
+                                // Compute local space normal for the geometry
+                                const edge1Local = new THREE.Vector3().subVectors(v1Local, v0Local);
+                                const edge2Local = new THREE.Vector3().subVectors(v2Local, v0Local);
+                                const faceNormalLocal = new THREE.Vector3().crossVectors(edge1Local, edge2Local).normalize();
+                                
+                                // Store vertices in LOCAL space (mesh transform will be applied during render)
+                                newPositions.push(v0Local.x, v0Local.y, v0Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                                
+                                newPositions.push(v1Local.x, v1Local.y, v1Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                                
+                                newPositions.push(v2Local.x, v2Local.y, v2Local.z);
+                                newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                                newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            }
+                        }
+                        
+                        // Store original geometry and create new non-indexed geometry with flat shading
+                        originalGeometries.set(child, geometry);
+                        const flatGeometry = new THREE.BufferGeometry();
+                        flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+                        flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
+                        flatGeometry.setAttribute('color', new THREE.Float32BufferAttribute(newColors, 3));
+                        
+                        // Replace geometry with flat version
+                        child.geometry = flatGeometry;
+                        
+                        const faceOrientationMaterial = new THREE.MeshBasicMaterial({
+                            vertexColors: true,
+                            side: THREE.DoubleSide
+                        });
+                        child.material = faceOrientationMaterial;
+                    }
+                });
+            });
+        } else {
+            const whiteMat = new THREE.MeshPhongMaterial({
+                color: 0xffffff,
+                shininess: 30,
+            });
+            whiteMat.dithering = true;
+            scene.overrideMaterial = whiteMat;
+        }
+        
+        // Create 8K cube render target
+        const cubeRenderTarget8K = new THREE.WebGLCubeRenderTarget(4096, {
+            format: THREE.RGBAFormat,
+            generateMipmaps: false,
+            minFilter: THREE.LinearFilter,
+        });
+        const cubeCamera8K = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget8K);
+        cubeCamera8K.position.copy(worldPos);
+        cubeCamera8K.quaternion.copy(worldQuat);
+        cubeCamera8K.quaternion.multiply(
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2)
+        );
+        
+        cubeCamera8K.update(renderer, scene);
+        
+        // Restore materials and geometries
+        if (showNormals) {
+            originalMaterials.forEach((originalMaterial, mesh) => {
+                mesh.material = originalMaterial;
+            });
+            originalGeometries.forEach((originalGeometry, mesh) => {
+                mesh.geometry = originalGeometry;
+            });
+        } else {
+            scene.overrideMaterial = prevOverride;
+        }
+        
+        markers.forEach((m) => (m.visible = true));
+        
+        // Render equirectangular at 8K (8192x4096)
+        const eqWidth = 8192;
+        const eqHeight = 4096;
+        renderer.setPixelRatio(1);
+        renderer.setSize(eqWidth, eqHeight);
+        renderer.setRenderTarget(null);
+        renderer.autoClear = true;
+        renderer.setClearColor(0x000000, 1);
+        renderer.clear(true, true, true);
+        
+        // Update equirectangular material to use 8K cubemap
+        const originalEnvMap = eqMaterial.uniforms.envMap.value;
+        eqMaterial.uniforms.envMap.value = cubeRenderTarget8K.texture;
+        eqMaterial.needsUpdate = true;
+        
+        renderer.render(eqScene, eqCam);
+        
+        // Read pixels from WebGL canvas
+        const gl = renderer.getContext();
+        const pixels = new Uint8Array(eqWidth * eqHeight * 4);
+        gl.readPixels(0, 0, eqWidth, eqHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        
+        // Flip Y axis (WebGL has origin at bottom-left, ImageData has origin at top-left)
+        const flippedPixels = new Uint8Array(eqWidth * eqHeight * 4);
+        for (let y = 0; y < eqHeight; y++) {
+            const srcRow = (eqHeight - 1 - y) * eqWidth * 4;
+            const dstRow = y * eqWidth * 4;
+            flippedPixels.set(pixels.subarray(srcRow, srcRow + eqWidth * 4), dstRow);
+        }
+        
+        const imageData = new ImageData(
+            new Uint8ClampedArray(flippedPixels),
+            eqWidth,
+            eqHeight
+        );
+        
+        // Restore equirectangular material
+        eqMaterial.uniforms.envMap.value = originalEnvMap;
+        eqMaterial.needsUpdate = true;
+        
+        lights.forEach((l) => scene.remove(l));
+        
+        // Cleanup 8K cube camera
+        scene.remove(cubeCamera8K);
+        cubeRenderTarget8K.dispose();
+        
+        // Restore renderer state
+        renderer.setPixelRatio(origDPR);
+        renderer.setSize(origSize.x, origSize.y, true);
+        renderer.setClearColor(origClearColor, origClearAlpha);
+        renderer.autoClear = origAutoClear;
+        
+        // Show preview in render window
+        showRenderPreview(imageData, cone.name || '8K Render');
+        
+        return { imageData, width: eqWidth, height: eqHeight };
+    }
+    
+    // Store renders for first 3 cameras for export
+    let renderExports = [];
+    let exportLogsEnabled = false;
+    
+    function updateSelectCurrentButtonVisibility() {
+        const btn = document.getElementById("select-reversed-faces-current") as HTMLButtonElement;
+        if (btn) {
+            btn.style.display = currentSelectedCone ? "block" : "none";
+        }
+    }
+    
+    // Function to export render images and debug info as zip
+    async function exportRenderZip(cameraIndex, coneName, idRender, normalRender, redFaces, faceIdToMeshInfo) {
+        const zip = new JSZip();
+        const folder = zip.folder(`camera_${cameraIndex}_${coneName}`);
+        
+        // Convert ImageData to PNG for ID render
+        const idCanvas = document.createElement('canvas');
+        idCanvas.width = idRender.width;
+        idCanvas.height = idRender.height;
+        const idCtx = idCanvas.getContext('2d');
+        if (idCtx) {
+            idCtx.putImageData(idRender.imageData, 0, 0);
+            const idBlob = await new Promise((resolve) => {
+                idCanvas.toBlob((blob) => resolve(blob), 'image/png');
+            });
+            if (idBlob) {
+                folder.file('face-id-render.png', idBlob);
+            }
+        }
+        
+        // Convert ImageData to PNG for normals render
+        const normalCanvas = document.createElement('canvas');
+        normalCanvas.width = normalRender.width;
+        normalCanvas.height = normalRender.height;
+        const normalCtx = normalCanvas.getContext('2d');
+        if (normalCtx) {
+            normalCtx.putImageData(normalRender.imageData, 0, 0);
+            const normalBlob = await new Promise((resolve) => {
+                normalCanvas.toBlob((blob) => resolve(blob), 'image/png');
+            });
+            if (normalBlob) {
+                folder.file('normals-render.png', normalBlob);
+            }
+        }
+        
+        // Export viewport
+        renderer.render(scene, currentCamera);
+        const viewportDataURL = renderer.domElement.toDataURL('image/png');
+        const viewportBlob = await (await fetch(viewportDataURL)).blob();
+        folder.file('viewport.png', viewportBlob);
+        
+        // Export debug info as JSON
+        const debugInfo = {
+            cameraIndex: cameraIndex,
+            coneName: coneName,
+            redFacesCount: redFaces.size,
+            redFaceIds: Array.from(redFaces).slice(0, 100), // First 100 face IDs
+            faceIdToMeshInfo: faceIdToMeshInfo ? Array.from(faceIdToMeshInfo.entries()).map(([faceId, info]) => ({
+                faceId: faceId,
+                meshName: info.meshName,
+                meshUuid: info.meshUuid,
+                parentName: info.parentName,
+                faceIndex: info.faceIndex,
+                totalFaces: info.totalFaces,
+                isSphere: info.isSphere
+            })) : [],
+            renderDimensions: {
+                idRender: { width: idRender.width, height: idRender.height },
+                normalRender: { width: normalRender.width, height: normalRender.height }
+            }
+        };
+        folder.file('debug-info.json', JSON.stringify(debugInfo, null, 2));
+        
+        // Generate and download zip
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        saveBlob(zipBlob, `render-export-camera-${cameraIndex}-${coneName}.zip`);
+        console.log(`Exported zip for camera ${cameraIndex}: render-export-camera-${cameraIndex}-${coneName}.zip`);
+    }
+    
+    // Function to select all reversed faces from all cameras using 8K render comparison
+    async function selectAllReversedFaces() {
+        if (markers.length === 0) {
+            console.log("No cameras found. Please import cameras first.");
+            return;
+        }
+        
+        if (objects.length === 0) {
+            console.log("No models found. Please import a model first.");
+            return;
+        }
+        
+        const allReversedFaces = new Set();
+        
+        // Clear existing highlights and start fresh
+        selectedReversedFaceIds.clear();
+        updateSelectedReversedFacesHighlights();
+        
+        // Reset stored renders
+        renderExports = [];
+        
+        console.log(`Starting to check ${markers.length} cameras for reversed faces using 8K render comparison...`);
+        
+        // Iterate through all visible camera markers
+        for (let i = 0; i < markers.length; i++) {
+            const cone = markers[i];
+            if (cone.cameraPos && cone.parent && cone.parent.visible) {
+                console.log(`Processing camera ${i + 1}/${markers.length} (${cone.name})...`);
+                
+                // Yield control to allow viewport updates between cameras
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                
+                // Step 1: Render face IDs at 8K
+                console.log("  Rendering face IDs...");
+                const idRender = await renderFaceIdsAt8K(cone);
+                
+                // Yield after render to allow viewport update
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                
+                // Step 2: Render normals at 8K
+                console.log("  Rendering normals...");
+                const normalRenderResult = await render360SnapshotForConeAt8K(cone, true);
+                const normalImageData = normalRenderResult.imageData;
+                
+                // Yield after render to allow viewport update
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                
+                // Camera world position for visibility checks
+                const cameraWorldPos = new THREE.Vector3();
+                cone.getWorldPosition(cameraWorldPos);
+                
+                // Cache mesh info for later debugging/export
+                const meshInfoByUuid = new Map();
+                objects.forEach(obj => {
+                    obj.traverse((mesh) => {
+                        if (mesh.isMesh && mesh.geometry) {
+                            const meshName = mesh.name || "unnamed";
+                            const parentName = mesh.parent?.name || "unnamed parent";
+                            const isSphere = meshName.toLowerCase().includes("sphere") || parentName.toLowerCase().includes("sphere") || obj.name?.toLowerCase().includes("sphere");
+                            const faceCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.attributes.position?.count || 0) / 3;
+                            meshInfoByUuid.set(mesh.uuid, { meshName, parentName, isSphere, faceCount });
+                        }
+                    });
+                });
+                
+                // Step 3: Compare renders to find red faces
+                console.log("  Comparing renders...");
+                const idData = idRender.imageData.data;
+                const normalData = normalImageData.data;
+                const width = idRender.width;
+                const height = idRender.height;
+                
+                // Sample pixels (check every Nth pixel for performance)
+                const sampleRate = 4; // Check every 4th pixel
+                const redFaces = new Set();
+                
+                // Build red mask on sampled grid
+                const widthS = Math.ceil(width / sampleRate);
+                const heightS = Math.ceil(height / sampleRate);
+                const redMask = new Uint8Array(widthS * heightS);
+                const isRed = (rr, gg, bb) => rr > 200 && gg < 50 && bb < 50;
+                
+                for (let yS = 0; yS < heightS; yS++) {
+                    const y = yS * sampleRate;
+                    if (y >= height) continue;
+                    for (let xS = 0; xS < widthS; xS++) {
+                        const x = xS * sampleRate;
+                        if (x >= width) continue;
+                        const idx = (y * width + x) * 4;
+                        const r = normalData[idx];
+                        const g = normalData[idx + 1];
+                        const b = normalData[idx + 2];
+                        if (!isRed(r, g, b)) continue;
+                        // 4-neighbor strength
+                        let redNeighbors = 0;
+                        if (x > 0) {
+                            const nIdx = (y * width + (x - 1)) * 4;
+                            if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                        }
+                        if (x + 1 < width) {
+                            const nIdx = (y * width + (x + 1)) * 4;
+                            if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                        }
+                        if (y > 0) {
+                            const nIdx = ((y - 1) * width + x) * 4;
+                            if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                        }
+                        if (y + 1 < height) {
+                            const nIdx = ((y + 1) * width + x) * 4;
+                            if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                        }
+                        if (redNeighbors < 3) continue;
+                        redMask[yS * widthS + xS] = 1;
+                    }
+                }
+                
+                // Connected components on the sampled mask with shape metrics
+                const compIds = new Int32Array(widthS * heightS);
+                compIds.fill(-1);
+                const compMetrics = []; // {size, minX, maxX, minY, maxY, perimeter}
+                let compCounter = 0;
+                const stack = [];
+                
+                // Helper to check if pixel is on edge (has non-red neighbor)
+                const isEdgePixel = (xS, yS) => {
+                    if (xS === 0 || xS === widthS - 1 || yS === 0 || yS === heightS - 1) return true;
+                    const neighbors = [
+                        (yS - 1) * widthS + xS, // up
+                        (yS + 1) * widthS + xS, // down
+                        yS * widthS + (xS - 1), // left
+                        yS * widthS + (xS + 1)  // right
+                    ];
+                    for (const n of neighbors) {
+                        if (!redMask[n]) return true;
+                    }
+                    return false;
+                };
+                
+                for (let yS = 0; yS < heightS; yS++) {
+                    for (let xS = 0; xS < widthS; xS++) {
+                        const idxS = yS * widthS + xS;
+                        if (!redMask[idxS] || compIds[idxS] !== -1) continue;
+                        
+                        let size = 0;
+                        let minX = xS, maxX = xS, minY = yS, maxY = yS;
+                        let perimeter = 0;
+                        
+                        stack.length = 0;
+                        stack.push(idxS);
+                        compIds[idxS] = compCounter;
+                        
+                        while (stack.length) {
+                            const cur = stack.pop();
+                            size++;
+                            const cx = cur % widthS;
+                            const cy = (cur / widthS) | 0;
+                            
+                            // Update bounding box
+                            if (cx < minX) minX = cx;
+                            if (cx > maxX) maxX = cx;
+                            if (cy < minY) minY = cy;
+                            if (cy > maxY) maxY = cy;
+                            
+                            // Count perimeter
+                            if (isEdgePixel(cx, cy)) perimeter++;
+                            
+                            const neighbors = [
+                                cur - 1,
+                                cur + 1,
+                                cur - widthS,
+                                cur + widthS
+                            ];
+                            if (cx === 0) neighbors[0] = -1;
+                            if (cx === widthS - 1) neighbors[1] = -1;
+                            if (cy === 0) neighbors[2] = -1;
+                            if (cy === heightS - 1) neighbors[3] = -1;
+                            for (const n of neighbors) {
+                                if (n < 0) continue;
+                                if (!redMask[n]) continue;
+                                if (compIds[n] !== -1) continue;
+                                compIds[n] = compCounter;
+                                stack.push(n);
+                            }
+                        }
+                        
+                        const width = maxX - minX + 1;
+                        const height = maxY - minY + 1;
+                        const bboxArea = width * height;
+                        const aspectRatio = Math.max(width / Math.max(height, 1), height / Math.max(width, 1));
+                        const compactness = size / Math.max(bboxArea, 1); // 1.0 = perfect rectangle, lower = sparse
+                        const perimeterToArea = perimeter / Math.max(size, 1);
+                        
+                        compMetrics[compCounter] = {
+                            size,
+                            minX, maxX, minY, maxY,
+                            width, height,
+                            perimeter,
+                            aspectRatio,
+                            compactness,
+                            perimeterToArea
+                        };
+                        compCounter++;
+                    }
+                }
+                
+                // Filter thresholds
+                const minRedRegionSize = 20; // minimum pixel count
+                const minWidth = 2; // minimum bounding box width (in sampled pixels)
+                const minHeight = 2; // minimum bounding box height (in sampled pixels)
+                const maxAspectRatio = 8; // filter very thin lines (width/height or height/width)
+                const minCompactness = 0.3; // filter very sparse regions (low = thin/scattered)
+                const maxPerimeterToArea = 1.5; // filter high edge-to-area ratio (specks/thin lines)
+                
+                // Process only sufficiently large and compact red regions
+                const chunkSize = 100; // rows before yielding
+                let processedRows = 0;
+                
+                for (let yS = 0; yS < heightS; yS++) {
+                    const y = yS * sampleRate;
+                    if (y >= height) continue;
+                    for (let xS = 0; xS < widthS; xS++) {
+                        const idxS = yS * widthS + xS;
+                        if (!redMask[idxS]) continue;
+                        const compId = compIds[idxS];
+                        if (compId === -1) continue;
+                        
+                        const metrics = compMetrics[compId];
+                        // Apply all filters
+                        if (metrics.size < minRedRegionSize) continue;
+                        if (metrics.width < minWidth || metrics.height < minHeight) continue;
+                        if (metrics.aspectRatio > maxAspectRatio) continue;
+                        if (metrics.compactness < minCompactness) continue;
+                        if (metrics.perimeterToArea > maxPerimeterToArea) continue;
+                        
+                        const x = xS * sampleRate;
+                        if (x >= width) continue;
+                        const idx = (y * width + x) * 4;
+                        const idR = idData[idx];
+                        const idG = idData[idx + 1];
+                        const idB = idData[idx + 2];
+                        
+                        const idBrightness = (idR + idG + idB) / 3;
+                        if (idBrightness < 10) continue;
+                        
+                        const exactColorKey = `${Math.floor(idR)},${Math.floor(idG)},${Math.floor(idB)}`;
+                        let faceId = idRender.colorToFaceIdMap.get(exactColorKey);
+                        let matchType = 'exact';
+                        let matchDistance = 0;
+                        
+                        if (!faceId) {
+                            const tolerance = 4;
+                            let bestMatch = null;
+                            let bestDistance = Infinity;
+                            const bucketKeyBase = { r: idR >> 2, g: idG >> 2, b: idB >> 2 };
+                            const bucketsToCheck = [];
+                            for (let dr = -1; dr <= 1; dr++) {
+                                for (let dg = -1; dg <= 1; dg++) {
+                                    for (let db = -1; db <= 1; db++) {
+                                        bucketsToCheck.push(`${bucketKeyBase.r + dr},${bucketKeyBase.g + dg},${bucketKeyBase.b + db}`);
+                                    }
+                                }
+                            }
+                            const colorBuckets = idRender.colorBuckets;
+                            for (const key of bucketsToCheck) {
+                                const bucket = colorBuckets?.get(key);
+                                if (!bucket) continue;
+                                for (const entry of bucket) {
+                                    const distance = Math.abs(idR - entry.r) + Math.abs(idG - entry.g) + Math.abs(idB - entry.b);
+                                    if (distance < bestDistance &&
+                                        Math.abs(idR - entry.r) <= tolerance &&
+                                        Math.abs(idG - entry.g) <= tolerance &&
+                                        Math.abs(idB - entry.b) <= tolerance) {
+                                        bestDistance = distance;
+                                        bestMatch = entry.faceId;
+                                    }
+                                }
+                            }
+                            
+                            if (bestMatch) {
+                                faceId = bestMatch;
+                                matchType = 'tolerance';
+                                matchDistance = bestDistance;
+                            }
+                        }
+                        
+                        if (faceId) {
+                            const expectedColor = idRender.faceIdToColorMap?.get(faceId);
+                            if (expectedColor) {
+                                const expectedR = Math.floor(expectedColor.r * 255);
+                                const expectedG = Math.floor(expectedColor.g * 255);
+                                const expectedB = Math.floor(expectedColor.b * 255);
+                                const colorDiff = Math.abs(idR - expectedR) + Math.abs(idG - expectedG) + Math.abs(idB - expectedB);
+                                
+                                if (matchType === 'tolerance' && colorDiff > 6) {
+                                    if (redFaces.size === 0 && x % 500 === 0 && y % 500 === 0) {
+                                        console.warn(`  Skipped potential color collision: faceId ${faceId}, expected rgb(${expectedR}, ${expectedG}, ${expectedB}), got rgb(${idR}, ${idG}, ${idB}), diff: ${colorDiff}`);
+                                    }
+                                    continue;
+                                }
+                            }
+                            
+                            redFaces.add(faceId);
+                            if (redFaces.size <= 5) {
+                                console.log(`  Found red face ID: ${faceId}, at pixel (${x}, ${y}), ID color: rgb(${idR}, ${idG}, ${idB}), match: ${matchType}, distance: ${matchDistance}`);
+                            }
+                        } else {
+                            if (redFaces.size < 3 && x % 100 === 0 && y % 100 === 0) {
+                                console.warn(`  Red pixel at (${x}, ${y}) but no matching face ID. ID color: rgb(${idR}, ${idG}, ${idB}), brightness: ${idBrightness.toFixed(1)}`);
+                            }
+                        }
+                    }
+                    
+                    processedRows++;
+                    if (processedRows >= chunkSize) {
+                        processedRows = 0;
+                        await new Promise(resolve => requestAnimationFrame(resolve));
+                    }
+                }
+                
+                // Add found faces to the global set and update highlights in real-time
+                redFaces.forEach(faceId => {
+                    allReversedFaces.add(faceId);
+                    selectedReversedFaceIds.add(faceId);
+                });
+                
+                console.log(`  Camera ${i + 1}/${markers.length} (${cone.name}): Found ${redFaces.size} reversed faces`);
+                
+                // Try to identify which meshes these faces belong to
+                let faceIdToMeshInfo = new Map();
+                if (redFaces.size > 0) {
+                    // Build faceId -> mesh info using cached mappings for all red faces
+                    redFaces.forEach(faceId => {
+                        const meshUuid = idRender.faceIdToMeshMap?.get(faceId);
+                        if (!meshUuid) return;
+                        const meshInfo = meshInfoByUuid.get(meshUuid);
+                        if (!meshInfo) return;
+                        const faceIndex = parseInt(faceId.split('-').pop());
+                        faceIdToMeshInfo.set(faceId, {
+                            faceId,
+                            meshName: meshInfo.meshName,
+                            meshUuid,
+                            parentName: meshInfo.parentName,
+                            faceIndex,
+                            totalFaces: meshInfo.faceCount,
+                            isSphere: meshInfo.isSphere
+                        });
+                    });
+                    
+                    // Log a small sample for visibility
+                    const sampleFaceIds = Array.from(redFaces).slice(0, 10);
+                    console.log(`  Sample face IDs:`, sampleFaceIds);
+                    console.log(`  Face IDs belong to meshes:`, Array.from(faceIdToMeshInfo.entries()).slice(0, 10));
+                }
+                
+                // Export zip for first 3 cameras (if enabled)
+                if (exportLogsEnabled && i < 3) {
+                    await exportRenderZip(
+                        i + 1,
+                        cone.name,
+                        {
+                            imageData: idRender.imageData,
+                            width: idRender.width,
+                            height: idRender.height
+                        },
+                        {
+                            imageData: normalImageData,
+                            width: normalRenderResult.width,
+                            height: normalRenderResult.height
+                        },
+                        redFaces,
+                        faceIdToMeshInfo
+                    );
+                }
+                
+                // Update highlights to show faces found so far
+                updateSelectedReversedFacesHighlights();
+                
+                // Yield after processing each camera to allow viewport updates
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+        }
+        
+        // Log results
+        console.log("=== All Reversed Faces (Red Faces) ===");
+        console.log(`Total unique reversed faces found across all cameras: ${allReversedFaces.size}`);
+        console.log("Face identifiers:", Array.from(allReversedFaces).sort().slice(0, 20), "...");
+        console.log("========================================");
+        
+        // Final update of highlights (already done incrementally, but ensure it's up to date)
+        updateSelectedReversedFacesHighlights();
+        
+        return allReversedFaces;
+    }
+    
+    // Function to create highlight meshes for selected reversed faces
+    function updateSelectedReversedFacesHighlights() {
+        // Clear existing highlights
+        selectedReversedFacesGroup.children.slice().forEach(child => {
+            selectedReversedFacesGroup.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+        
+        // Update flip button visibility
+        const flipBtn = document.getElementById("flip-selected-normals");
+        if (flipBtn) {
+            flipBtn.style.display = selectedReversedFaceIds.size > 0 ? "block" : "none";
+        }
+        
+        if (selectedReversedFaceIds.size === 0) {
+            console.log("No selected reversed faces to highlight");
+            return;
+        }
+        
+        console.log(`Updating highlights for ${selectedReversedFaceIds.size} selected reversed faces`);
+        console.log("Sample face IDs in set:", Array.from(selectedReversedFaceIds).slice(0, 5));
+        
+        // Group faces by mesh
+        const facesByMesh = new Map();
+        let totalFacesChecked = 0;
+        let totalFacesMatched = 0;
+        
+        // Find all faces that match the selected face IDs
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position || !geometry.attributes.normal) return;
+                
+                const positions = geometry.attributes.position;
+                const hasIndex = geometry.index !== null;
+                const faceIndices = [];
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    const faceCount = index.count / 3;
+                    totalFacesChecked += faceCount;
+                    for (let i = 0; i < index.count; i += 3) {
+                        const faceIdx = i / 3;
+                        const faceId = getFaceId(child, faceIdx);
+                        // Debug: log first few face IDs to see if they match
+                        if (faceIdx < 3) {
+                            console.log(`Face ${faceIdx} ID: ${faceId}, in set: ${selectedReversedFaceIds.has(faceId)}`);
+                        }
+                        if (selectedReversedFaceIds.has(faceId)) {
+                            faceIndices.push(faceIdx);
+                            totalFacesMatched++;
+                        }
+                    }
+                } else {
+                    const faceCount = positions.count / 3;
+                    totalFacesChecked += faceCount;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        // Debug: log first few face IDs
+                        if (i < 3) {
+                            console.log(`Face ${i} ID: ${faceId}, in set: ${selectedReversedFaceIds.has(faceId)}`);
+                        }
+                        if (selectedReversedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                            totalFacesMatched++;
+                        }
+                    }
+                }
+                
+                if (faceIndices.length > 0) {
+                    if (!facesByMesh.has(child)) {
+                        facesByMesh.set(child, []);
+                    }
+                    facesByMesh.get(child).push(...faceIndices);
+                }
+            });
+        });
+        
+        console.log(`Checked ${totalFacesChecked} total faces, matched ${totalFacesMatched} faces`);
+        console.log(`Found ${facesByMesh.size} meshes with selected faces`);
+        
+        // Create highlight meshes
+        let totalHighlightFaces = 0;
+        facesByMesh.forEach((faceIndices, mesh) => {
+            try {
+                // Verify face indices are actually in the selected set
+                const verifiedFaceIndices = faceIndices.filter(faceIdx => {
+                    const faceId = getFaceId(mesh, faceIdx);
+                    return selectedReversedFaceIds.has(faceId);
+                });
+                
+                if (verifiedFaceIndices.length === 0) {
+                    console.warn(`Mesh ${mesh.uuid} had ${faceIndices.length} face indices but none matched after verification`);
+                    return;
+                }
+                
+                totalHighlightFaces += verifiedFaceIndices.length;
+                const highlightGeometry = extractFacesToGeometry(mesh, verifiedFaceIndices);
+                const redMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff0000,
+                    side: THREE.DoubleSide,
+                    depthTest: true,
+                    depthWrite: true,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const highlightMesh = new THREE.Mesh(highlightGeometry, redMaterial);
+                highlightMesh.userData.parentMesh = mesh;
+                highlightMesh.userData.faceIndices = verifiedFaceIndices;
+                highlightMesh.renderOrder = 100; // Render on top
+                
+                // Match parent mesh transform
+                mesh.updateMatrixWorld(true);
+                mesh.matrixWorld.decompose(
+                    highlightMesh.position,
+                    highlightMesh.quaternion,
+                    highlightMesh.scale
+                );
+                highlightMesh.updateMatrixWorld(true);
+                
+                selectedReversedFacesGroup.add(highlightMesh);
+            } catch (error) {
+                console.error("Error creating highlight mesh:", error);
+            }
+        });
+        
+        console.log(`Created ${selectedReversedFacesGroup.children.length} highlight meshes with ${totalHighlightFaces} total faces`);
+    }
+    
+    // Helper function to project 3D position to 2D equirectangular coordinates
+    function projectToEquirectangular(worldPos, cameraPos, width, height) {
+        // Direction from camera to face center
+        const dir = new THREE.Vector3().subVectors(worldPos, cameraPos).normalize();
+        
+        // Convert to spherical coordinates
+        const phi = Math.atan2(dir.z, dir.x); // azimuth [-π, π]
+        const theta = Math.acos(dir.y); // elevation [0, π]
+        
+        // Convert to UV coordinates [0, 1]
+        const u = (phi + Math.PI) / (2 * Math.PI); // [0, 1]
+        const v = theta / Math.PI; // [0, 1]
+        
+        // Convert to pixel coordinates
+        const x = u * width;
+        const y = v * height;
+        
+        return { x, y, u, v };
+    }
+    
+    // Helper function to extract faces into geometry
+    function extractFacesToGeometry(mesh, faceIndices) {
+        const geometry = mesh.geometry;
+        const extractedGeometry = new THREE.BufferGeometry();
+        const positions = [];
+        const normals = [];
+        
+        const posAttr = geometry.attributes.position;
+        const normAttr = geometry.attributes.normal;
+        const hasIndex = geometry.index !== null;
+        
+        if (hasIndex) {
+            const index = geometry.index;
+            faceIndices.forEach(faceIdx => {
+                const baseIdx = faceIdx * 3;
+                for (let i = 0; i < 3; i++) {
+                    const vertexIdx = index.getX(baseIdx + i);
+                    const posIdx = vertexIdx * 3;
+                    const normIdx = vertexIdx * 3;
+                    
+                    positions.push(
+                        posAttr.array[posIdx],
+                        posAttr.array[posIdx + 1],
+                        posAttr.array[posIdx + 2]
+                    );
+                    normals.push(
+                        normAttr.array[normIdx],
+                        normAttr.array[normIdx + 1],
+                        normAttr.array[normIdx + 2]
+                    );
+                }
+            });
+        } else {
+            faceIndices.forEach(faceIdx => {
+                const baseIdx = faceIdx * 9;
+                for (let i = 0; i < 9; i++) {
+                    positions.push(posAttr.array[baseIdx + i]);
+                    normals.push(normAttr.array[baseIdx + i]);
+                }
+            });
+        }
+        
+        extractedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        extractedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        
+        return extractedGeometry;
+    }
+    
+    // Function to flip normals of selected faces
+    function flipSelectedNormals() {
+        if (selectedReversedFaceIds.size === 0) {
+            console.log("No faces selected to flip");
+            return;
+        }
+        
+        console.log(`Flipping normals for ${selectedReversedFaceIds.size} selected faces`);
+        let totalFacesFlipped = 0;
+        
+        // Group faces by mesh
+        const facesByMesh = new Map();
+        
+        // Find all faces that match the selected face IDs
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position || !geometry.attributes.normal) return;
+                
+                const hasIndex = geometry.index !== null;
+                const faceIndices = [];
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    const faceCount = index.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (selectedReversedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                } else {
+                    const positions = geometry.attributes.position;
+                    const faceCount = positions.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (selectedReversedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                }
+                
+                if (faceIndices.length > 0) {
+                    facesByMesh.set(child, faceIndices);
+                }
+            });
+        });
+        
+        // Flip faces for each mesh
+        facesByMesh.forEach((faceIndices, mesh) => {
+            const geometry = mesh.geometry;
+            const hasIndex = geometry.index !== null;
+            
+            if (hasIndex) {
+                // For indexed geometry, swap two indices to reverse winding order
+                const index = geometry.index;
+                const indexArray = index.array;
+                
+                faceIndices.forEach(faceIdx => {
+                    const baseIdx = faceIdx * 3;
+                    // Swap indices at baseIdx+1 and baseIdx+2 to reverse winding
+                    const temp = indexArray[baseIdx + 1];
+                    indexArray[baseIdx + 1] = indexArray[baseIdx + 2];
+                    indexArray[baseIdx + 2] = temp;
+                    totalFacesFlipped++;
+                });
+                
+                index.needsUpdate = true;
+            } else {
+                // For non-indexed geometry, swap vertex positions and normals
+                const positions = geometry.attributes.position;
+                const normals = geometry.attributes.normal;
+                const posArray = positions.array;
+                const normArray = normals.array;
+                
+                faceIndices.forEach(faceIdx => {
+                    const basePosIdx = faceIdx * 9;
+                    const baseNormIdx = faceIdx * 9;
+                    
+                    // Swap vertices 1 and 2 (indices 3-5 and 6-8)
+                    // Swap positions
+                    for (let i = 0; i < 3; i++) {
+                        const temp = posArray[basePosIdx + 3 + i];
+                        posArray[basePosIdx + 3 + i] = posArray[basePosIdx + 6 + i];
+                        posArray[basePosIdx + 6 + i] = temp;
+                    }
+                    
+                    // Swap normals
+                    for (let i = 0; i < 3; i++) {
+                        const temp = normArray[baseNormIdx + 3 + i];
+                        normArray[baseNormIdx + 3 + i] = normArray[baseNormIdx + 6 + i];
+                        normArray[baseNormIdx + 6 + i] = temp;
+                    }
+                    
+                    totalFacesFlipped++;
+                });
+                
+                positions.needsUpdate = true;
+                normals.needsUpdate = true;
+            }
+            
+            // Recompute normals to ensure they're correct
+            geometry.computeVertexNormals();
+        });
+        
+        console.log(`Flipped normals for ${totalFacesFlipped} faces across ${facesByMesh.size} meshes`);
+        
+        // Clear selection and update highlights
+        selectedReversedFaceIds.clear();
+        updateSelectedReversedFacesHighlights();
+        
+        // Update button visibility
+        const flipBtn = document.getElementById("flip-selected-normals");
+        if (flipBtn) {
+            flipBtn.style.display = "none";
+        }
+    }
+
+async function render360SnapshotForCone(cone, allCones = markers, showNormals = false) {
     // 1) backup renderer state
     const origSize       = renderer.getSize(new THREE.Vector2());
     const origDPR        = renderer.getPixelRatio();
@@ -4460,19 +6122,206 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     cone.visible = true
 
     markers.forEach((m) => (m.visible = false));
-    const whiteMat = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        shininess: 30,
-    });
-    whiteMat.dithering = true;
-    const prevOverride = scene.overrideMaterial;
-    scene.overrideMaterial = whiteMat;
 
     // Capture cube map - use world position and quaternion to handle flipped parents
     const worldPos = new THREE.Vector3();
     const worldQuat = new THREE.Quaternion();
     cone.getWorldPosition(worldPos);
     cone.getWorldQuaternion(worldQuat);
+    
+    let prevOverride = scene.overrideMaterial;
+    let originalMaterials = new Map();
+    let originalGeometries = new Map();
+    
+    if (showNormals) {
+        // Store original materials and geometries, then replace with face-orientation materials
+        // Use duplicated vertices to prevent color interpolation (flat shading)
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (child.isMesh && child.material && child.geometry) {
+                    originalMaterials.set(child, child.material);
+                    
+                    const geometry = child.geometry;
+                    if (!geometry.attributes.position) return;
+                    
+                    const positions = geometry.attributes.position;
+                    const hasIndex = geometry.index !== null;
+                    
+                    // Create new arrays for duplicated vertices (non-indexed for flat shading)
+                    const newPositions = [];
+                    const newNormals = [];
+                    const newColors = [];
+                    
+                    if (hasIndex) {
+                        const index = geometry.index;
+                        const faceCount = index.count / 3;
+                        
+                        for (let i = 0; i < faceCount; i++) {
+                            const i0 = index.getX(i * 3);
+                            const i1 = index.getX(i * 3 + 1);
+                            const i2 = index.getX(i * 3 + 2);
+                            
+                            // Get face vertices in local space
+                            const v0Local = new THREE.Vector3(
+                                positions.array[i0 * 3],
+                                positions.array[i0 * 3 + 1],
+                                positions.array[i0 * 3 + 2]
+                            );
+                            const v1Local = new THREE.Vector3(
+                                positions.array[i1 * 3],
+                                positions.array[i1 * 3 + 1],
+                                positions.array[i1 * 3 + 2]
+                            );
+                            const v2Local = new THREE.Vector3(
+                                positions.array[i2 * 3],
+                                positions.array[i2 * 3 + 1],
+                                positions.array[i2 * 3 + 2]
+                            );
+                            
+                            // Transform to world space for orientation check only
+                            const v0 = v0Local.clone().applyMatrix4(child.matrixWorld);
+                            const v1 = v1Local.clone().applyMatrix4(child.matrixWorld);
+                            const v2 = v2Local.clone().applyMatrix4(child.matrixWorld);
+                            
+                            // Compute face center and flat normal in world space
+                            const faceCenter = new THREE.Vector3()
+                                .addVectors(v0, v1)
+                                .add(v2)
+                                .multiplyScalar(1/3);
+                            
+                            // Compute flat face normal in world space
+                            const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                            const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                            const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                            
+                            // Determine face orientation relative to camera
+                            const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
+                            const dot = faceNormalWorld.dot(toCamera);
+                            
+                            // Assign color based on orientation (same for all vertices of this face)
+                            let faceColor;
+                            if (dot > 0.0) {
+                                faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                            } else {
+                                faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                            }
+                            
+                            // Compute local space normal for the geometry
+                            const edge1Local = new THREE.Vector3().subVectors(v1Local, v0Local);
+                            const edge2Local = new THREE.Vector3().subVectors(v2Local, v0Local);
+                            const faceNormalLocal = new THREE.Vector3().crossVectors(edge1Local, edge2Local).normalize();
+                            
+                            // Store vertices in LOCAL space (mesh transform will be applied during render)
+                            newPositions.push(v0Local.x, v0Local.y, v0Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            
+                            newPositions.push(v1Local.x, v1Local.y, v1Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            
+                            newPositions.push(v2Local.x, v2Local.y, v2Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                        }
+                    } else {
+                        // Non-indexed geometry - already has separate vertices per face
+                        const faceCount = positions.count / 3;
+                        
+                        for (let i = 0; i < faceCount; i++) {
+                            const baseIdx = i * 9;
+                            
+                            // Get face vertices in local space
+                            const v0Local = new THREE.Vector3(
+                                positions.array[baseIdx],
+                                positions.array[baseIdx + 1],
+                                positions.array[baseIdx + 2]
+                            );
+                            const v1Local = new THREE.Vector3(
+                                positions.array[baseIdx + 3],
+                                positions.array[baseIdx + 4],
+                                positions.array[baseIdx + 5]
+                            );
+                            const v2Local = new THREE.Vector3(
+                                positions.array[baseIdx + 6],
+                                positions.array[baseIdx + 7],
+                                positions.array[baseIdx + 8]
+                            );
+                            
+                            // Transform to world space for orientation check only
+                            const v0 = v0Local.clone().applyMatrix4(child.matrixWorld);
+                            const v1 = v1Local.clone().applyMatrix4(child.matrixWorld);
+                            const v2 = v2Local.clone().applyMatrix4(child.matrixWorld);
+                            
+                            // Compute face center and flat normal in world space
+                            const faceCenter = new THREE.Vector3()
+                                .addVectors(v0, v1)
+                                .add(v2)
+                                .multiplyScalar(1/3);
+                            
+                            // Compute flat face normal in world space
+                            const edge1 = new THREE.Vector3().subVectors(v1, v0);
+                            const edge2 = new THREE.Vector3().subVectors(v2, v0);
+                            const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+                            
+                            // Determine face orientation relative to camera
+                            const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
+                            const dot = faceNormalWorld.dot(toCamera);
+                            
+                            // Assign color based on orientation (same for all vertices of this face)
+                            let faceColor;
+                            if (dot > 0.0) {
+                                faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                            } else {
+                                faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                            }
+                            
+                            // Compute local space normal for the geometry
+                            const edge1Local = new THREE.Vector3().subVectors(v1Local, v0Local);
+                            const edge2Local = new THREE.Vector3().subVectors(v2Local, v0Local);
+                            const faceNormalLocal = new THREE.Vector3().crossVectors(edge1Local, edge2Local).normalize();
+                            
+                            // Store vertices in LOCAL space (mesh transform will be applied during render)
+                            newPositions.push(v0Local.x, v0Local.y, v0Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            
+                            newPositions.push(v1Local.x, v1Local.y, v1Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                            
+                            newPositions.push(v2Local.x, v2Local.y, v2Local.z);
+                            newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
+                            newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                        }
+                    }
+                    
+                    // Store original geometry and create new non-indexed geometry with flat shading
+                    originalGeometries.set(child, geometry);
+                    const flatGeometry = new THREE.BufferGeometry();
+                    flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+                    flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
+                    flatGeometry.setAttribute('color', new THREE.Float32BufferAttribute(newColors, 3));
+                    
+                    // Replace geometry with flat version
+                    child.geometry = flatGeometry;
+                    
+                    const faceOrientationMaterial = new THREE.MeshBasicMaterial({
+                        vertexColors: true,
+                        side: THREE.DoubleSide
+                    });
+                    child.material = faceOrientationMaterial;
+                }
+            });
+        });
+    } else {
+        const whiteMat = new THREE.MeshPhongMaterial({
+            color: 0xffffff,
+            shininess: 30,
+        });
+        whiteMat.dithering = true;
+        scene.overrideMaterial = whiteMat;
+    }
     
     cubeCamera.position.copy(worldPos);
     cubeCamera.quaternion.copy(worldQuat);
@@ -4482,17 +6331,89 @@ async function render360SnapshotForCone(cone, allCones = markers) {
         Math.PI/2
       )
     );
+    
+    // Detect reversed normals relative to camera position (only if not in normals mode)
+    let reversedFaces = [];
+    let reversedFacesGroup = new THREE.Group();
+    let reversedFaceData = [];
+    
+    if (!showNormals) {
+        reversedFaces = detectReversedNormalsFromCamera(worldPos);
+        
+        // Create a temporary group for reversed face highlights
+        // Group faces by mesh for efficient rendering
+        const facesByMesh = new Map();
+        reversedFaces.forEach(faceData => {
+            if (!facesByMesh.has(faceData.mesh)) {
+                facesByMesh.set(faceData.mesh, []);
+            }
+            facesByMesh.get(faceData.mesh).push(faceData.faceIndex);
+        });
+        
+        // Create highlight meshes for reversed faces
+        facesByMesh.forEach((faceIndices, mesh) => {
+            const highlightGeometry = extractFacesToGeometry(mesh, faceIndices);
+            const redMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const highlightMesh = new THREE.Mesh(highlightGeometry, redMaterial);
+            highlightMesh.userData.parentMesh = mesh;
+            highlightMesh.userData.faceIndices = faceIndices;
+            
+            // Match parent mesh transform
+            mesh.updateMatrixWorld(true);
+            mesh.matrixWorld.decompose(
+                highlightMesh.position,
+                highlightMesh.quaternion,
+                highlightMesh.scale
+            );
+            highlightMesh.updateMatrixWorld(true);
+            
+            reversedFacesGroup.add(highlightMesh);
+            
+            // Store face center positions for 2D projection
+            faceIndices.forEach(faceIdx => {
+                const faceData = reversedFaces.find(f => f.mesh === mesh && f.faceIndex === faceIdx);
+                if (faceData) {
+                    reversedFaceData.push(faceData);
+                }
+            });
+        });
+        
+        // Add reversed faces group to scene temporarily
+        scene.add(reversedFacesGroup);
+    }
+    
     renderer.autoClear = true
     cubeCamera.update(renderer, scene);
 
-    // Restore material and visibility
+    // Restore materials and geometries
+    if (showNormals) {
+        originalMaterials.forEach((originalMaterial, mesh) => {
+            mesh.material = originalMaterial;
+        });
+        originalGeometries.forEach((originalGeometry, mesh) => {
+            mesh.geometry = originalGeometry;
+        });
+        originalMaterials.clear();
+    } else {
     scene.overrideMaterial = prevOverride;
+    }
+    
     markers.forEach((m) => (m.visible = true));
 
     // 6) equirectangular pass (optimized for performance)
     // Equirectangular pass
+    const eqWidth = 1024;
+    const eqHeight = 512;
     renderer.setPixelRatio(1);
-    renderer.setSize(1024, 512);
+    renderer.setSize(eqWidth, eqHeight);
     renderer.setRenderTarget(null);
     renderer.autoClear = true;
     renderer.setClearColor(0x000000, 1);
@@ -4503,6 +6424,30 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     const srcCanvas = renderer.domElement;
 
     const dataURL = srcCanvas.toDataURL("image/jpeg", 0.6); // Reduced quality for better performance
+    
+    // Project reversed face centers to 2D equirectangular coordinates
+    const facePositions2D = reversedFaceData.map(faceData => {
+        const proj = projectToEquirectangular(faceData.faceCenter, worldPos, eqWidth, eqHeight);
+        return {
+            x: proj.x,
+            y: proj.y,
+            u: proj.u,
+            v: proj.v,
+            faceCenter: faceData.faceCenter,
+            normal: faceData.normal,
+            mesh: faceData.mesh,
+            faceIndex: faceData.faceIndex
+        };
+    });
+    
+    // Remove reversed faces group from scene (if it was created)
+    if (reversedFacesGroup.children.length > 0) {
+        scene.remove(reversedFacesGroup);
+        reversedFacesGroup.children.forEach(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+    }
 
     // 8) re-enable wireframes
     originalWireframeMeshes.forEach(m => {
@@ -4518,8 +6463,58 @@ async function render360SnapshotForCone(cone, allCones = markers) {
     renderer.setClearColor(origClearColor, origClearAlpha);
     renderer.autoClear = origAutoClear;
 
-    // 9) return a JPEG data-URL
-    return dataURL;
+    // 9) Show preview in render window (always show preview when render completes)
+    // Use setTimeout to ensure DOM is ready and to avoid conflicts with calling code
+    setTimeout(() => {
+        const panel = document.getElementById("vr-image-panel");
+        const img = document.getElementById("vr-img") as HTMLImageElement;
+        const widget = document.getElementById('vr-widget') as HTMLDivElement;
+        
+        if (panel && img && widget) {
+            console.log('Setting up render preview...', { dataURLLength: dataURL.length, coneName: cone.name });
+            
+            // Ensure image element is visible and properly styled
+            img.style.display = 'block';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            
+            // Set image source and wait for it to load
+            img.onload = function() {
+                console.log('Render preview image loaded successfully in vr-img');
+            };
+            img.onerror = function(e) {
+                console.error('Error loading render preview image:', e);
+            };
+            
+            // Set the image source - this should trigger the onload
+            img.src = dataURL;
+            
+            // Set up VR image rotation
+            setVRImage(dataURL, cone.name || 'Render Preview');
+            
+            // Show widget and panel - ensure they're visible
+            widget.style.display = 'block';
+            panel.style.display = 'block';
+            panel.classList.remove("hidden");
+            
+            // Hide overlay for generated views
+            const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
+            if (vrOverlayCanvas) {
+                vrOverlayCanvas.style.display = 'none';
+            }
+            
+            console.log('Render preview setup complete for:', cone.name || 'Render Preview');
+        } else {
+            console.warn('VR panel elements not found:', { panel: !!panel, img: !!img, widget: !!widget });
+        }
+    }, 0);
+
+    // 10) return a JPEG data-URL and face positions
+    return {
+        dataURL: dataURL,
+        facePositions: facePositions2D
+    };
 }
 
     /**
@@ -4585,6 +6580,7 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             });
             whiteMat.dithering = true;
             const prevOverride = scene.overrideMaterial;
+            
             scene.overrideMaterial = whiteMat;
 
             // Capture cube map - use world position and quaternion to handle flipped parents
@@ -4603,10 +6599,12 @@ async function render360SnapshotForCone(cone, allCones = markers) {
                    -Math.PI/2
                  )
                );
+            
             cubeCamera.update(renderer, scene);
 
-            // Restore material and visibility
+            // Restore material
             scene.overrideMaterial = prevOverride;
+            
             markers.forEach((m) => (m.visible = true));
 
             // Equirectangular pass
@@ -4715,6 +6713,322 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             object.children.forEach((child) =>
                 toggleVisibility(child, visible),
             );
+        }
+    }
+    
+    // Function to select reversed faces for a single camera (currentSelectedCone)
+    async function selectReversedFacesForCamera(cone) {
+        if (!cone || !cone.cameraPos || !cone.parent || !cone.parent.visible) {
+            console.log("No valid camera selected.");
+            return;
+        }
+        
+        // Clear previous highlights
+        selectedReversedFaceIds.clear();
+        updateSelectedReversedFacesHighlights();
+        
+        console.log(`Processing single camera (${cone.name}) for reversed faces...`);
+        
+        // Render face IDs
+        const idRender = await renderFaceIdsAt8K(cone);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
+        // Render normals
+        const normalRenderResult = await render360SnapshotForConeAt8K(cone, true);
+        const normalImageData = normalRenderResult.imageData;
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        
+        // Cache mesh info
+        const meshInfoByUuid = new Map();
+        objects.forEach(obj => {
+            obj.traverse((mesh) => {
+                if (mesh.isMesh && mesh.geometry) {
+                    const meshName = mesh.name || "unnamed";
+                    const parentName = mesh.parent?.name || "unnamed parent";
+                    const isSphere = meshName.toLowerCase().includes("sphere") || parentName.toLowerCase().includes("sphere") || obj.name?.toLowerCase().includes("sphere");
+                    const faceCount = mesh.geometry.index ? mesh.geometry.index.count / 3 : (mesh.geometry.attributes.position?.count || 0) / 3;
+                    meshInfoByUuid.set(mesh.uuid, { meshName, parentName, isSphere, faceCount });
+                }
+            });
+        });
+        
+        // Compare renders
+        const idData = idRender.imageData.data;
+        const normalData = normalImageData.data;
+        const width = idRender.width;
+        const height = idRender.height;
+        const sampleRate = 4;
+        const redFaces = new Set();
+        
+        const widthS = Math.ceil(width / sampleRate);
+        const heightS = Math.ceil(height / sampleRate);
+        const redMask = new Uint8Array(widthS * heightS);
+        const isRed = (rr, gg, bb) => rr > 200 && gg < 50 && bb < 50;
+        
+        // Build mask
+        for (let yS = 0; yS < heightS; yS++) {
+            const y = yS * sampleRate;
+            if (y >= height) continue;
+            for (let xS = 0; xS < widthS; xS++) {
+                const x = xS * sampleRate;
+                if (x >= width) continue;
+                const idx = (y * width + x) * 4;
+                const r = normalData[idx];
+                const g = normalData[idx + 1];
+                const b = normalData[idx + 2];
+                if (!isRed(r, g, b)) continue;
+                let redNeighbors = 0;
+                if (x > 0) {
+                    const nIdx = (y * width + (x - 1)) * 4;
+                    if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                }
+                if (x + 1 < width) {
+                    const nIdx = (y * width + (x + 1)) * 4;
+                    if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                }
+                if (y > 0) {
+                    const nIdx = ((y - 1) * width + x) * 4;
+                    if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                }
+                if (y + 1 < height) {
+                    const nIdx = ((y + 1) * width + x) * 4;
+                    if (isRed(normalData[nIdx], normalData[nIdx + 1], normalData[nIdx + 2])) redNeighbors++;
+                }
+                if (redNeighbors < 3) continue;
+                redMask[yS * widthS + xS] = 1;
+            }
+        }
+        
+        // Connected components with shape metrics
+        const compIds = new Int32Array(widthS * heightS);
+        compIds.fill(-1);
+        const compMetrics = []; // {size, minX, maxX, minY, maxY, perimeter}
+        let compCounter = 0;
+        const stack = [];
+        
+        // Helper to check if pixel is on edge (has non-red neighbor)
+        const isEdgePixel = (xS, yS) => {
+            if (xS === 0 || xS === widthS - 1 || yS === 0 || yS === heightS - 1) return true;
+            const neighbors = [
+                (yS - 1) * widthS + xS, // up
+                (yS + 1) * widthS + xS, // down
+                yS * widthS + (xS - 1), // left
+                yS * widthS + (xS + 1)  // right
+            ];
+            for (const n of neighbors) {
+                if (!redMask[n]) return true;
+            }
+            return false;
+        };
+        
+        for (let yS = 0; yS < heightS; yS++) {
+            for (let xS = 0; xS < widthS; xS++) {
+                const idxS = yS * widthS + xS;
+                if (!redMask[idxS] || compIds[idxS] !== -1) continue;
+                
+                let size = 0;
+                let minX = xS, maxX = xS, minY = yS, maxY = yS;
+                let perimeter = 0;
+                
+                stack.length = 0;
+                stack.push(idxS);
+                compIds[idxS] = compCounter;
+                
+                while (stack.length) {
+                    const cur = stack.pop();
+                    size++;
+                    const cx = cur % widthS;
+                    const cy = (cur / widthS) | 0;
+                    
+                    // Update bounding box
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+                    
+                    // Count perimeter
+                    if (isEdgePixel(cx, cy)) perimeter++;
+                    
+                    const neighbors = [
+                        cur - 1,
+                        cur + 1,
+                        cur - widthS,
+                        cur + widthS
+                    ];
+                    if (cx === 0) neighbors[0] = -1;
+                    if (cx === widthS - 1) neighbors[1] = -1;
+                    if (cy === 0) neighbors[2] = -1;
+                    if (cy === heightS - 1) neighbors[3] = -1;
+                    for (const n of neighbors) {
+                        if (n < 0) continue;
+                        if (!redMask[n]) continue;
+                        if (compIds[n] !== -1) continue;
+                        compIds[n] = compCounter;
+                        stack.push(n);
+                    }
+                }
+                
+                const width = maxX - minX + 1;
+                const height = maxY - minY + 1;
+                const bboxArea = width * height;
+                const aspectRatio = Math.max(width / Math.max(height, 1), height / Math.max(width, 1));
+                const compactness = size / Math.max(bboxArea, 1); // 1.0 = perfect rectangle, lower = sparse
+                const perimeterToArea = perimeter / Math.max(size, 1);
+                
+                compMetrics[compCounter] = {
+                    size,
+                    minX, maxX, minY, maxY,
+                    width, height,
+                    perimeter,
+                    aspectRatio,
+                    compactness,
+                    perimeterToArea
+                };
+                compCounter++;
+            }
+        }
+        
+        // Filter thresholds
+        const minRedRegionSize = 20; // minimum pixel count
+        const minWidth = 2; // minimum bounding box width (in sampled pixels)
+        const minHeight = 2; // minimum bounding box height (in sampled pixels)
+        const maxAspectRatio = 8; // filter very thin lines (width/height or height/width)
+        const minCompactness = 0.3; // filter very sparse regions (low = thin/scattered)
+        const maxPerimeterToArea = 1.5; // filter high edge-to-area ratio (specks/thin lines)
+        
+        const chunkSize = 100;
+        let processedRows = 0;
+        for (let yS = 0; yS < heightS; yS++) {
+            const y = yS * sampleRate;
+            if (y >= height) continue;
+            for (let xS = 0; xS < widthS; xS++) {
+                const idxS = yS * widthS + xS;
+                if (!redMask[idxS]) continue;
+                const compId = compIds[idxS];
+                if (compId === -1) continue;
+                
+                const metrics = compMetrics[compId];
+                // Apply all filters
+                if (metrics.size < minRedRegionSize) continue;
+                if (metrics.width < minWidth || metrics.height < minHeight) continue;
+                if (metrics.aspectRatio > maxAspectRatio) continue;
+                if (metrics.compactness < minCompactness) continue;
+                if (metrics.perimeterToArea > maxPerimeterToArea) continue;
+                
+                const x = xS * sampleRate;
+                if (x >= width) continue;
+                const idx = (y * width + x) * 4;
+                const idR = idData[idx];
+                const idG = idData[idx + 1];
+                const idB = idData[idx + 2];
+                
+                const idBrightness = (idR + idG + idB) / 3;
+                if (idBrightness < 10) continue;
+                
+                const exactColorKey = `${Math.floor(idR)},${Math.floor(idG)},${Math.floor(idB)}`;
+                let faceId = idRender.colorToFaceIdMap.get(exactColorKey);
+                let matchType = 'exact';
+                let matchDistance = 0;
+                
+                if (!faceId) {
+                    const tolerance = 4;
+                    let bestMatch = null;
+                    let bestDistance = Infinity;
+                    const bucketKeyBase = { r: idR >> 2, g: idG >> 2, b: idB >> 2 };
+                    const bucketsToCheck = [];
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dg = -1; dg <= 1; dg++) {
+                            for (let db = -1; db <= 1; db++) {
+                                bucketsToCheck.push(`${bucketKeyBase.r + dr},${bucketKeyBase.g + dg},${bucketKeyBase.b + db}`);
+                            }
+                        }
+                    }
+                    const colorBuckets = idRender.colorBuckets;
+                    for (const key of bucketsToCheck) {
+                        const bucket = colorBuckets?.get(key);
+                        if (!bucket) continue;
+                        for (const entry of bucket) {
+                            const distance = Math.abs(idR - entry.r) + Math.abs(idG - entry.g) + Math.abs(idB - entry.b);
+                            if (distance < bestDistance &&
+                                Math.abs(idR - entry.r) <= tolerance &&
+                                Math.abs(idG - entry.g) <= tolerance &&
+                                Math.abs(idB - entry.b) <= tolerance) {
+                                bestDistance = distance;
+                                bestMatch = entry.faceId;
+                            }
+                        }
+                    }
+                    
+                    if (bestMatch) {
+                        faceId = bestMatch;
+                        matchType = 'tolerance';
+                        matchDistance = bestDistance;
+                    }
+                }
+                
+                if (faceId) {
+                    const expectedColor = idRender.faceIdToColorMap?.get(faceId);
+                    if (expectedColor) {
+                        const expectedR = Math.floor(expectedColor.r * 255);
+                        const expectedG = Math.floor(expectedColor.g * 255);
+                        const expectedB = Math.floor(expectedColor.b * 255);
+                        const colorDiff = Math.abs(idR - expectedR) + Math.abs(idG - expectedG) + Math.abs(idB - expectedB);
+                        if (matchType === 'tolerance' && colorDiff > 6) {
+                            continue;
+                        }
+                    }
+                    
+                    redFaces.add(faceId);
+                }
+            }
+            
+            processedRows++;
+            if (processedRows >= chunkSize) {
+                processedRows = 0;
+                await new Promise(resolve => requestAnimationFrame(resolve));
+            }
+        }
+        
+        // Build faceIdToMeshInfo
+        const faceIdToMeshInfo = new Map();
+        redFaces.forEach(faceId => {
+            const meshUuid = idRender.faceIdToMeshMap?.get(faceId);
+            if (!meshUuid) return;
+            const meshInfo = meshInfoByUuid.get(meshUuid);
+            if (!meshInfo) return;
+            const faceIndex = parseInt(faceId.split('-').pop());
+            faceIdToMeshInfo.set(faceId, {
+                faceId,
+                meshName: meshInfo.meshName,
+                meshUuid,
+                parentName: meshInfo.parentName,
+                faceIndex,
+                totalFaces: meshInfo.faceCount,
+                isSphere: meshInfo.isSphere
+            });
+        });
+        
+        // Update global selections
+        redFaces.forEach(faceId => {
+            selectedReversedFaceIds.add(faceId);
+        });
+        updateSelectedReversedFacesHighlights();
+        
+        console.log(`Camera (${cone.name}): Found ${redFaces.size} reversed faces`);
+        
+        // Export if enabled and within first 3 cameras
+        if (exportLogsEnabled) {
+            const cameraIndex = Math.max(0, markers.findIndex(m => m === cone));
+            if (cameraIndex > -1 && cameraIndex < 3) {
+                await exportRenderZip(
+                    cameraIndex + 1,
+                    cone.name,
+                    { imageData: idRender.imageData, width: idRender.width, height: idRender.height },
+                    { imageData: normalImageData, width: normalRenderResult.width, height: normalRenderResult.height },
+                    redFaces,
+                    faceIdToMeshInfo
+                );
+            }
         }
     }
 
@@ -5129,6 +7443,44 @@ async function render360SnapshotForCone(cone, allCones = markers) {
             }
         });
     });
+    
+    // Select Reversed Faces button
+    const selectReversedFacesBtn = document.getElementById("select-reversed-faces");
+    const selectReversedFacesCurrentBtn = document.getElementById("select-reversed-faces-current");
+    const flipSelectedNormalsBtn = document.getElementById("flip-selected-normals");
+    
+    if (selectReversedFacesCurrentBtn) {
+        selectReversedFacesCurrentBtn.style.display = currentSelectedCone ? "block" : "none";
+        selectReversedFacesCurrentBtn.addEventListener("click", async () => {
+            if (!currentSelectedCone) {
+                console.warn("No camera selected.");
+                return;
+            }
+            await selectReversedFacesForCamera(currentSelectedCone);
+        });
+    }
+    if (selectReversedFacesBtn) {
+        selectReversedFacesBtn.addEventListener("click", async () => {
+            await selectAllReversedFaces();
+        });
+    }
+    if (flipSelectedNormalsBtn) {
+        flipSelectedNormalsBtn.style.display = selectedReversedFaceIds.size > 0 ? "block" : "none";
+        flipSelectedNormalsBtn.addEventListener("click", () => {
+            flipSelectedNormals();
+        });
+    }
+
+    // Toggle export logs & screengrabs
+    const toggleExportLogs = document.getElementById("toggle-export-logs");
+    if (toggleExportLogs) {
+        exportLogsEnabled = !!(toggleExportLogs as HTMLInputElement).checked;
+        toggleExportLogs.addEventListener("change", (e) => {
+            const target = e.target as HTMLInputElement;
+            exportLogsEnabled = !!target.checked;
+            console.log(`Export logs & screengrabs: ${exportLogsEnabled ? "ON" : "OFF"}`);
+        });
+    }
 
     //Gizmo controls
     document.getElementById("camera-top").addEventListener("click", (e) => {
