@@ -144,12 +144,29 @@ import ObjectList from "../components/object-list.tsx";
             </div>
 
             <div class="flex flex-col mt-3">
-                <button
-                    id="select-reversed-faces" 
-                    class="bg-purple-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-600 hover:drop-shadow-lg active:bg-purple-700"
-                >
-                    Select Reversed Faces
-                </button>
+                <div class="relative">
+                    <button
+                        id="select-reversed-faces" 
+                        class="bg-purple-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-600 hover:drop-shadow-lg active:bg-purple-700 w-full flex items-center justify-between"
+                    >
+                        <span>Select Reversed Faces</span>
+                        <span class="ml-2">▼</span>
+                    </button>
+                    <div id="select-reversed-faces-dropdown" class="hidden absolute top-full left-0 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg z-50">
+                        <button
+                            id="select-reversed-faces-single"
+                            class="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-t-md"
+                        >
+                            Process Current Model
+                        </button>
+                        <button
+                            id="select-reversed-faces-batch"
+                            class="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-b-md border-t border-gray-200"
+                        >
+                            Batch Process Collision Models
+                        </button>
+                    </div>
+                </div>
                 <button
                     id="select-reversed-faces-current"
                     class="bg-purple-200 text-purple-900 p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-300 hover:drop-shadow-lg active:bg-purple-400 mt-2"
@@ -163,6 +180,12 @@ import ObjectList from "../components/object-list.tsx";
                     style="display: none;"
                 >
                     Flip Selected Normals
+                </button>
+                <button
+                    id="flatten-combine-meshes"
+                    class="bg-green-200 text-green-900 p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-green-300 hover:drop-shadow-lg active:bg-green-400 mt-2"
+                >
+                    Flatten & Combine Meshes (Exclude Spheres)
                 </button>
                 <label class="mt-2 flex items-center space-x-2 text-sm">
                     <input type="checkbox" id="toggle-export-logs" class="accent-purple-600" />
@@ -384,6 +407,68 @@ import ObjectList from "../components/object-list.tsx";
 
         <div id="tag" class="z-[101]">
             <h3 id="label">-</h3>
+        </div>
+
+        <!-- Batch Processing Modal -->
+        <div id="batch-process-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[200] flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+                <h2 class="text-xl font-bold mb-4">Batch Process Collision Models</h2>
+                <p class="text-sm text-gray-600 mb-4">Upload collision model files (.glb) and their corresponding camera CSV files. Files will be paired automatically.</p>
+                
+                <div 
+                    id="batch-file-drop-zone"
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4 min-h-[200px] flex flex-col"
+                >
+                    <div class="text-center text-gray-500 mb-4">
+                        <p class="mb-2">Drag and drop files here</p>
+                        <p class="text-xs">or</p>
+                        <input 
+                            type="file" 
+                            id="batch-file-input" 
+                            multiple 
+                            accept=".glb,.csv"
+                            class="hidden"
+                        />
+                        <label 
+                            for="batch-file-input" 
+                            class="inline-block mt-2 px-4 py-2 bg-purple-500 text-white rounded-md cursor-pointer hover:bg-purple-600"
+                        >
+                            Browse Files
+                        </label>
+                    </div>
+                    
+                    <div id="batch-file-list" class="flex-1 overflow-y-auto">
+                        <p class="text-sm text-gray-400 text-center">No files added yet</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button
+                        id="batch-process-cancel"
+                        class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        id="batch-process-start"
+                        class="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled
+                    >
+                        Batch Process
+                    </button>
+                </div>
+                
+                <div id="batch-process-progress" class="hidden mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Processing...</span>
+                        <span id="batch-process-status" class="text-sm text-gray-600">0/0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="batch-process-progress-bar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="batch-process-current-file" class="text-xs text-gray-500 mt-2"></p>
+                </div>
+            </div>
         </div>
     </body>
     <div
@@ -4762,6 +4847,9 @@ async function renderOverlayCanvas(cone) {
                 const geometry = child.geometry;
                 if (!geometry.attributes.position) return;
                 
+                // Store ORIGINAL geometry BEFORE any cloning
+                originalGeometries.set(child, geometry);
+                
                 // Check if this geometry has already been processed (shared geometry)
                 // If so, we need to clone it for this mesh to avoid affecting other meshes
                 let geometryToUse = geometry;
@@ -4881,8 +4969,8 @@ async function renderOverlayCanvas(cone) {
                     }
                 }
                 
-                // Store original geometry and create new non-indexed geometry
-                originalGeometries.set(child, geometryToUse);
+                // Create new non-indexed geometry
+                // (original geometry already stored above, before cloning)
                 const flatGeometry = new THREE.BufferGeometry();
                 flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                 flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
@@ -5062,6 +5150,9 @@ async function renderOverlayCanvas(cone) {
                         const geometry = child.geometry;
                         if (!geometry.attributes.position) return;
                         
+                        // Store ORIGINAL geometry BEFORE any cloning
+                        originalGeometries.set(child, geometry);
+                        
                         // Check if this geometry has already been processed (shared geometry)
                         // If so, we need to clone it for this mesh to avoid affecting other meshes
                         let geometryToUse = geometry;
@@ -5228,8 +5319,8 @@ async function renderOverlayCanvas(cone) {
                             }
                         }
                         
-                        // Store original geometry and create new non-indexed geometry with flat shading
-                        originalGeometries.set(child, geometryToUse);
+                        // Create new non-indexed geometry with flat shading
+                        // (original geometry already stored above, before cloning)
                         const flatGeometry = new THREE.BufferGeometry();
                         flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                         flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
@@ -6136,6 +6227,334 @@ async function renderOverlayCanvas(cone) {
             flipBtn.style.display = "none";
         }
     }
+    
+    // Function to flatten and combine all meshes (except spheres) into one mesh
+    function flattenAndCombineMeshes() {
+        if (objects.length === 0) {
+            console.log("No objects to flatten");
+            return;
+        }
+        
+        console.log("Flattening and combining meshes...");
+        
+        // Update all matrix worlds
+        objects.forEach(obj => {
+            obj.updateMatrixWorld(true);
+        });
+        
+        const meshesToCombine = [];
+        const sphereObjects = [];
+        const combinedPositions = [];
+        const combinedNormals = [];
+        const combinedColors = [];
+        const combinedUvs = [];
+        const combinedIndices = [];
+        let vertexOffset = 0;
+        
+        // Helper to check if a mesh is a sphere
+        const isSphereMesh = (mesh, parentObj) => {
+            const meshName = mesh.name || "";
+            const parentName = mesh.parent?.name || "";
+            const objName = parentObj.name || "";
+            return meshName.toLowerCase().includes("sphere") || 
+                   parentName.toLowerCase().includes("sphere") || 
+                   objName.toLowerCase().includes("sphere");
+        };
+        
+        // Track which objects contain meshes to combine vs spheres
+        const objectsToRemove = [];
+        
+        // Collect all meshes and separate spheres
+        // We'll combine non-sphere meshes and keep sphere meshes in their original objects
+        objects.forEach(obj => {
+            const sphereMeshesInObj = [];
+            const nonSphereMeshesInObj = [];
+            
+            obj.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    if (isSphereMesh(child, obj)) {
+                        sphereMeshesInObj.push(child);
+                    } else {
+                        nonSphereMeshesInObj.push(child);
+                    }
+                }
+            });
+            
+            // If object has non-sphere meshes, add them to combine list and mark object for removal
+            if (nonSphereMeshesInObj.length > 0) {
+                nonSphereMeshesInObj.forEach(mesh => {
+                    meshesToCombine.push(mesh);
+                });
+                objectsToRemove.push(obj);
+                
+                // If object also has sphere meshes, create a new group for just the spheres
+                if (sphereMeshesInObj.length > 0) {
+                    const sphereGroup = new THREE.Group();
+                    sphereGroup.name = obj.name ? `${obj.name}_Spheres` : "SphereGroup";
+                    // Copy transform from original object
+                    sphereGroup.position.copy(obj.position);
+                    sphereGroup.rotation.copy(obj.rotation);
+                    sphereGroup.scale.copy(obj.scale);
+                    
+                    // Add sphere meshes to the group (they keep their relative transforms)
+                    sphereMeshesInObj.forEach(mesh => {
+                        const meshParent = mesh.parent;
+                        mesh.parent.remove(mesh);
+                        sphereGroup.add(mesh);
+                    });
+                    
+                    sphereObjects.push(sphereGroup);
+                }
+            } else if (sphereMeshesInObj.length > 0) {
+                // Object only contains spheres, keep it separate
+                sphereObjects.push(obj);
+            }
+        });
+        
+        console.log(`Found ${meshesToCombine.length} meshes to combine, ${sphereObjects.length} sphere objects to keep separate`);
+        console.log(`Will remove ${objectsToRemove.length} objects from scene`);
+        
+        // Debug: log mesh names to see what we're working with
+        if (meshesToCombine.length === 0) {
+            console.warn("No meshes to combine! All meshes might be spheres or objects are empty.");
+            console.log("Debugging: Listing all meshes in objects:");
+            objects.forEach((obj, idx) => {
+                console.log(`Object ${idx}: ${obj.name || 'unnamed'}`);
+                obj.traverse((child) => {
+                    if (child.isMesh && child.geometry) {
+                        const meshName = child.name || "unnamed";
+                        const parentName = child.parent?.name || "unnamed parent";
+                        const objName = obj.name || "unnamed obj";
+                        const isSphere = isSphereMesh(child, obj);
+                        console.log(`  - Mesh: ${meshName}, parent: ${parentName}, obj: ${objName}, isSphere: ${isSphere}`);
+                    }
+                });
+            });
+            return;
+        }
+        
+        // Process each mesh to combine
+        meshesToCombine.forEach(mesh => {
+            const geometry = mesh.geometry;
+            if (!geometry.attributes.position) return;
+            
+            // Ensure matrixWorld is up to date
+            mesh.updateMatrixWorld(true);
+            const matrixWorld = mesh.matrixWorld.clone();
+            const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrixWorld);
+            
+            const positions = geometry.attributes.position;
+            const normals = geometry.attributes.normal;
+            const colors = geometry.attributes.color;
+            const uvs = geometry.attributes.uv;
+            const hasIndex = geometry.index !== null;
+            
+            if (hasIndex) {
+                const index = geometry.index;
+                const vertexCount = positions.count;
+                const indexCount = index.count;
+                
+                // Transform vertices to world space
+                for (let i = 0; i < vertexCount; i++) {
+                    const posIdx = i * 3;
+                    const v = new THREE.Vector3(
+                        positions.array[posIdx],
+                        positions.array[posIdx + 1],
+                        positions.array[posIdx + 2]
+                    );
+                    v.applyMatrix4(matrixWorld);
+                    combinedPositions.push(v.x, v.y, v.z);
+                    
+                    // Transform normals
+                    if (normals) {
+                        const n = new THREE.Vector3(
+                            normals.array[posIdx],
+                            normals.array[posIdx + 1],
+                            normals.array[posIdx + 2]
+                        );
+                        n.applyMatrix3(normalMatrix).normalize();
+                        combinedNormals.push(n.x, n.y, n.z);
+                    } else {
+                        combinedNormals.push(0, 1, 0); // Default normal
+                    }
+                    
+                    // Copy colors if available
+                    if (colors) {
+                        const colorIdx = i * 3;
+                        combinedColors.push(
+                            colors.array[colorIdx],
+                            colors.array[colorIdx + 1],
+                            colors.array[colorIdx + 2]
+                        );
+                    }
+                    
+                    // Copy UVs if available
+                    if (uvs) {
+                        const uvIdx = i * 2;
+                        combinedUvs.push(
+                            uvs.array[uvIdx],
+                            uvs.array[uvIdx + 1]
+                        );
+                    }
+                }
+                
+                // Copy indices with vertex offset
+                for (let i = 0; i < indexCount; i++) {
+                    const originalIndex = index.getX(i);
+                    combinedIndices.push(vertexOffset + originalIndex);
+                }
+                
+                vertexOffset += vertexCount;
+            } else {
+                // Non-indexed geometry
+                const vertexCount = positions.count;
+                
+                for (let i = 0; i < vertexCount; i++) {
+                    const posIdx = i * 3;
+                    const v = new THREE.Vector3(
+                        positions.array[posIdx],
+                        positions.array[posIdx + 1],
+                        positions.array[posIdx + 2]
+                    );
+                    v.applyMatrix4(matrixWorld);
+                    combinedPositions.push(v.x, v.y, v.z);
+                    
+                    if (normals) {
+                        const n = new THREE.Vector3(
+                            normals.array[posIdx],
+                            normals.array[posIdx + 1],
+                            normals.array[posIdx + 2]
+                        );
+                        n.applyMatrix3(normalMatrix).normalize();
+                        combinedNormals.push(n.x, n.y, n.z);
+                    } else {
+                        combinedNormals.push(0, 1, 0);
+                    }
+                    
+                    if (colors) {
+                        const colorIdx = i * 3;
+                        combinedColors.push(
+                            colors.array[colorIdx],
+                            colors.array[colorIdx + 1],
+                            colors.array[colorIdx + 2]
+                        );
+                    }
+                    
+                    if (uvs) {
+                        const uvIdx = i * 2;
+                        combinedUvs.push(
+                            uvs.array[uvIdx],
+                            uvs.array[uvIdx + 1]
+                        );
+                    }
+                }
+                
+                vertexOffset += vertexCount;
+            }
+        });
+        
+        // Create combined geometry
+        const combinedGeometry = new THREE.BufferGeometry();
+        combinedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(combinedPositions, 3));
+        combinedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(combinedNormals, 3));
+        
+        if (combinedColors.length > 0) {
+            combinedGeometry.setAttribute('color', new THREE.Float32BufferAttribute(combinedColors, 3));
+        }
+        
+        if (combinedUvs.length > 0) {
+            combinedGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(combinedUvs, 2));
+        }
+        
+        // Set indices if we have indexed geometry
+        if (combinedIndices.length > 0) {
+            combinedGeometry.setIndex(combinedIndices);
+        }
+        
+        // Compute bounding box and sphere
+        combinedGeometry.computeBoundingBox();
+        combinedGeometry.computeBoundingSphere();
+        
+        // Create a single mesh with the combined geometry
+        // Use the first mesh's material as a default, or create a basic material
+        let combinedMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        if (meshesToCombine.length > 0 && meshesToCombine[0].material) {
+            const firstMaterial = meshesToCombine[0].material;
+            if (Array.isArray(firstMaterial)) {
+                combinedMaterial = firstMaterial[0].clone();
+            } else {
+                combinedMaterial = firstMaterial.clone();
+            }
+        }
+        
+        const combinedMesh = new THREE.Mesh(combinedGeometry, combinedMaterial);
+        combinedMesh.name = "CombinedMesh";
+        combinedMesh.position.set(0, 0, 0);
+        combinedMesh.rotation.set(0, 0, 0);
+        combinedMesh.scale.set(1, 1, 1);
+        
+        // Helper function to dispose of geometry and materials
+        const disposeObject = (obj) => {
+            obj.traverse((child) => {
+                if (child.isMesh) {
+                    const mesh = child;
+                    if (mesh.geometry) {
+                        mesh.geometry.dispose();
+                    }
+                    if (mesh.material) {
+                        if (Array.isArray(mesh.material)) {
+                            mesh.material.forEach(mat => mat.dispose());
+                        } else {
+                            mesh.material.dispose();
+                        }
+                    }
+                }
+            });
+        };
+        
+        // Remove and dispose of old objects that are being combined
+        objectsToRemove.forEach(obj => {
+            disposeObject(obj);
+            scene.remove(obj);
+        });
+        
+        // Create new objects array
+        const newObjects = [];
+        
+        // Add combined mesh
+        if (combinedPositions.length > 0) {
+            const combinedGroup = new THREE.Group();
+            combinedGroup.name = "CombinedMeshes";
+            combinedGroup.add(combinedMesh);
+            scene.add(combinedGroup);
+            newObjects.push(combinedGroup);
+            console.log(`Created combined mesh with ${combinedPositions.length / 3} vertices, ${combinedIndices.length > 0 ? combinedIndices.length / 3 : combinedPositions.length / 9} faces`);
+        } else {
+            console.error("No vertices in combined geometry! Something went wrong.");
+            return;
+        }
+        
+        // Add sphere objects back (they were already in the scene, just re-add to objects array)
+        sphereObjects.forEach(obj => {
+            // Make sure they're still in the scene
+            if (!scene.children.includes(obj)) {
+                scene.add(obj);
+            }
+            newObjects.push(obj);
+        });
+        
+        // Update objects array - completely replace it
+        objects.length = 0;
+        objects.push(...newObjects);
+        
+        console.log(`Flattened and combined ${meshesToCombine.length} meshes into 1 mesh, kept ${sphereObjects.length} sphere objects separate`);
+        console.log(`New objects array has ${objects.length} objects`);
+        
+        // Force a render update
+        if (renderer) {
+            renderer.render(scene, camera);
+        }
+    }
 
 async function render360SnapshotForCone(cone, allCones = markers, showNormals = false) {
     // 1) backup renderer state
@@ -6195,6 +6614,9 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                     
                     const geometry = child.geometry;
                     if (!geometry.attributes.position) return;
+                    
+                    // Store ORIGINAL geometry BEFORE any cloning
+                    originalGeometries.set(child, geometry);
                     
                     // Check if this geometry has already been processed (shared geometry)
                     // If so, we need to clone it for this mesh to avoid affecting other meshes
@@ -6362,8 +6784,8 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                         }
                     }
                     
-                    // Store original geometry and create new non-indexed geometry with flat shading
-                    originalGeometries.set(child, geometryToUse);
+                    // Create new non-indexed geometry with flat shading
+                    // (original geometry already stored above, before cloning)
                     const flatGeometry = new THREE.BufferGeometry();
                     flatGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
                     flatGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
@@ -7510,10 +7932,45 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
         });
     });
     
-    // Select Reversed Faces button
+    // Select Reversed Faces button with dropdown
     const selectReversedFacesBtn = document.getElementById("select-reversed-faces");
+    const selectReversedFacesDropdown = document.getElementById("select-reversed-faces-dropdown");
+    const selectReversedFacesSingleBtn = document.getElementById("select-reversed-faces-single");
+    const selectReversedFacesBatchBtn = document.getElementById("select-reversed-faces-batch");
     const selectReversedFacesCurrentBtn = document.getElementById("select-reversed-faces-current");
     const flipSelectedNormalsBtn = document.getElementById("flip-selected-normals");
+    
+    // Dropdown toggle
+    if (selectReversedFacesBtn && selectReversedFacesDropdown) {
+        selectReversedFacesBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectReversedFacesDropdown.classList.toggle("hidden");
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!selectReversedFacesBtn.contains(e.target as Node) && 
+                !selectReversedFacesDropdown.contains(e.target as Node)) {
+                selectReversedFacesDropdown.classList.add("hidden");
+            }
+        });
+    }
+    
+    if (selectReversedFacesSingleBtn) {
+        selectReversedFacesSingleBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            selectReversedFacesDropdown.classList.add("hidden");
+            await selectAllReversedFaces();
+        });
+    }
+    
+    if (selectReversedFacesBatchBtn) {
+        selectReversedFacesBatchBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectReversedFacesDropdown.classList.add("hidden");
+            openBatchProcessModal();
+        });
+    }
     
     if (selectReversedFacesCurrentBtn) {
         selectReversedFacesCurrentBtn.style.display = currentSelectedCone ? "block" : "none";
@@ -7525,15 +7982,17 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
             await selectReversedFacesForCamera(currentSelectedCone);
         });
     }
-    if (selectReversedFacesBtn) {
-        selectReversedFacesBtn.addEventListener("click", async () => {
-            await selectAllReversedFaces();
-        });
-    }
     if (flipSelectedNormalsBtn) {
         flipSelectedNormalsBtn.style.display = selectedReversedFaceIds.size > 0 ? "block" : "none";
         flipSelectedNormalsBtn.addEventListener("click", () => {
             flipSelectedNormals();
+        });
+    }
+    
+    const flattenCombineMeshesBtn = document.getElementById("flatten-combine-meshes");
+    if (flattenCombineMeshesBtn) {
+        flattenCombineMeshesBtn.addEventListener("click", () => {
+            flattenAndCombineMeshes();
         });
     }
 
@@ -7545,6 +8004,538 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
             const target = e.target as HTMLInputElement;
             exportLogsEnabled = !!target.checked;
             console.log(`Export logs & screengrabs: ${exportLogsEnabled ? "ON" : "OFF"}`);
+        });
+    }
+
+    // Batch Processing Modal
+    const batchProcessModal = document.getElementById("batch-process-modal");
+    const batchFileDropZone = document.getElementById("batch-file-drop-zone");
+    const batchFileInput = document.getElementById("batch-file-input") as HTMLInputElement;
+    const batchFileList = document.getElementById("batch-file-list");
+    const batchProcessCancel = document.getElementById("batch-process-cancel");
+    const batchProcessStart = document.getElementById("batch-process-start");
+    const batchProcessProgress = document.getElementById("batch-process-progress");
+    const batchProcessProgressBar = document.getElementById("batch-process-progress-bar");
+    const batchProcessStatus = document.getElementById("batch-process-status");
+    const batchProcessCurrentFile = document.getElementById("batch-process-current-file");
+    
+    interface BatchFile {
+        file: File;
+        type: 'glb' | 'csv';
+        paired?: boolean;
+    }
+    
+    let batchFiles: BatchFile[] = [];
+    
+    function openBatchProcessModal() {
+        if (batchProcessModal) {
+            batchProcessModal.classList.remove("hidden");
+            batchFiles = [];
+            updateBatchFileList();
+        }
+    }
+    
+    function closeBatchProcessModal() {
+        if (batchProcessModal) {
+            batchProcessModal.classList.add("hidden");
+            batchFiles = [];
+            if (batchProcessProgress) batchProcessProgress.classList.add("hidden");
+        }
+    }
+    
+    // Close modal when clicking backdrop
+    if (batchProcessModal) {
+        batchProcessModal.addEventListener('click', (e) => {
+            if (e.target === batchProcessModal) {
+                closeBatchProcessModal();
+            }
+        });
+    }
+    
+    function extractIdentifier(filename: string): string {
+        // Remove extension
+        const baseName = filename.replace(/\.(glb|csv)$/i, '').toLowerCase();
+        
+        // Remove common prefixes
+        let identifier = baseName
+            .replace(/^csv_camera_/i, '')
+            .replace(/^model_360-collision_/i, '')
+            .replace(/^model_/i, '')
+            .replace(/-collision_/i, '_')
+            .replace(/-collision$/i, '');
+        
+        // Look for camera/room identifier patterns like: a_s_1b_c1_s1 or a_s_1b_c1_0
+        // Extract the core identifier (first 4 underscore-separated parts)
+        const parts = identifier.split('_').filter(p => p.length > 0);
+        
+        // Try to find a pattern that looks like a camera identifier
+        // Common pattern: letter_number_letter_number (e.g., "a_s_1b_c1")
+        if (parts.length >= 4) {
+            // Check if first 4 parts form a valid identifier pattern
+            const coreParts = parts.slice(0, 4);
+            // Verify it's not just numbers or single letters
+            const hasValidPattern = coreParts.some(p => /^[a-z]\d+[a-z]?$|^\d+[a-z]$/i.test(p)) || 
+                                   coreParts.every(p => /^[a-z0-9]+$/i.test(p));
+            
+            if (hasValidPattern) {
+                identifier = coreParts.join('_');
+            } else if (parts.length >= 3) {
+                // Fallback to first 3 parts
+                identifier = parts.slice(0, 3).join('_');
+            }
+        } else if (parts.length >= 3) {
+            // Use first 3 parts if we have at least 3
+            identifier = parts.slice(0, 3).join('_');
+        }
+        
+        return identifier;
+    }
+    
+    function updateBatchFileList() {
+        if (!batchFileList) return;
+        
+        if (batchFiles.length === 0) {
+            batchFileList.innerHTML = '<p class="text-sm text-gray-400 text-center">No files added yet</p>';
+            if (batchProcessStart) (batchProcessStart as HTMLButtonElement).disabled = true;
+            return;
+        }
+        
+        // Group files by identifier (smart matching)
+        const identifierGroups = new Map<string, { glbs: File[]; csvs: File[] }>();
+        
+        // Also track exact base name matches
+        const exactGroups = new Map<string, { glb?: File; csv?: File }>();
+        
+        batchFiles.forEach(({ file, type }) => {
+            const baseName = file.name.replace(/\.(glb|csv)$/i, '');
+            const identifier = extractIdentifier(file.name);
+            
+            // Add to exact group
+            if (!exactGroups.has(baseName)) {
+                exactGroups.set(baseName, {});
+            }
+            const exactGroup = exactGroups.get(baseName)!;
+            if (type === 'glb') {
+                exactGroup.glb = file;
+            } else {
+                exactGroup.csv = file;
+            }
+            
+            // Add to identifier group
+            if (!identifierGroups.has(identifier)) {
+                identifierGroups.set(identifier, { glbs: [], csvs: [] });
+            }
+            const idGroup = identifierGroups.get(identifier)!;
+            if (type === 'glb') {
+                idGroup.glbs.push(file);
+            } else {
+                idGroup.csvs.push(file);
+            }
+        });
+        
+        // Build final groups: prioritize exact matches, then identifier matches
+        const finalGroups = new Map<string, { glb?: File; csv?: File; displayName: string }>();
+        const usedFiles = new Set<File>();
+        
+        // First, add exact matches
+        exactGroups.forEach((group, baseName) => {
+            if (group.glb && group.csv) {
+                usedFiles.add(group.glb);
+                usedFiles.add(group.csv);
+                finalGroups.set(baseName, {
+                    glb: group.glb,
+                    csv: group.csv,
+                    displayName: baseName
+                });
+            }
+        });
+        
+        // Then, add identifier-based matches for unpaired files
+        identifierGroups.forEach((group, identifier) => {
+            // Find unpaired GLB and CSV files
+            const unpairedGlbs = group.glbs.filter(f => !usedFiles.has(f));
+            const unpairedCsvs = group.csvs.filter(f => !usedFiles.has(f));
+            
+            // Pair them up
+            const pairsToCreate = Math.min(unpairedGlbs.length, unpairedCsvs.length);
+            for (let i = 0; i < pairsToCreate; i++) {
+                const glb = unpairedGlbs[i];
+                const csv = unpairedCsvs[i];
+                const glbBase = glb.name.replace(/\.glb$/i, '');
+                const csvBase = csv.name.replace(/\.csv$/i, '');
+                const displayName = identifier; // Use identifier as display name
+                
+                usedFiles.add(glb);
+                usedFiles.add(csv);
+                
+                // Use identifier as key, but check if we already have this identifier
+                const key = `${identifier}_${i}`;
+                finalGroups.set(key, {
+                    glb,
+                    csv,
+                    displayName
+                });
+            }
+            
+            // Add remaining unpaired files
+            for (let i = pairsToCreate; i < unpairedGlbs.length; i++) {
+                const glb = unpairedGlbs[i];
+                const baseName = glb.name.replace(/\.glb$/i, '');
+                if (!finalGroups.has(baseName)) {
+                    finalGroups.set(baseName, {
+                        glb,
+                        displayName: baseName
+                    });
+                }
+            }
+            
+            for (let i = pairsToCreate; i < unpairedCsvs.length; i++) {
+                const csv = unpairedCsvs[i];
+                const baseName = csv.name.replace(/\.csv$/i, '');
+                if (!finalGroups.has(baseName)) {
+                    finalGroups.set(baseName, {
+                        csv,
+                        displayName: baseName
+                    });
+                }
+            }
+        });
+        
+        let html = '<div class="space-y-2">';
+        finalGroups.forEach((group, key) => {
+            const isPaired = !!(group.glb && group.csv);
+            html += `
+                <div class="flex items-center justify-between p-2 border rounded ${isPaired ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}">
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">${group.displayName}</p>
+                        <div class="text-xs text-gray-500 mt-1">
+                            ${group.glb ? `✓ GLB: ${group.glb.name}` : '✗ GLB'} | ${group.csv ? `✓ CSV: ${group.csv.name}` : '✗ CSV'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        batchFileList.innerHTML = html;
+        
+        // Enable batch process button if at least one pair is complete
+        const hasCompletePairs = Array.from(finalGroups.values()).some(group => group.glb && group.csv);
+        if (batchProcessStart) {
+            (batchProcessStart as HTMLButtonElement).disabled = !hasCompletePairs;
+        }
+    }
+    
+    function addBatchFiles(files: FileList | File[]) {
+        const fileArray = Array.from(files);
+        fileArray.forEach(file => {
+            const lower = file.name.toLowerCase();
+            if (lower.endsWith('.glb')) {
+                batchFiles.push({ file, type: 'glb' });
+            } else if (lower.endsWith('.csv')) {
+                batchFiles.push({ file, type: 'csv' });
+            }
+        });
+        updateBatchFileList();
+    }
+    
+    // Drag and drop handlers for batch modal (separate from main drop zone)
+    if (batchFileDropZone) {
+        batchFileDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            batchFileDropZone.classList.add('border-purple-500', 'bg-purple-50');
+        });
+        
+        batchFileDropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            batchFileDropZone.classList.remove('border-purple-500', 'bg-purple-50');
+        });
+        
+        batchFileDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            batchFileDropZone.classList.remove('border-purple-500', 'bg-purple-50');
+            
+            if (e.dataTransfer?.files) {
+                addBatchFiles(e.dataTransfer.files);
+            }
+        });
+    }
+    
+    if (batchFileInput) {
+        batchFileInput.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            if (target.files) {
+                addBatchFiles(target.files);
+            }
+        });
+    }
+    
+    if (batchProcessCancel) {
+        batchProcessCancel.addEventListener('click', closeBatchProcessModal);
+    }
+    
+    if (batchProcessStart) {
+        batchProcessStart.addEventListener('click', async () => {
+            await startBatchProcessing();
+        });
+    }
+    
+    async function startBatchProcessing() {
+        if (batchFiles.length === 0) return;
+        
+        // Use the same pairing logic as updateBatchFileList
+        const identifierGroups = new Map<string, { glbs: File[]; csvs: File[] }>();
+        const exactGroups = new Map<string, { glb?: File; csv?: File }>();
+        
+        batchFiles.forEach(({ file, type }) => {
+            const baseName = file.name.replace(/\.(glb|csv)$/i, '');
+            const identifier = extractIdentifier(file.name);
+            
+            // Add to exact group
+            if (!exactGroups.has(baseName)) {
+                exactGroups.set(baseName, {});
+            }
+            const exactGroup = exactGroups.get(baseName)!;
+            if (type === 'glb') {
+                exactGroup.glb = file;
+            } else {
+                exactGroup.csv = file;
+            }
+            
+            // Add to identifier group
+            if (!identifierGroups.has(identifier)) {
+                identifierGroups.set(identifier, { glbs: [], csvs: [] });
+            }
+            const idGroup = identifierGroups.get(identifier)!;
+            if (type === 'glb') {
+                idGroup.glbs.push(file);
+            } else {
+                idGroup.csvs.push(file);
+            }
+        });
+        
+        // Build pairs: prioritize exact matches, then identifier matches
+        const pairs: Array<{ baseName: string; glb: File; csv: File }> = [];
+        const usedFiles = new Set<File>();
+        
+        // First, add exact matches
+        exactGroups.forEach((group, baseName) => {
+            if (group.glb && group.csv) {
+                usedFiles.add(group.glb);
+                usedFiles.add(group.csv);
+                pairs.push({
+                    baseName,
+                    glb: group.glb,
+                    csv: group.csv
+                });
+            }
+        });
+        
+        // Then, add identifier-based matches for unpaired files
+        identifierGroups.forEach((group, identifier) => {
+            const unpairedGlbs = group.glbs.filter(f => !usedFiles.has(f));
+            const unpairedCsvs = group.csvs.filter(f => !usedFiles.has(f));
+            
+            const pairsToCreate = Math.min(unpairedGlbs.length, unpairedCsvs.length);
+            for (let i = 0; i < pairsToCreate; i++) {
+                const glb = unpairedGlbs[i];
+                const csv = unpairedCsvs[i];
+                usedFiles.add(glb);
+                usedFiles.add(csv);
+                pairs.push({
+                    baseName: identifier,
+                    glb,
+                    csv
+                });
+            }
+        });
+        
+        if (pairs.length === 0) {
+            alert('No complete file pairs found. Each GLB file needs a matching CSV file.');
+            return;
+        }
+        
+        // Show progress
+        if (batchProcessProgress) batchProcessProgress.classList.remove("hidden");
+        if (batchProcessStart) (batchProcessStart as HTMLButtonElement).disabled = true;
+        
+        // Process each pair
+        for (let i = 0; i < pairs.length; i++) {
+            const pair = pairs[i];
+            
+            if (batchProcessStatus) {
+                batchProcessStatus.textContent = `${i + 1}/${pairs.length}`;
+            }
+            if (batchProcessProgressBar) {
+                batchProcessProgressBar.style.width = `${((i + 1) / pairs.length) * 100}%`;
+            }
+            if (batchProcessCurrentFile) {
+                batchProcessCurrentFile.textContent = `Processing: ${pair.baseName}`;
+            }
+            
+            try {
+                // Clear scene
+                await clearScene();
+                
+                // Load model
+                console.log(`Loading model: ${pair.glb.name}`);
+                await loadModelFile(pair.glb);
+                
+                // Wait a bit for model to load
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Load CSV
+                console.log(`Loading CSV: ${pair.csv.name}`);
+                await loadCSVFile(pair.csv);
+                
+                // Wait a bit for CSV to process
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Run Select Reversed Faces
+                console.log(`Processing reversed faces for: ${pair.baseName}`);
+                await selectAllReversedFaces();
+                
+                // Wait for processing to complete
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Export to GLB
+                console.log(`Exporting GLB: ${pair.glb.name}`);
+                await exportCurrentModelToGLB(pair.glb);
+                
+                console.log(`Completed: ${pair.baseName}`);
+            } catch (error) {
+                console.error(`Error processing ${pair.baseName}:`, error);
+                alert(`Error processing ${pair.baseName}: ${error}`);
+            }
+        }
+        
+        // Hide progress and close modal
+        if (batchProcessProgress) batchProcessProgress.classList.add("hidden");
+        closeBatchProcessModal();
+        alert(`Batch processing complete! Processed ${pairs.length} file pair(s).`);
+    }
+    
+    async function clearScene() {
+        // Remove all objects from scene
+        while (objects.length > 0) {
+            const obj = objects.pop();
+            if (obj) {
+                scene.remove(obj);
+                obj.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(mat => mat.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Clear CSV groups
+        csvGroups.forEach(group => {
+            scene.remove(group);
+            group.traverse((child) => {
+                if (child.isMesh) {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => mat.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                }
+            });
+        });
+        csvGroups.length = 0;
+        
+        // Clear markers
+        markers.forEach(marker => scene.remove(marker));
+        markers.length = 0;
+        
+        // Clear arrays
+        simplifiedNamesId.length = 0;
+        globalFloors = [];
+        
+        // Reset selected faces
+        selectedReversedFaceIds.clear();
+        
+        // Force render
+        renderer.render(scene, camera);
+    }
+    
+    async function loadModelFile(file: File): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (file.name.toLowerCase().endsWith('.glb')) {
+                file.arrayBuffer().then(arrayBuffer => {
+                    GLTFloader.parse(
+                        arrayBuffer,
+                        "",
+                        (gltf) => {
+                            applyLitMaterialToGLTF(gltf.scene);
+                            gltf.scene.name = file.name;
+                            gltf.scene.scale.set(100, 100, 100);
+                            objects.push(gltf.scene);
+                            simplifiedNamesId.push({
+                                uuid: gltf.scene.uuid,
+                                simplifiedName: file.name.replace(/\D/g, ""),
+                            });
+                            scene.add(gltf.scene);
+                            updateOutliner();
+                            resolve();
+                        },
+                        (err) => {
+                            console.error("GLB load error:", err);
+                            reject(err);
+                        }
+                    );
+                }).catch(reject);
+            } else {
+                reject(new Error("Unsupported file type"));
+            }
+        });
+    }
+    
+    async function loadCSVFile(file: File): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (file.name.toLowerCase().endsWith('.csv')) {
+                file.text().then(text => {
+                    globalFloors = [];
+                    processCSVData(text, file.name);
+                    resolve();
+                }).catch(reject);
+            } else {
+                reject(new Error("Unsupported file type"));
+            }
+        });
+    }
+    
+    async function exportCurrentModelToGLB(glbFile: File): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (objects.length === 0) {
+                reject(new Error("No model to export"));
+                return;
+            }
+            
+            // Export the first object (or combine all objects)
+            const objectToExport = objects[0];
+            // Use the original GLB filename
+            const filename = glbFile.name.replace(/\.glb$/i, '') + '.glb';
+            
+            exportToGLB(objectToExport, filename);
+            
+            // Wait a bit for export to complete
+            setTimeout(() => {
+                resolve();
+            }, 500);
         });
     }
 
