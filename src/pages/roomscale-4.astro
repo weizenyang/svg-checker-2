@@ -8401,6 +8401,16 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                 // Wait for processing to complete
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 
+                // Flip the selected reversed faces
+                if (selectedReversedFaceIds.size > 0) {
+                    console.log(`Flipping ${selectedReversedFaceIds.size} reversed faces for: ${pair.baseName}`);
+                    flipSelectedNormals();
+                    // Wait a bit for flip to complete
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } else {
+                    console.log(`No reversed faces found for: ${pair.baseName}`);
+                }
+                
                 // Export to GLB
                 console.log(`Exporting GLB: ${pair.glb.name}`);
                 await exportCurrentModelToGLB(pair.glb);
