@@ -1869,7 +1869,8 @@ async function reviewVR(event) {
 
     /* ───── decide which view to show ───── */
     // First check if 360 image is available - if so, always show photo mode (disable collision render)
-    const has360Image = await imageManager.findImageByName(targetName, 'medium').then(entry => !!entry).catch(() => false);
+    const entry = await imageManager.findImageByName(targetName, 'medium').catch(() => null);
+    const has360Image = !!entry;
     
     if (has360Image) {
         // When 360 images are available, always show photo mode (disable collision render toggle)
@@ -1878,6 +1879,38 @@ async function reviewVR(event) {
         }
         showGeneratedView = false;  // Force photo mode when 360 images are available
         showNormalsMode = false;
+        
+        // Load and display the 360 image immediately
+        try {
+            // Show loading indicator
+            img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666'%3ELoading...%3C/text%3E%3C/svg%3E";
+            panel.classList.remove("hidden");
+            
+            img.src = entry.image;
+            
+            // Set up rotation for equirectangular image
+            setVRImage(entry.image, entry.name);
+            // Ensure floating widget is visible when an image is loaded
+            const widget = document.getElementById('vr-widget') as HTMLDivElement;
+            if (widget) widget.style.display = 'block';
+            
+            // Render collision overlay as a semi-transparent overlay on top of the 360 image
+            // This allows comparison between the 360 image and the collision model render
+            await renderOverlayCanvas(cone);
+            vrOverlayCanvas.style.display = 'block';
+            vrOverlayCanvas.style.opacity = '0.45';
+            
+            // Apply flipping based on the image entry name
+            applyImageFlipping(entry.name);
+            
+            // Early return to prevent any collision render from replacing the 360 image
+            return;
+        } catch (error) {
+            console.error(`Error loading image ${targetName}:`, error);
+            // Show error state but keep panel visible
+            img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23ff0000'%3EError loading image%3C/text%3E%3C/svg%3E";
+            return;
+        }
     } else {
         // Only allow toggle when no 360 images are available
         if (cone !== lastConeClicked) {          // new cone → always start in photo mode
@@ -1892,7 +1925,8 @@ async function reviewVR(event) {
         }
     }
 
-    if (showGeneratedView) {
+    // Only render collision as main image if no 360 image is available AND toggle is on
+    if (showGeneratedView && !has360Image) {
         console.log(cone)
         currentRenderedCone = cone;  // Store the current cone for re-rendering
         const renderResult = await render360SnapshotForCone(cone, markers, showNormalsMode);
@@ -1917,45 +1951,25 @@ async function reviewVR(event) {
         applyImageFlipping(cone.name);
         panel.classList.remove("hidden");
     } else {
+        // No 360 image available - show collision render or overlay based on toggle state
         try {
             // Show loading indicator
             img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666'%3ELoading...%3C/text%3E%3C/svg%3E";
             panel.classList.remove("hidden");
             
-            // Use persistent image manager for on-demand loading
-            const entry = await imageManager.findImageByName(targetName, 'medium');
-            if (entry) {
-                img.src = entry.image;
-                
-                // Set up rotation for equirectangular image
-                setVRImage(entry.image, entry.name);
-                // Ensure floating widget is visible when an image is loaded
-                const widget = document.getElementById('vr-widget') as HTMLDivElement;
-                if (widget) widget.style.display = 'block';
-                
-                // Render collision overlay as a semi-transparent overlay on top of the 360 image
-                // This allows comparison between the 360 image and the collision model render
-                await renderOverlayCanvas(cone);
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-                
-                // Apply flipping based on the image entry name
-                applyImageFlipping(entry.name);
-            } else {
-                // No 360 image available - render collision overlay instead
-                // Reset states but DO NOT auto-hide the floating panel
-                img.style.transform = "scaleX(1)";
-                flippedTag.classList.add("hidden");
-                vrDragOverlay.classList.add("hidden");
-                vrRotationDisplay.classList.add("hidden");
-                
-                // Prepare overlay and show it for comparison (collision render)
-                await renderOverlayCanvas(cone);
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-                
-                console.warn(`Image not found: ${targetName}, using collision render overlay`);
-            }
+            // No 360 image available - render collision overlay instead
+            // Reset states but DO NOT auto-hide the floating panel
+            img.style.transform = "scaleX(1)";
+            flippedTag.classList.add("hidden");
+            vrDragOverlay.classList.add("hidden");
+            vrRotationDisplay.classList.add("hidden");
+            
+            // Prepare overlay and show it for comparison (collision render)
+            await renderOverlayCanvas(cone);
+            vrOverlayCanvas.style.display = 'block';
+            vrOverlayCanvas.style.opacity = '0.45';
+            
+            console.warn(`Image not found: ${targetName}, using collision render overlay`);
         } catch (error) {
             console.error(`Error loading image ${targetName}:`, error);
             // Show error state but keep panel visible
