@@ -1868,14 +1868,27 @@ async function reviewVR(event) {
     }
 
     /* ───── decide which view to show ───── */
-    if (cone !== lastConeClicked) {          // new cone → always start in photo mode
-        lastConeClicked = cone;
-        showGeneratedView = false;
-        showNormalsMode = false;  // Reset normals mode when switching cones
+    // First check if 360 image is available - if so, always show photo mode (disable collision render)
+    const has360Image = await imageManager.findImageByName(targetName, 'medium').then(entry => !!entry).catch(() => false);
+    
+    if (has360Image) {
+        // When 360 images are available, always show photo mode (disable collision render toggle)
+        if (cone !== lastConeClicked) {
+            lastConeClicked = cone;
+        }
+        showGeneratedView = false;  // Force photo mode when 360 images are available
+        showNormalsMode = false;
     } else {
-        showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
-        if (!showGeneratedView) {
-            showNormalsMode = false;  // Reset normals mode when switching to photo view
+        // Only allow toggle when no 360 images are available
+        if (cone !== lastConeClicked) {          // new cone → always start in photo mode
+            lastConeClicked = cone;
+            showGeneratedView = false;
+            showNormalsMode = false;  // Reset normals mode when switching cones
+        } else {
+            showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
+            if (!showGeneratedView) {
+                showNormalsMode = false;  // Reset normals mode when switching to photo view
+            }
         }
     }
 
@@ -2619,18 +2632,9 @@ async function renderOverlayCanvas(cone) {
                 vrDragOverlay.classList.remove("hidden");
                 vrRotationDisplay.classList.remove("hidden");
                 
-                // Immediately show overlay canvas (will be updated when rendering completes)
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-                
-                // Prepare overlay and show it for comparison
-                try {
-                    await renderOverlayCanvas(point);
-                    console.log('Overlay rendering completed successfully');
-                } catch (overlayError) {
-                    console.error('Error rendering overlay:', overlayError);
-                    // Overlay is already visible from above, so we just log the error
-                }
+                // Skip collision overlay rendering when 360 images are available
+                // Hide overlay canvas since we have the actual 360 image
+                vrOverlayCanvas.style.display = 'none';
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
@@ -2642,7 +2646,18 @@ async function renderOverlayCanvas(cone) {
                 flippedTag.classList.add("hidden");
                 vrDragOverlay.classList.add("hidden");
                 vrRotationDisplay.classList.add("hidden");
-                vrOverlayCanvas.style.display = 'none';
+                
+                // No 360 image available - render collision overlay instead
+                try {
+                    await renderOverlayCanvas(point);
+                    vrOverlayCanvas.style.display = 'block';
+                    vrOverlayCanvas.style.opacity = '0.45';
+                    console.log('Collision overlay rendered (no 360 image available)');
+                } catch (overlayError) {
+                    console.error('Error rendering overlay:', overlayError);
+                    vrOverlayCanvas.style.display = 'none';
+                }
+                
                 console.warn(`Image not found: ${targetName}`);
             }
         } catch (error) {
