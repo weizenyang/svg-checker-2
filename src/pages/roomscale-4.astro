@@ -1912,38 +1912,53 @@ async function reviewVR(event) {
             // Use persistent image manager for on-demand loading
             const entry = await imageManager.findImageByName(targetName, 'medium');
             if (entry) {
-                // CRITICAL: Store the 360 image URL to prevent it from being replaced
+                // CRITICAL: Store the 360 image URL - this will be the bottom layer
                 const original360ImageUrl = entry.image;
-                
-                // Set up rotation for equirectangular image FIRST (before setting img.src)
-                // This ensures vrCurrentImage is set correctly to the 360 image, not collision render
-                setVRImage(original360ImageUrl, entry.name);
-                
-                // Set the image source - this should be the 360 image, not the collision model
-                img.src = original360ImageUrl;
                 
                 // Ensure floating widget is visible when an image is loaded
                 const widget = document.getElementById('vr-widget') as HTMLDivElement;
                 if (widget) widget.style.display = 'block';
                 
-                // Prepare overlay and show it for comparison
-                // The overlay should show the collision model render on top of the 360 image
+                // STEP 1: Render the overlay FIRST (collision model render)
+                // This ensures the overlay is ready before we set the background
                 await renderOverlayCanvas(cone);
                 
-                // CRITICAL: After overlay render, ensure img.src and vrCurrentImage are still the 360 image
-                // Never let the collision render replace the background image
-                const imgAfterOverlay = document.getElementById('vr-img') as HTMLImageElement;
-                if (imgAfterOverlay && imgAfterOverlay.src !== original360ImageUrl) {
-                    console.warn('Image source was replaced during overlay render, restoring 360 image');
-                    imgAfterOverlay.src = original360ImageUrl;
-                }
-                // Ensure vrCurrentImage is still the 360 image (not the collision render)
-                if (vrCurrentImage !== original360ImageUrl) {
-                    console.warn('vrCurrentImage was replaced during overlay render, restoring 360 image');
-                    vrCurrentImage = original360ImageUrl;
-                }
+                // STEP 2: Set the 360 image as the BOTTOM LAYER (background)
+                // Do this AFTER overlay render to ensure it stays as the bottom layer
+                // This is the critical step - the 360 image MUST be the bottom layer
+                img.src = original360ImageUrl;
                 
-                // Ensure overlay is visible and on top
+                // STEP 3: Set up rotation for equirectangular image
+                // This must use the 360 image URL, NOT the collision render
+                setVRImage(original360ImageUrl, entry.name);
+                
+                // CRITICAL: Force ensure img.src is ALWAYS the 360 image (bottom layer)
+                // Use multiple checks to ensure it never gets replaced
+                const ensure360ImageAsBottomLayer = () => {
+                    const imgElement = document.getElementById('vr-img') as HTMLImageElement;
+                    if (imgElement) {
+                        // If img.src is NOT the 360 image, force it back
+                        if (imgElement.src !== original360ImageUrl) {
+                            console.warn('Forcing 360 image as bottom layer - img.src was:', imgElement.src.substring(0, 50));
+                            imgElement.src = original360ImageUrl;
+                        }
+                    }
+                    // Ensure vrCurrentImage is ALWAYS the 360 image
+                    if (vrCurrentImage !== original360ImageUrl) {
+                        console.warn('Forcing vrCurrentImage to 360 image - was:', vrCurrentImage ? vrCurrentImage.substring(0, 50) : 'null');
+                        vrCurrentImage = original360ImageUrl;
+                    }
+                };
+                
+                // Check immediately
+                ensure360ImageAsBottomLayer();
+                
+                // Check after a short delay to catch any async replacements
+                setTimeout(ensure360ImageAsBottomLayer, 50);
+                setTimeout(ensure360ImageAsBottomLayer, 200);
+                setTimeout(ensure360ImageAsBottomLayer, 500);
+                
+                // Ensure overlay is visible and on top (z-index ensures it's above the image)
                 vrOverlayCanvas.style.display = 'block';
                 vrOverlayCanvas.style.opacity = '0.45';
                 vrOverlayCanvas.style.zIndex = '10';
@@ -1992,10 +2007,9 @@ async function renderOverlayCanvas(cone) {
     const overlayRenderResult = await render360SnapshotForCone(cone);
     const overlayRenderURL = overlayRenderResult.dataURL;
     
-        // Store the current image sources BEFORE rendering overlay to prevent replacement
-        const img = document.getElementById('vr-img') as HTMLImageElement;
-        const originalImgSrc = img ? img.src : '';
-        const originalVRImage = vrCurrentImage; // Store the 360 image URL
+        // CRITICAL: This function ONLY draws on the overlay canvas
+        // It should NEVER modify img.src or vrCurrentImage
+        // The 360 image will be set as the bottom layer AFTER this function completes
         
         // Load and draw the overlay image
         return new Promise((resolve, reject) => {
@@ -2003,10 +2017,10 @@ async function renderOverlayCanvas(cone) {
             
     overlayImg.onload = function() {
                 try {
-                    // CRITICAL: Only draw on the overlay canvas, never modify img.src or vrCurrentImage
-                    // The 360 image should remain as the background in img.src
+                    // CRITICAL: Only draw on the overlay canvas, NEVER touch img.src or vrCurrentImage
+                    // The 360 image will be set as the bottom layer by the calling code
                     
-                    // Clear and draw on overlay canvas only - NEVER touch img.src or vrCurrentImage
+                    // Clear and draw on overlay canvas only
                     vrOverlayCtx.clearRect(0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
                     vrOverlayCtx.drawImage(overlayImg, 0, 0, vrOverlayCanvas.width, vrOverlayCanvas.height);
                     
@@ -2016,21 +2030,18 @@ async function renderOverlayCanvas(cone) {
                     vrOverlayCanvas.style.zIndex = '10';
                     vrOverlayCanvas.style.pointerEvents = 'none';
                     
-                    // CRITICAL: Verify and restore img.src if it was accidentally replaced
-                    // The overlay render URL should NEVER be set as img.src
-                    if (img && originalImgSrc) {
-                        const currentImgSrc = img.src;
-                        // Specifically check if img.src matches the collision render URL
-                        if (currentImgSrc === overlayRenderURL) {
-                            console.warn('Image source was set to collision render, restoring 360 image');
-                            img.src = originalImgSrc;
-                        }
+                    // CRITICAL: Never set img.src to the overlay render URL
+                    // The calling code will set the 360 image as the bottom layer
+                    const img = document.getElementById('vr-img') as HTMLImageElement;
+                    if (img && img.src === overlayRenderURL) {
+                        console.error('ERROR: img.src was set to collision render in renderOverlayCanvas - this should never happen!');
+                        // Don't restore here - let the calling code set the 360 image
                     }
                     
-                    // CRITICAL: Ensure vrCurrentImage was not replaced with collision render
-                    if (originalVRImage && vrCurrentImage === overlayRenderURL) {
-                        console.warn('vrCurrentImage was set to collision render, restoring 360 image');
-                        vrCurrentImage = originalVRImage;
+                    // CRITICAL: Never set vrCurrentImage to the overlay render URL
+                    if (vrCurrentImage === overlayRenderURL) {
+                        console.error('ERROR: vrCurrentImage was set to collision render in renderOverlayCanvas - this should never happen!');
+                        // Don't restore here - let the calling code set the 360 image
                     }
                     
                     console.log(`Overlay successfully rendered for cone: ${cone.name}`);
@@ -2226,23 +2237,32 @@ async function renderOverlayCanvas(cone) {
         const img = document.getElementById('vr-img');
         if (!img) return;
         
-        // CRITICAL: Ensure we're not using a collision model render as the source
-        // vrCurrentImage should always be the 360 image (JPG), not the collision render
-        // Check if vrCurrentImage looks like a collision render (data URL from render360SnapshotForCone)
-        // If we have a 360 image entry, we should use that instead
+        // CRITICAL: Ensure we're ALWAYS using the 360 image as the source, never the collision render
+        // The 360 image is the bottom layer, collision render is only on the overlay canvas
         const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
         const shouldShowOverlay = vrOverlayCanvas && vrOverlayCanvas.style.display !== 'none';
         
-        // If overlay is showing, it means we have a 360 image - ensure we're using it, not collision render
+        // If overlay is showing, it means we have a 360 image as the bottom layer
+        // vrCurrentImage MUST be the 360 image URL, NOT the collision render
         if (shouldShowOverlay) {
-            // Check if vrCurrentImage is a collision render (data URL that's not the original 360 image)
-            // The original 360 image should be from imageManager, not a data URL from rendering
+            // Get the current img.src - this should be the 360 image (bottom layer)
             const currentImgSrc = img.src;
+            
+            // If vrCurrentImage is a data URL (collision render) but img.src is the 360 image,
+            // use img.src instead
             if (vrCurrentImage.startsWith('data:image') && currentImgSrc && 
-                !currentImgSrc.startsWith('data:image') && currentImgSrc !== vrCurrentImage) {
+                !currentImgSrc.startsWith('data:image/svg+xml') && 
+                currentImgSrc !== vrCurrentImage) {
                 // vrCurrentImage is a collision render, but img.src is the 360 image
-                // Use img.src as the source instead
+                // Use img.src (360 image) as the source instead
                 console.warn('drawVRRotatedImage: vrCurrentImage is collision render, using img.src (360 image) instead');
+                vrCurrentImage = currentImgSrc;
+            }
+            
+            // Additional safety: if img.src looks like a 360 image (not a data URL from rendering),
+            // ensure vrCurrentImage matches it
+            if (currentImgSrc && !currentImgSrc.startsWith('data:image') && vrCurrentImage !== currentImgSrc) {
+                console.warn('drawVRRotatedImage: Ensuring vrCurrentImage matches img.src (360 image)');
                 vrCurrentImage = currentImgSrc;
             }
         }
