@@ -1933,10 +1933,11 @@ async function reviewVR(event) {
                 const widget = document.getElementById('vr-widget') as HTMLDivElement;
                 if (widget) widget.style.display = 'block';
                 
-                // Skip collision overlay rendering when 360 images are available
-                // Only render overlay if no 360 image was found (fallback to collision render)
-                // Hide overlay canvas since we have the actual 360 image
-                vrOverlayCanvas.style.display = 'none';
+                // Render collision overlay as a semi-transparent overlay on top of the 360 image
+                // This allows comparison between the 360 image and the collision model render
+                await renderOverlayCanvas(cone);
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.45';
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
@@ -2632,9 +2633,17 @@ async function renderOverlayCanvas(cone) {
                 vrDragOverlay.classList.remove("hidden");
                 vrRotationDisplay.classList.remove("hidden");
                 
-                // Skip collision overlay rendering when 360 images are available
-                // Hide overlay canvas since we have the actual 360 image
-                vrOverlayCanvas.style.display = 'none';
+                // Render collision overlay as a semi-transparent overlay on top of the 360 image
+                // This allows comparison between the 360 image and the collision model render
+                try {
+                    await renderOverlayCanvas(point);
+                    vrOverlayCanvas.style.display = 'block';
+                    vrOverlayCanvas.style.opacity = '0.45';
+                    console.log('Collision overlay rendered on top of 360 image');
+                } catch (overlayError) {
+                    console.error('Error rendering overlay:', overlayError);
+                    vrOverlayCanvas.style.display = 'none';
+                }
                 
                 // Apply flipping based on the image entry name
                 applyImageFlipping(entry.name);
