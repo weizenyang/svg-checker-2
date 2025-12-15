@@ -1804,6 +1804,136 @@ import "../styles.css";
 			}
 		}
 
+		// SVG Context Menu
+		let svgContextMenu = null;
+		let currentSVGElement = null;
+		let svgFlipX = 1;
+		let svgFlipY = 1;
+
+		function createSVGContextMenu() {
+			if (svgContextMenu) return svgContextMenu;
+
+			svgContextMenu = document.createElement('div');
+			svgContextMenu.id = 'svg-context-menu';
+			Object.assign(svgContextMenu.style, {
+				position: 'fixed',
+				background: '#fff',
+				border: '1px solid #ccc',
+				borderRadius: '4px',
+				boxShadow: '0 2px 10px rgba(0,0,0,.2)',
+				zIndex: '10001',
+				display: 'none',
+				minWidth: '150px',
+				padding: '4px 0'
+			});
+
+			const flipXItem = document.createElement('button');
+			flipXItem.textContent = 'Flip X';
+			Object.assign(flipXItem.style, {
+				display: 'block',
+				width: '100%',
+				padding: '8px 12px',
+				textAlign: 'left',
+				background: 'none',
+				border: 'none',
+				cursor: 'pointer',
+				fontSize: '14px',
+				fontFamily: 'inherit'
+			});
+			flipXItem.addEventListener('mouseenter', () => {
+				flipXItem.style.background = '#f0f0f0';
+			});
+			flipXItem.addEventListener('mouseleave', () => {
+				flipXItem.style.background = 'none';
+			});
+			flipXItem.addEventListener('click', () => {
+				flipSVGX();
+				svgContextMenu.style.display = 'none';
+			});
+
+			const flipYItem = document.createElement('button');
+			flipYItem.textContent = 'Flip Y';
+			Object.assign(flipYItem.style, {
+				display: 'block',
+				width: '100%',
+				padding: '8px 12px',
+				textAlign: 'left',
+				background: 'none',
+				border: 'none',
+				cursor: 'pointer',
+				fontSize: '14px',
+				fontFamily: 'inherit',
+				borderTop: '1px solid #eee'
+			});
+			flipYItem.addEventListener('mouseenter', () => {
+				flipYItem.style.background = '#f0f0f0';
+			});
+			flipYItem.addEventListener('mouseleave', () => {
+				flipYItem.style.background = 'none';
+			});
+			flipYItem.addEventListener('click', () => {
+				flipSVGY();
+				svgContextMenu.style.display = 'none';
+			});
+
+			svgContextMenu.appendChild(flipXItem);
+			svgContextMenu.appendChild(flipYItem);
+			document.body.appendChild(svgContextMenu);
+
+			return svgContextMenu;
+		}
+
+		function updateSVGTransform() {
+			if (!currentSVGElement) return;
+			
+			// Use CSS transform instead of SVG transform to keep it within bounds
+			const svgContainer = document.getElementById("svg-container");
+			if (!svgContainer) return;
+			
+			// Ensure container has overflow hidden to prevent going out of bounds
+			svgContainer.style.overflow = 'hidden';
+			
+			// Apply CSS transform to the SVG element
+			currentSVGElement.style.transform = `scale(${svgFlipX}, ${svgFlipY})`;
+			currentSVGElement.style.transformOrigin = 'center center';
+		}
+
+		function flipSVGX() {
+			svgFlipX *= -1;
+			updateSVGTransform();
+		}
+
+		function flipSVGY() {
+			svgFlipY *= -1;
+			updateSVGTransform();
+		}
+
+		function setupSVGContextMenu(svgElement) {
+			if (!svgElement) return;
+
+			createSVGContextMenu();
+			currentSVGElement = svgElement;
+			svgFlipX = 1;
+			svgFlipY = 1;
+
+			const preventContextMenu = (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				if (svgContextMenu && currentSVGElement) {
+					svgContextMenu.style.left = `${e.clientX}px`;
+					svgContextMenu.style.top = `${e.clientY}px`;
+					svgContextMenu.style.display = 'block';
+				}
+			};
+
+			svgElement.addEventListener('contextmenu', preventContextMenu);
+			
+			const allChildren = svgElement.querySelectorAll('*');
+			allChildren.forEach(child => {
+				child.addEventListener('contextmenu', preventContextMenu);
+			});
+		}
+
 		const processSVG = (svgElement) => {
 			const list = svgElement.querySelectorAll(`[id]`);
 			svgElement.setAttribute("data-csv-editor", "svg");
@@ -1881,9 +2011,14 @@ import "../styles.css";
 			// Append the SVG element to the div element
 			const svgContainer = document.getElementById("svg-container");
 			svgContainer.innerHTML = "";
+			// Ensure container has overflow hidden to prevent going out of bounds
+			svgContainer.style.overflow = 'hidden';
 			svgElement.setAttributeNS(null, "width", "100%");
 			svgElement.setAttributeNS(null, "height", "100%");
 			svgContainer.appendChild(svgElement);
+
+			// Setup context menu for the SVG
+			setupSVGContextMenu(svgElement);
 
 			console.log(imageList.length)
 
@@ -3399,8 +3534,22 @@ import "../styles.css";
 				var url = URL.createObjectURL(blob);
 				var link = document.createElement("a");
 				link.href = url;
-				link.download =
-					file.replace(/\.[^/.]+$/, "") + "_" + type + ".svg";
+				
+				// Build filename with suffix
+				const baseName = file.replace(/\.[^/.]+$/, "");
+				const typeSuffix = type ? "_" + type : "";
+				
+				// Add flip suffix if SVG has been flipped
+				let flipSuffix = "";
+				if (svgFlipX === -1 && svgFlipY === -1) {
+					flipSuffix = "_flipped-xy";
+				} else if (svgFlipX === -1) {
+					flipSuffix = "_flipped-x";
+				} else if (svgFlipY === -1) {
+					flipSuffix = "_flipped-y";
+				}
+				
+				link.download = baseName + typeSuffix + flipSuffix + ".svg";
 				document.body.appendChild(link);
 				link.click();
 				document.body.removeChild(link);
@@ -4922,5 +5071,26 @@ import "../styles.css";
 			const label = document.getElementById('project-csv-label');
 			if (label) label.remove();
 		}
+
+		// Close context menu when clicking elsewhere (anywhere except the menu itself)
+		document.addEventListener('click', (e) => {
+			if (svgContextMenu && svgContextMenu.style.display === 'block') {
+				if (!svgContextMenu.contains(e.target as Node)) {
+					svgContextMenu.style.display = 'none';
+				}
+			}
+		});
+
+		// Also close on right-click outside the menu
+		document.addEventListener('contextmenu', (e) => {
+			if (svgContextMenu && svgContextMenu.style.display === 'block') {
+				if (!svgContextMenu.contains(e.target as Node)) {
+					svgContextMenu.style.display = 'none';
+				}
+			}
+		});
+
+		// Initialize context menu on page load
+		createSVGContextMenu();
 	</script>
 </html>
