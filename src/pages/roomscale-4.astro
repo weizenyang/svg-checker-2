@@ -960,8 +960,18 @@ import ObjectList from "../components/object-list.tsx";
     selectedReversedFacesGroup.visible = true;
     scene.add(selectedReversedFacesGroup);
     
+    // Group for hover face highlights
+    const hoverFacesGroup = new THREE.Group();
+    hoverFacesGroup.name = "HoverFacesHighlights";
+    hoverFacesGroup.visible = true;
+    scene.add(hoverFacesGroup);
+    
     // Store selected reversed face IDs
     let selectedReversedFaceIds = new Set();
+    // Store manually selected face IDs (for hover/click selection)
+    let manuallySelectedFaceIds = new Set();
+    // Track currently hovered face
+    let hoveredFaceId = null;
     // Track last clicked/selected camera marker
     let currentSelectedCone = null;
     
@@ -1938,9 +1948,47 @@ let currentRenderedCone = null;  // store the currently rendered cone for re-ren
     }
 
 async function reviewVR(event) {
+    // Update pointer and raycaster for current mouse position
+    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, currentCamera);
+    
     const intersects = raycaster.intersectObjects(markers);
     const hit = intersects.find(i => i.object.cameraPos && i.object.parent.visible);
-    if (!hit) return;
+    if (!hit) {
+        // Clicked on something other than a camera - check if it's a face
+        const meshIntersects = raycaster.intersectObjects(scene.children, true).filter(i => 
+            i.object.isMesh && 
+            !i.object.cameraPos && 
+            i.object.parent &&
+            i.object.parent.name !== "SelectedReversedFacesHighlights" &&
+            i.object.parent.name !== "HoverFacesHighlights"
+        );
+        
+        if (meshIntersects.length > 0) {
+            // Clicked on a mesh face - select it
+            const intersection = meshIntersects[0];
+            const faceIndex = getFaceIndexFromIntersection(intersection);
+            if (faceIndex !== null) {
+                const faceId = getFaceId(intersection.object, faceIndex);
+                if (manuallySelectedFaceIds.has(faceId)) {
+                    // Deselect if already selected
+                    manuallySelectedFaceIds.delete(faceId);
+                } else {
+                    // Select the face
+                    manuallySelectedFaceIds.add(faceId);
+                }
+                updateSelectedFacesHighlights();
+                updateHoverHighlight(null);
+            }
+        }
+        return;
+    }
+
+    // Clear manually selected faces when clicking on a camera position
+    manuallySelectedFaceIds.clear();
+    updateSelectedFacesHighlights();
+    updateHoverHighlight(null);
 
     const cone       = hit.object;
     const panel      = document.getElementById("vr-image-panel");
@@ -2682,6 +2730,25 @@ async function renderOverlayCanvas(cone) {
     let currentCsvIndex = 0;
     let csvPoints = [];
 
+    // Keyboard handler for delete/backspace to delete selected faces
+    window.addEventListener("keydown", (event) => {
+        // Check if delete or backspace is pressed
+        if (event.key === "Delete" || event.key === "Backspace") {
+            // Don't delete if user is typing in an input field
+            const activeElement = document.activeElement;
+            if (activeElement && (activeElement.tagName === "INPUT" || activeElement.tagName === "TEXTAREA")) {
+                return;
+            }
+            
+            // Prevent default browser behavior
+            event.preventDefault();
+            
+            // Delete selected faces
+            deleteSelectedFaces();
+            return;
+        }
+    });
+
     // Event listeners for keydown and keyup
     window.addEventListener("keydown", (event) => {
         keyState[event.key.toLowerCase()] = true;
@@ -2907,6 +2974,9 @@ async function renderOverlayCanvas(cone) {
         // Update raycaster for object intersections
         raycaster.setFromCamera(pointer, currentCamera);
         const intersects = raycaster.intersectObjects(scene.children);
+        
+        // Handle face hover highlighting
+        handleFaceHover(intersects);
 
         orthoRaycaster.setFromCamera(orthoPointer, orthoCamera);
         const orthoIntersects = orthoRaycaster.intersectObjects(scene.children);
@@ -4837,6 +4907,402 @@ async function renderOverlayCanvas(cone) {
     function getFaceId(mesh, faceIndex) {
         return `${mesh.uuid}-${faceIndex}`;
     }
+
+    // Get face index from raycast intersection
+    function getFaceIndexFromIntersection(intersection) {
+        if (!intersection || !intersection.object || !intersection.object.isMesh) {
+            return null;
+        }
+
+        const mesh = intersection.object;
+        const geometry = mesh.geometry;
+        if (!geometry.attributes.position) return null;
+
+        const point = intersection.point;
+        const face = intersection.face;
+        
+        if (face !== undefined && face.a !== undefined) {
+            // Three.js provides face index directly
+            return Math.floor(face.a / 3); // face.a is the first vertex index, divide by 3 to get face index
+        }
+
+        // Fallback: find closest face by checking distance to face centers
+        const positions = geometry.attributes.position;
+        const hasIndex = geometry.index !== null;
+        let closestFaceIdx = null;
+        let minDistance = Infinity;
+
+        if (hasIndex) {
+            const index = geometry.index;
+            const faceCount = index.count / 3;
+            
+            for (let i = 0; i < faceCount; i++) {
+                const i0 = index.getX(i * 3);
+                const i1 = index.getX(i * 3 + 1);
+                const i2 = index.getX(i * 3 + 2);
+                
+                const v0 = new THREE.Vector3(
+                    positions.array[i0 * 3],
+                    positions.array[i0 * 3 + 1],
+                    positions.array[i0 * 3 + 2]
+                );
+                const v1 = new THREE.Vector3(
+                    positions.array[i1 * 3],
+                    positions.array[i1 * 3 + 1],
+                    positions.array[i1 * 3 + 2]
+                );
+                const v2 = new THREE.Vector3(
+                    positions.array[i2 * 3],
+                    positions.array[i2 * 3 + 1],
+                    positions.array[i2 * 3 + 2]
+                );
+                
+                // Transform to world space
+                v0.applyMatrix4(mesh.matrixWorld);
+                v1.applyMatrix4(mesh.matrixWorld);
+                v2.applyMatrix4(mesh.matrixWorld);
+                
+                const faceCenter = new THREE.Vector3()
+                    .addVectors(v0, v1)
+                    .add(v2)
+                    .multiplyScalar(1/3);
+                
+                const distance = point.distanceTo(faceCenter);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestFaceIdx = i;
+                }
+            }
+        } else {
+            const faceCount = positions.count / 3;
+            for (let i = 0; i < faceCount; i++) {
+                const v0 = new THREE.Vector3(
+                    positions.array[i * 9],
+                    positions.array[i * 9 + 1],
+                    positions.array[i * 9 + 2]
+                );
+                const v1 = new THREE.Vector3(
+                    positions.array[i * 9 + 3],
+                    positions.array[i * 9 + 4],
+                    positions.array[i * 9 + 5]
+                );
+                const v2 = new THREE.Vector3(
+                    positions.array[i * 9 + 6],
+                    positions.array[i * 9 + 7],
+                    positions.array[i * 9 + 8]
+                );
+                
+                v0.applyMatrix4(mesh.matrixWorld);
+                v1.applyMatrix4(mesh.matrixWorld);
+                v2.applyMatrix4(mesh.matrixWorld);
+                
+                const faceCenter = new THREE.Vector3()
+                    .addVectors(v0, v1)
+                    .add(v2)
+                    .multiplyScalar(1/3);
+                
+                const distance = point.distanceTo(faceCenter);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestFaceIdx = i;
+                }
+            }
+        }
+
+        return closestFaceIdx;
+    }
+
+    // Update hover highlight for faces
+    function updateHoverHighlight(faceId) {
+        // Clear existing hover highlights
+        hoverFacesGroup.children.slice().forEach(child => {
+            hoverFacesGroup.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+
+        if (!faceId) {
+            hoveredFaceId = null;
+            return;
+        }
+
+        // Don't highlight if already selected
+        if (manuallySelectedFaceIds.has(faceId)) {
+            hoveredFaceId = null;
+            return;
+        }
+
+        hoveredFaceId = faceId;
+
+        // Find the face and create highlight
+        const [meshUuid, faceIndexStr] = faceId.split('-');
+        const faceIndex = parseInt(faceIndexStr);
+
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry || child.uuid !== meshUuid) return;
+                
+                const highlightGeometry = extractFacesToGeometry(child, [faceIndex]);
+                const yellowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffff00,
+                    side: THREE.DoubleSide,
+                    depthTest: true,
+                    depthWrite: false,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                
+                const highlightMesh = new THREE.Mesh(highlightGeometry, yellowMaterial);
+                highlightMesh.userData.parentMesh = child;
+                highlightMesh.userData.faceIndices = [faceIndex];
+                highlightMesh.renderOrder = 99; // Render below selected faces
+                
+                // Match parent mesh transform
+                child.updateMatrixWorld(true);
+                child.matrixWorld.decompose(
+                    highlightMesh.position,
+                    highlightMesh.quaternion,
+                    highlightMesh.scale
+                );
+                highlightMesh.updateMatrixWorld(true);
+                
+                hoverFacesGroup.add(highlightMesh);
+            });
+        });
+    }
+
+    // Update selected faces highlights (combines manually selected and reversed faces)
+    function updateSelectedFacesHighlights() {
+        // Clear existing highlights
+        selectedReversedFacesGroup.children.slice().forEach(child => {
+            selectedReversedFacesGroup.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+
+        // Combine manually selected and reversed face IDs
+        const allSelectedFaceIds = new Set([...manuallySelectedFaceIds, ...selectedReversedFaceIds]);
+
+        if (allSelectedFaceIds.size === 0) {
+            return;
+        }
+
+        // Group faces by mesh
+        const facesByMesh = new Map();
+
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position) return;
+                
+                const hasIndex = geometry.index !== null;
+                const faceIndices = [];
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    const faceCount = index.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (allSelectedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                } else {
+                    const positions = geometry.attributes.position;
+                    const faceCount = positions.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (allSelectedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                }
+                
+                if (faceIndices.length > 0) {
+                    if (!facesByMesh.has(child)) {
+                        facesByMesh.set(child, []);
+                    }
+                    facesByMesh.get(child).push(...faceIndices);
+                }
+            });
+        });
+
+        // Create highlight meshes
+        facesByMesh.forEach((faceIndices, mesh) => {
+            try {
+                const highlightGeometry = extractFacesToGeometry(mesh, faceIndices);
+                const redMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff0000,
+                    side: THREE.DoubleSide,
+                    depthTest: true,
+                    depthWrite: true,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const highlightMesh = new THREE.Mesh(highlightGeometry, redMaterial);
+                highlightMesh.userData.parentMesh = mesh;
+                highlightMesh.userData.faceIndices = faceIndices;
+                highlightMesh.renderOrder = 100;
+                
+                mesh.updateMatrixWorld(true);
+                mesh.matrixWorld.decompose(
+                    highlightMesh.position,
+                    highlightMesh.quaternion,
+                    highlightMesh.scale
+                );
+                highlightMesh.updateMatrixWorld(true);
+                
+                selectedReversedFacesGroup.add(highlightMesh);
+            } catch (error) {
+                console.error("Error creating highlight mesh:", error);
+            }
+        });
+    }
+
+    // Handle face hover
+    function handleFaceHover(intersects) {
+        // Filter out markers, highlights, and other non-mesh objects
+        const meshIntersects = intersects.filter(i => 
+            i.object.isMesh && 
+            !i.object.cameraPos && 
+            i.object.parent &&
+            i.object.parent.name !== "SelectedReversedFacesHighlights" &&
+            i.object.parent.name !== "HoverFacesHighlights"
+        );
+
+        if (meshIntersects.length === 0) {
+            updateHoverHighlight(null);
+            return;
+        }
+
+        const intersection = meshIntersects[0];
+        const faceIndex = getFaceIndexFromIntersection(intersection);
+        
+        if (faceIndex === null) {
+            updateHoverHighlight(null);
+            return;
+        }
+
+        const faceId = getFaceId(intersection.object, faceIndex);
+        updateHoverHighlight(faceId);
+    }
+
+    // Delete selected faces
+    function deleteSelectedFaces() {
+        if (manuallySelectedFaceIds.size === 0) {
+            console.log("No faces selected to delete");
+            return;
+        }
+
+        console.log(`Deleting ${manuallySelectedFaceIds.size} selected faces`);
+
+        // Group faces by mesh
+        const facesByMesh = new Map();
+
+        objects.forEach(obj => {
+            obj.traverse((child) => {
+                if (!child.isMesh || !child.geometry) return;
+                
+                const geometry = child.geometry;
+                if (!geometry.attributes.position) return;
+                
+                const hasIndex = geometry.index !== null;
+                const faceIndices = [];
+                
+                if (hasIndex) {
+                    const index = geometry.index;
+                    const faceCount = index.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (manuallySelectedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                } else {
+                    const positions = geometry.attributes.position;
+                    const faceCount = positions.count / 3;
+                    for (let i = 0; i < faceCount; i++) {
+                        const faceId = getFaceId(child, i);
+                        if (manuallySelectedFaceIds.has(faceId)) {
+                            faceIndices.push(i);
+                        }
+                    }
+                }
+                
+                if (faceIndices.length > 0) {
+                    facesByMesh.set(child, faceIndices.sort((a, b) => b - a)); // Sort descending for safe deletion
+                }
+            });
+        });
+
+        // Delete faces from each mesh (delete in reverse order to maintain indices)
+        facesByMesh.forEach((faceIndices, mesh) => {
+            const geometry = mesh.geometry;
+            const hasIndex = geometry.index !== null;
+
+            if (hasIndex) {
+                const index = geometry.index;
+                const newIndexArray = [];
+                const faceSet = new Set(faceIndices);
+                
+                const faceCount = index.count / 3;
+                for (let i = 0; i < faceCount; i++) {
+                    if (!faceSet.has(i)) {
+                        newIndexArray.push(
+                            index.getX(i * 3),
+                            index.getX(i * 3 + 1),
+                            index.getX(i * 3 + 2)
+                        );
+                    }
+                }
+                
+                geometry.setIndex(newIndexArray);
+                geometry.attributes.position.needsUpdate = true;
+                if (geometry.attributes.normal) geometry.attributes.normal.needsUpdate = true;
+                geometry.computeVertexNormals();
+            } else {
+                const positions = geometry.attributes.position;
+                const newPositions = [];
+                const faceSet = new Set(faceIndices);
+                
+                const faceCount = positions.count / 3;
+                for (let i = 0; i < faceCount; i++) {
+                    if (!faceSet.has(i)) {
+                        const baseIdx = i * 9;
+                        for (let j = 0; j < 9; j++) {
+                            newPositions.push(positions.array[baseIdx + j]);
+                        }
+                    }
+                }
+                
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+                if (geometry.attributes.normal) {
+                    const normals = geometry.attributes.normal;
+                    const newNormals = [];
+                    for (let i = 0; i < faceCount; i++) {
+                        if (!faceSet.has(i)) {
+                            const baseIdx = i * 9;
+                            for (let j = 0; j < 9; j++) {
+                                newNormals.push(normals.array[baseIdx + j]);
+                            }
+                        }
+                    }
+                    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
+                }
+                geometry.computeVertexNormals();
+            }
+        });
+
+        // Clear selection
+        manuallySelectedFaceIds.clear();
+        updateSelectedFacesHighlights();
+        updateHoverHighlight(null);
+        
+        console.log("Faces deleted successfully");
+    }
     
     // Helper function to detect reversed normals relative to camera position
     function detectReversedNormalsFromCamera(cameraPosition) {
@@ -6146,137 +6612,16 @@ async function renderOverlayCanvas(cone) {
         return allReversedFaces;
     }
     
-    // Function to create highlight meshes for selected reversed faces
+    // Function to create highlight meshes for selected reversed faces (now uses combined function)
     function updateSelectedReversedFacesHighlights() {
-        // Clear existing highlights
-        selectedReversedFacesGroup.children.slice().forEach(child => {
-            selectedReversedFacesGroup.remove(child);
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-        });
-        
         // Update flip button visibility
         const flipBtn = document.getElementById("flip-selected-normals");
         if (flipBtn) {
-            flipBtn.style.display = selectedReversedFaceIds.size > 0 ? "block" : "none";
+            flipBtn.style.display = (selectedReversedFaceIds.size > 0 || manuallySelectedFaceIds.size > 0) ? "block" : "none";
         }
         
-        if (selectedReversedFaceIds.size === 0) {
-            console.log("No selected reversed faces to highlight");
-            return;
-        }
-        
-        console.log(`Updating highlights for ${selectedReversedFaceIds.size} selected reversed faces`);
-        console.log("Sample face IDs in set:", Array.from(selectedReversedFaceIds).slice(0, 5));
-        
-        // Group faces by mesh
-        const facesByMesh = new Map();
-        let totalFacesChecked = 0;
-        let totalFacesMatched = 0;
-        
-        // Find all faces that match the selected face IDs
-        objects.forEach(obj => {
-            obj.traverse((child) => {
-                if (!child.isMesh || !child.geometry) return;
-                
-                const geometry = child.geometry;
-                if (!geometry.attributes.position || !geometry.attributes.normal) return;
-                
-                const positions = geometry.attributes.position;
-                const hasIndex = geometry.index !== null;
-                const faceIndices = [];
-                
-                if (hasIndex) {
-                    const index = geometry.index;
-                    const faceCount = index.count / 3;
-                    totalFacesChecked += faceCount;
-                    for (let i = 0; i < index.count; i += 3) {
-                        const faceIdx = i / 3;
-                        const faceId = getFaceId(child, faceIdx);
-                        // Debug: log first few face IDs to see if they match
-                        if (faceIdx < 3) {
-                            console.log(`Face ${faceIdx} ID: ${faceId}, in set: ${selectedReversedFaceIds.has(faceId)}`);
-                        }
-                        if (selectedReversedFaceIds.has(faceId)) {
-                            faceIndices.push(faceIdx);
-                            totalFacesMatched++;
-                        }
-                    }
-                } else {
-                    const faceCount = positions.count / 3;
-                    totalFacesChecked += faceCount;
-                    for (let i = 0; i < faceCount; i++) {
-                        const faceId = getFaceId(child, i);
-                        // Debug: log first few face IDs
-                        if (i < 3) {
-                            console.log(`Face ${i} ID: ${faceId}, in set: ${selectedReversedFaceIds.has(faceId)}`);
-                        }
-                        if (selectedReversedFaceIds.has(faceId)) {
-                            faceIndices.push(i);
-                            totalFacesMatched++;
-                        }
-                    }
-                }
-                
-                if (faceIndices.length > 0) {
-                    if (!facesByMesh.has(child)) {
-                        facesByMesh.set(child, []);
-                    }
-                    facesByMesh.get(child).push(...faceIndices);
-                }
-            });
-        });
-        
-        console.log(`Checked ${totalFacesChecked} total faces, matched ${totalFacesMatched} faces`);
-        console.log(`Found ${facesByMesh.size} meshes with selected faces`);
-        
-        // Create highlight meshes
-        let totalHighlightFaces = 0;
-        facesByMesh.forEach((faceIndices, mesh) => {
-            try {
-                // Verify face indices are actually in the selected set
-                const verifiedFaceIndices = faceIndices.filter(faceIdx => {
-                    const faceId = getFaceId(mesh, faceIdx);
-                    return selectedReversedFaceIds.has(faceId);
-                });
-                
-                if (verifiedFaceIndices.length === 0) {
-                    console.warn(`Mesh ${mesh.uuid} had ${faceIndices.length} face indices but none matched after verification`);
-                    return;
-                }
-                
-                totalHighlightFaces += verifiedFaceIndices.length;
-                const highlightGeometry = extractFacesToGeometry(mesh, verifiedFaceIndices);
-                const redMaterial = new THREE.MeshBasicMaterial({
-                    color: 0xff0000,
-                    side: THREE.DoubleSide,
-                    depthTest: true,
-                    depthWrite: true,
-                    transparent: true,
-                    opacity: 0.8
-                });
-                
-                const highlightMesh = new THREE.Mesh(highlightGeometry, redMaterial);
-                highlightMesh.userData.parentMesh = mesh;
-                highlightMesh.userData.faceIndices = verifiedFaceIndices;
-                highlightMesh.renderOrder = 100; // Render on top
-                
-                // Match parent mesh transform
-                mesh.updateMatrixWorld(true);
-                mesh.matrixWorld.decompose(
-                    highlightMesh.position,
-                    highlightMesh.quaternion,
-                    highlightMesh.scale
-                );
-                highlightMesh.updateMatrixWorld(true);
-                
-                selectedReversedFacesGroup.add(highlightMesh);
-            } catch (error) {
-                console.error("Error creating highlight mesh:", error);
-            }
-        });
-        
-        console.log(`Created ${selectedReversedFacesGroup.children.length} highlight meshes with ${totalHighlightFaces} total faces`);
+        // Use the combined highlight function
+        updateSelectedFacesHighlights();
     }
     
     // Helper function to project 3D position to 2D equirectangular coordinates
@@ -6574,7 +6919,7 @@ async function renderOverlayCanvas(cone) {
         
         // Process each mesh to combine
         meshesToCombine.forEach(mesh => {
-            const geometry = mesh.geometry;
+        const geometry = mesh.geometry;
             if (!geometry.attributes.position) return;
             
             // Ensure matrixWorld is up to date
@@ -6586,10 +6931,10 @@ async function renderOverlayCanvas(cone) {
             const normals = geometry.attributes.normal;
             const colors = geometry.attributes.color;
             const uvs = geometry.attributes.uv;
-            const hasIndex = geometry.index !== null;
-            
-            if (hasIndex) {
-                const index = geometry.index;
+        const hasIndex = geometry.index !== null;
+        
+        if (hasIndex) {
+            const index = geometry.index;
                 const vertexCount = positions.count;
                 const indexCount = index.count;
                 
@@ -6721,7 +7066,7 @@ async function renderOverlayCanvas(cone) {
             const firstMaterial = meshesToCombine[0].material;
             if (Array.isArray(firstMaterial)) {
                 combinedMaterial = firstMaterial[0].clone();
-            } else {
+        } else {
                 combinedMaterial = firstMaterial.clone();
             }
         }
