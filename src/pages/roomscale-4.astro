@@ -1998,8 +1998,8 @@ async function renderOverlayCanvas(cone) {
         
         console.log(`Rendering overlay for cone: ${cone.name}`);
     
-    // Generate a separate render for the overlay
-    const overlayRenderResult = await render360SnapshotForCone(cone);
+    // Generate a separate render for the overlay (skip preview to prevent replacing main image)
+    const overlayRenderResult = await render360SnapshotForCone(cone, markers, false, true);
     const overlayRenderURL = overlayRenderResult.dataURL;
     
         // Load and draw the overlay image
@@ -6600,7 +6600,7 @@ async function renderOverlayCanvas(cone) {
         }
     }
 
-async function render360SnapshotForCone(cone, allCones = markers, showNormals = false) {
+async function render360SnapshotForCone(cone, allCones = markers, showNormals = false, skipPreview = false) {
     // 1) backup renderer state
     const origSize       = renderer.getSize(new THREE.Vector2());
     const origDPR        = renderer.getPixelRatio();
@@ -6995,52 +6995,54 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
     renderer.setClearColor(origClearColor, origClearAlpha);
     renderer.autoClear = origAutoClear;
 
-    // 9) Show preview in render window (always show preview when render completes)
+    // 9) Show preview in render window (only if not skipping preview - e.g., when rendering for overlay)
     // Use setTimeout to ensure DOM is ready and to avoid conflicts with calling code
-    setTimeout(() => {
-        const panel = document.getElementById("vr-image-panel");
-        const img = document.getElementById("vr-img") as HTMLImageElement;
-        const widget = document.getElementById('vr-widget') as HTMLDivElement;
-        
-        if (panel && img && widget) {
-            console.log('Setting up render preview...', { dataURLLength: dataURL.length, coneName: cone.name });
+    if (!skipPreview) {
+        setTimeout(() => {
+            const panel = document.getElementById("vr-image-panel");
+            const img = document.getElementById("vr-img") as HTMLImageElement;
+            const widget = document.getElementById('vr-widget') as HTMLDivElement;
             
-            // Ensure image element is visible and properly styled
-            img.style.display = 'block';
-            img.style.width = '100%';
-            img.style.height = '100%';
-            img.style.objectFit = 'contain';
-            
-            // Set image source and wait for it to load
-            img.onload = function() {
-                console.log('Render preview image loaded successfully in vr-img');
-            };
-            img.onerror = function(e) {
-                console.error('Error loading render preview image:', e);
-            };
-            
-            // Set the image source - this should trigger the onload
-            img.src = dataURL;
-            
-            // Set up VR image rotation
-            setVRImage(dataURL, cone.name || 'Render Preview');
-            
-            // Show widget and panel - ensure they're visible
-            widget.style.display = 'block';
-            panel.style.display = 'block';
-            panel.classList.remove("hidden");
-            
-            // Hide overlay for generated views
-            const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
-            if (vrOverlayCanvas) {
-                vrOverlayCanvas.style.display = 'none';
+            if (panel && img && widget) {
+                console.log('Setting up render preview...', { dataURLLength: dataURL.length, coneName: cone.name });
+                
+                // Ensure image element is visible and properly styled
+                img.style.display = 'block';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'contain';
+                
+                // Set image source and wait for it to load
+                img.onload = function() {
+                    console.log('Render preview image loaded successfully in vr-img');
+                };
+                img.onerror = function(e) {
+                    console.error('Error loading render preview image:', e);
+                };
+                
+                // Set the image source - this should trigger the onload
+                img.src = dataURL;
+                
+                // Set up VR image rotation
+                setVRImage(dataURL, cone.name || 'Render Preview');
+                
+                // Show widget and panel - ensure they're visible
+                widget.style.display = 'block';
+                panel.style.display = 'block';
+                panel.classList.remove("hidden");
+                
+                // Hide overlay for generated views
+                const vrOverlayCanvas = document.getElementById('vr-overlay-canvas') as HTMLCanvasElement;
+                if (vrOverlayCanvas) {
+                    vrOverlayCanvas.style.display = 'none';
+                }
+                
+                console.log('Render preview setup complete for:', cone.name || 'Render Preview');
+            } else {
+                console.warn('VR panel elements not found:', { panel: !!panel, img: !!img, widget: !!widget });
             }
-            
-            console.log('Render preview setup complete for:', cone.name || 'Render Preview');
-        } else {
-            console.warn('VR panel elements not found:', { panel: !!panel, img: !!img, widget: !!widget });
-        }
-    }, 0);
+        }, 0);
+    }
 
     // 10) return a JPEG data-URL and face positions
     return {
