@@ -603,16 +603,8 @@ import ObjectList from "../components/object-list.tsx";
     rotateMinus90Btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (typeof vrRotation !== 'undefined') {
-            vrRotation -= 90;
-            // Keep rotation in range -180 to 180
-            vrRotation = ((vrRotation + 180) % 360) - 180;
-            updateVRRotationDisplay();
-            drawVRRotatedImage();
-            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
-            if (vrOverlayCanvas && !showGeneratedView) {
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-            }
+            const targetRotation = vrRotation - 90;
+            animateRotation(targetRotation, 500);
         }
     });
     
@@ -639,16 +631,8 @@ import ObjectList from "../components/object-list.tsx";
     rotatePlus90Btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (typeof vrRotation !== 'undefined') {
-            vrRotation += 90;
-            // Keep rotation in range -180 to 180
-            vrRotation = ((vrRotation + 180) % 360) - 180;
-            updateVRRotationDisplay();
-            drawVRRotatedImage();
-            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
-            if (vrOverlayCanvas && !showGeneratedView) {
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-            }
+            const targetRotation = vrRotation + 90;
+            animateRotation(targetRotation, 500);
         }
     });
     
@@ -675,14 +659,7 @@ import ObjectList from "../components/object-list.tsx";
     rotateResetBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (typeof vrRotation !== 'undefined') {
-            vrRotation = 0;
-            updateVRRotationDisplay();
-            drawVRRotatedImage();
-            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
-            if (vrOverlayCanvas && !showGeneratedView) {
-                vrOverlayCanvas.style.display = 'block';
-                vrOverlayCanvas.style.opacity = '0.45';
-            }
+            animateRotation(0, 500);
         }
     });
     
@@ -2231,6 +2208,7 @@ async function renderOverlayCanvas(cone) {
     let vrIsDragging = false;
     let vrLastMouseX = 0;
     let vrImageSize = { width: 0, height: 0 };
+    let vrRotationAnimationId = null; // Track ongoing rotation animation
     
     // Draw on every mouse move for immediate response
 
@@ -2292,6 +2270,58 @@ async function renderOverlayCanvas(cone) {
 
     function updateVRRotationDisplay() {
         vrRotationDisplay.textContent = `Rotation: ${vrRotation.toFixed(1)}°`;
+    }
+
+    // Animate rotation from current value to target value over duration (in ms)
+    function animateRotation(targetRotation, duration = 500) {
+        // Cancel any existing animation
+        if (vrRotationAnimationId !== null) {
+            cancelAnimationFrame(vrRotationAnimationId);
+            vrRotationAnimationId = null;
+        }
+
+        const startRotation = vrRotation;
+        const startTime = performance.now();
+        
+        // Normalize target rotation to [-180, 180] range
+        let normalizedTarget = ((targetRotation + 180) % 360) - 180;
+        
+        // Handle shortest path (e.g., if current is 170 and target is -170, go through 180, not -180)
+        let rotationDiff = normalizedTarget - startRotation;
+        if (rotationDiff > 180) {
+            rotationDiff -= 360;
+        } else if (rotationDiff < -180) {
+            rotationDiff += 360;
+        }
+
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Easing function (ease-out cubic)
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            vrRotation = startRotation + (rotationDiff * eased);
+            // Normalize rotation to [-180, 180] range
+            vrRotation = ((vrRotation + 180) % 360) - 180;
+            
+            updateVRRotationDisplay();
+            drawVRRotatedImage();
+            
+            // Keep overlay visible if it should be shown
+            if (vrOverlayCanvas && !showGeneratedView) {
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.45';
+            }
+            
+            if (progress < 1) {
+                vrRotationAnimationId = requestAnimationFrame(animate);
+            } else {
+                vrRotationAnimationId = null;
+            }
+        }
+        
+        vrRotationAnimationId = requestAnimationFrame(animate);
     }
 
     // Make "Rotation:" clickable to apply as offset to the currently focused CSV cone
