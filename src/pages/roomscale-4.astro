@@ -3717,7 +3717,7 @@ async function renderOverlayCanvas(cone) {
                         objects.push(gltf.scene);
                         simplifiedNamesId.push({
                             uuid: gltf.scene.uuid,
-                            simplifiedName: file.name.replace(/\D/g, ""),
+                            simplifiedName: getSimplifiedName(file.name),
                         });
                         scene.add(gltf.scene);
                         updateOutliner();
@@ -3744,7 +3744,7 @@ async function renderOverlayCanvas(cone) {
                         objects.push(fbx);
                         simplifiedNamesId.push({
                             uuid: fbx.uuid,
-                            simplifiedName: file.name.replace(/\D/g, ""),
+                            simplifiedName: getSimplifiedName(file.name),
                         });
                         scene.add(fbx);
                         updateOutliner();
@@ -3907,10 +3907,7 @@ async function renderOverlayCanvas(cone) {
                                     item.name = entry.name;
                                     simplifiedNamesId.push({
                                         uuid: item.uuid,
-                                        simplifiedName: entry.name.replace(
-                                            /\D/g,
-                                            "",
-                                        ),
+                                        simplifiedName: getSimplifiedName(entry.name),
                                     });
                                     console.log("item name" + item.name);
                                     glbFiles.push(item.name);
@@ -4449,13 +4446,23 @@ async function renderOverlayCanvas(cone) {
         return { position: convertedPosition, rotation: convertedRotation };
     }
 
+    // Helper function to extract simplified name from filename (strips extension first)
+    function getSimplifiedName(filename: string): string {
+        if (!filename) return "";
+        // Strip file extension first (e.g., .csv, .glb, .gltf)
+        const baseName = filename.replace(/\.[^/.]+$/, "");
+        // Then extract only digits
+        return baseName.replace(/\D/g, "");
+    }
+
     // Function to process CSV data and create spheres
     function processCSVData(csvText, name?) {
         const lines = csvText.split("\n"); // Split CSV text into lines
         // Skip the first line if it contains headers, and process the rest
 
         // Check if a group with the same simplified name already exists
-        const simplifiedName = name ? name.replace(/\D/g, "") : "";
+        // Strip extension before extracting simplified name for proper matching
+        const simplifiedName = name ? getSimplifiedName(name) : "";
         let existingGroup = null;
         let existingGroupIndex = -1;
         
@@ -4496,8 +4503,12 @@ async function renderOverlayCanvas(cone) {
                 }
                 
                 // DO NOT clear images - keep existing 360 images loaded
+                // Images will be automatically re-linked when cameras are clicked
+                // because imageManager.findImageByName() matches by camera cone name
+                // If new CSV has same camera names, images will work automatically
                 // DO NOT remove geometries - keep existing 3D models loaded
                 console.log(`Replaced cameras for group ${name}, kept images and geometries`);
+                console.log(`Images will be matched by camera name when cameras are clicked`);
             }
         }
 
@@ -4533,7 +4544,8 @@ async function renderOverlayCanvas(cone) {
 
             if (name) {
                 group.name = name;
-                group.userData.simplifiedName = name.replace(/\D/g, "");
+                // Strip extension before extracting simplified name for consistent matching
+                group.userData.simplifiedName = getSimplifiedName(name);
             }
         }
         
@@ -4548,13 +4560,23 @@ async function renderOverlayCanvas(cone) {
 
         //Update main object references
         if (simplifiedNamesId.length > 0) {
+            // Find matching model by simplified name (strip extension for comparison)
+            const csvSimplifiedName = name ? getSimplifiedName(name) : "";
+            let foundMatch = false;
+            
             simplifiedNamesId.forEach((e) => {
-                if (e.simplifiedName == name.replace(/\D/g, "")) {
+                if (e.simplifiedName === csvSimplifiedName) {
                     e.csvObject = group.uuid;
-                } else {
-                    group.remove();
+                    foundMatch = true;
                 }
             });
+            
+            // Only remove group if we have models but none matched
+            // This allows CSV groups to exist independently if no model is loaded yet
+            if (!foundMatch && simplifiedNamesId.length > 0) {
+                // Don't remove - allow CSV to exist without a matching model
+                // The group will be linked when the model is loaded
+            }
         }
         const csvUploadEvent = new CustomEvent("file-upload-csv", {
             detail: {
@@ -9251,7 +9273,7 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                             objects.push(gltf.scene);
                             simplifiedNamesId.push({
                                 uuid: gltf.scene.uuid,
-                                simplifiedName: file.name.replace(/\D/g, ""),
+                                simplifiedName: getSimplifiedName(file.name),
                             });
                             scene.add(gltf.scene);
                             updateOutliner();
