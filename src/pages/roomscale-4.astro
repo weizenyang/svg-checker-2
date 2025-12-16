@@ -145,8 +145,8 @@ import ObjectList from "../components/object-list.tsx";
 
             <div class="flex flex-col mt-3">
                 <div class="relative">
-                    <button
-                        id="select-reversed-faces" 
+                <button
+                    id="select-reversed-faces" 
                         class="bg-purple-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-600 hover:drop-shadow-lg active:bg-purple-700 w-full flex items-center justify-between"
                     >
                         <span>Select Reversed Faces</span>
@@ -164,7 +164,7 @@ import ObjectList from "../components/object-list.tsx";
                             class="w-full text-left px-4 py-2 hover:bg-gray-100 rounded-b-md border-t border-gray-200"
                         >
                             Batch Process Collision Models
-                        </button>
+                </button>
                     </div>
                 </div>
                 <button
@@ -530,6 +530,75 @@ import ObjectList from "../components/object-list.tsx";
     vrLauncher.innerHTML = '<span style="font-size:12px; font-family: monospace;">VR</span>';
     document.body.appendChild(vrLauncher);
 
+    // Rotation buttons container (above panel)
+    const rotationButtonsContainer = document.createElement('div');
+    rotationButtonsContainer.id = 'vr-rotation-buttons';
+    Object.assign(rotationButtonsContainer.style, {
+        position: 'absolute',
+        right: '0',
+        bottom: '240px',
+        display: 'flex',
+        gap: '4px',
+        zIndex: '122'
+    } as CSSStyleDeclaration);
+    vrWidget.appendChild(rotationButtonsContainer);
+
+    // +90 button
+    const rotatePlus90Btn = document.createElement('button');
+    rotatePlus90Btn.id = 'vr-rotate-plus90';
+    rotatePlus90Btn.textContent = '+90';
+    rotatePlus90Btn.title = 'Rotate 90° clockwise';
+    Object.assign(rotatePlus90Btn.style, {
+        width: '40px',
+        height: '28px',
+        background: '#fff',
+        border: '1px solid #a1a1aa',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        fontWeight: '600',
+        color: '#374151',
+        boxShadow: '0 2px 4px rgba(0,0,0,.1)',
+        transition: 'all 0.2s'
+    } as CSSStyleDeclaration);
+    rotatePlus90Btn.addEventListener('mouseenter', () => {
+        rotatePlus90Btn.style.background = '#f3f4f6';
+        rotatePlus90Btn.style.borderColor = '#6b7280';
+    });
+    rotatePlus90Btn.addEventListener('mouseleave', () => {
+        rotatePlus90Btn.style.background = '#fff';
+        rotatePlus90Btn.style.borderColor = '#a1a1aa';
+    });
+    rotationButtonsContainer.appendChild(rotatePlus90Btn);
+
+    // -90 button
+    const rotateMinus90Btn = document.createElement('button');
+    rotateMinus90Btn.id = 'vr-rotate-minus90';
+    rotateMinus90Btn.textContent = '-90';
+    rotateMinus90Btn.title = 'Rotate 90° counter-clockwise';
+    Object.assign(rotateMinus90Btn.style, {
+        width: '40px',
+        height: '28px',
+        background: '#fff',
+        border: '1px solid #a1a1aa',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        fontWeight: '600',
+        color: '#374151',
+        boxShadow: '0 2px 4px rgba(0,0,0,.1)',
+        transition: 'all 0.2s'
+    } as CSSStyleDeclaration);
+    rotateMinus90Btn.addEventListener('mouseenter', () => {
+        rotateMinus90Btn.style.background = '#f3f4f6';
+        rotateMinus90Btn.style.borderColor = '#6b7280';
+    });
+    rotateMinus90Btn.addEventListener('mouseleave', () => {
+        rotateMinus90Btn.style.background = '#fff';
+        rotateMinus90Btn.style.borderColor = '#a1a1aa';
+    });
+    rotationButtonsContainer.appendChild(rotateMinus90Btn);
+
     // Panel container anchored above the launcher
     const panel = document.createElement('div');
     panel.id = 'vr-image-panel';
@@ -667,6 +736,11 @@ import ObjectList from "../components/object-list.tsx";
     vrLauncher.addEventListener('click', () => {
         const visible = vrWidget.style.display !== 'none';
         vrWidget.style.display = visible ? 'none' : 'block';
+        // Hide/show rotation buttons with widget
+        const rotationButtons = document.getElementById('vr-rotation-buttons');
+        if (rotationButtons) {
+            rotationButtons.style.display = visible ? 'none' : 'flex';
+        }
     });
 
     // Drag to move the widget
@@ -1913,14 +1987,14 @@ async function reviewVR(event) {
         }
     } else {
         // Only allow toggle when no 360 images are available
-        if (cone !== lastConeClicked) {          // new cone → always start in photo mode
-            lastConeClicked = cone;
-            showGeneratedView = false;
-            showNormalsMode = false;  // Reset normals mode when switching cones
-        } else {
-            showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
-            if (!showGeneratedView) {
-                showNormalsMode = false;  // Reset normals mode when switching to photo view
+    if (cone !== lastConeClicked) {          // new cone → always start in photo mode
+        lastConeClicked = cone;
+        showGeneratedView = false;
+        showNormalsMode = false;  // Reset normals mode when switching cones
+    } else {
+        showGeneratedView = !showGeneratedView;      // same cone → toggle back / forth
+        if (!showGeneratedView) {
+            showNormalsMode = false;  // Reset normals mode when switching to photo view
             }
         }
     }
@@ -1958,11 +2032,11 @@ async function reviewVR(event) {
             panel.classList.remove("hidden");
             
             // No 360 image available - render collision overlay instead
-            // Reset states but DO NOT auto-hide the floating panel
-            img.style.transform = "scaleX(1)";
-            flippedTag.classList.add("hidden");
-            vrDragOverlay.classList.add("hidden");
-            vrRotationDisplay.classList.add("hidden");
+                // Reset states but DO NOT auto-hide the floating panel
+                img.style.transform = "scaleX(1)";
+                flippedTag.classList.add("hidden");
+                vrDragOverlay.classList.add("hidden");
+                vrRotationDisplay.classList.add("hidden");
             
             // Prepare overlay and show it for comparison (collision render)
             await renderOverlayCanvas(cone);
@@ -2166,6 +2240,27 @@ async function renderOverlayCanvas(cone) {
         vrRotationDisplay.textContent = `Rotation: ${vrRotation.toFixed(1)}°`;
     }
 
+    // Function to rotate VR image by specified degrees
+    function rotateVRImage(degrees) {
+        if (!vrCurrentImage) return;
+        
+        vrRotation += degrees;
+        // Normalize to [-180, 180] range
+        vrRotation = ((vrRotation + 180) % 360) - 180;
+        
+        updateVRRotationDisplay();
+        drawVRRotatedImage();
+    }
+
+    // Add event listeners for rotation buttons
+    rotatePlus90Btn.addEventListener('click', () => {
+        rotateVRImage(90);
+    });
+
+    rotateMinus90Btn.addEventListener('click', () => {
+        rotateVRImage(-90);
+    });
+
     // Make "Rotation:" clickable to apply as offset to the currently focused CSV cone
     let rotHoverTimer: number | null = null;
     vrRotationDisplay.addEventListener('mouseenter', () => {
@@ -2259,6 +2354,7 @@ async function renderOverlayCanvas(cone) {
             // Show rotation controls
             vrDragOverlay.classList.remove('hidden');
             vrRotationDisplay.classList.remove('hidden');
+            rotationButtonsContainer.style.display = 'flex';
             updateVRRotationDisplay();
         };
         tempImg.src = imageSrc;
@@ -2678,7 +2774,7 @@ async function renderOverlayCanvas(cone) {
                     console.log('Collision overlay rendered (no 360 image available)');
                 } catch (overlayError) {
                     console.error('Error rendering overlay:', overlayError);
-                    vrOverlayCanvas.style.display = 'none';
+                vrOverlayCanvas.style.display = 'none';
                 }
                 
                 console.warn(`Image not found: ${targetName}`);
@@ -5005,7 +5101,7 @@ async function renderOverlayCanvas(cone) {
                         const faceId = getFaceId(child, i);
                         const color = faceIdToColorMap.get(faceId) || new THREE.Color(0.5, 0.5, 0.5);
                         
-                        const baseIdx = i * 9;
+                            const baseIdx = i * 9;
                         
                         // Get face vertices
                         const v0 = new THREE.Vector3(
@@ -5825,10 +5921,10 @@ async function renderOverlayCanvas(cone) {
                         const x = xS * sampleRate;
                         if (x >= width) continue;
                         const idx = (y * width + x) * 4;
-                        const idR = idData[idx];
-                        const idG = idData[idx + 1];
-                        const idB = idData[idx + 2];
-                        
+                            const idR = idData[idx];
+                            const idG = idData[idx + 1];
+                            const idB = idData[idx + 2];
+                            
                         const idBrightness = (idR + idG + idB) / 3;
                         if (idBrightness < 10) continue;
                         
@@ -5837,7 +5933,7 @@ async function renderOverlayCanvas(cone) {
                         let matchType = 'exact';
                         let matchDistance = 0;
                         
-                        if (!faceId) {
+                            if (!faceId) {
                             const tolerance = 4;
                             let bestMatch = null;
                             let bestDistance = Infinity;
@@ -5870,10 +5966,10 @@ async function renderOverlayCanvas(cone) {
                                 faceId = bestMatch;
                                 matchType = 'tolerance';
                                 matchDistance = bestDistance;
+                                }
                             }
-                        }
-                        
-                        if (faceId) {
+                            
+                            if (faceId) {
                             const expectedColor = idRender.faceIdToColorMap?.get(faceId);
                             if (expectedColor) {
                                 const expectedR = Math.floor(expectedColor.r * 255);
@@ -5889,7 +5985,7 @@ async function renderOverlayCanvas(cone) {
                                 }
                             }
                             
-                            redFaces.add(faceId);
+                                redFaces.add(faceId);
                             if (redFaces.size <= 5) {
                                 console.log(`  Found red face ID: ${faceId}, at pixel (${x}, ${y}), ID color: rgb(${idR}, ${idG}, ${idB}), match: ${matchType}, distance: ${matchDistance}`);
                             }
@@ -6182,7 +6278,7 @@ async function renderOverlayCanvas(cone) {
         
         return extractedGeometry;
     }
-    
+
     // Function to flip normals of selected faces
     function flipSelectedNormals() {
         if (selectedReversedFaceIds.size === 0) {
