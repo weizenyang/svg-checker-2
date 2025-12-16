@@ -3802,6 +3802,29 @@ async function renderOverlayCanvas(cone) {
     const exportButton = document.getElementById("export-all-fbx");
     exportButton.addEventListener("click", exportAllFBXFilesToGLB);
 
+    // Helper function to normalize Euler angles
+    // Converts -180 to 180, and normalizes angles to [-180, 180] range
+    function normalizeEulerAngle(angleInRadians) {
+        let degrees = THREE.MathUtils.radToDeg(angleInRadians);
+        // Normalize to [-180, 180] range
+        degrees = ((degrees % 360) + 360) % 360;
+        if (degrees > 180) {
+            degrees -= 360;
+        }
+        // Convert -180 to 180 (they're equivalent rotations, but prefer 180)
+        // Check if the absolute value is close to 180 (within 0.5 degree tolerance)
+        // This handles cases where -180 might appear as -179.5, -180.0, or even -0.5 due to wrapping
+        const absDegrees = Math.abs(degrees);
+        if (absDegrees >= 179.5 && absDegrees <= 180.5) {
+            // If it's close to 180 (either positive or negative), normalize to 180
+            degrees = 180;
+        } else if (Math.abs(degrees) < 0.001) {
+            // Convert -0 to 0 (handle floating point precision issues)
+            degrees = 0;
+        }
+        return degrees;
+    }
+
     // Function to export CSV with updated rotations
     function exportCSVWithRotations() {
         if (!m_Group || !m_Group.children || m_Group.children.length === 0) {
@@ -3822,8 +3845,11 @@ async function renderOverlayCanvas(cone) {
                 child.getWorldQuaternion(worldQuaternion);
                 worldEuler.setFromQuaternion(worldQuaternion, 'XYZ');
 
+                // Normalize Y rotation to handle -180 -> 180 conversion
+                const normalizedY = normalizeEulerAngle(worldEuler.y);
+
                 // Format: name,x,-z,y,0,0,rotation_y_in_degrees
-                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${worldPosition.y.toFixed(6)},0,0,${THREE.MathUtils.radToDeg(worldEuler.y).toFixed(6)}\n`;
+                csvContent += `${child.name},${worldPosition.x.toFixed(6)},${(-worldPosition.z).toFixed(6)},${worldPosition.y.toFixed(6)},0,0,${normalizedY.toFixed(6)}\n`;
             }
         });
 
@@ -4005,7 +4031,12 @@ async function renderOverlayCanvas(cone) {
                     const rotation = child.getWorldQuaternion(worldQuaternion);
                     worldEuler.setFromQuaternion(worldQuaternion);
 
-                    csvContent += `${name},${worldPosition.x},${-worldPosition.y},${worldPosition.z},${worldEuler.x},${worldEuler.y},${worldEuler.z}\n`;
+                    // Normalize Euler angles before exporting
+                    const normalizedX = normalizeEulerAngle(worldEuler.x);
+                    const normalizedY = normalizeEulerAngle(worldEuler.y);
+                    const normalizedZ = normalizeEulerAngle(worldEuler.z);
+
+                    csvContent += `${name},${worldPosition.x},${-worldPosition.y},${worldPosition.z},${normalizedX},${normalizedY},${normalizedZ}\n`;
                 }
             });
 
