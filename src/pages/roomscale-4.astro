@@ -642,8 +642,38 @@ import ObjectList from "../components/object-list.tsx";
         }
     });
     
+    const rotateResetBtn = document.createElement('button');
+    rotateResetBtn.textContent = 'Reset';
+    Object.assign(rotateResetBtn.style, {
+        background: 'rgba(0,0,0,.7)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '4px 8px',
+        fontSize: '11px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'background 0.15s'
+    });
+    rotateResetBtn.addEventListener('mouseenter', () => {
+        rotateResetBtn.style.background = 'rgba(0,0,0,.9)';
+    });
+    rotateResetBtn.addEventListener('mouseleave', () => {
+        rotateResetBtn.style.background = 'rgba(0,0,0,.7)';
+    });
+    rotateResetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof vrRotation !== 'undefined') {
+            vrRotation = 0;
+            updateVRRotationDisplay();
+            drawVRRotatedImage();
+        }
+    });
+    
     rotationButtonsContainer.appendChild(rotateMinus90Btn);
     rotationButtonsContainer.appendChild(rotatePlus90Btn);
+    rotationButtonsContainer.appendChild(rotateResetBtn);
     panel.appendChild(rotationButtonsContainer);
 
     const flippedTag = document.createElement('div');
