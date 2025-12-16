@@ -608,6 +608,11 @@ import ObjectList from "../components/object-list.tsx";
             vrRotation = ((vrRotation + 180) % 360) - 180;
             updateVRRotationDisplay();
             drawVRRotatedImage();
+            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
+            if (vrOverlayCanvas && !showGeneratedView) {
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.45';
+            }
         }
     });
     
@@ -639,6 +644,11 @@ import ObjectList from "../components/object-list.tsx";
             vrRotation = ((vrRotation + 180) % 360) - 180;
             updateVRRotationDisplay();
             drawVRRotatedImage();
+            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
+            if (vrOverlayCanvas && !showGeneratedView) {
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.45';
+            }
         }
     });
     
@@ -668,6 +678,11 @@ import ObjectList from "../components/object-list.tsx";
             vrRotation = 0;
             updateVRRotationDisplay();
             drawVRRotatedImage();
+            // Keep overlay visible if it should be shown (when 360 image is available and not in generated view)
+            if (vrOverlayCanvas && !showGeneratedView) {
+                vrOverlayCanvas.style.display = 'block';
+                vrOverlayCanvas.style.opacity = '0.45';
+            }
         }
     });
     
@@ -3444,8 +3459,8 @@ async function renderOverlayCanvas(cone) {
     // Auto-load project from URL parameter (only if parameter is present)
     const projectKey = getProjectKeyFromURL();
     if (projectKey) {
-        displayProjectInfo(projectKey);
-        fetchAssetsFromServer(projectKey).then(loadAssetsFromData);
+    displayProjectInfo(projectKey);
+    fetchAssetsFromServer(projectKey).then(loadAssetsFromData);
     }
 
     // Alternative: Load assets directly (uncomment and provide your data)
