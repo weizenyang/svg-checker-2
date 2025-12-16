@@ -148,7 +148,7 @@ import ObjectList from "../components/object-list.tsx";
                 <button
                     id="select-reversed-faces" 
                         class="bg-purple-500 text-white p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-purple-600 hover:drop-shadow-lg active:bg-purple-700 w-full flex items-center justify-between"
-                    >
+                >
                         <span>Select Reversed Faces</span>
                         <span class="ml-2">▼</span>
                     </button>
@@ -530,75 +530,6 @@ import ObjectList from "../components/object-list.tsx";
     vrLauncher.innerHTML = '<span style="font-size:12px; font-family: monospace;">VR</span>';
     document.body.appendChild(vrLauncher);
 
-    // Rotation buttons container (above panel)
-    const rotationButtonsContainer = document.createElement('div');
-    rotationButtonsContainer.id = 'vr-rotation-buttons';
-    Object.assign(rotationButtonsContainer.style, {
-        position: 'absolute',
-        right: '0',
-        bottom: '240px',
-        display: 'flex',
-        gap: '4px',
-        zIndex: '122'
-    } as CSSStyleDeclaration);
-    vrWidget.appendChild(rotationButtonsContainer);
-
-    // +90 button
-    const rotatePlus90Btn = document.createElement('button');
-    rotatePlus90Btn.id = 'vr-rotate-plus90';
-    rotatePlus90Btn.textContent = '+90';
-    rotatePlus90Btn.title = 'Rotate 90° clockwise';
-    Object.assign(rotatePlus90Btn.style, {
-        width: '40px',
-        height: '28px',
-        background: '#fff',
-        border: '1px solid #a1a1aa',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: '600',
-        color: '#374151',
-        boxShadow: '0 2px 4px rgba(0,0,0,.1)',
-        transition: 'all 0.2s'
-    } as CSSStyleDeclaration);
-    rotatePlus90Btn.addEventListener('mouseenter', () => {
-        rotatePlus90Btn.style.background = '#f3f4f6';
-        rotatePlus90Btn.style.borderColor = '#6b7280';
-    });
-    rotatePlus90Btn.addEventListener('mouseleave', () => {
-        rotatePlus90Btn.style.background = '#fff';
-        rotatePlus90Btn.style.borderColor = '#a1a1aa';
-    });
-    rotationButtonsContainer.appendChild(rotatePlus90Btn);
-
-    // -90 button
-    const rotateMinus90Btn = document.createElement('button');
-    rotateMinus90Btn.id = 'vr-rotate-minus90';
-    rotateMinus90Btn.textContent = '-90';
-    rotateMinus90Btn.title = 'Rotate 90° counter-clockwise';
-    Object.assign(rotateMinus90Btn.style, {
-        width: '40px',
-        height: '28px',
-        background: '#fff',
-        border: '1px solid #a1a1aa',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: '600',
-        color: '#374151',
-        boxShadow: '0 2px 4px rgba(0,0,0,.1)',
-        transition: 'all 0.2s'
-    } as CSSStyleDeclaration);
-    rotateMinus90Btn.addEventListener('mouseenter', () => {
-        rotateMinus90Btn.style.background = '#f3f4f6';
-        rotateMinus90Btn.style.borderColor = '#6b7280';
-    });
-    rotateMinus90Btn.addEventListener('mouseleave', () => {
-        rotateMinus90Btn.style.background = '#fff';
-        rotateMinus90Btn.style.borderColor = '#a1a1aa';
-    });
-    rotationButtonsContainer.appendChild(rotateMinus90Btn);
-
     // Panel container anchored above the launcher
     const panel = document.createElement('div');
     panel.id = 'vr-image-panel';
@@ -633,6 +564,87 @@ import ObjectList from "../components/object-list.tsx";
     dragOverlay.className = 'hidden';
     Object.assign(dragOverlay.style, { position:'absolute', inset:'0', cursor:'grab', zIndex:'8', userSelect:'none' });
     panel.appendChild(dragOverlay);
+
+    // Rotation quick adjust buttons (+90 and -90)
+    const rotationButtonsContainer = document.createElement('div');
+    rotationButtonsContainer.id = 'vr-rotation-buttons';
+    rotationButtonsContainer.className = 'hidden';
+    Object.assign(rotationButtonsContainer.style, {
+        position: 'absolute',
+        left: '50%',
+        top: '8px',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: '8px',
+        zIndex: '16',
+        pointerEvents: 'auto'
+    });
+    
+    const rotateMinus90Btn = document.createElement('button');
+    rotateMinus90Btn.textContent = '-90°';
+    Object.assign(rotateMinus90Btn.style, {
+        background: 'rgba(0,0,0,.7)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '4px 8px',
+        fontSize: '11px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'background 0.15s'
+    });
+    rotateMinus90Btn.addEventListener('mouseenter', () => {
+        rotateMinus90Btn.style.background = 'rgba(0,0,0,.9)';
+    });
+    rotateMinus90Btn.addEventListener('mouseleave', () => {
+        rotateMinus90Btn.style.background = 'rgba(0,0,0,.7)';
+    });
+    rotateMinus90Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof vrRotation !== 'undefined') {
+            vrRotation -= 90;
+            // Keep rotation in range -180 to 180
+            vrRotation = ((vrRotation + 180) % 360) - 180;
+            updateVRRotationDisplay();
+            drawVRRotatedImage();
+        }
+    });
+    
+    const rotatePlus90Btn = document.createElement('button');
+    rotatePlus90Btn.textContent = '+90°';
+    Object.assign(rotatePlus90Btn.style, {
+        background: 'rgba(0,0,0,.7)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '4px 8px',
+        fontSize: '11px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'background 0.15s'
+    });
+    rotatePlus90Btn.addEventListener('mouseenter', () => {
+        rotatePlus90Btn.style.background = 'rgba(0,0,0,.9)';
+    });
+    rotatePlus90Btn.addEventListener('mouseleave', () => {
+        rotatePlus90Btn.style.background = 'rgba(0,0,0,.7)';
+    });
+    rotatePlus90Btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof vrRotation !== 'undefined') {
+            vrRotation += 90;
+            // Keep rotation in range -180 to 180
+            vrRotation = ((vrRotation + 180) % 360) - 180;
+            updateVRRotationDisplay();
+            drawVRRotatedImage();
+        }
+    });
+    
+    rotationButtonsContainer.appendChild(rotateMinus90Btn);
+    rotationButtonsContainer.appendChild(rotatePlus90Btn);
+    panel.appendChild(rotationButtonsContainer);
 
     const flippedTag = document.createElement('div');
     flippedTag.id = 'vr-flipped-tag';
@@ -736,11 +748,6 @@ import ObjectList from "../components/object-list.tsx";
     vrLauncher.addEventListener('click', () => {
         const visible = vrWidget.style.display !== 'none';
         vrWidget.style.display = visible ? 'none' : 'block';
-        // Hide/show rotation buttons with widget
-        const rotationButtons = document.getElementById('vr-rotation-buttons');
-        if (rotationButtons) {
-            rotationButtons.style.display = visible ? 'none' : 'flex';
-        }
     });
 
     // Drag to move the widget
@@ -2037,6 +2044,8 @@ async function reviewVR(event) {
                 flippedTag.classList.add("hidden");
                 vrDragOverlay.classList.add("hidden");
                 vrRotationDisplay.classList.add("hidden");
+                const rotationButtons = document.getElementById('vr-rotation-buttons');
+                if (rotationButtons) rotationButtons.classList.add("hidden");
             
             // Prepare overlay and show it for comparison (collision render)
             await renderOverlayCanvas(cone);
@@ -2240,27 +2249,6 @@ async function renderOverlayCanvas(cone) {
         vrRotationDisplay.textContent = `Rotation: ${vrRotation.toFixed(1)}°`;
     }
 
-    // Function to rotate VR image by specified degrees
-    function rotateVRImage(degrees) {
-        if (!vrCurrentImage) return;
-        
-        vrRotation += degrees;
-        // Normalize to [-180, 180] range
-        vrRotation = ((vrRotation + 180) % 360) - 180;
-        
-        updateVRRotationDisplay();
-        drawVRRotatedImage();
-    }
-
-    // Add event listeners for rotation buttons
-    rotatePlus90Btn.addEventListener('click', () => {
-        rotateVRImage(90);
-    });
-
-    rotateMinus90Btn.addEventListener('click', () => {
-        rotateVRImage(-90);
-    });
-
     // Make "Rotation:" clickable to apply as offset to the currently focused CSV cone
     let rotHoverTimer: number | null = null;
     vrRotationDisplay.addEventListener('mouseenter', () => {
@@ -2354,7 +2342,8 @@ async function renderOverlayCanvas(cone) {
             // Show rotation controls
             vrDragOverlay.classList.remove('hidden');
             vrRotationDisplay.classList.remove('hidden');
-            rotationButtonsContainer.style.display = 'flex';
+            const rotationButtons = document.getElementById('vr-rotation-buttons');
+            if (rotationButtons) rotationButtons.classList.remove('hidden');
             updateVRRotationDisplay();
         };
         tempImg.src = imageSrc;
@@ -2765,6 +2754,8 @@ async function renderOverlayCanvas(cone) {
                 flippedTag.classList.add("hidden");
                 vrDragOverlay.classList.add("hidden");
                 vrRotationDisplay.classList.add("hidden");
+                const rotationButtons = document.getElementById('vr-rotation-buttons');
+                if (rotationButtons) rotationButtons.classList.add("hidden");
                 
                 // No 360 image available - render collision overlay instead
                 try {
@@ -5137,8 +5128,8 @@ async function renderOverlayCanvas(cone) {
                         newPositions.push(v2.x, v2.y, v2.z);
                         newNormals.push(faceNormal.x, faceNormal.y, faceNormal.z);
                         newColors.push(color.r, color.g, color.b);
-                    }
-                }
+                            }
+                        }
                 
                 // Create new non-indexed geometry
                 // (original geometry already stored above, before cloning)
@@ -5487,8 +5478,8 @@ async function renderOverlayCanvas(cone) {
                                 newPositions.push(v2Local.x, v2Local.y, v2Local.z);
                                 newNormals.push(faceNormalLocal.x, faceNormalLocal.y, faceNormalLocal.z);
                                 newColors.push(faceColor[0], faceColor[1], faceColor[2]);
+                                }
                             }
-                        }
                         
                         // Create new non-indexed geometry with flat shading
                         // (original geometry already stored above, before cloning)
@@ -5988,7 +5979,7 @@ async function renderOverlayCanvas(cone) {
                                 redFaces.add(faceId);
                             if (redFaces.size <= 5) {
                                 console.log(`  Found red face ID: ${faceId}, at pixel (${x}, ${y}), ID color: rgb(${idR}, ${idG}, ${idB}), match: ${matchType}, distance: ${matchDistance}`);
-                            }
+                        }
                         } else {
                             if (redFaces.size < 3 && x % 100 === 0 && y % 100 === 0) {
                                 console.warn(`  Red pixel at (${x}, ${y}) but no matching face ID. ID color: rgb(${idR}, ${idG}, ${idB}), brightness: ${idBrightness.toFixed(1)}`);
