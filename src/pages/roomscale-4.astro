@@ -1216,6 +1216,48 @@ import ObjectList from "../components/object-list.tsx";
             };
             this.updateStatsDisplay();
         }
+        
+        // Clear images for a specific group by matching simplified name pattern
+        clearGroupImages(simplifiedName: string) {
+            if (!simplifiedName) return;
+            
+            const pattern = simplifiedName.toLowerCase();
+            let removedCount = 0;
+            
+            // Remove from imageIndex
+            for (const [key, indexed] of this.imageIndex) {
+                // Check if image name contains the group identifier
+                const keyWithoutExt = key.replace(/\.[^/.]+$/, "");
+                // Match if the image name starts with or contains the group pattern
+                if (keyWithoutExt.includes(pattern) || key.startsWith(pattern)) {
+                    this.imageIndex.delete(key);
+                    removedCount++;
+                }
+            }
+            
+            // Remove from compressionCache
+            for (const [key] of this.compressionCache) {
+                const keyWithoutExt = key.replace(/\.[^/.]+$/, "");
+                if (keyWithoutExt.includes(pattern) || key.startsWith(pattern)) {
+                    this.compressionCache.delete(key);
+                }
+            }
+            
+            // Remove from compressionQueue
+            for (const key of this.compressionQueue) {
+                const keyWithoutExt = key.replace(/\.[^/.]+$/, "");
+                if (keyWithoutExt.includes(pattern) || key.startsWith(pattern)) {
+                    this.compressionQueue.delete(key);
+                }
+            }
+            
+            this.stats.totalImages = this.imageIndex.size;
+            this.updateStatsDisplay();
+            
+            if (removedCount > 0) {
+                console.log(`Cleared ${removedCount} images for group ${simplifiedName}`);
+            }
+        }
 
         // Fast indexing for large image sets (no compression during load)
         async indexBatch(imageDataArray, batchSize = 50) {
@@ -4412,7 +4454,57 @@ async function renderOverlayCanvas(cone) {
         const lines = csvText.split("\n"); // Split CSV text into lines
         // Skip the first line if it contains headers, and process the rest
 
-        const group = new THREE.Group();
+        // Check if a group with the same simplified name already exists
+        const simplifiedName = name ? name.replace(/\D/g, "") : "";
+        let existingGroup = null;
+        let existingGroupIndex = -1;
+        
+        if (simplifiedName) {
+            existingGroupIndex = csvGroups.findIndex(g => 
+                g.userData.simplifiedName === simplifiedName
+            );
+            if (existingGroupIndex !== -1) {
+                existingGroup = csvGroups[existingGroupIndex];
+                console.log(`Found existing group for ${name}, replacing cameras only...`);
+                
+                // Remove existing cameras (cones/markers) from markers array
+                existingGroup.children.forEach(child => {
+                    if (child.cameraPos) {
+                        const markerIndex = markers.indexOf(child);
+                        if (markerIndex !== -1) {
+                            markers.splice(markerIndex, 1);
+                        }
+                        // Remove from globalFloors
+                        const floorIndex = globalFloors.findIndex(f => f.arrow === child);
+                        if (floorIndex !== -1) {
+                            globalFloors.splice(floorIndex, 1);
+                        }
+                        // Dispose of camera cone geometry and material
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) child.material.dispose();
+                        // Remove camera cone from group
+                        existingGroup.remove(child);
+                    }
+                });
+                
+                // Remove the old group from csvGroups array (but keep it in scene if it has other children)
+                csvGroups.splice(existingGroupIndex, 1);
+                
+                // Only remove the group from scene if it's now empty
+                if (existingGroup.children.length === 0) {
+                    scene.remove(existingGroup);
+                }
+                
+                // DO NOT clear images - keep existing 360 images loaded
+                // DO NOT remove geometries - keep existing 3D models loaded
+                console.log(`Replaced cameras for group ${name}, kept images and geometries`);
+            }
+        }
+
+        // Create new group or reuse existing one if it was cleared of cameras
+        const group = existingGroup && existingGroup.children.length === 0 
+            ? existingGroup 
+            : new THREE.Group();
 
         for (let i = 0; i < lines.length; i++) {
             const row = lines[i].split(",");
@@ -4443,9 +4535,13 @@ async function renderOverlayCanvas(cone) {
                 group.name = name;
                 group.userData.simplifiedName = name.replace(/\D/g, "");
             }
-            scene.add(group);
-            m_Group = group;
         }
+        
+        // Only add group to scene if it's not already there
+        if (!group.parent) {
+            scene.add(group);
+        }
+        m_Group = group;
         createLabels();
         csvGroups.push(group);
         handleFloors();
@@ -4472,6 +4568,11 @@ async function renderOverlayCanvas(cone) {
         // Update CSV points list for navigation
         updateCsvPointsList();
         updateNavigationDisplay();
+        
+        // If this was a replacement, log that images can now be reloaded
+        if (existingGroup) {
+            console.log(`Group ${name} replaced, ready for 360 image reload`);
+        }
     }
 
     function processVRImage(data, name?) {
