@@ -3305,7 +3305,7 @@ async function renderOverlayCanvas(cone) {
     // Get project key from URL parameters
     function getProjectKeyFromURL() {
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('project') || urlParams.get('key') || urlParams.get('id') || 'default';
+        return urlParams.get('project') || urlParams.get('key') || urlParams.get('id') || null;
     }
 
     // Helper function to fetch assets from server using project key
@@ -3411,10 +3411,12 @@ async function renderOverlayCanvas(cone) {
         }
     }
 
-    // Auto-load project from URL parameter
+    // Auto-load project from URL parameter (only if parameter is present)
     const projectKey = getProjectKeyFromURL();
-    displayProjectInfo(projectKey);
-    fetchAssetsFromServer(projectKey).then(loadAssetsFromData);
+    if (projectKey) {
+        displayProjectInfo(projectKey);
+        fetchAssetsFromServer(projectKey).then(loadAssetsFromData);
+    }
 
     // Alternative: Load assets directly (uncomment and provide your data)
     // loadAssetsFromData({
