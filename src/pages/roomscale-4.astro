@@ -181,12 +181,6 @@ import ObjectList from "../components/object-list.tsx";
                 >
                     Flip Selected Normals
                 </button>
-                <button
-                    id="flatten-combine-meshes"
-                    class="bg-green-200 text-green-900 p-2 rounded-md transition-all duration-75 drop-shadow-sm hover:bg-green-300 hover:drop-shadow-lg active:bg-green-400 mt-2"
-                >
-                    Flatten & Combine Meshes (Exclude Spheres)
-                </button>
                 <label class="mt-2 flex items-center space-x-2 text-sm">
                     <input type="checkbox" id="toggle-export-logs" class="accent-purple-600" />
                     <span>Export logs & screengrabs (first 3 cameras)</span>
@@ -667,6 +661,279 @@ import ObjectList from "../components/object-list.tsx";
     rotationButtonsContainer.appendChild(rotatePlus90Btn);
     rotationButtonsContainer.appendChild(rotateResetBtn);
     panel.appendChild(rotationButtonsContainer);
+
+    // Expand to list button (top right)
+    const expandListBtn = document.createElement('button');
+    expandListBtn.id = 'vr-expand-list-btn';
+    Object.assign(expandListBtn.style, {
+        position: 'absolute',
+        right: '8px',
+        top: '8px',
+        background: 'rgba(0,0,0,.7)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '6px 10px',
+        fontSize: '11px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'background 0.15s',
+        zIndex: '17',
+        pointerEvents: 'auto'
+    });
+    expandListBtn.textContent = '📋';
+    expandListBtn.title = 'Expand to list view';
+    expandListBtn.addEventListener('mouseenter', () => {
+        expandListBtn.style.background = 'rgba(0,0,0,.9)';
+    });
+    expandListBtn.addEventListener('mouseleave', () => {
+        expandListBtn.style.background = 'rgba(0,0,0,.7)';
+    });
+    panel.appendChild(expandListBtn);
+
+    // Scrollable list container
+    const listContainer = document.createElement('div');
+    listContainer.id = 'vr-list-container';
+    Object.assign(listContainer.style, {
+        position: 'absolute',
+        inset: '0',
+        background: '#fff',
+        display: 'none',
+        flexDirection: 'column',
+        zIndex: '10',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        padding: '8px'
+    });
+    // Custom scrollbar styling
+    listContainer.style.scrollbarWidth = 'thin';
+    listContainer.style.scrollbarColor = '#999 #f0f0f0';
+    panel.appendChild(listContainer);
+
+    // Close list button (inside list container)
+    const closeListBtn = document.createElement('button');
+    closeListBtn.id = 'vr-close-list-btn';
+    Object.assign(closeListBtn.style, {
+        position: 'sticky',
+        top: '0',
+        alignSelf: 'flex-end',
+        background: 'rgba(0,0,0,.7)',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        padding: '6px 10px',
+        fontSize: '11px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        userSelect: 'none',
+        transition: 'background 0.15s',
+        zIndex: '18',
+        marginBottom: '8px'
+    });
+    closeListBtn.textContent = '✕';
+    closeListBtn.title = 'Close list view';
+    closeListBtn.addEventListener('mouseenter', () => {
+        closeListBtn.style.background = 'rgba(0,0,0,.9)';
+    });
+    closeListBtn.addEventListener('mouseleave', () => {
+        closeListBtn.style.background = 'rgba(0,0,0,.7)';
+    });
+    listContainer.appendChild(closeListBtn);
+
+    // Toggle list view
+    let isListViewOpen = false;
+    expandListBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!isListViewOpen) {
+            openListView();
+        } else {
+            closeListView();
+        }
+    });
+    closeListBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeListView();
+    });
+
+    async function openListView() {
+        isListViewOpen = true;
+        img.style.display = 'none';
+        overlayCanvas.style.display = 'none';
+        dragOverlay.style.display = 'none';
+        rotationButtonsContainer.style.display = 'none';
+        expandListBtn.style.display = 'none';
+        listContainer.style.display = 'flex';
+        
+        // Clear existing list items
+        const existingItems = listContainer.querySelectorAll('.vr-list-item');
+        existingItems.forEach(item => item.remove());
+        
+        // Get all visible camera markers
+        const visibleMarkers = markers.filter(m => m.cameraPos && m.parent && m.parent.visible);
+        
+        if (visibleMarkers.length === 0) {
+            const noItemsMsg = document.createElement('div');
+            noItemsMsg.textContent = 'No camera positions found';
+            noItemsMsg.style.padding = '20px';
+            noItemsMsg.style.textAlign = 'center';
+            noItemsMsg.style.color = '#666';
+            listContainer.appendChild(noItemsMsg);
+            return;
+        }
+        
+        // Show loading message
+        const loadingMsg = document.createElement('div');
+        loadingMsg.textContent = `Loading ${visibleMarkers.length} camera views...`;
+        loadingMsg.style.padding = '20px';
+        loadingMsg.style.textAlign = 'center';
+        loadingMsg.style.color = '#666';
+        listContainer.appendChild(loadingMsg);
+        
+        // Process each marker
+        for (let i = 0; i < visibleMarkers.length; i++) {
+            const marker = visibleMarkers[i];
+            const targetName = marker.name.toLowerCase();
+            
+            // Create list item
+            const listItem = document.createElement('div');
+            listItem.className = 'vr-list-item';
+            Object.assign(listItem.style, {
+                position: 'relative',
+                width: '100%',
+                marginBottom: '12px',
+                background: '#f5f5f5',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                border: '1px solid #ddd',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
+            });
+            
+            // Add hover effect
+            listItem.addEventListener('mouseenter', () => {
+                listItem.style.background = '#e8e8e8';
+                listItem.style.borderColor = '#999';
+                listItem.style.transform = 'scale(1.01)';
+            });
+            listItem.addEventListener('mouseleave', () => {
+                listItem.style.background = '#f5f5f5';
+                listItem.style.borderColor = '#ddd';
+                listItem.style.transform = 'scale(1)';
+            });
+            
+            // Item header with camera name
+            const itemHeader = document.createElement('div');
+            itemHeader.textContent = marker.name || `Camera ${i + 1}`;
+            Object.assign(itemHeader.style, {
+                padding: '6px 10px',
+                background: 'rgba(0,0,0,.05)',
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#333',
+                borderBottom: '1px solid #ddd'
+            });
+            listItem.appendChild(itemHeader);
+            
+            // Image container
+            const itemImageContainer = document.createElement('div');
+            Object.assign(itemImageContainer.style, {
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '2 / 1',
+                background: '#000'
+            });
+            
+            // 360 image
+            const itemImg = document.createElement('img');
+            Object.assign(itemImg.style, {
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                display: 'block'
+            });
+            itemImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666'%3ELoading...%3C/text%3E%3C/svg%3E";
+            itemImageContainer.appendChild(itemImg);
+            
+            // Collision overlay canvas
+            const itemOverlayCanvas = document.createElement('canvas');
+            Object.assign(itemOverlayCanvas.style, {
+                position: 'absolute',
+                inset: '0',
+                opacity: '0.45',
+                pointerEvents: 'none'
+            });
+            itemImageContainer.appendChild(itemOverlayCanvas);
+            
+            listItem.appendChild(itemImageContainer);
+            listContainer.appendChild(listItem);
+            
+            // Make item clickable to switch to that camera
+            listItem.addEventListener('click', async () => {
+                closeListView();
+                // Update to show this marker's view
+                await updateVRPanelForPoint(marker);
+            });
+            
+            // Load 360 image and render collision overlay
+            (async () => {
+                try {
+                    // Try to load 360 image
+                    const entry = await imageManager.findImageByName(targetName, 'medium').catch(() => null);
+                    
+                    if (entry) {
+                        itemImg.src = entry.image;
+                        
+                        // Wait for image to load before rendering overlay
+                        itemImg.onload = async () => {
+                            // Render collision overlay
+                            const overlayRenderResult = await render360SnapshotForCone(marker, markers, false, true);
+                            if (overlayRenderResult && overlayRenderResult.dataURL) {
+                                const overlayImg = new Image();
+                                overlayImg.onload = () => {
+                                    const ctx = itemOverlayCanvas.getContext('2d');
+                                    if (ctx) {
+                                        itemOverlayCanvas.width = itemImg.offsetWidth || itemImg.naturalWidth || 360;
+                                        itemOverlayCanvas.height = itemImg.offsetHeight || itemImg.naturalHeight || 180;
+                                        ctx.drawImage(overlayImg, 0, 0, itemOverlayCanvas.width, itemOverlayCanvas.height);
+                                    }
+                                };
+                                overlayImg.src = overlayRenderResult.dataURL;
+                            }
+                        };
+                    } else {
+                        // No 360 image, show collision render as main image
+                        const renderResult = await render360SnapshotForCone(marker, markers, false, false);
+                        if (renderResult && renderResult.dataURL) {
+                            itemImg.src = renderResult.dataURL;
+                        } else {
+                            itemImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23ff0000'%3ENo image available%3C/text%3E%3C/svg%3E";
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error loading image for ${marker.name}:`, error);
+                    itemImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100'%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23ff0000'%3EError loading%3C/text%3E%3C/svg%3E";
+                }
+            })();
+        }
+        
+        // Remove loading message
+        loadingMsg.remove();
+    }
+
+    function closeListView() {
+        isListViewOpen = false;
+        listContainer.style.display = 'none';
+        img.style.display = 'block';
+        expandListBtn.style.display = 'block';
+        rotationButtonsContainer.style.display = 'flex';
+        if (vrOverlayCanvas.style.display === 'block') {
+            overlayCanvas.style.display = 'block';
+        }
+        if (!dragOverlay.classList.contains('hidden')) {
+            dragOverlay.style.display = 'block';
+        }
+    }
 
     const flippedTag = document.createElement('div');
     flippedTag.id = 'vr-flipped-tag';
@@ -7003,334 +7270,6 @@ async function renderOverlayCanvas(cone) {
         }
     }
     
-    // Function to flatten and combine all meshes (except spheres) into one mesh
-    function flattenAndCombineMeshes() {
-        if (objects.length === 0) {
-            console.log("No objects to flatten");
-            return;
-        }
-        
-        console.log("Flattening and combining meshes...");
-        
-        // Update all matrix worlds
-        objects.forEach(obj => {
-            obj.updateMatrixWorld(true);
-        });
-        
-        const meshesToCombine = [];
-        const sphereObjects = [];
-        const combinedPositions = [];
-        const combinedNormals = [];
-        const combinedColors = [];
-        const combinedUvs = [];
-        const combinedIndices = [];
-        let vertexOffset = 0;
-        
-        // Helper to check if a mesh is a sphere
-        const isSphereMesh = (mesh, parentObj) => {
-            const meshName = mesh.name || "";
-            const parentName = mesh.parent?.name || "";
-            const objName = parentObj.name || "";
-            return meshName.toLowerCase().includes("sphere") || 
-                   parentName.toLowerCase().includes("sphere") || 
-                   objName.toLowerCase().includes("sphere");
-        };
-        
-        // Track which objects contain meshes to combine vs spheres
-        const objectsToRemove = [];
-        
-        // Collect all meshes and separate spheres
-        // We'll combine non-sphere meshes and keep sphere meshes in their original objects
-        objects.forEach(obj => {
-            const sphereMeshesInObj = [];
-            const nonSphereMeshesInObj = [];
-            
-            obj.traverse((child) => {
-                if (child.isMesh && child.geometry) {
-                    if (isSphereMesh(child, obj)) {
-                        sphereMeshesInObj.push(child);
-                    } else {
-                        nonSphereMeshesInObj.push(child);
-                    }
-                }
-            });
-            
-            // If object has non-sphere meshes, add them to combine list and mark object for removal
-            if (nonSphereMeshesInObj.length > 0) {
-                nonSphereMeshesInObj.forEach(mesh => {
-                    meshesToCombine.push(mesh);
-                });
-                objectsToRemove.push(obj);
-                
-                // If object also has sphere meshes, create a new group for just the spheres
-                if (sphereMeshesInObj.length > 0) {
-                    const sphereGroup = new THREE.Group();
-                    sphereGroup.name = obj.name ? `${obj.name}_Spheres` : "SphereGroup";
-                    // Copy transform from original object
-                    sphereGroup.position.copy(obj.position);
-                    sphereGroup.rotation.copy(obj.rotation);
-                    sphereGroup.scale.copy(obj.scale);
-                    
-                    // Add sphere meshes to the group (they keep their relative transforms)
-                    sphereMeshesInObj.forEach(mesh => {
-                        const meshParent = mesh.parent;
-                        mesh.parent.remove(mesh);
-                        sphereGroup.add(mesh);
-                    });
-                    
-                    sphereObjects.push(sphereGroup);
-                }
-            } else if (sphereMeshesInObj.length > 0) {
-                // Object only contains spheres, keep it separate
-                sphereObjects.push(obj);
-            }
-        });
-        
-        console.log(`Found ${meshesToCombine.length} meshes to combine, ${sphereObjects.length} sphere objects to keep separate`);
-        console.log(`Will remove ${objectsToRemove.length} objects from scene`);
-        
-        // Debug: log mesh names to see what we're working with
-        if (meshesToCombine.length === 0) {
-            console.warn("No meshes to combine! All meshes might be spheres or objects are empty.");
-            console.log("Debugging: Listing all meshes in objects:");
-            objects.forEach((obj, idx) => {
-                console.log(`Object ${idx}: ${obj.name || 'unnamed'}`);
-                obj.traverse((child) => {
-                    if (child.isMesh && child.geometry) {
-                        const meshName = child.name || "unnamed";
-                        const parentName = child.parent?.name || "unnamed parent";
-                        const objName = obj.name || "unnamed obj";
-                        const isSphere = isSphereMesh(child, obj);
-                        console.log(`  - Mesh: ${meshName}, parent: ${parentName}, obj: ${objName}, isSphere: ${isSphere}`);
-                    }
-                });
-            });
-            return;
-        }
-        
-        // Process each mesh to combine
-        meshesToCombine.forEach(mesh => {
-        const geometry = mesh.geometry;
-            if (!geometry.attributes.position) return;
-            
-            // Ensure matrixWorld is up to date
-            mesh.updateMatrixWorld(true);
-            const matrixWorld = mesh.matrixWorld.clone();
-            const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrixWorld);
-            
-            const positions = geometry.attributes.position;
-            const normals = geometry.attributes.normal;
-            const colors = geometry.attributes.color;
-            const uvs = geometry.attributes.uv;
-        const hasIndex = geometry.index !== null;
-        
-        if (hasIndex) {
-            const index = geometry.index;
-                const vertexCount = positions.count;
-                const indexCount = index.count;
-                
-                // Transform vertices to world space
-                for (let i = 0; i < vertexCount; i++) {
-                    const posIdx = i * 3;
-                    const v = new THREE.Vector3(
-                        positions.array[posIdx],
-                        positions.array[posIdx + 1],
-                        positions.array[posIdx + 2]
-                    );
-                    v.applyMatrix4(matrixWorld);
-                    combinedPositions.push(v.x, v.y, v.z);
-                    
-                    // Transform normals
-                    if (normals) {
-                        const n = new THREE.Vector3(
-                            normals.array[posIdx],
-                            normals.array[posIdx + 1],
-                            normals.array[posIdx + 2]
-                        );
-                        n.applyMatrix3(normalMatrix).normalize();
-                        combinedNormals.push(n.x, n.y, n.z);
-                    } else {
-                        combinedNormals.push(0, 1, 0); // Default normal
-                    }
-                    
-                    // Copy colors if available
-                    if (colors) {
-                        const colorIdx = i * 3;
-                        combinedColors.push(
-                            colors.array[colorIdx],
-                            colors.array[colorIdx + 1],
-                            colors.array[colorIdx + 2]
-                        );
-                    }
-                    
-                    // Copy UVs if available
-                    if (uvs) {
-                        const uvIdx = i * 2;
-                        combinedUvs.push(
-                            uvs.array[uvIdx],
-                            uvs.array[uvIdx + 1]
-                        );
-                    }
-                }
-                
-                // Copy indices with vertex offset
-                for (let i = 0; i < indexCount; i++) {
-                    const originalIndex = index.getX(i);
-                    combinedIndices.push(vertexOffset + originalIndex);
-                }
-                
-                vertexOffset += vertexCount;
-            } else {
-                // Non-indexed geometry
-                const vertexCount = positions.count;
-                
-                for (let i = 0; i < vertexCount; i++) {
-                    const posIdx = i * 3;
-                    const v = new THREE.Vector3(
-                        positions.array[posIdx],
-                        positions.array[posIdx + 1],
-                        positions.array[posIdx + 2]
-                    );
-                    v.applyMatrix4(matrixWorld);
-                    combinedPositions.push(v.x, v.y, v.z);
-                    
-                    if (normals) {
-                        const n = new THREE.Vector3(
-                            normals.array[posIdx],
-                            normals.array[posIdx + 1],
-                            normals.array[posIdx + 2]
-                        );
-                        n.applyMatrix3(normalMatrix).normalize();
-                        combinedNormals.push(n.x, n.y, n.z);
-                    } else {
-                        combinedNormals.push(0, 1, 0);
-                    }
-                    
-                    if (colors) {
-                        const colorIdx = i * 3;
-                        combinedColors.push(
-                            colors.array[colorIdx],
-                            colors.array[colorIdx + 1],
-                            colors.array[colorIdx + 2]
-                        );
-                    }
-                    
-                    if (uvs) {
-                        const uvIdx = i * 2;
-                        combinedUvs.push(
-                            uvs.array[uvIdx],
-                            uvs.array[uvIdx + 1]
-                        );
-                    }
-                }
-                
-                vertexOffset += vertexCount;
-            }
-        });
-        
-        // Create combined geometry
-        const combinedGeometry = new THREE.BufferGeometry();
-        combinedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(combinedPositions, 3));
-        combinedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(combinedNormals, 3));
-        
-        if (combinedColors.length > 0) {
-            combinedGeometry.setAttribute('color', new THREE.Float32BufferAttribute(combinedColors, 3));
-        }
-        
-        if (combinedUvs.length > 0) {
-            combinedGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(combinedUvs, 2));
-        }
-        
-        // Set indices if we have indexed geometry
-        if (combinedIndices.length > 0) {
-            combinedGeometry.setIndex(combinedIndices);
-        }
-        
-        // Compute bounding box and sphere
-        combinedGeometry.computeBoundingBox();
-        combinedGeometry.computeBoundingSphere();
-        
-        // Create a single mesh with the combined geometry
-        // Use the first mesh's material as a default, or create a basic material
-        let combinedMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        if (meshesToCombine.length > 0 && meshesToCombine[0].material) {
-            const firstMaterial = meshesToCombine[0].material;
-            if (Array.isArray(firstMaterial)) {
-                combinedMaterial = firstMaterial[0].clone();
-        } else {
-                combinedMaterial = firstMaterial.clone();
-            }
-        }
-        
-        const combinedMesh = new THREE.Mesh(combinedGeometry, combinedMaterial);
-        combinedMesh.name = "CombinedMesh";
-        combinedMesh.position.set(0, 0, 0);
-        combinedMesh.rotation.set(0, 0, 0);
-        combinedMesh.scale.set(1, 1, 1);
-        
-        // Helper function to dispose of geometry and materials
-        const disposeObject = (obj) => {
-            obj.traverse((child) => {
-                if (child.isMesh) {
-                    const mesh = child;
-                    if (mesh.geometry) {
-                        mesh.geometry.dispose();
-                    }
-                    if (mesh.material) {
-                        if (Array.isArray(mesh.material)) {
-                            mesh.material.forEach(mat => mat.dispose());
-                        } else {
-                            mesh.material.dispose();
-                        }
-                    }
-                }
-            });
-        };
-        
-        // Remove and dispose of old objects that are being combined
-        objectsToRemove.forEach(obj => {
-            disposeObject(obj);
-            scene.remove(obj);
-        });
-        
-        // Create new objects array
-        const newObjects = [];
-        
-        // Add combined mesh
-        if (combinedPositions.length > 0) {
-            const combinedGroup = new THREE.Group();
-            combinedGroup.name = "CombinedMeshes";
-            combinedGroup.add(combinedMesh);
-            scene.add(combinedGroup);
-            newObjects.push(combinedGroup);
-            console.log(`Created combined mesh with ${combinedPositions.length / 3} vertices, ${combinedIndices.length > 0 ? combinedIndices.length / 3 : combinedPositions.length / 9} faces`);
-        } else {
-            console.error("No vertices in combined geometry! Something went wrong.");
-            return;
-        }
-        
-        // Add sphere objects back (they were already in the scene, just re-add to objects array)
-        sphereObjects.forEach(obj => {
-            // Make sure they're still in the scene
-            if (!scene.children.includes(obj)) {
-                scene.add(obj);
-            }
-            newObjects.push(obj);
-        });
-        
-        // Update objects array - completely replace it
-        objects.length = 0;
-        objects.push(...newObjects);
-        
-        console.log(`Flattened and combined ${meshesToCombine.length} meshes into 1 mesh, kept ${sphereObjects.length} sphere objects separate`);
-        console.log(`New objects array has ${objects.length} objects`);
-        
-        // Force a render update
-        if (renderer) {
-            renderer.render(scene, camera);
-        }
-    }
-
 async function render360SnapshotForCone(cone, allCones = markers, showNormals = false, skipPreview = false) {
     // 1) backup renderer state
     const origSize       = renderer.getSize(new THREE.Vector2());
@@ -8763,13 +8702,6 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
         flipSelectedNormalsBtn.style.display = selectedReversedFaceIds.size > 0 ? "block" : "none";
         flipSelectedNormalsBtn.addEventListener("click", () => {
             flipSelectedNormals();
-        });
-    }
-    
-    const flattenCombineMeshesBtn = document.getElementById("flatten-combine-meshes");
-    if (flattenCombineMeshesBtn) {
-        flattenCombineMeshesBtn.addEventListener("click", () => {
-            flattenAndCombineMeshes();
         });
     }
 
