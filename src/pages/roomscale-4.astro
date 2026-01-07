@@ -340,8 +340,8 @@ import ObjectList from "../components/object-list.tsx";
 
             
 
-            <div class="flex flex-col pointer-events-auto" style="height: calc(100vh - 20px); max-height: calc(100vh - 20px); overflow-y: auto; position: relative;">
-                <div class="right-0 max-w-2xl text-xs" id="gizmo" style="flex-shrink: 0;">
+            <div class="flex flex-col pointer-events-auto" style="height: calc(100vh - 20px); max-height: calc(100vh - 20px); min-height: calc(100vh - 20px); overflow-y: auto; position: relative;">
+                <div class="right-0 max-w-2xl text-xs" id="gizmo" style="flex-shrink: 0; min-height: 180px;">
                     <div class="p-2">
                         <div id="rendering-mode" class="mb-2">
                             <div class="flex bg-gray-100 rounded-lg p-1">
@@ -353,9 +353,9 @@ import ObjectList from "../components/object-list.tsx";
                                 </button>
                             </div>
                         </div>
-                        <div class="h-36 w-44" id="orthoView"></div>
+                        <div class="h-36 w-44" id="orthoView" style="flex-shrink: 0;"></div>
                     </div>
-                    <button id="open-align-popup"> Align Points </button>
+                    <button id="open-align-popup" style="flex-shrink: 0;"> Align Points </button>
                 </div>
 
                 <div
@@ -922,6 +922,9 @@ import ObjectList from "../components/object-list.tsx";
                         
                         // Wait for image to load before rendering overlay
                         itemImg.onload = async () => {
+                            // Wait for layout to settle
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                            
                             // Render collision overlay
                             const overlayRenderResult = await render360SnapshotForCone(marker, markers, false, true);
                             if (overlayRenderResult && overlayRenderResult.dataURL) {
@@ -929,9 +932,35 @@ import ObjectList from "../components/object-list.tsx";
                                 overlayImg.onload = () => {
                                     const ctx = itemOverlayCanvas.getContext('2d');
                                     if (ctx) {
-                                        itemOverlayCanvas.width = itemImg.offsetWidth || itemImg.naturalWidth || 360;
-                                        itemOverlayCanvas.height = itemImg.offsetHeight || itemImg.naturalHeight || 180;
-                                        ctx.drawImage(overlayImg, 0, 0, itemOverlayCanvas.width, itemOverlayCanvas.height);
+                                        // Get the actual container dimensions
+                                        const containerWidth = itemImageContainer.offsetWidth;
+                                        const containerHeight = itemImageContainer.offsetHeight;
+                                        
+                                        // Calculate the displayed image size accounting for object-fit: contain
+                                        const imgAspect = itemImg.naturalWidth / itemImg.naturalHeight;
+                                        const containerAspect = containerWidth / containerHeight;
+                                        
+                                        let displayWidth, displayHeight, offsetX = 0, offsetY = 0;
+                                        
+                                        if (imgAspect > containerAspect) {
+                                            // Image is wider - fit to width
+                                            displayWidth = containerWidth;
+                                            displayHeight = containerWidth / imgAspect;
+                                            offsetY = (containerHeight - displayHeight) / 2;
+                                        } else {
+                                            // Image is taller - fit to height
+                                            displayHeight = containerHeight;
+                                            displayWidth = containerHeight * imgAspect;
+                                            offsetX = (containerWidth - displayWidth) / 2;
+                                        }
+                                        
+                                        // Set canvas to container size
+                                        itemOverlayCanvas.width = containerWidth;
+                                        itemOverlayCanvas.height = containerHeight;
+                                        
+                                        // Clear and draw overlay at correct position and size
+                                        ctx.clearRect(0, 0, containerWidth, containerHeight);
+                                        ctx.drawImage(overlayImg, offsetX, offsetY, displayWidth, displayHeight);
                                     }
                                 };
                                 overlayImg.src = overlayRenderResult.dataURL;
@@ -6750,10 +6779,24 @@ async function renderOverlayCanvas(cone) {
         
         console.log(`Starting to check ${markers.length} cameras for reversed faces using 8K render comparison...`);
         
+        // Helper function to check if camera is an anchor point
+        const isAnchorPoint = (cameraName) => {
+            if (!cameraName) return false;
+            // Normalize: remove all non-alphanumeric chars and convert to lowercase
+            const normalized = cameraName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return normalized.includes('anchorpoint');
+        };
+        
         // Iterate through all visible camera markers
         for (let i = 0; i < markers.length; i++) {
             const cone = markers[i];
             if (cone.cameraPos && cone.parent && cone.parent.visible) {
+                // Skip anchor point cameras
+                if (isAnchorPoint(cone.name)) {
+                    console.log(`Skipping camera ${i + 1}/${markers.length} (${cone.name}) - anchor point`);
+                    continue;
+                }
+                
                 console.log(`Processing camera ${i + 1}/${markers.length} (${cone.name})...`);
                 
                 // Yield control to allow viewport updates between cameras
@@ -6960,7 +7003,7 @@ async function renderOverlayCanvas(cone) {
                         if (metrics.aspectRatio > maxAspectRatio) continue;
                         if (metrics.compactness < minCompactness) continue;
                         if (metrics.perimeterToArea > maxPerimeterToArea) continue;
-                        
+                
                         const x = xS * sampleRate;
                         if (x >= width) continue;
                         const idx = (y * width + x) * 4;
@@ -6975,7 +7018,7 @@ async function renderOverlayCanvas(cone) {
                         let faceId = idRender.colorToFaceIdMap.get(exactColorKey);
                         let matchType = 'exact';
                         let matchDistance = 0;
-                        
+                
                             if (!faceId) {
                             const tolerance = 4;
                             let bestMatch = null;
@@ -7001,7 +7044,7 @@ async function renderOverlayCanvas(cone) {
                                         Math.abs(idB - entry.b) <= tolerance) {
                                         bestDistance = distance;
                                         bestMatch = entry.faceId;
-                                    }
+                        }
                                 }
                             }
                             
@@ -7035,7 +7078,7 @@ async function renderOverlayCanvas(cone) {
                         } else {
                             if (redFaces.size < 3 && x % 100 === 0 && y % 100 === 0) {
                                 console.warn(`  Red pixel at (${x}, ${y}) but no matching face ID. ID color: rgb(${idR}, ${idG}, ${idB}), brightness: ${idBrightness.toFixed(1)}`);
-                            }
+                }
                         }
                     }
                     
@@ -7053,7 +7096,7 @@ async function renderOverlayCanvas(cone) {
                 });
                 
                 console.log(`  Camera ${i + 1}/${markers.length} (${cone.name}): Found ${redFaces.size} reversed faces`);
-                
+        
                 // Try to identify which meshes these faces belong to
                 let faceIdToMeshInfo = new Map();
                 if (redFaces.size > 0) {
@@ -7975,6 +8018,20 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
     async function selectReversedFacesForCamera(cone) {
         if (!cone || !cone.cameraPos || !cone.parent || !cone.parent.visible) {
             console.log("No valid camera selected.");
+            return;
+        }
+        
+        // Helper function to check if camera is an anchor point
+        const isAnchorPoint = (cameraName) => {
+            if (!cameraName) return false;
+            // Normalize: remove all non-alphanumeric chars and convert to lowercase
+            const normalized = cameraName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return normalized.includes('anchorpoint');
+        };
+        
+        // Skip anchor point cameras
+        if (isAnchorPoint(cone.name)) {
+            console.log(`Skipping camera (${cone.name}) - anchor point`);
             return;
         }
         
