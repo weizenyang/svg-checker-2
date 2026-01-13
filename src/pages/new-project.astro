@@ -1,0 +1,1284 @@
+---
+// Floorplan Processor - New Project Dialog (Astro)
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate JSON Files - Floorplan Processor</title>
+    <style>
+        /* Global Styles */
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --secondary-color: #6c757d;
+            --secondary-hover: #545b62;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --error-color: #dc3545;
+            --border-color: #dee2e6;
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --text-secondary: #6c757d;
+            --white: #ffffff;
+            --radius: 4px;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1e1e1e;
+                --white: #2d2d2d;
+                --text-color: #e0e0e0;
+                --text-secondary: #a0a0a0;
+                --border-color: #404040;
+                --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .dialog {
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: var(--shadow-lg);
+            overflow: visible;
+            margin-bottom: 20px;
+        }
+
+        /* Header */
+        header {
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            color: white;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* Main Content */
+        main {
+            padding: 24px 32px;
+            padding-bottom: 100px; /* Space for fixed footer */
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            margin-bottom: 16px;
+        }
+
+        .section-header h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .section-content {
+            padding: 16px;
+            background: var(--bg-color);
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            font-size: 12px;
+            color: var(--text-color);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 6px 10px;
+            font-size: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background-color: var(--white);
+            color: var(--text-color);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .form-control[readonly] {
+            background-color: var(--bg-color);
+            cursor: not-allowed;
+        }
+
+        /* Input Groups */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group .form-control {
+            flex: 1;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: var(--secondary-hover);
+        }
+
+        /* Radio and Checkbox */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-label,
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .radio-label input[type="radio"],
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Status Messages */
+        .status-message {
+            margin-top: 4px;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .status-message.success {
+            color: var(--success-color);
+        }
+
+        .status-message.warning {
+            color: var(--warning-color);
+        }
+
+        .status-message.error {
+            color: var(--error-color);
+        }
+
+        .status-message.info {
+            color: var(--text-secondary);
+        }
+
+        /* Preview Path */
+        .preview-path {
+            padding: 6px 10px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+
+        /* Info Box */
+        .info-box {
+            padding: 12px;
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: var(--radius);
+            font-size: 11px;
+            color: #004085;
+            margin-bottom: 12px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .info-box {
+                background-color: #1a3a52;
+                border-color: #2a4a62;
+                color: #b3d9ff;
+            }
+        }
+
+        .info-box p {
+            margin-bottom: 8px;
+        }
+
+        .info-box ul {
+            margin: 8px 0 8px 20px;
+        }
+
+        .info-box li {
+            margin: 4px 0;
+        }
+
+        .format-info {
+            margin: 12px 0;
+        }
+
+        .format-info:first-of-type {
+            margin-top: 8px;
+        }
+
+        .format-info strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* Help Text */
+        .help-text {
+            display: block;
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Tables */
+        .preview-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            background-color: var(--bg-color);
+            z-index: 1;
+        }
+
+        th {
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-color);
+        }
+
+        td {
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tbody tr:hover {
+            background-color: var(--bg-color);
+        }
+
+        .no-data {
+            text-align: center;
+            color: var(--text-secondary);
+            font-style: italic;
+            padding: 24px !important;
+        }
+
+        /* Footer */
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px 32px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--white);
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            background-color: #333;
+            color: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s;
+            pointer-events: none;
+            max-width: 400px;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .toast.success {
+            background-color: var(--success-color);
+        }
+
+        .toast.error {
+            background-color: var(--error-color);
+        }
+
+        .toast.warning {
+            background-color: var(--warning-color);
+            color: #000;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            header,
+            main,
+            footer {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .section-content {
+                padding: 12px;
+            }
+
+            .button-group {
+                flex-direction: column-reverse;
+            }
+
+            .button-group .btn {
+                width: 100%;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .input-group .btn {
+                width: 100%;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Loading State */
+        .loading {
+            position: relative;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid var(--primary-color);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="dialog">
+            <header>
+                <h1>Generate JSON Files</h1>
+            </header>
+
+            <main>
+                <!-- Data Source Section -->
+                <section class="section">
+                    <div class="section-header">
+                        <h2>Data Source</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="dataSource" value="csv" checked>
+                                <span>Create from CSV file</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="dataSource" value="json">
+                                <span>Import existing JSON files</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CSV File Selection Section -->
+                <section class="section" id="csvSection">
+                    <div class="section-header">
+                        <h2>Unit Data CSV File</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="form-group">
+                            <div class="input-group">
+                                <input type="text" id="csvFilePath" class="form-control" readonly placeholder="No file selected">
+                                <button type="button" class="btn btn-secondary" id="browseCsvBtn">Browse...</button>
+                            </div>
+                            <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                        </div>
+
+                        <div class="info-box">
+                            <p><strong>Select a CSV file containing unit data with one of the following formats:</strong></p>
+                            
+                            <div class="format-info">
+                                <strong>Format 1 (Simple):</strong> Unit_ID, Unit_Type, MIRROR, Rotation (optional)
+                                <ul>
+                                    <li>Unit_ID (e.g., "B1-01-02", "bx-yyzz")</li>
+                                    <li>Unit_Type (e.g., "a_s_3b_b1")</li>
+                                    <li>MIRROR ("MIRROR", "TRUE", "FLIPPED" for flipped units, anything else for normal)</li>
+                                    <li>Rotation (rotation angle in degrees, optional, defaults to 0)</li>
+                                </ul>
+                            </div>
+
+                            <div class="format-info">
+                                <strong>Format 2 (Original):</strong> Unit Name, Unit Type Dev Final, Mirrored, Rotation (optional)
+                                <ul>
+                                    <li>Unit Name (e.g., "B1-01-02", "bx-yyzz", or "FahidBeachResidences-B1-01-02")</li>
+                                    <li>Unit Type Dev Final (e.g., "a_s_3b_b1")</li>
+                                    <li>Mirrored ("true", "mirror", "flipped" for flipped units, "false", "normal" or anything else for normal)</li>
+                                    <li>Rotation (rotation angle in degrees, optional, defaults to 0)</li>
+                                </ul>
+                            </div>
+
+                            <div class="format-info">
+                                <strong>Format 3 (New):</strong> UnitNumber, Mirror, Code
+                                <ul>
+                                    <li>UnitNumber (e.g., "TheBeachHouse-B6-04-03", "bx-yyzz")</li>
+                                    <li>Mirror ("MIRROR" for flipped units, "NORMAL" for normal units)</li>
+                                    <li>Code (e.g., "A_S_3BF_A1M" - will be sanitized to remove BF from 3rd segment)</li>
+                                </ul>
+                            </div>
+
+                            <div class="format-info">
+                                <strong>Format 4 (Unreal):</strong> UnitID, FormattedOutput, Rotation_Yaw
+                                <ul>
+                                    <li>UnitID (e.g., "B1-01-02", "bx-yyzz")</li>
+                                    <li>FormattedOutput (e.g., "a_s_3b_BF_s1_0" where "BF" indicates mirrored)</li>
+                                    <li>Rotation_Yaw (rotation angle, will be converted to closest cardinal: 0, 90, 180, 270)</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="detectBalconies" checked>
+                                <span>Detect balconies</span>
+                                <span class="help-text">Automatically detect and create balcony variants</span>
+                            </label>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rotationOffset">Rotation Offset (degrees):</label>
+                            <input type="number" id="rotationOffset" class="form-control" value="0" min="-360" max="360">
+                            <span class="help-text">Global offset applied to all rotation values before cardinal conversion (for Unreal format)</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- JSON Files Selection Section -->
+                <section class="section" id="jsonSection" style="display: none;">
+                    <div class="section-header">
+                        <h2>Import JSON Files</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="info-box">
+                            <p>Select existing unit-reference.json and reference.json files to import:</p>
+                            <ul>
+                                <li><strong>unit-reference.json:</strong> Contains unit definitions with names, types, flip settings, and rotations</li>
+                                <li><strong>reference.json:</strong> Contains type definitions with parent relationships and transformations</li>
+                            </ul>
+                            <p>These files will be copied to your new project directory.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Unit Reference File:</label>
+                            <div class="input-group">
+                                <input type="text" id="unitRefFilePath" class="form-control" readonly placeholder="No file selected">
+                                <button type="button" class="btn btn-secondary" id="browseUnitRefBtn">Browse...</button>
+                            </div>
+                            <input type="file" id="unitRefFileInput" accept=".json" style="display: none;">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Reference File:</label>
+                            <div class="input-group">
+                                <input type="text" id="refFilePath" class="form-control" readonly placeholder="No file selected">
+                                <button type="button" class="btn btn-secondary" id="browseRefBtn">Browse...</button>
+                            </div>
+                            <input type="file" id="refFileInput" accept=".json" style="display: none;">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Preview Section -->
+                <section class="section preview-section" id="csvPreviewSection">
+                    <div class="section-header">
+                        <h2>CSV Preview</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="table-container">
+                            <table id="csvPreviewTable">
+                                <thead>
+                                    <tr>
+                                        <th>Unit Name</th>
+                                        <th>Unit Type</th>
+                                        <th>Mirrored</th>
+                                        <th>Rotation</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="csvPreviewBody">
+                                    <tr>
+                                        <td colspan="4" class="no-data">No CSV file selected</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="status-message" id="csvStatus">No CSV file selected</div>
+                    </div>
+                </section>
+
+                <section class="section preview-section" id="jsonPreviewSection" style="display: none;">
+                    <div class="section-header">
+                        <h2>JSON Preview</h2>
+                    </div>
+                    <div class="section-content">
+                        <div class="table-container">
+                            <table id="jsonPreviewTable">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Units/Types</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jsonPreviewBody">
+                                    <tr>
+                                        <td colspan="3" class="no-data">No JSON files selected</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="status-message" id="jsonStatus">No JSON files selected</div>
+                    </div>
+                </section>
+            </main>
+
+            <footer>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="createBtn" disabled>Generate JSON Files</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Global state
+        const state = {
+            dataSource: 'csv',
+            csvFile: null,
+            csvData: [],
+            csvFormat: null,
+            unitRefFile: null,
+            refFile: null,
+            jsonData: {},
+            detectBalconies: true,
+            rotationOffset: 0
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeEventListeners();
+        });
+
+        function initializeEventListeners() {
+            // Data source radio buttons
+            document.querySelectorAll('input[name="dataSource"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    state.dataSource = e.target.value;
+                    toggleDataSourceSections();
+                    updateCreateButtonState();
+                });
+            });
+
+            // CSV file selection
+            document.getElementById('browseCsvBtn').addEventListener('click', () => {
+                document.getElementById('csvFileInput').click();
+            });
+            document.getElementById('csvFileInput').addEventListener('change', handleCsvFileSelect);
+
+            // JSON file selection
+            document.getElementById('browseUnitRefBtn').addEventListener('click', () => {
+                document.getElementById('unitRefFileInput').click();
+            });
+            document.getElementById('unitRefFileInput').addEventListener('change', handleUnitRefFileSelect);
+
+            document.getElementById('browseRefBtn').addEventListener('click', () => {
+                document.getElementById('refFileInput').click();
+            });
+            document.getElementById('refFileInput').addEventListener('change', handleRefFileSelect);
+
+            // Checkboxes and inputs
+            document.getElementById('detectBalconies').addEventListener('change', (e) => {
+                state.detectBalconies = e.target.checked;
+            });
+
+            document.getElementById('rotationOffset').addEventListener('input', (e) => {
+                state.rotationOffset = parseFloat(e.target.value) || 0;
+            });
+
+            // Action buttons
+            document.getElementById('cancelBtn').addEventListener('click', handleCancel);
+            document.getElementById('createBtn').addEventListener('click', handleGenerate);
+        }
+
+        function toggleDataSourceSections() {
+            const csvSection = document.getElementById('csvSection');
+            const jsonSection = document.getElementById('jsonSection');
+            const csvPreviewSection = document.getElementById('csvPreviewSection');
+            const jsonPreviewSection = document.getElementById('jsonPreviewSection');
+
+            if (state.dataSource === 'csv') {
+                csvSection.style.display = 'block';
+                jsonSection.style.display = 'none';
+                csvPreviewSection.style.display = 'block';
+                jsonPreviewSection.style.display = 'none';
+            } else {
+                csvSection.style.display = 'none';
+                jsonSection.style.display = 'block';
+                csvPreviewSection.style.display = 'none';
+                jsonPreviewSection.style.display = 'block';
+            }
+        }
+
+        function handleCsvFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            state.csvFile = file;
+            document.getElementById('csvFilePath').value = file.name;
+            
+            loadCsvPreview(file);
+        }
+
+        function handleUnitRefFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            state.unitRefFile = file;
+            document.getElementById('unitRefFilePath').value = file.name;
+            
+            loadJsonPreview();
+        }
+
+        function handleRefFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            state.refFile = file;
+            document.getElementById('refFilePath').value = file.name;
+            
+            loadJsonPreview();
+        }
+
+        async function loadCsvPreview(file) {
+            try {
+                const text = await file.text();
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                if (lines.length === 0) {
+                    showCsvStatus('CSV file is empty', 'error');
+                    return;
+                }
+                
+                // Parse CSV (simple implementation)
+                const headers = parseCSVLine(lines[0]);
+                const rows = lines.slice(1).map(line => {
+                    const values = parseCSVLine(line);
+                    const row = {};
+                    headers.forEach((header, i) => {
+                        row[header] = values[i] || '';
+                    });
+                    return row;
+                });
+                
+                // Detect format
+                const format = detectCsvFormat(headers);
+                if (!format) {
+                    showCsvStatus('CSV format not recognized. Please check the format requirements.', 'error');
+                    return;
+                }
+                
+                state.csvFormat = format;
+                state.csvData = rows;
+                
+                // Display preview
+                displayCsvPreview(rows, format);
+                
+                showCsvStatus(`Loaded ${rows.length} units successfully - Format: ${format}`, 'success');
+                updateCreateButtonState();
+                
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                showCsvStatus(`Error loading CSV: ${error.message}`, 'error');
+            }
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current.trim());
+            return result;
+        }
+
+        function detectCsvFormat(headers) {
+            const simpleFormat = ['Unit_ID', 'Unit_Type', 'MIRROR'];
+            const originalFormat = ['Unit Name', 'Unit Type Dev Final', 'Mirrored'];
+            const newFormat = ['UnitNumber', 'Mirror', 'Code'];
+            const unrealFormat = ['UnitID', 'FormattedOutput', 'Rotation_Yaw'];
+            
+            if (simpleFormat.every(col => headers.includes(col))) return 'simple';
+            if (unrealFormat.every(col => headers.includes(col))) return 'unreal';
+            if (newFormat.every(col => headers.includes(col))) return 'new';
+            if (originalFormat.every(col => headers.includes(col))) return 'original';
+            
+            return null;
+        }
+
+        function displayCsvPreview(rows, format) {
+            const tbody = document.getElementById('csvPreviewBody');
+            tbody.innerHTML = '';
+            
+            const maxRows = Math.min(rows.length, 100);
+            
+            for (let i = 0; i < maxRows; i++) {
+                const row = rows[i];
+                const tr = document.createElement('tr');
+                
+                let unitName, unitType, mirrored, rotation;
+                
+                try {
+                    switch (format) {
+                        case 'simple':
+                            unitName = normaliseName(row['Unit_ID'] || '');
+                            unitType = parseUnitTypeBase(row['Unit_Type'] || '');
+                            mirrored = ['MIRROR', 'TRUE', 'FLIPPED'].includes((row['MIRROR'] || '').toUpperCase()) ? 'true' : 'false';
+                            rotation = row['Rotation'] || '0';
+                            break;
+                            
+                        case 'unreal':
+                            unitName = normaliseName(row['UnitID'] || '');
+                            const [sanitized, isMirrored] = parseFormattedOutput(row['FormattedOutput'] || '');
+                            unitType = parseUnitTypeBase(sanitized);
+                            mirrored = isMirrored ? 'true' : 'false';
+                            rotation = row['Rotation_Yaw'] || '0';
+                            break;
+                            
+                        case 'new':
+                            unitName = normaliseName(row['UnitNumber'] || '');
+                            unitType = parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
+                            mirrored = (row['Mirror'] || '').toUpperCase() === 'MIRROR' ? 'true' : 'false';
+                            rotation = '0';
+                            break;
+                            
+                        default: // original
+                            unitName = normaliseName(row['Unit Name'] || '');
+                            unitType = parseUnitTypeBase(row['Unit Type Dev Final'] || '');
+                            mirrored = ['true', 'mirror', 'flipped'].includes((row['Mirrored'] || '').toLowerCase()) ? 'true' : 'false';
+                            rotation = row['Rotation'] || '0';
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${unitName}</td>
+                        <td>${unitType}</td>
+                        <td>${mirrored}</td>
+                        <td>${rotation}</td>
+                    `;
+                } catch (error) {
+                    tr.innerHTML = `<td colspan="4" class="error">Error parsing row: ${error.message}</td>`;
+                }
+                
+                tbody.appendChild(tr);
+            }
+            
+            if (rows.length > 100) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="4" class="no-data">... and ${rows.length - 100} more rows</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        async function loadJsonPreview() {
+            const tbody = document.getElementById('jsonPreviewBody');
+            tbody.innerHTML = '';
+            
+            try {
+                let unitCount = 0;
+                let typeCount = 0;
+                
+                // Load unit reference file
+                if (state.unitRefFile) {
+                    const text = await state.unitRefFile.text();
+                    const data = JSON.parse(text);
+                    state.jsonData.unit_reference = data;
+                    unitCount = (data.units || []).length;
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>unit-reference.json</td>
+                        <td>${unitCount} units</td>
+                        <td class="success">✅ Loaded</td>
+                    `;
+                    tbody.appendChild(tr);
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>unit-reference.json</td>
+                        <td>0 units</td>
+                        <td class="error">❌ Not selected</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+                
+                // Load reference file
+                if (state.refFile) {
+                    const text = await state.refFile.text();
+                    const data = JSON.parse(text);
+                    state.jsonData.reference = data;
+                    typeCount = (data.types || []).length;
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>reference.json</td>
+                        <td>${typeCount} types</td>
+                        <td class="success">✅ Loaded</td>
+                    `;
+                    tbody.appendChild(tr);
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>reference.json</td>
+                        <td>0 types</td>
+                        <td class="error">❌ Not selected</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+                
+                if (state.unitRefFile && state.refFile) {
+                    showJsonStatus(`Loaded ${unitCount} units and ${typeCount} types successfully`, 'success');
+                } else {
+                    showJsonStatus('Please select both unit-reference.json and reference.json files', 'warning');
+                }
+                
+                updateCreateButtonState();
+                
+            } catch (error) {
+                console.error('Error loading JSON:', error);
+                showJsonStatus(`Error loading JSON: ${error.message}`, 'error');
+            }
+        }
+
+        // Utility functions (simplified versions of Python logic)
+
+        function normaliseName(raw) {
+            // Three-part pattern: building-floor-unit
+            let m = raw.match(/\b([A-Za-z0-9]+)[-_]([A-Za-z0-9]+)[-_](\d{2})\b/);
+            if (m) {
+                const [, building, floorRaw, unit] = m;
+                const floor = /^\d+$/.test(floorRaw) ? floorRaw.padStart(2, '0') : floorRaw.toLowerCase();
+                return `${building.toLowerCase()}-${floor}-${unit}`;
+            }
+            
+            // Two-part with combined floor+unit
+            m = raw.match(/\b([A-Za-z0-9]+)[-_](\d{3,4})\b/);
+            if (m) {
+                const [, building, floorunit] = m;
+                let floor, unit;
+                if (floorunit.length === 3) {
+                    floor = floorunit[0];
+                    unit = floorunit.slice(1);
+                } else {
+                    floor = floorunit.slice(0, 2);
+                    unit = floorunit.slice(2);
+                }
+                floor = floor.padStart(2, '0');
+                return `${building.toLowerCase()}-${floor}-${unit}`;
+            }
+            
+            // Two-part with letter+digit
+            m = raw.match(/\b([A-Za-z0-9]+)[-_]([A-Za-z])(\d{2,3})\b/);
+            if (m) {
+                const [, building, floorLetter, unitDigits] = m;
+                return `${building.toLowerCase()}-${floorLetter.toLowerCase()}-${unitDigits}`;
+            }
+            
+            // Two-part: building-unit
+            m = raw.match(/\b([A-Za-z0-9]+)[-_](\d{2,3})\b/);
+            if (m && m[2].length < 3) {
+                const [, building, unit] = m;
+                return `${building.toLowerCase()}-${unit}`;
+            }
+            
+            return raw.toLowerCase();
+        }
+
+        function parseUnitTypeBase(unitTypeRaw) {
+            const unitType = unitTypeRaw.toLowerCase().trim();
+            
+            // Remove _s1_X or _s2_X patterns (where X is any number)
+            const pattern1 = unitType.replace(/_s[12]_\d+$/, '');
+            if (pattern1 !== unitType) {
+                return pattern1;
+            }
+            
+            // Remove _s1 or _s2 patterns
+            const pattern2 = unitType.replace(/_s[12]$/, '');
+            if (pattern2 !== unitType) {
+                return pattern2;
+            }
+            
+            return unitType;
+        }
+
+        function sanitizeCode(code) {
+            if (!code) return code;
+            
+            const parts = code.split('_');
+            if (parts.length >= 3) {
+                const thirdSegment = parts[2];
+                if (thirdSegment.endsWith('BF')) {
+                    parts[2] = thirdSegment.slice(0, -2) + 'B';
+                } else if (thirdSegment === 'SF') {
+                    parts[2] = 'S';
+                }
+                return parts.join('_');
+            }
+            return code;
+        }
+
+        function parseFormattedOutput(formattedOutput) {
+            if (!formattedOutput) return [formattedOutput, false];
+            
+            const parts = formattedOutput.split('_');
+            let isMirrored = false;
+            
+            if (parts.length >= 3) {
+                const thirdSegment = parts[2];
+                if (thirdSegment.includes('BF')) {
+                    isMirrored = true;
+                    parts[2] = thirdSegment.replace('BF', 'B');
+                }
+            }
+            
+            return [parts.join('_'), isMirrored];
+        }
+
+        function showCsvStatus(message, type = 'info') {
+            const statusEl = document.getElementById('csvStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+        }
+
+        function showJsonStatus(message, type = 'info') {
+            const statusEl = document.getElementById('jsonStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+        }
+
+        function updateCreateButtonState() {
+            const createBtn = document.getElementById('createBtn');
+            
+            let validData = false;
+            if (state.dataSource === 'csv') {
+                validData = state.csvFile && state.csvData.length > 0;
+            } else {
+                validData = state.unitRefFile && state.refFile && 
+                           Object.keys(state.jsonData).length > 0;
+            }
+            
+            createBtn.disabled = !validData;
+        }
+
+        function handleCancel() {
+            if (confirm('Are you sure you want to cancel? All entered data will be lost.')) {
+                location.reload();
+            }
+        }
+
+        async function handleGenerate() {
+            const createBtn = document.getElementById('createBtn');
+            createBtn.disabled = true;
+            createBtn.textContent = 'Generating...';
+            
+            try {
+                let unitReferenceData, referenceData;
+                
+                if (state.dataSource === 'csv') {
+                    // Generate JSON files from CSV data
+                    const result = generateJSONFromCSV(state.csvData, state.csvFormat, state.detectBalconies, state.rotationOffset);
+                    unitReferenceData = result.unitReference;
+                    referenceData = result.reference;
+                } else {
+                    // Use existing JSON data
+                    unitReferenceData = state.jsonData.unit_reference;
+                    referenceData = state.jsonData.reference;
+                }
+                
+                // Download unit-reference.json
+                downloadJSON(unitReferenceData, 'unit-reference.json');
+                
+                // Download reference.json
+                downloadJSON(referenceData, 'reference.json');
+                
+                showToast('JSON files generated and downloaded successfully!', 'success');
+                
+                // Reset button
+                setTimeout(() => {
+                    createBtn.disabled = false;
+                    createBtn.textContent = 'Generate JSON Files';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Error generating JSON files:', error);
+                showToast(`Failed to generate JSON files: ${error.message}`, 'error');
+                createBtn.disabled = false;
+                createBtn.textContent = 'Generate JSON Files';
+            }
+        }
+
+        function generateJSONFromCSV(csvData, format, detectBalconies, rotationOffset) {
+            // Generate unit-reference.json
+            const units = csvData.map(row => {
+                let unitName, unitType, mirrored, rotation;
+                
+                switch (format) {
+                    case 'simple':
+                        unitName = normaliseName(row['Unit_ID'] || '');
+                        unitType = parseUnitTypeBase(row['Unit_Type'] || '');
+                        mirrored = ['MIRROR', 'TRUE', 'FLIPPED'].includes((row['MIRROR'] || '').toUpperCase());
+                        rotation = parseInt(row['Rotation'] || '0');
+                        break;
+                        
+                    case 'unreal':
+                        unitName = normaliseName(row['UnitID'] || '');
+                        const [sanitized, isMirrored] = parseFormattedOutput(row['FormattedOutput'] || '');
+                        unitType = parseUnitTypeBase(sanitized);
+                        mirrored = isMirrored;
+                        rotation = parseInt(row['Rotation_Yaw'] || '0') + rotationOffset;
+                        // Convert to nearest cardinal
+                        rotation = Math.round(rotation / 90) * 90;
+                        break;
+                        
+                    case 'new':
+                        unitName = normaliseName(row['UnitNumber'] || '');
+                        unitType = parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
+                        mirrored = (row['Mirror'] || '').toUpperCase() === 'MIRROR';
+                        rotation = 0;
+                        break;
+                        
+                    default: // original
+                        unitName = normaliseName(row['Unit Name'] || '');
+                        unitType = parseUnitTypeBase(row['Unit Type Dev Final'] || '');
+                        mirrored = ['true', 'mirror', 'flipped'].includes((row['Mirrored'] || '').toLowerCase());
+                        rotation = parseInt(row['Rotation'] || '0');
+                }
+                
+                return {
+                    name: unitName,
+                    type: unitType,
+                    flip: mirrored,
+                    rotation: rotation
+                };
+            });
+            
+            // Generate reference.json (extract unique types)
+            const typeSet = new Set(csvData.map(row => {
+                switch (format) {
+                    case 'simple':
+                        return parseUnitTypeBase(row['Unit_Type'] || '');
+                    case 'unreal':
+                        const [sanitized] = parseFormattedOutput(row['FormattedOutput'] || '');
+                        return parseUnitTypeBase(sanitized);
+                    case 'new':
+                        return parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
+                    default:
+                        return parseUnitTypeBase(row['Unit Type Dev Final'] || '');
+                }
+            }));
+            
+            const types = Array.from(typeSet).map(type => ({
+                name: type,
+                parent: null,
+                translation: { x: 0, y: 0, z: 0 },
+                rotation: 0
+            }));
+            
+            return {
+                unitReference: { units },
+                reference: { types }
+            };
+        }
+
+        function downloadJSON(data, filename) {
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+
