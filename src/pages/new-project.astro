@@ -530,14 +530,14 @@
                     <div class="section-content">
                         <div class="form-group">
                             <div class="input-group">
-                                <input type="text" id="csvFilePath" class="form-control" readonly placeholder="No file selected">
+                                <input type="text" id="csvFilePath" class="form-control" readonly placeholder="No files selected">
                                 <button type="button" class="btn btn-secondary" id="browseCsvBtn">Browse...</button>
                             </div>
-                            <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+                            <input type="file" id="csvFileInput" accept=".csv" multiple style="display: none;">
                         </div>
 
                         <div class="info-box">
-                            <p><strong>Select a CSV file containing unit data with one of the following formats:</strong></p>
+                            <p><strong>Select one or more CSV files containing unit data with one of the following formats:</strong></p>
                             
                             <div class="format-info">
                                 <strong>Format 1 (Simple):</strong> Unit_ID, Unit_Type, MIRROR, Rotation (optional)
@@ -639,6 +639,7 @@
                             <table id="csvPreviewTable">
                                 <thead>
                                     <tr>
+                                        <th>Source File</th>
                                         <th>Unit Name</th>
                                         <th>Unit Type</th>
                                         <th>Mirrored</th>
@@ -647,7 +648,7 @@
                                 </thead>
                                 <tbody id="csvPreviewBody">
                                     <tr>
-                                        <td colspan="4" class="no-data">No CSV file selected</td>
+                                        <td colspan="5" class="no-data">No CSV files selected</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -698,7 +699,7 @@
         // Global state
         const state = {
             dataSource: 'csv',
-            csvFile: null,
+            csvFiles: [],
             csvData: [],
             csvFormat: null,
             unitRefFile: null,
@@ -774,13 +775,14 @@
         }
 
         function handleCsvFileSelect(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            state.csvFile = file;
-            document.getElementById('csvFilePath').value = file.name;
-            
-            loadCsvPreview(file);
+            const files = Array.from(e.target.files || []);
+            if (files.length === 0) return;
+
+            state.csvFiles = files;
+            const fileNames = files.map(f => f.name).join(', ');
+            document.getElementById('csvFilePath').value = fileNames;
+
+            loadCsvPreview(files);
         }
 
         function handleUnitRefFileSelect(e) {
@@ -803,46 +805,85 @@
             loadJsonPreview();
         }
 
-        async function loadCsvPreview(file) {
+        async function loadCsvPreview(files) {
             try {
-                const text = await file.text();
-                const lines = text.split('\n').filter(line => line.trim());
-                
-                if (lines.length === 0) {
-                    showCsvStatus('CSV file is empty', 'error');
+                const allRows = [];
+                let totalUnits = 0;
+                let format = null;
+                let hasErrors = false;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    try {
+                        const text = await file.text();
+                        const lines = text.split('\n').filter(line => line.trim());
+
+                        if (lines.length === 0) {
+                            console.warn(`File ${file.name} is empty, skipping`);
+                            continue;
+                        }
+
+                        // Parse CSV (simple implementation)
+                        const headers = parseCSVLine(lines[0]);
+                        const rows = lines.slice(1).map(line => {
+                            const values = parseCSVLine(line);
+                            const row = {};
+                            headers.forEach((header, j) => {
+                                row[header] = values[j] || '';
+                            });
+                            // Add source file info
+                            row._sourceFile = file.name;
+                            return row;
+                        });
+
+                        // Detect format
+                        const fileFormat = detectCsvFormat(headers);
+                        if (!fileFormat) {
+                            console.warn(`File ${file.name}: format not recognized, skipping`);
+                            continue;
+                        }
+
+                        // Ensure all files have the same format
+                        if (format && format !== fileFormat) {
+                            showCsvStatus('All CSV files must have the same format', 'error');
+                            return;
+                        }
+                        format = fileFormat;
+
+                        allRows.push(...rows);
+                        totalUnits += rows.length;
+
+                    } catch (error) {
+                        console.error(`Error loading ${file.name}:`, error);
+                        hasErrors = true;
+                    }
+                }
+
+                if (allRows.length === 0) {
+                    if (hasErrors) {
+                        showCsvStatus('Failed to load any CSV files. Check console for details.', 'error');
+                    } else {
+                        showCsvStatus('All selected files are empty', 'warning');
+                    }
                     return;
                 }
-                
-                // Parse CSV (simple implementation)
-                const headers = parseCSVLine(lines[0]);
-                const rows = lines.slice(1).map(line => {
-                    const values = parseCSVLine(line);
-                    const row = {};
-                    headers.forEach((header, i) => {
-                        row[header] = values[i] || '';
-                    });
-                    return row;
-                });
-                
-                // Detect format
-                const format = detectCsvFormat(headers);
-                if (!format) {
-                    showCsvStatus('CSV format not recognized. Please check the format requirements.', 'error');
-                    return;
-                }
-                
+
                 state.csvFormat = format;
-                state.csvData = rows;
-                
+                state.csvData = allRows;
+
                 // Display preview
-                displayCsvPreview(rows, format);
-                
-                showCsvStatus(`Loaded ${rows.length} units successfully - Format: ${format}`, 'success');
+                displayCsvPreview(allRows, format);
+
+                let statusMessage = `Loaded ${totalUnits} units from ${files.length} file(s) successfully - Format: ${format}`;
+                if (hasErrors) {
+                    statusMessage += ' (some files had errors - check console)';
+                }
+                showCsvStatus(statusMessage, hasErrors ? 'warning' : 'success');
                 updateCreateButtonState();
-                
+
             } catch (error) {
-                console.error('Error loading CSV:', error);
-                showCsvStatus(`Error loading CSV: ${error.message}`, 'error');
+                console.error('Error loading CSV files:', error);
+                showCsvStatus(`Error loading CSV files: ${error.message}`, 'error');
             }
         }
 
@@ -902,7 +943,7 @@
                             mirrored = ['MIRROR', 'TRUE', 'FLIPPED'].includes((row['MIRROR'] || '').toUpperCase()) ? 'true' : 'false';
                             rotation = row['Rotation'] || '0';
                             break;
-                            
+
                         case 'unreal':
                             unitName = normaliseName(row['UnitID'] || '');
                             const [sanitized, isMirrored] = parseFormattedOutput(row['FormattedOutput'] || '');
@@ -910,29 +951,30 @@
                             mirrored = isMirrored ? 'true' : 'false';
                             rotation = row['Rotation_Yaw'] || '0';
                             break;
-                            
+
                         case 'new':
                             unitName = normaliseName(row['UnitNumber'] || '');
                             unitType = parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
                             mirrored = (row['Mirror'] || '').toUpperCase() === 'MIRROR' ? 'true' : 'false';
                             rotation = '0';
                             break;
-                            
+
                         default: // original
                             unitName = normaliseName(row['Unit Name'] || '');
                             unitType = parseUnitTypeBase(row['Unit Type Dev Final'] || '');
                             mirrored = ['true', 'mirror', 'flipped'].includes((row['Mirrored'] || '').toLowerCase()) ? 'true' : 'false';
                             rotation = row['Rotation'] || '0';
                     }
-                    
+
                     tr.innerHTML = `
+                        <td>${row._sourceFile || 'Unknown'}</td>
                         <td>${unitName}</td>
                         <td>${unitType}</td>
                         <td>${mirrored}</td>
                         <td>${rotation}</td>
                     `;
                 } catch (error) {
-                    tr.innerHTML = `<td colspan="4" class="error">Error parsing row: ${error.message}</td>`;
+                    tr.innerHTML = `<td colspan="5" class="error">Error parsing row: ${error.message}</td>`;
                 }
                 
                 tbody.appendChild(tr);
@@ -1124,15 +1166,15 @@
 
         function updateCreateButtonState() {
             const createBtn = document.getElementById('createBtn');
-            
+
             let validData = false;
             if (state.dataSource === 'csv') {
-                validData = state.csvFile && state.csvData.length > 0;
+                validData = state.csvFiles.length > 0 && state.csvData.length > 0;
             } else {
-                validData = state.unitRefFile && state.refFile && 
+                validData = state.unitRefFile && state.refFile &&
                            Object.keys(state.jsonData).length > 0;
             }
-            
+
             createBtn.disabled = !validData;
         }
 
