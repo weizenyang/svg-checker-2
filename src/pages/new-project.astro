@@ -1225,9 +1225,47 @@
             }
         }
 
+        // Process unit type: ensure 6 segments, handle d_s prefix
+        function processUnitType(unitType) {
+            if (!unitType) return [unitType];
+            
+            const segments = unitType.split('_');
+            const segmentCount = segments.length;
+            const startsWithDS = segments.length >= 2 && segments[0] === 'd' && segments[1] === 's';
+            
+            // Get base type (remove _s1_0 or _s1_1 suffix if present)
+            let baseType = unitType;
+            if (segmentCount >= 2 && 
+                segments[segmentCount - 2] === 's1' && 
+                (segments[segmentCount - 1] === '0' || segments[segmentCount - 1] === '1')) {
+                baseType = segments.slice(0, -2).join('_');
+            }
+            
+            // If it starts with d_s, always create two variants: _s1_0 and _s1_1
+            if (startsWithDS) {
+                return [
+                    baseType + '_s1_0',
+                    baseType + '_s1_1'
+                ];
+            }
+            
+            // Doesn't start with d_s
+            // Check if base type has less than 6 segments
+            const baseSegments = baseType.split('_');
+            if (baseSegments.length < 6) {
+                // Add _s1_0 to reach 6 segments
+                return [baseType + '_s1_0'];
+            }
+            
+            // Already has 6 segments and doesn't start with d_s, return as is
+            return [unitType];
+        }
+
         function generateJSONFromCSV(csvData, format, detectBalconies, rotationOffset) {
             // Generate unit-reference.json
-            const units = csvData.map(row => {
+            const units = [];
+            
+            csvData.forEach(row => {
                 let unitName, unitType, mirrored, rotation;
                 
                 switch (format) {
@@ -1262,28 +1300,25 @@
                         rotation = parseInt(row['Rotation'] || '0');
                 }
                 
-                return {
-                    name: unitName,
-                    type: unitType,
-                    flip: mirrored,
-                    rotation: rotation
-                };
+                // Process unit type (may return multiple types for d_s prefix)
+                const processedTypes = processUnitType(unitType);
+                
+                // Create a unit for each processed type
+                processedTypes.forEach(type => {
+                    units.push({
+                        name: unitName,
+                        type: type,
+                        flip: mirrored,
+                        rotation: rotation
+                    });
+                });
             });
             
-            // Generate reference.json (extract unique types)
-            const typeSet = new Set(csvData.map(row => {
-                switch (format) {
-                    case 'simple':
-                        return parseUnitTypeBase(row['Unit_Type'] || '');
-                    case 'unreal':
-                        const [sanitized] = parseFormattedOutput(row['FormattedOutput'] || '');
-                        return parseUnitTypeBase(sanitized);
-                    case 'new':
-                        return parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
-                    default:
-                        return parseUnitTypeBase(row['Unit Type Dev Final'] || '');
-                }
-            }));
+            // Generate reference.json (extract unique types from processed units)
+            const typeSet = new Set();
+            units.forEach(unit => {
+                typeSet.add(unit.type);
+            });
             
             const types = Array.from(typeSet).map(type => ({
                 name: type,
