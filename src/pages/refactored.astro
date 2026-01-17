@@ -686,91 +686,137 @@ import "../styles.css";
 			}
 
 			if (converted.images) {
+				console.log('Converting images data:', converted.images.map(img => ({
+					name: img.imageName,
+					mimeType: img.mimeType,
+					dataType: typeof img.data,
+					dataLength: img.data?.length,
+					dataPreview: typeof img.data === 'string' ? img.data.substring(0, 50) : 'non-string'
+				})));
+
 				converted.images = converted.images.map(img => {
 					let data = img.data;
+					console.log(`Processing image: ${img.imageName}, mimeType: ${img.mimeType}`);
+
 					// For SVG files, if it's base64 encoded, keep as string for direct parsing
 					// For other image types, convert to data URLs
 					if (img.mimeType !== 'image/svg+xml') {
+						console.log(`Converting non-SVG image to data URL: ${img.imageName}`);
 						if (typeof data === 'string' && !data.startsWith('data:')) {
 							data = `data:${img.mimeType};base64,${data}`;
+							console.log(`Converted to data URL, new length: ${data.length}`);
 						}
 					} else {
+						console.log(`Processing SVG image: ${img.imageName}`);
 						// For SVG, handle different data formats
 						if (data instanceof ArrayBuffer) {
 							// Convert ArrayBuffer to string
+							console.log('Converting ArrayBuffer to string');
 							const decoder = new TextDecoder('utf-8');
 							data = decoder.decode(data);
 						} else if (data instanceof Uint8Array) {
 							// Convert Uint8Array to string
+							console.log('Converting Uint8Array to string');
 							const decoder = new TextDecoder('utf-8');
 							data = decoder.decode(data);
 						} else if (typeof data === 'string') {
+							console.log(`Processing string data, starts with: ${data.substring(0, 50)}`);
 							// Handle data URLs and plain content
 							if (data.startsWith('data:image/svg+xml;base64,')) {
+								console.log('Decoding base64 data URL');
 								const base64Data = data.split(',')[1];
 								data = atob(base64Data);
 							} else if (data.startsWith('data:image/svg+xml,')) {
+								console.log('Decoding plain data URL');
 								data = decodeURIComponent(data.split(',')[1]);
 							} else {
 								// Check if it's a base64-encoded string (not a data URL)
 								// Base64 strings typically don't contain spaces and are longer than typical SVG content
 								const isLikelyBase64 = /^[A-Za-z0-9+/]+=*$/.test(data) && data.length > 100 && !data.includes('<');
+								console.log(`Checking if base64: ${isLikelyBase64}, length: ${data.length}, contains '<': ${data.includes('<')}`);
 								if (isLikelyBase64) {
 									try {
+										console.log('Decoding base64 string');
 										data = atob(data);
 									} catch (e) {
 										// If atob fails, assume it's already decoded SVG content
 										console.warn('Failed to decode base64 SVG data, assuming it\'s already decoded');
 									}
+								} else {
+									console.log('Assuming already decoded SVG content');
 								}
 								// If it's already a string and not a data URL or base64, assume it's SVG content
 							}
 						}
+						console.log(`Final SVG data length: ${data.length}, starts with: ${data.substring(0, 50)}`);
 					}
 					return { ...img, data };
 				});
 			}
 
 			if (converted.unitFloorplans) {
+				console.log('Converting unitFloorplans data:', converted.unitFloorplans.map(img => ({
+					name: img.imageName,
+					mimeType: img.mimeType,
+					dataType: typeof img.data,
+					dataLength: img.data?.length,
+					dataPreview: typeof img.data === 'string' ? img.data.substring(0, 50) : 'non-string'
+				})));
+
 				converted.unitFloorplans = converted.unitFloorplans.map(img => {
 					let data = img.data;
+					console.log(`Processing unitFloorplan: ${img.imageName}, mimeType: ${img.mimeType}`);
+
 					// Same logic as images above
 					if (img.mimeType !== 'image/svg+xml') {
+						console.log(`Converting non-SVG unitFloorplan to data URL: ${img.imageName}`);
 						if (typeof data === 'string' && !data.startsWith('data:')) {
 							data = `data:${img.mimeType};base64,${data}`;
+							console.log(`Converted to data URL, new length: ${data.length}`);
 						}
 					} else {
+						console.log(`Processing SVG unitFloorplan: ${img.imageName}`);
 						// For SVG, handle different data formats
 						if (data instanceof ArrayBuffer) {
 							// Convert ArrayBuffer to string
+							console.log('Converting ArrayBuffer to string');
 							const decoder = new TextDecoder('utf-8');
 							data = decoder.decode(data);
 						} else if (data instanceof Uint8Array) {
 							// Convert Uint8Array to string
+							console.log('Converting Uint8Array to string');
 							const decoder = new TextDecoder('utf-8');
 							data = decoder.decode(data);
 						} else if (typeof data === 'string') {
+							console.log(`Processing string data, starts with: ${data.substring(0, 50)}`);
 							// Handle data URLs and plain content
 							if (data.startsWith('data:image/svg+xml;base64,')) {
+								console.log('Decoding base64 data URL');
 								const base64Data = data.split(',')[1];
 								data = atob(base64Data);
 							} else if (data.startsWith('data:image/svg+xml,')) {
+								console.log('Decoding plain data URL');
 								data = decodeURIComponent(data.split(',')[1]);
 							} else {
 								// Check if it's a base64-encoded string (not a data URL)
 								// Base64 strings typically don't contain spaces and are longer than typical SVG content
 								const isLikelyBase64 = /^[A-Za-z0-9+/]+=*$/.test(data) && data.length > 100 && !data.includes('<');
+								console.log(`Checking if base64: ${isLikelyBase64}, length: ${data.length}, contains '<': ${data.includes('<')}`);
 								if (isLikelyBase64) {
 									try {
+										console.log('Decoding base64 string');
 										data = atob(data);
 									} catch (e) {
 										// If atob fails, assume it's already decoded SVG content
 										console.warn('Failed to decode base64 SVG data, assuming it\'s already decoded');
 									}
+								} else {
+									console.log('Assuming already decoded SVG content');
 								}
 								// If it's already a string and not a data URL or base64, assume it's SVG content
 							}
 						}
+						console.log(`Final unitFloorplan SVG data length: ${data.length}, starts with: ${data.substring(0, 50)}`);
 					}
 					return { ...img, data };
 				});
@@ -792,9 +838,14 @@ import "../styles.css";
 
 			// Process based on mode
 			if (convertedData.mode === 'refactored') {
+				console.log('Processing refactored mode assets');
+
+				// Collect all overlay images (both from images array and unitFloorplans)
+				let allOverlayImages = [];
+
 				// Load SVG floorplates and overlay images
 				if (convertedData.images && convertedData.images.length > 0) {
-					console.log('Loading SVG floorplates and images:', convertedData.images.length);
+					console.log('Processing images array:', convertedData.images.length, 'items');
 
 					// Reset SVG state for API loading
 					importedSVGs = [];
@@ -805,9 +856,12 @@ import "../styles.css";
 					const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
 					const overlayImages = convertedData.images.filter(img => img.mimeType !== 'image/svg+xml');
 
+					console.log(`Found ${svgImages.length} SVG files and ${overlayImages.length} overlay images in images array`);
+
 					// Process each SVG
 					for (const image of svgImages) {
 						try {
+							console.log(`Loading SVG: ${image.imageName}`);
 							// Load SVG using existing logic (data is already processed in convertApiData)
 							loadSVGFromData(image.data, image.imageName);
 						} catch (error) {
@@ -815,25 +869,36 @@ import "../styles.css";
 						}
 					}
 
-					// Load overlay images into imageList
-					if (overlayImages.length > 0) {
-						loadApiImagesToImageList(overlayImages);
-					}
-
-					// Show navigation if multiple SVGs
-					if (importedSVGs.length > 1) {
-						spawnSVGNavigation();
-					}
+					// Add overlay images to the collection
+					allOverlayImages = allOverlayImages.concat(overlayImages);
 				}
 
 				// Also load unitFloorplans for overlay if they exist
 				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
-					console.log('Loading additional unit floorplans:', convertedData.unitFloorplans.length);
+					console.log('Processing unitFloorplans array:', convertedData.unitFloorplans.length, 'items');
 					// Store unit floorplans for later use
 					window.unitFloorplans = convertedData.unitFloorplans;
 
-					// Add unit floorplans to imageList as well
-					loadApiImagesToImageList(convertedData.unitFloorplans);
+					// Add unit floorplans to the overlay images collection
+					allOverlayImages = allOverlayImages.concat(convertedData.unitFloorplans);
+				}
+
+				// Load all overlay images into imageList
+				if (allOverlayImages.length > 0) {
+					console.log(`Loading ${allOverlayImages.length} total overlay images into imageList`);
+					loadApiImagesToImageList(allOverlayImages, 'combined');
+				} else {
+					console.log('No overlay images found to load');
+				}
+
+				// Show navigation if multiple SVGs
+				if (importedSVGs.length > 1) {
+					console.log('Showing SVG navigation for multiple SVGs');
+					spawnSVGNavigation();
+				} else if (importedSVGs.length === 1) {
+					console.log('Single SVG loaded, no navigation needed');
+				} else {
+					console.log('No SVGs were loaded');
 				}
 			} else if (convertedData.mode === 'roomscale-4') {
 				// For roomscale mode, store assets but don't auto-load (user can load manually)
@@ -855,9 +920,11 @@ import "../styles.css";
 
 		// Load SVG from data (helper function to integrate with existing logic)
 		function loadSVGFromData(svgData, filename) {
+			console.log(`loadSVGFromData called for: ${filename}`);
 			try {
 				// Ensure svgData is a string
 				let svgText = svgData;
+				console.log(`SVG data type: ${typeof svgText}, length: ${svgText?.length}`);
 				if (typeof svgText !== 'string') {
 					console.warn(`SVG data for ${filename} is not a string, converting...`);
 					if (svgText instanceof ArrayBuffer) {
@@ -877,6 +944,7 @@ import "../styles.css";
 					throw new Error('Content does not appear to be valid SVG');
 				}
 
+				console.log(`Parsing SVG: ${filename}`);
 				// Parse and process the SVG similar to existing file loading
 				const parser = new DOMParser();
 				const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
@@ -888,17 +956,25 @@ import "../styles.css";
 				}
 
 				const svgElement = svgDoc.documentElement;
+				console.log(`SVG parsed successfully: ${filename}, element:`, svgElement.tagName);
 
 				// Use existing SVG processing logic (same as in handleFileChange)
 				importedSVGs.push({ name: getBaseName(filename), element: svgElement });
+				console.log(`Added SVG to importedSVGs. Total SVGs now: ${importedSVGs.length}`);
 
 				// Process the SVG
+				console.log(`Processing SVG with processSVG: ${filename}`);
 				processSVG(svgElement);
 
 				// Set up image overlay if images are already loaded
 				if (imageList.length > 0) {
+					console.log(`Setting up image overlay for ${filename} with ${imageList.length} images`);
 					previewBackplate(svgElement);
+				} else {
+					console.log(`No images in imageList yet for ${filename}`);
 				}
+
+				console.log(`Successfully loaded SVG: ${filename}`);
 
 			} catch (error) {
 				console.error(`Error loading SVG ${filename}:`, error);
@@ -906,45 +982,91 @@ import "../styles.css";
 		}
 
 		// Load API images into imageList for overlay functionality
-		function loadApiImagesToImageList(apiImages) {
-			// Clear existing images
-			imageList.splice(0, imageList.length);
+		function loadApiImagesToImageList(apiImages, source = 'unknown') {
+			console.log(`loadApiImagesToImageList called with ${apiImages.length} images from source: ${source}`);
+			console.log('API images:', apiImages.map(img => ({ name: img.imageName, mimeType: img.mimeType, dataLength: img.data?.length })));
+
+			if (apiImages.length === 0) {
+				console.log('No images to load');
+				return;
+			}
+
+			// Clear existing images only if this is the first load
+			if (imageList.length === 0) {
+				console.log('Clearing existing imageList');
+				imageList.splice(0, imageList.length);
+			}
 
 			// Add API images to imageList
+			let addedCount = 0;
 			apiImages.forEach(img => {
+				console.log(`Adding image: ${img.imageName}, mimeType: ${img.mimeType}, data length: ${img.data?.length}`);
 				imageList.push({
 					name: img.imageName,
 					data: img.data // Already converted to data URL format
 				});
+				addedCount++;
 			});
+
+			console.log(`Added ${addedCount} images to imageList. Total images now: ${imageList.length}`);
 
 			// Show the image carousel UI
 			const imgCarouselContainer = document.getElementById("image-carousel-container");
-			if (imgCarouselContainer && imgCarouselContainer.classList.contains("hidden")) {
-				imgCarouselContainer.classList.remove("hidden");
-				imgCarouselContainer.classList.add("flex");
+			console.log('Image carousel container element:', imgCarouselContainer);
+			if (imgCarouselContainer) {
+				console.log('Image carousel container classes:', imgCarouselContainer.classList.value);
+				if (imgCarouselContainer.classList.contains("hidden")) {
+					console.log('Showing image carousel container');
+					imgCarouselContainer.classList.remove("hidden");
+					imgCarouselContainer.classList.add("flex");
+				} else {
+					console.log('Image carousel container already visible');
+				}
+			} else {
+				console.error('Image carousel container not found!');
 			}
 
 			// Update the image carousel display
 			const imageListCarousel = document.getElementById("image-list-carousel");
-			imageListCarousel.innerHTML = "";
-			imageList.forEach((image) => {
-				const listItem = document.createElement("li");
-				listItem.style.height = "100%";
-				const imageElement = document.createElement("img");
-				imageElement.src = image.data;
-				imageElement.style.height = "60px";
-				listItem.appendChild(imageElement);
-				imageListCarousel.appendChild(listItem);
-			});
+			console.log('Image list carousel element:', imageListCarousel);
+			if (imageListCarousel) {
+				imageListCarousel.innerHTML = "";
+				imageList.forEach((image, index) => {
+					console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
+					const listItem = document.createElement("li");
+					listItem.style.height = "100%";
+					const imageElement = document.createElement("img");
+					imageElement.src = image.data;
+					imageElement.style.height = "60px";
+					imageElement.title = image.name; // Add tooltip
+					listItem.appendChild(imageElement);
+					imageListCarousel.appendChild(listItem);
+				});
+				console.log('Created thumbnails for all images');
+			} else {
+				console.error('Image list carousel not found!');
+			}
 
 			// Set up image overlay functionality
 			const currentSVG = document.getElementById("svg-container").querySelector("svg");
+			console.log('Current SVG element:', currentSVG);
 			if (currentSVG) {
+				console.log('Setting up previewBackplate for current SVG');
 				previewBackplate(currentSVG);
+			} else {
+				console.log('No current SVG found, previewBackplate not called');
 			}
 
-			console.log('Loaded', apiImages.length, 'images into overlay system');
+			// Also set up overlay for any existing SVGs in importedSVGs
+			if (importedSVGs.length > 0) {
+				console.log(`Setting up previewBackplate for ${importedSVGs.length} imported SVGs`);
+				importedSVGs.forEach((svgInfo, index) => {
+					console.log(`Setting up overlay for imported SVG ${index}: ${svgInfo.name}`);
+					previewBackplate(svgInfo.element);
+				});
+			}
+
+			console.log(`Successfully loaded ${apiImages.length} images into overlay system from ${source}`);
 
 			// Show toast notification that floorplans are loaded
 			showToast(`Loaded ${apiImages.length} floorplan image(s) for overlay`, 'success');
