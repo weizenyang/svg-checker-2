@@ -1500,6 +1500,45 @@ import "../styles.css";
 			return { mode: currentControlMode, hasImages: hasFloorplateImages, hovered: !!currentHoveredImage };
 		};
 
+		// Debug function to check image overlay functionality
+		window.debugImageOverlay = function() {
+			console.log('=== IMAGE OVERLAY DEBUG ===');
+			console.log('Image list length:', imageList.length);
+			console.log('Image list:', imageList.map(img => ({ name: img.name, hasData: !!img.data })));
+
+			const svg = document.querySelector('#svg-container svg');
+			if (svg) {
+				const paths = svg.querySelectorAll('path');
+				const circles = svg.querySelectorAll('circle');
+				const polygons = svg.querySelectorAll('polygon');
+				const rects = svg.querySelectorAll('rect');
+
+				console.log('SVG elements:');
+				console.log('- Paths:', paths.length);
+				console.log('- Circles:', circles.length);
+				console.log('- Polygons:', polygons.length);
+				console.log('- Rectangles:', rects.length);
+
+				console.log('Sample element IDs:');
+				const sampleElements = Array.from(svg.querySelectorAll('[id]')).slice(0, 5);
+				sampleElements.forEach(el => {
+					console.log(`  ${el.tagName}#${el.id}`);
+				});
+			} else {
+				console.log('No SVG found in container');
+			}
+
+			return {
+				imageListLength: imageList.length,
+				svgElements: svg ? {
+					paths: svg.querySelectorAll('path').length,
+					circles: svg.querySelectorAll('circle').length,
+					polygons: svg.querySelectorAll('polygon').length,
+					rects: svg.querySelectorAll('rect').length
+				} : null
+			};
+		};
+
 		// Log current transformations (can be called from console)
 		window.logImageTransformations = function() {
 			const transformations = getImageTransformationsData();
@@ -3791,13 +3830,16 @@ import "../styles.css";
 		}
 
 		function previewBackplate(parentSVG) {
+			console.log("🔍 Setting up previewBackplate for SVG element");
+			console.log("📋 Current imageList:", imageList.map(img => ({ name: img.name, data: img.data ? 'HAS_DATA' : 'NO_DATA' })));
+
 			const listeners = [];
 			listeners.forEach((e) => {
 				removeEventListener("hover", e);
 			});
 
 			let previewerInstance = document.getElementById("image-previewer");
-			console.log("previewing")
+			console.log("🎨 Creating previewer element")
 			if (!previewerInstance) {
 				const newPreviewer = document.createElement("div");
 				const previewerImg = document.createElement("img");
@@ -3824,8 +3866,13 @@ import "../styles.css";
 				document.querySelector("body").appendChild(newPreviewer);
 			}
 
-			parentSVG.querySelectorAll("path").forEach((path) => {
-				const listener = path.addEventListener("mouseover", (e) => {
+			// Listen to all interactive SVG elements: paths, circles, polygons, rectangles
+			const svgElements = parentSVG.querySelectorAll("path, circle, polygon, rect");
+			console.log(`🎯 Setting up hover listeners for ${svgElements.length} SVG elements:`, Array.from(svgElements).map(el => `${el.tagName}#${el.id}`).slice(0, 10));
+
+			svgElements.forEach((element) => {
+				const listener = element.addEventListener("mouseover", (e) => {
+					console.log(`🖱️ Hovering over ${element.tagName} with ID: ${element.id}`);
 					// Don't switch modes on hover - only show preview
 					document.getElementById(
 						"image-previewer-container",
@@ -3836,20 +3883,24 @@ import "../styles.css";
 					
 					if (useDefaultMatching) {
 						// DEFAULT MATCHING LOGIC:
-						// Extract final 3 elements from Path ID (separated by _)
+						// Extract final 3 elements from element ID (separated by _)
 						// Match to 4th element of image name (separated by _)
 						// Remove all separators (space, -, _) during matching
-						
-						const pathIdParts = e.target.id.split("_");
-						const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
-						const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
-						
+
+						const elementIdParts = e.target.id.split("_");
+						const elementFinalThreeElements = elementIdParts.slice(-3).join("_");
+						const elementNormalized = elementFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
+
+						console.log(`🔍 Matching element ID "${e.target.id}" -> "${elementFinalThreeElements}" -> normalized: "${elementNormalized}"`);
+
 						selectedImage = imageList.filter((image) => {
 							// Normalize the entire image name
 							const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
-							
-							// Check if normalized path appears in normalized image name
-							return imageNormalized.includes(pathNormalized);
+
+							// Check if normalized element ID appears in normalized image name
+							const matches = imageNormalized.includes(elementNormalized);
+							console.log(`  📸 Checking image "${image.name}" -> normalized: "${imageNormalized}" -> matches: ${matches}`);
+							return matches;
 						})[0];
 						
 						// FALLBACK: Use custom logic if default matching fails
@@ -3890,22 +3941,23 @@ import "../styles.css";
 					}
 
 					if (selectedImage) {
-						// console.log(selectedImage)
+						console.log(`✅ Found matching image: ${selectedImage.name}`);
 						document.getElementById("image-previewer-image").src =
 							selectedImage.data;
 						document.getElementById(
 							"image-previewer-text",
 						).innerHTML = selectedImage.name;
 					} else {
+						console.log(`❌ No matching image found for element ID: ${e.target.id}`);
 						document.getElementById("image-previewer-image").src =
 							"";
 						document.getElementById(
 							"image-previewer-text",
-						).innerHTML = "";
+						).innerHTML = "No matching floorplan found";
 					}
 				});
 
-				const listener2 = path.addEventListener("mouseout", (e) => {
+				const listener2 = element.addEventListener("mouseout", (e) => {
 					// Don't switch modes on mouseout - only hide preview
 					document.getElementById(
 						"image-previewer-container",
