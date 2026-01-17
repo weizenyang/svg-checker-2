@@ -620,6 +620,95 @@ import "../styles.css";
 		let aggregatePoints = false;
 		let checkboxesId = [];
 
+		// Image transformations tracking
+		let imageTransformations = {}; // { "name": { flip: boolean, rotation: number } }
+		let currentHoveredImage = null;
+
+		// Parse image name from filename (4th part separated by _, contains 2 dashes)
+		function parseImageName(imageFileName) {
+			// Remove extension
+			const nameWithoutExt = imageFileName.replace(/\.[^/.]+$/, "");
+			const parts = nameWithoutExt.split('_');
+
+			// Find the part that contains exactly 2 dashes
+			for (const part of parts) {
+				if ((part.match(/-/g) || []).length === 2) {
+					return part;
+				}
+			}
+
+			// Fallback: return the last part if no part has exactly 2 dashes
+			return parts[parts.length - 1] || imageFileName;
+		}
+
+		// Apply transformations to an image element
+		function applyImageTransformations(imageElement, transformations) {
+			if (!imageElement || !transformations) return;
+
+			// Apply rotation
+			const rotation = transformations.rotation || 0;
+			const flip = transformations.flip || false;
+
+			// Create transform string
+			let transform = '';
+			if (rotation !== 0) {
+				transform += `rotate(${rotation}deg) `;
+			}
+			if (flip) {
+				transform += 'scaleX(-1) ';
+			}
+
+			// Handle different element types
+			if (imageElement.tagName === 'image') {
+				// SVG image element - use transform attribute
+				imageElement.setAttribute('transform', transform.trim());
+			} else {
+				// Regular img element - use CSS transform
+				imageElement.style.transform = transform.trim();
+				imageElement.style.transformOrigin = 'center center';
+			}
+		}
+
+		// Get or create transformation object for an image
+		function getImageTransformations(imageName) {
+			const parsedName = parseImageName(imageName);
+			if (!imageTransformations[parsedName]) {
+				imageTransformations[parsedName] = {
+					name: parsedName,
+					flip: false,
+					rotation: 0
+				};
+			}
+			return imageTransformations[parsedName];
+		}
+
+		// Rotate image by delta degrees (90 degree increments)
+		function rotateImage(imageElement, delta) {
+			if (!imageElement) return;
+
+			const imageName = imageElement.getAttribute('data-image-name') || imageElement.src.split('/').pop();
+			const transformations = getImageTransformations(imageName);
+
+			// Rotate in 90 degree increments, clamped to -90 to 270
+			transformations.rotation = Math.max(-90, Math.min(270, transformations.rotation + delta));
+
+			applyImageTransformations(imageElement, transformations);
+			console.log(`Rotated ${imageName} to ${transformations.rotation}°`);
+		}
+
+		// Flip image horizontally
+		function flipImage(imageElement) {
+			if (!imageElement) return;
+
+			const imageName = imageElement.getAttribute('data-image-name') || imageElement.src.split('/').pop();
+			const transformations = getImageTransformations(imageName);
+
+			transformations.flip = !transformations.flip;
+
+			applyImageTransformations(imageElement, transformations);
+			console.log(`${transformations.flip ? 'Flipped' : 'Unflipped'} ${imageName}`);
+		}
+
 		// Asset Delivery API Integration
 		const API_BASE_URL = 'http://localhost:9234';
 
@@ -898,6 +987,9 @@ import "../styles.css";
 				} else {
 					console.log('🏗️ No background images found to load');
 				}
+
+				// Set up keyboard controls for image transformations
+				setupImageTransformationControls();
 			} else if (convertedData.mode === 'roomscale-4') {
 				// For roomscale mode, store assets but don't auto-load (user can load manually)
 				console.log('Roomscale assets loaded via API:', {
@@ -1050,6 +1142,25 @@ import "../styles.css";
 						imageElement.setAttribute("href", imageData.data); // Use the data URL
 						imageElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
+						// Store image name for transformation tracking
+						imageElement.setAttribute("data-image-name", imageData.imageName);
+
+						// Add hover event listeners
+						imageElement.addEventListener("mouseenter", (e) => {
+							currentHoveredImage = imageElement;
+							console.log(`Hovering over image: ${imageData.imageName}`);
+						});
+
+						imageElement.addEventListener("mouseleave", (e) => {
+							if (currentHoveredImage === imageElement) {
+								currentHoveredImage = null;
+							}
+						});
+
+						// Apply any existing transformations
+						const transformations = getImageTransformations(imageData.imageName);
+						applyImageTransformations(imageElement, transformations);
+
 						// Insert as the first child (background)
 						if (svgElement.firstChild) {
 							svgElement.insertBefore(imageElement, svgElement.firstChild);
@@ -1131,17 +1242,36 @@ import "../styles.css";
 			console.log('Image list carousel element:', imageListCarousel);
 			if (imageListCarousel) {
 				imageListCarousel.innerHTML = "";
-				imageList.forEach((image, index) => {
-					console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
-					const listItem = document.createElement("li");
-					listItem.style.height = "100%";
-					const imageElement = document.createElement("img");
-					imageElement.src = image.data;
-					imageElement.style.height = "60px";
-					imageElement.title = image.name; // Add tooltip
-					listItem.appendChild(imageElement);
-					imageListCarousel.appendChild(listItem);
-				});
+					imageList.forEach((image, index) => {
+						console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
+						const listItem = document.createElement("li");
+						listItem.style.height = "100%";
+						const imageElement = document.createElement("img");
+						imageElement.src = image.data;
+						imageElement.style.height = "60px";
+						imageElement.title = image.name; // Add tooltip
+						imageElement.setAttribute("data-image-name", image.name);
+
+						// Add hover events for transformation controls
+						imageElement.addEventListener("mouseenter", (e) => {
+							currentHoveredImage = imageElement;
+							console.log(`Hovering over thumbnail: ${image.name}`);
+							console.log('Use Left/Right arrows to rotate, F to flip');
+						});
+
+						imageElement.addEventListener("mouseleave", (e) => {
+							if (currentHoveredImage === imageElement) {
+								currentHoveredImage = null;
+							}
+						});
+
+						// Apply any existing transformations
+						const transformations = getImageTransformations(image.name);
+						applyImageTransformations(imageElement, transformations);
+
+						listItem.appendChild(imageElement);
+						imageListCarousel.appendChild(listItem);
+					});
 				console.log('Created thumbnails for all images');
 			} else {
 				console.error('Image list carousel not found!');
@@ -1184,6 +1314,88 @@ import "../styles.css";
 				toast.classList.remove('show');
 			}, 5000);
 		}
+
+		// Set up keyboard controls for image transformations
+		function setupImageTransformationControls() {
+			console.log('Setting up image transformation keyboard controls');
+
+			document.addEventListener('keydown', (e) => {
+				// Only process if we have a hovered image
+				if (!currentHoveredImage) return;
+
+				switch (e.key) {
+					case 'ArrowLeft':
+						e.preventDefault();
+						rotateImage(currentHoveredImage, -90);
+						break;
+					case 'ArrowRight':
+						e.preventDefault();
+						rotateImage(currentHoveredImage, 90);
+						break;
+					case 'f':
+					case 'F':
+						e.preventDefault();
+						flipImage(currentHoveredImage);
+						break;
+				}
+			});
+
+			console.log('🎮 Image transformation controls enabled!');
+			console.log('🎯 Hover over images and use:');
+			console.log('  ← → Arrow keys: Rotate ±90°');
+			console.log('  F key: Flip horizontally');
+			console.log('💾 Call logImageTransformations() to view changes');
+			console.log('📤 Call exportImageTransformations() to download JSON');
+
+			// Add visual feedback for transformable images
+			const style = document.createElement('style');
+			style.textContent = `
+				svg image:hover {
+					outline: 2px solid #007bff !important;
+					outline-offset: 2px;
+					cursor: crosshair;
+				}
+			`;
+			document.head.appendChild(style);
+		}
+
+		// Get all image transformations
+		function getImageTransformationsData() {
+			const transformations = Object.values(imageTransformations).filter(t =>
+				t.flip !== false || t.rotation !== 0
+			);
+			return transformations;
+		}
+
+		// Export transformations data
+		function exportImageTransformations() {
+			const transformations = getImageTransformationsData();
+			const dataStr = JSON.stringify(transformations, null, 2);
+			const dataBlob = new Blob([dataStr], {type: 'application/json'});
+			const url = URL.createObjectURL(dataBlob);
+
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = 'image-transformations.json';
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+
+			console.log('Exported image transformations to image-transformations.json');
+			return transformations;
+		}
+
+		// Log current transformations (can be called from console)
+		window.logImageTransformations = function() {
+			const transformations = getImageTransformationsData();
+			console.log('Current Image Transformations:', transformations);
+			console.table(transformations);
+			return transformations;
+		};
+
+		// Export transformations (can be called from console)
+		window.exportImageTransformations = exportImageTransformations;
 
 		// Initialize API loading on page load
 		document.addEventListener('DOMContentLoaded', async () => {
