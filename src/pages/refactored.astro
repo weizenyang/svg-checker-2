@@ -1412,6 +1412,11 @@ import "../styles.css";
 			document.body.className = document.body.className.replace(/control-mode-\w+/g, '');
 			document.body.classList.add(`control-mode-${mode}`);
 
+			// Ensure labels toggle exists when switching to modes that support labels
+			if (mode === 'floorplan' || mode === 'default') {
+				labelToggle(); // Create labels toggle if it doesn't exist
+			}
+
 			if (previousMode !== mode) {
 				console.log(`🔄 Control mode switched: ${previousMode} → ${mode}`);
 				showModeIndicator(mode);
@@ -1481,6 +1486,19 @@ import "../styles.css";
 			console.log('Exported image transformations to image-transformations.json');
 			return transformations;
 		}
+
+		// Debug function to check current state
+		window.debugFloorplateMode = function() {
+			console.log('=== FLOORPLATE MODE DEBUG ===');
+			console.log('Current mode:', currentControlMode);
+			console.log('Has floorplate images:', hasFloorplateImages);
+			console.log('Current hovered image:', currentHoveredImage ? 'YES' : 'NO');
+			if (currentHoveredImage) {
+				console.log('Hovered image name:', currentHoveredImage.getAttribute('data-image-name'));
+			}
+			console.log('Image transformations:', getImageTransformationsData());
+			return { mode: currentControlMode, hasImages: hasFloorplateImages, hovered: !!currentHoveredImage };
+		};
 
 		// Log current transformations (can be called from console)
 		window.logImageTransformations = function() {
@@ -5057,7 +5075,8 @@ import "../styles.css";
 
 		function spawnLabel() {
 			killLabels(true);
-			if (document.getElementById("showLabelsToggle")) {
+			// Only proceed if labels toggle exists and we're in a mode that supports labels
+			if (document.getElementById("showLabelsToggle") && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
 				if (document.getElementById("showLabelsToggle").checked) {
 					var circles = [];
 					const group = globalSvgContainer
