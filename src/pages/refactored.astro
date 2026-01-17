@@ -508,14 +508,16 @@ import "../styles.css";
 						<span id="matching-mode-label">Default Matching (Final 3 elements in image name)</span>
 					</label>
 				</div>
-				<input
+				
+				<div class="flex gap-2">
+					<input
 					type="text"
 					placeholder="To Remove"
 					id="text-replacement"
 				/>
 				<label
 					for="check-floorplans-button"
-					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
+					class="flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
 				>
 					Check Floorplans
 				</label>
@@ -533,6 +535,30 @@ import "../styles.css";
         type="button">
   Clear Images
 </button>
+				</div>
+				
+				<div class="flex gap-2 mt-2">
+					<label
+						for="upload-unit-reference-button"
+						class="flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end cursor-pointer"
+					>
+						Upload unit-reference
+					</label>
+					<input
+						type="file"
+						class="input-style"
+						id="upload-unit-reference-button"
+						accept=".json"
+						name="unit-reference"
+						style="display:none;"
+					/>
+					<button id="export-unit-reference-button"
+						class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
+						type="button">
+						Export unit-reference
+					</button>
+				</div>
+				
 				<div
 					id="image-carousel-container"
 					class="hidden flex-col p-2 bg-neutral-100 rounded-sm"
@@ -620,98 +646,12 @@ import "../styles.css";
 		let aggregatePoints = false;
 		let checkboxesId = [];
 
-		// Image transformations tracking
-		let imageTransformations = {}; // { "name": { flip: boolean, rotation: number } }
-		let currentHoveredImage = null;
-
-		// Control modes to prevent conflicts
-		let currentControlMode = 'default'; // 'default', 'floorplate', 'floorplan'
-		let hasFloorplateImages = false; // Track if floorplate images are present
-
-		// Parse image name from filename (4th part separated by _, contains 2 dashes)
-		function parseImageName(imageFileName) {
-			// Remove extension
-			const nameWithoutExt = imageFileName.replace(/\.[^/.]+$/, "");
-			const parts = nameWithoutExt.split('_');
-
-			// Find the part that contains exactly 2 dashes
-			for (const part of parts) {
-				if ((part.match(/-/g) || []).length === 2) {
-					return part;
-				}
-			}
-
-			// Fallback: return the last part if no part has exactly 2 dashes
-			return parts[parts.length - 1] || imageFileName;
-		}
-
-		// Apply transformations to an image element
-		function applyImageTransformations(imageElement, transformations) {
-			if (!imageElement || !transformations) return;
-
-			// Apply rotation
-			const rotation = transformations.rotation || 0;
-			const flip = transformations.flip || false;
-
-			// Create transform string
-			let transform = '';
-			if (rotation !== 0) {
-				transform += `rotate(${rotation}deg) `;
-			}
-			if (flip) {
-				transform += 'scaleX(-1) ';
-			}
-
-			// Handle different element types
-			if (imageElement.tagName === 'image') {
-				// SVG image element - use transform attribute
-				imageElement.setAttribute('transform', transform.trim());
-			} else {
-				// Regular img element - use CSS transform
-				imageElement.style.transform = transform.trim();
-				imageElement.style.transformOrigin = 'center center';
-			}
-		}
-
-		// Get or create transformation object for an image
-		function getImageTransformations(imageName) {
-			const parsedName = parseImageName(imageName);
-			if (!imageTransformations[parsedName]) {
-				imageTransformations[parsedName] = {
-					name: parsedName,
-					flip: false,
-					rotation: 0
-				};
-			}
-			return imageTransformations[parsedName];
-		}
-
-		// Rotate image by delta degrees (90 degree increments)
-		function rotateImage(imageElement, delta) {
-			if (!imageElement) return;
-
-			const imageName = imageElement.getAttribute('data-image-name') || imageElement.src.split('/').pop();
-			const transformations = getImageTransformations(imageName);
-
-			// Rotate in 90 degree increments, clamped to -90 to 270
-			transformations.rotation = Math.max(-90, Math.min(270, transformations.rotation + delta));
-
-			applyImageTransformations(imageElement, transformations);
-			console.log(`Rotated ${imageName} to ${transformations.rotation}°`);
-		}
-
-		// Flip image horizontally
-		function flipImage(imageElement) {
-			if (!imageElement) return;
-
-			const imageName = imageElement.getAttribute('data-image-name') || imageElement.src.split('/').pop();
-			const transformations = getImageTransformations(imageName);
-
-			transformations.flip = !transformations.flip;
-
-			applyImageTransformations(imageElement, transformations);
-			console.log(`${transformations.flip ? 'Flipped' : 'Unflipped'} ${imageName}`);
-		}
+		// Image transformation lookup for preview images
+		let imageTransformLookup = {};
+		let currentHoveredImageName = null;
+		
+		// Imported unit-reference data
+		let importedUnitReference = null;
 
 		// Asset Delivery API Integration
 		const API_BASE_URL = 'http://localhost:9234';
@@ -987,16 +927,10 @@ import "../styles.css";
 				// Load background images (tower floorplates) via simulated drag-and-drop AFTER SVGs are loaded
 				if (backgroundImages.length > 0) {
 					console.log(`🏗️ Loading ${backgroundImages.length} background images (tower floorplates) via simulated drag-and-drop`);
-					hasFloorplateImages = true;
-					switchControlMode('floorplate'); // Set floorplate mode when images are present
 					loadApiBackgroundImages(backgroundImages);
 				} else {
 					console.log('🏗️ No background images found to load');
-					hasFloorplateImages = false;
 				}
-
-				// Set up keyboard controls for image transformations
-				setupImageTransformationControls();
 			} else if (convertedData.mode === 'roomscale-4') {
 				// For roomscale mode, store assets but don't auto-load (user can load manually)
 				console.log('Roomscale assets loaded via API:', {
@@ -1149,31 +1083,6 @@ import "../styles.css";
 						imageElement.setAttribute("href", imageData.data); // Use the data URL
 						imageElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-						// Store image name for transformation tracking
-						imageElement.setAttribute("data-image-name", imageData.imageName);
-
-						// Add hover event listeners
-						imageElement.addEventListener("mouseenter", (e) => {
-							currentHoveredImage = imageElement;
-							// Only switch to floorplate mode if we're not already in it
-							if (currentControlMode !== 'floorplate') {
-								switchControlMode('floorplate');
-							}
-							console.log(`Hovering over floorplate: ${imageData.imageName}`);
-						});
-
-						imageElement.addEventListener("mouseleave", (e) => {
-							if (currentHoveredImage === imageElement) {
-								currentHoveredImage = null;
-								// Don't switch back to default immediately - stay in floorplate mode if images are present
-								// Mode will only change when explicitly switching to floorplan mode or when no images are present
-							}
-						});
-
-						// Apply any existing transformations
-						const transformations = getImageTransformations(imageData.imageName);
-						applyImageTransformations(imageElement, transformations);
-
 						// Insert as the first child (background)
 						if (svgElement.firstChild) {
 							svgElement.insertBefore(imageElement, svgElement.firstChild);
@@ -1255,41 +1164,17 @@ import "../styles.css";
 			console.log('Image list carousel element:', imageListCarousel);
 			if (imageListCarousel) {
 				imageListCarousel.innerHTML = "";
-					imageList.forEach((image, index) => {
-						console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
-						const listItem = document.createElement("li");
-						listItem.style.height = "100%";
-						const imageElement = document.createElement("img");
-						imageElement.src = image.data;
-						imageElement.style.height = "60px";
-						imageElement.title = image.name; // Add tooltip
-						imageElement.setAttribute("data-image-name", image.name);
-
-						// Add hover events for transformation controls
-						imageElement.addEventListener("mouseenter", (e) => {
-							currentHoveredImage = imageElement;
-							// Only switch to floorplate mode if we're not already in it
-							if (currentControlMode !== 'floorplate') {
-								switchControlMode('floorplate');
-							}
-							console.log(`Hovering over thumbnail: ${image.name}`);
-							console.log('Use Left/Right arrows to rotate, F to flip');
-						});
-
-						imageElement.addEventListener("mouseleave", (e) => {
-							if (currentHoveredImage === imageElement) {
-								currentHoveredImage = null;
-								// Don't switch back to default immediately - stay in floorplate mode if images are present
-							}
-						});
-
-						// Apply any existing transformations
-						const transformations = getImageTransformations(image.name);
-						applyImageTransformations(imageElement, transformations);
-
-						listItem.appendChild(imageElement);
-						imageListCarousel.appendChild(listItem);
-					});
+				imageList.forEach((image, index) => {
+					console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
+					const listItem = document.createElement("li");
+					listItem.style.height = "100%";
+					const imageElement = document.createElement("img");
+					imageElement.src = image.data;
+					imageElement.style.height = "60px";
+					imageElement.title = image.name; // Add tooltip
+					listItem.appendChild(imageElement);
+					imageListCarousel.appendChild(listItem);
+				});
 				console.log('Created thumbnails for all images');
 			} else {
 				console.error('Image list carousel not found!');
@@ -1333,234 +1218,8 @@ import "../styles.css";
 			}, 5000);
 		}
 
-		// Set up keyboard controls for image transformations
-		function setupImageTransformationControls() {
-			console.log('Setting up image transformation keyboard controls');
-
-			document.addEventListener('keydown', (e) => {
-				// Handle mode switching shortcuts first
-				if (e.key === 'm' || e.key === 'M') {
-					e.preventDefault();
-					if (currentControlMode === 'floorplate' && hasFloorplateImages) {
-						switchControlMode('floorplan');
-					} else if (currentControlMode === 'floorplan') {
-						switchControlMode('default');
-					} else {
-						switchControlMode(hasFloorplateImages ? 'floorplate' : 'default');
-					}
-					return;
-				}
-
-				// Then handle mode-specific controls
-				if (currentControlMode === 'floorplate' && currentHoveredImage) {
-					switch (e.key) {
-						case 'ArrowLeft':
-							e.preventDefault();
-							rotateImage(currentHoveredImage, -90);
-							break;
-						case 'ArrowRight':
-							e.preventDefault();
-							rotateImage(currentHoveredImage, 90);
-							break;
-						case 'f':
-						case 'F':
-							e.preventDefault();
-							flipImage(currentHoveredImage);
-							break;
-					}
-				}
-			});
-
-			console.log('🎮 Floorplate transformation controls enabled!');
-			console.log('🎯 Hover over floorplate images and use:');
-			console.log('  ← → Arrow keys: Rotate ±90° (only in floorplate mode)');
-			console.log('  F key: Flip horizontally (only in floorplate mode)');
-			console.log('  M key: Switch between floorplate/floorplan/default modes');
-			console.log('💾 Call logImageTransformations() to view changes');
-			console.log('📤 Call exportImageTransformations() to download JSON');
-
-			// Add visual feedback for transformable images
-			const style = document.createElement('style');
-			style.textContent = `
-				svg image:hover {
-					outline: 2px solid #007bff !important;
-					outline-offset: 2px;
-					cursor: crosshair;
-				}
-				.control-mode-floorplate svg image:hover {
-					outline: 3px solid #28a745 !important;
-					cursor: crosshair;
-				}
-			`;
-			document.head.appendChild(style);
-		}
-
-		// Get all image transformations
-		function getImageTransformationsData() {
-			const transformations = Object.values(imageTransformations).filter(t =>
-				t.flip !== false || t.rotation !== 0
-			);
-			return transformations;
-		}
-
-		// Function to switch control modes
-		function switchControlMode(mode) {
-			const previousMode = currentControlMode;
-			currentControlMode = mode;
-
-			// Update body class for visual feedback
-			document.body.className = document.body.className.replace(/control-mode-\w+/g, '');
-			document.body.classList.add(`control-mode-${mode}`);
-
-			// Ensure labels toggle exists when switching to modes that support labels
-			if (mode === 'floorplan' || mode === 'default') {
-				labelToggle(); // Create labels toggle if it doesn't exist
-			}
-
-			if (previousMode !== mode) {
-				console.log(`🔄 Control mode switched: ${previousMode} → ${mode}`);
-				showModeIndicator(mode);
-			}
-		}
-
-		// Show visual indicator of current mode
-		function showModeIndicator(mode) {
-			// Remove existing indicator
-			const existing = document.getElementById('control-mode-indicator');
-			if (existing) existing.remove();
-
-			// Create new indicator
-			const indicator = document.createElement('div');
-			indicator.id = 'control-mode-indicator';
-			indicator.style.cssText = `
-				position: fixed;
-				top: 10px;
-				right: 10px;
-				background: rgba(0,0,0,0.8);
-				color: white;
-				padding: 5px 10px;
-				border-radius: 4px;
-				font-size: 12px;
-				z-index: 10000;
-				pointer-events: none;
-			`;
-
-			let modeText = '';
-			switch (mode) {
-				case 'floorplate':
-					modeText = '🏗️ Floorplate Mode (←→ rotate, F flip, M switch)';
-					break;
-				case 'floorplan':
-					modeText = '📐 Floorplan Mode (←→ rotate circles, M switch)';
-					break;
-				default:
-					modeText = '📝 Default Mode (M switch)';
-			}
-
-			indicator.textContent = modeText;
-			document.body.appendChild(indicator);
-
-			// Auto-hide after 3 seconds
-			setTimeout(() => {
-				if (indicator.parentNode) {
-					indicator.remove();
-				}
-			}, 3000);
-		}
-
-		// Export transformations data
-		function exportImageTransformations() {
-			const transformations = getImageTransformationsData();
-			const dataStr = JSON.stringify(transformations, null, 2);
-			const dataBlob = new Blob([dataStr], {type: 'application/json'});
-			const url = URL.createObjectURL(dataBlob);
-
-			const link = document.createElement('a');
-			link.href = url;
-			link.download = 'image-transformations.json';
-			document.body.appendChild(link);
-			link.click();
-			document.body.removeChild(link);
-			URL.revokeObjectURL(url);
-
-			console.log('Exported image transformations to image-transformations.json');
-			return transformations;
-		}
-
-		// Debug function to check current state
-		window.debugFloorplateMode = function() {
-			console.log('=== FLOORPLATE MODE DEBUG ===');
-			console.log('Current mode:', currentControlMode);
-			console.log('Has floorplate images:', hasFloorplateImages);
-			console.log('Current hovered image:', currentHoveredImage ? 'YES' : 'NO');
-			if (currentHoveredImage) {
-				console.log('Hovered image name:', currentHoveredImage.getAttribute('data-image-name'));
-			}
-			console.log('Image transformations:', getImageTransformationsData());
-			return { mode: currentControlMode, hasImages: hasFloorplateImages, hovered: !!currentHoveredImage };
-		};
-
-		// Debug function to check image overlay functionality
-		window.debugImageOverlay = function() {
-			console.log('=== IMAGE OVERLAY DEBUG ===');
-			console.log('Image list length:', imageList.length);
-			console.log('Image list:', imageList.map(img => ({ name: img.name, hasData: !!img.data })));
-
-			const svg = document.querySelector('#svg-container svg');
-			if (svg) {
-				const paths = svg.querySelectorAll('path');
-				const circles = svg.querySelectorAll('circle');
-				const polygons = svg.querySelectorAll('polygon');
-				const rects = svg.querySelectorAll('rect');
-
-				console.log('SVG elements:');
-				console.log('- Paths:', paths.length);
-				console.log('- Circles:', circles.length);
-				console.log('- Polygons:', polygons.length);
-				console.log('- Rectangles:', rects.length);
-
-				console.log('Sample element IDs:');
-				const sampleElements = Array.from(svg.querySelectorAll('[id]')).slice(0, 5);
-				sampleElements.forEach(el => {
-					console.log(`  ${el.tagName}#${el.id}`);
-				});
-			} else {
-				console.log('No SVG found in container');
-			}
-
-			return {
-				imageListLength: imageList.length,
-				svgElements: svg ? {
-					paths: svg.querySelectorAll('path').length,
-					circles: svg.querySelectorAll('circle').length,
-					polygons: svg.querySelectorAll('polygon').length,
-					rects: svg.querySelectorAll('rect').length
-				} : null
-			};
-		};
-
-		// Log current transformations (can be called from console)
-		window.logImageTransformations = function() {
-			const transformations = getImageTransformationsData();
-			console.log('Current Image Transformations:', transformations);
-			console.table(transformations);
-			return transformations;
-		};
-
-		// Export transformations (can be called from console)
-		window.exportImageTransformations = exportImageTransformations;
-
 		// Initialize API loading on page load
 		document.addEventListener('DOMContentLoaded', async () => {
-			// Check if there are any URL parameters
-			const urlParams = new URLSearchParams(window.location.search);
-			const hasParams = urlParams.toString().length > 0;
-
-			if (!hasParams) {
-				console.log('No URL parameters found, skipping API loading. User can load files manually.');
-				return;
-			}
-
 			const projectKey = getProjectKey();
 			console.log('Loading project:', projectKey);
 
@@ -2954,26 +2613,11 @@ import "../styles.css";
 				}
 			};
 
-			// Add mode switching for floorplan elements - only on click/interaction, not hover
-			const handleFloorplanClick = (e) => {
-				if (e.target && (e.target.tagName === 'circle' || e.target.tagName === 'polygon' || e.target.tagName === 'path' || e.target.tagName === 'rect')) {
-					// Only switch to floorplan mode if we're currently in default mode (not overriding floorplate mode)
-					if (currentControlMode === 'default') {
-						switchControlMode('floorplan');
-					}
-				}
-			};
-
 			svgElement.addEventListener('contextmenu', preventContextMenu);
-			svgElement.addEventListener('click', handleFloorplanClick, true); // Use capture phase
 			
 			const allChildren = svgElement.querySelectorAll('*');
 			allChildren.forEach(child => {
 				child.addEventListener('contextmenu', preventContextMenu);
-				// Add click listeners for individual elements (only switch to floorplan mode on interaction)
-				if (child.tagName === 'circle' || child.tagName === 'polygon' || child.tagName === 'path' || child.tagName === 'rect') {
-					child.addEventListener('click', handleFloorplanClick);
-				}
 			});
 		}
 
@@ -3752,6 +3396,136 @@ import "../styles.css";
 			uploadImages(e)
 		});
 
+		// Upload unit-reference handler
+		document.getElementById("upload-unit-reference-button").addEventListener("change", (e: any) => {
+			const file = e.target.files[0];
+			if (!file) return;
+			
+			const reader = new FileReader();
+			reader.onload = (event: any) => {
+				try {
+					const jsonData = JSON.parse(event.target.result);
+					let unitsArray = null;
+					
+					// Handle different JSON structures
+					if (Array.isArray(jsonData)) {
+						// Direct array format: [{...}, {...}]
+						unitsArray = jsonData;
+					} else if (jsonData.unitReference && Array.isArray(jsonData.unitReference.units)) {
+						// Wrapped in unitReference.units: {"unitReference": {"units": [{...}]}}
+						unitsArray = jsonData.unitReference.units;
+					} else if (Array.isArray(jsonData.units)) {
+						// Wrapped in units: {"units": [{...}]}
+						unitsArray = jsonData.units;
+					} else {
+						console.error("Unexpected JSON structure:", jsonData);
+						alert("Invalid format: Expected an array of unit objects, or an object with 'units' or 'unitReference.units' property");
+						return;
+					}
+					
+					if (unitsArray && unitsArray.length > 0) {
+						importedUnitReference = unitsArray;
+						console.log("📥 Imported unit-reference:", {
+							count: unitsArray.length,
+							units: unitsArray.map((unit: any) => ({
+								name: unit.name,
+								type: unit.type,
+								rotation: unit.rotation,
+								flip: unit.flip,
+								identifier: getUnitIdentifier(unit.name || "")
+							}))
+						});
+						
+						// Update preview if currently showing an image
+						if (currentHoveredImageName) {
+							const transform = getImageTransform(currentHoveredImageName);
+							updatePreviewText(currentHoveredImageName, transform);
+						}
+						
+						console.log(`Successfully imported ${unitsArray.length} unit(s)`);
+					} else {
+						console.log("No units found in the file");
+					}
+				} catch (error) {
+					console.error("Error parsing unit-reference JSON:", error);
+					console.log("Error parsing JSON file. Please check the format.");
+				}
+			};
+			reader.readAsText(file);
+		});
+
+		// Export unit-reference handler
+		document.getElementById("export-unit-reference-button").addEventListener("click", () => {
+			if (!importedUnitReference || importedUnitReference.length === 0) {
+				console.log("No imported unit-reference data to export. Please upload a unit-reference file first.");
+				return;
+			}
+			
+			// Merge imported data with current transform values
+			const mergedData = importedUnitReference.map((unit: any) => {
+				const unitName = unit.name || "";
+				const identifier = getUnitIdentifier(unitName);
+				
+				// Get imported rotation
+				let importedRotation = typeof unit.rotation === 'string' ? parseInt(unit.rotation) : unit.rotation;
+				
+				// Find matching transform by identifier
+				const transform = identifier && imageTransformLookup[identifier] ? imageTransformLookup[identifier] : null;
+				
+				// Calculate final rotation: importedRotation + change (if transform exists)
+				let rotation = importedRotation;
+				let flip = unit.flip;
+				
+			if (transform) {
+				// Final rotation = importedRotation + change
+				const rotationChange = transform.rotation || 0;
+				rotation = importedRotation + rotationChange;
+				
+				// Normalize rotation to -90 to 180 degrees
+				while (rotation < -90) rotation += 360;
+				while (rotation > 180) rotation -= 360;
+				
+				// For flip: apply change relative to imported (XOR logic)
+				// transform.flip represents whether user has toggled it (change)
+				const importedFlipBool = typeof unit.flip === 'string' ? unit.flip === 'true' : unit.flip;
+				flip = importedFlipBool !== transform.flip; // XOR: final = imported XOR change
+			} else {
+				// Use imported values as-is
+				if (typeof rotation === 'string') {
+					rotation = parseInt(rotation);
+				}
+				// Normalize rotation even if no transform
+				while (rotation < -90) rotation += 360;
+				while (rotation > 180) rotation -= 360;
+			}
+				
+				// Convert flip to string format ("true" or "false")
+				const flipString = typeof flip === 'boolean' ? flip.toString() : (flip === 'true' || flip === true ? 'true' : 'false');
+				
+				return {
+					name: unit.name,
+					type: unit.type,
+					flip: flipString,
+					rotation: rotation
+				};
+			});
+			
+			// Create and download JSON file
+			const jsonString = JSON.stringify(mergedData, null, 2);
+			const blob = new Blob([jsonString], { type: "application/json" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = "unit-reference.json";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+			
+			console.log("Exported unit-reference:", mergedData);
+			console.log(`Successfully exported ${mergedData.length} unit(s)`);
+		});
+
 		document.getElementById("clear-images").addEventListener("click", () => {
 			// 1. empty the array that the previewer uses
 			imageList.splice(0, imageList.length);
@@ -3829,17 +3603,261 @@ import "../styles.css";
 				);
 		}
 
-		function previewBackplate(parentSVG) {
-			console.log("🔍 Setting up previewBackplate for SVG element");
-			console.log("📋 Current imageList:", imageList.map(img => ({ name: img.name, data: img.data ? 'HAS_DATA' : 'NO_DATA' })));
+		// Helper function to parse image name and extract the 4th segment (with 2 dashes)
+		function parseImageName(imageName) {
+			if (!imageName) return null;
+			const parts = imageName.split("_");
+			if (parts.length < 4) return null;
+			
+			// Find the 4th segment (index 3) that contains exactly 2 dashes
+			const fourthSegment = parts[3];
+			if (!fourthSegment) return null;
+			
+			// Count dashes in the 4th segment
+			const dashCount = (fourthSegment.match(/-/g) || []).length;
+			if (dashCount === 2) {
+				return fourthSegment;
+			}
+			
+			return null;
+		}
 
+		// Helper function to get the unit identifier from a name (handles both image names and unit names)
+		function getUnitIdentifier(name) {
+			if (!name) return null;
+			
+			// First try parsing as image name (has 4+ segments with _)
+			const parsedFromImage = parseImageName(name);
+			if (parsedFromImage) return parsedFromImage;
+			
+			// If not found, check if the name itself is already in the format (e.g., "a-01-01")
+			// Check if it has exactly 2 dashes (unit identifier format)
+			const dashCount = (name.match(/-/g) || []).length;
+			if (dashCount === 2 && !name.includes("_")) {
+				// It's already a unit identifier (e.g., "a-01-01")
+				return name;
+			}
+			
+			return null;
+		}
+
+		// Helper function to get or create transformation entry
+		function getImageTransform(imageName) {
+			const identifier = getUnitIdentifier(imageName);
+			if (!identifier) return null;
+			
+			if (!imageTransformLookup[identifier]) {
+				imageTransformLookup[identifier] = {
+					name: identifier,
+					flip: false,
+					rotation: 0
+				};
+			}
+			
+			return imageTransformLookup[identifier];
+		}
+
+		// Helper function to apply transformation to image element
+		function applyImageTransform(imgElement, transform, importedRotation = null, importedFlip = null) {
+			if (!imgElement || !transform) return;
+			
+			// Set transform origin to center (50% 50%) for rotation around center
+			imgElement.style.transformOrigin = "center center";
+			imgElement.style.transformOrigin = "50% 50%";
+			
+			// Calculate final rotation: importedRotation + change (if imported exists)
+			const rotationChange = transform.rotation || 0;
+			const finalRotation = importedRotation !== null ? importedRotation + rotationChange : rotationChange;
+			
+			// Calculate final flip: importedFlip XOR change (if imported exists)
+			const finalFlip = importedFlip !== null ? (importedFlip !== transform.flip) : transform.flip;
+			
+			// Build transform string - apply rotation and flip
+			let transformParts = [];
+			
+			// Apply final rotation
+			if (finalRotation !== 0) {
+				transformParts.push(`rotate(${finalRotation}deg)`);
+			}
+			
+			// Apply final flip
+			if (finalFlip) {
+				transformParts.push(`scaleX(-1)`);
+			}
+			
+			// Combine all transforms
+			const transformString = transformParts.join(" ");
+			imgElement.style.transform = transformString || "none";
+		}
+
+		// Helper function to update preview text with transform values
+		function updatePreviewText(imageName, transform) {
+			const previewTextEl = document.getElementById("image-previewer-text");
+			if (!previewTextEl || !imageName) return;
+			
+			// Find the original image to get its name
+			const selectedImage = imageList.find((img) => img.name === imageName);
+			if (!selectedImage) return;
+			
+			// Check if this unit exists in imported unit-reference
+			// Match by the 4th segment (with 2 dashes) from the image name, or direct match for unit names
+			// NOTE: Sequence of loading doesn't matter - matching happens on hover after all data is available
+			const imageIdentifier = getUnitIdentifier(imageName);
+			let importedUnit = null;
+			
+			console.log("🔍 Hover - Unit Matching:", {
+				imageName: imageName,
+				imageIdentifier: imageIdentifier,
+				hasImportedData: !!importedUnitReference,
+				importedDataCount: importedUnitReference?.length || 0,
+				imageListCount: imageList.length
+			});
+			
+			if (imageIdentifier && importedUnitReference) {
+				// Try to find matching unit by identifier (handles both image names and unit names)
+				importedUnit = importedUnitReference.find((unit: any) => {
+					const unitIdentifier = getUnitIdentifier(unit.name || "");
+					const matches = unitIdentifier === imageIdentifier;
+					if (matches) {
+						console.log("✅ Match found:", {
+							unitName: unit.name,
+							unitIdentifier: unitIdentifier,
+							imageIdentifier: imageIdentifier,
+							unitData: {
+								name: unit.name,
+								type: unit.type,
+								rotation: unit.rotation,
+								flip: unit.flip
+							}
+						});
+					}
+					return matches;
+				});
+				
+				if (!importedUnit && imageIdentifier) {
+					const availableIdentifiers = importedUnitReference
+						.map((u: any) => getUnitIdentifier(u.name || ""))
+						.filter(Boolean);
+					console.log("❌ No match found for imageIdentifier:", imageIdentifier, "Available identifiers:", availableIdentifiers);
+				}
+			} else if (imageIdentifier) {
+				console.log("⚠️ No imported unit-reference data available yet");
+			} else {
+				console.log("⚠️ Could not extract identifier from image name:", imageName);
+			}
+			
+			// Get rotation CHANGE from transform (this is the delta, not the absolute value)
+			const rotationChange = transform?.rotation || 0;
+			const currentFlip = transform?.flip || false;
+			
+			// Get imported rotation (convert string to number if needed)
+			const importedRotation = importedUnit ? 
+				(typeof importedUnit.rotation === 'string' ? parseInt(importedUnit.rotation) : importedUnit.rotation) : 
+				null;
+			const importedFlip = importedUnit ? 
+				(typeof importedUnit.flip === 'string' ? importedUnit.flip === 'true' : importedUnit.flip) : 
+				null;
+			
+			// Calculate final rotation: importedRotation + rotationChange (change is added to imported)
+			const finalRotation = importedRotation !== null ? importedRotation + rotationChange : rotationChange;
+			
+			// Log offsets and changes
+			console.log("📊 Unit Offsets & Changes:", {
+				unitName: imageName,
+				imageIdentifier: imageIdentifier,
+				importedUnit: importedUnit ? {
+					name: importedUnit.name,
+					type: importedUnit.type,
+					rotation: importedUnit.rotation,
+					flip: importedUnit.flip
+				} : null,
+				currentTransform: transform ? {
+					rotationChange: rotationChange,
+					flipChange: currentFlip
+				} : null,
+				offsets: {
+					rotation: importedRotation !== null ? {
+						imported: importedRotation,
+						change: rotationChange,
+						final: finalRotation
+					} : null,
+					flip: importedFlip !== null ? {
+						imported: importedFlip,
+						change: currentFlip,
+						final: importedFlip !== currentFlip // XOR: final flip
+					} : null
+				}
+			});
+			
+			// Format transform values
+			let transformParts = [];
+			let rotationDisplay = "";
+			
+			// If imported data exists AND transform has been applied, show change format
+			if (importedRotation !== null && transform) {
+				// Show: importedRotation -> finalRotation (where finalRotation = importedRotation + change)
+				rotationDisplay = `rot:${importedRotation}° -> ${finalRotation}°`;
+				transformParts.push(rotationDisplay);
+			} else if (transform && rotationChange !== 0) {
+				// No imported data, just show the change as final rotation
+				rotationDisplay = `rot:${finalRotation}°`;
+				transformParts.push(rotationDisplay);
+			} else if (importedRotation !== null) {
+				// Show imported rotation even if no transform applied yet
+				rotationDisplay = `rot:${importedRotation}°`;
+				transformParts.push(rotationDisplay);
+			}
+			
+			// Add flip if present - show final flip value (imported XOR change)
+			if (transform) {
+				const finalFlip = importedFlip !== null ? (importedFlip !== transform.flip) : transform.flip;
+				if (finalFlip) {
+					if (importedFlip !== null) {
+						// Show imported -> final format
+						transformParts.push(`<br>flip:${importedFlip} -> ${finalFlip}`);
+					} else {
+						transformParts.push("<br>flip:true");
+					}
+				}
+			} else if (importedFlip !== null && importedFlip) {
+				// Show imported flip if no transform
+				transformParts.push("<br>flip:true");
+			}
+			
+			// Determine if rotation display should be blue (exists in imported data)
+			const rotationStyle = importedUnit && importedRotation !== null ? "color: #3b82f6; font-weight: normal;" : "font-weight: normal; color: #666;";
+			const nameStyle = "font-weight: normal;";
+			
+			// Create structure with flex layout for spacing
+			if (transformParts.length > 0) {
+				previewTextEl.innerHTML = `
+					<div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 10px; font-weight: normal;">
+						<span style="${nameStyle}">${selectedImage.name}</span>
+						<span style="${rotationStyle}">${transformParts.join(", ")}</span>
+					</div>
+				`;
+			} else {
+				previewTextEl.innerHTML = `<div style="font-size: 10px; font-weight: normal;"><span style="${nameStyle}">${selectedImage.name}</span></div>`;
+			}
+		}
+
+		// Function to get the image transformation lookup object
+		function getImageTransformLookup() {
+			// Return array of transformation objects
+			return Object.values(imageTransformLookup);
+		}
+
+		// Expose lookup on window for debugging/export
+		(window as any).getImageTransformLookup = getImageTransformLookup;
+
+		function previewBackplate(parentSVG) {
 			const listeners = [];
 			listeners.forEach((e) => {
 				removeEventListener("hover", e);
 			});
 
 			let previewerInstance = document.getElementById("image-previewer");
-			console.log("🎨 Creating previewer element")
+			console.log("previewing")
 			if (!previewerInstance) {
 				const newPreviewer = document.createElement("div");
 				const previewerImg = document.createElement("img");
@@ -3861,19 +3879,14 @@ import "../styles.css";
 				previewerImg.style.marginBottom = "10px";
 				newPreviewer.appendChild(previewerImg);
 				previewerText.id = "image-previewer-text";
-				previewerText.style.fontSize = "12px";
+				previewerText.style.fontSize = "10px";
+				previewerText.style.fontWeight = "normal";
 				newPreviewer.appendChild(previewerText);
 				document.querySelector("body").appendChild(newPreviewer);
 			}
 
-			// Listen to all interactive SVG elements: paths, circles, polygons, rectangles
-			const svgElements = parentSVG.querySelectorAll("path, circle, polygon, rect");
-			console.log(`🎯 Setting up hover listeners for ${svgElements.length} SVG elements:`, Array.from(svgElements).map(el => `${el.tagName}#${el.id}`).slice(0, 10));
-
-			svgElements.forEach((element) => {
-				const listener = element.addEventListener("mouseover", (e) => {
-					console.log(`🖱️ Hovering over ${element.tagName} with ID: ${element.id}`);
-					// Don't switch modes on hover - only show preview
+			parentSVG.querySelectorAll("path").forEach((path) => {
+				const listener = path.addEventListener("mouseover", (e) => {
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
@@ -3883,24 +3896,20 @@ import "../styles.css";
 					
 					if (useDefaultMatching) {
 						// DEFAULT MATCHING LOGIC:
-						// Extract final 3 elements from element ID (separated by _)
+						// Extract final 3 elements from Path ID (separated by _)
 						// Match to 4th element of image name (separated by _)
 						// Remove all separators (space, -, _) during matching
-
-						const elementIdParts = e.target.id.split("_");
-						const elementFinalThreeElements = elementIdParts.slice(-3).join("_");
-						const elementNormalized = elementFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
-
-						console.log(`🔍 Matching element ID "${e.target.id}" -> "${elementFinalThreeElements}" -> normalized: "${elementNormalized}"`);
-
+						
+						const pathIdParts = e.target.id.split("_");
+						const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
+						const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
+						
 						selectedImage = imageList.filter((image) => {
 							// Normalize the entire image name
 							const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
-
-							// Check if normalized element ID appears in normalized image name
-							const matches = imageNormalized.includes(elementNormalized);
-							console.log(`  📸 Checking image "${image.name}" -> normalized: "${imageNormalized}" -> matches: ${matches}`);
-							return matches;
+							
+							// Check if normalized path appears in normalized image name
+							return imageNormalized.includes(pathNormalized);
 						})[0];
 						
 						// FALLBACK: Use custom logic if default matching fails
@@ -3941,24 +3950,60 @@ import "../styles.css";
 					}
 
 					if (selectedImage) {
-						console.log(`✅ Found matching image: ${selectedImage.name}`);
-						document.getElementById("image-previewer-image").src =
-							selectedImage.data;
-						document.getElementById(
-							"image-previewer-text",
-						).innerHTML = selectedImage.name;
+						// console.log(selectedImage)
+						const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+						previewImg.src = selectedImage.data;
+						
+						// Track current hovered image name
+						currentHoveredImageName = selectedImage.name;
+						
+						// Get or create transformation entry
+						const transform = getImageTransform(selectedImage.name);
+						
+						// Get imported rotation and flip for this image
+						const imageIdentifier = getUnitIdentifier(selectedImage.name);
+						let importedRotationForImage = null;
+						let importedFlipForImage = null;
+						if (imageIdentifier && importedUnitReference) {
+							const importedUnit = importedUnitReference.find((unit: any) => {
+								const unitIdentifier = getUnitIdentifier(unit.name || "");
+								return unitIdentifier === imageIdentifier;
+							});
+							if (importedUnit) {
+								importedRotationForImage = typeof importedUnit.rotation === 'string' ? parseInt(importedUnit.rotation) : importedUnit.rotation;
+								importedFlipForImage = typeof importedUnit.flip === 'string' ? importedUnit.flip === 'true' : importedUnit.flip;
+							}
+						}
+						
+						// Update preview text with transform values
+						updatePreviewText(selectedImage.name, transform);
+						
+						// Apply saved transformation after image loads
+						previewImg.onload = () => {
+							if (transform) {
+								applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+								updatePreviewText(selectedImage.name, transform);
+							}
+						};
+						
+						// If image is already loaded, apply immediately
+						if (previewImg.complete) {
+							if (transform) {
+								applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+								updatePreviewText(selectedImage.name, transform);
+							}
+						}
 					} else {
-						console.log(`❌ No matching image found for element ID: ${e.target.id}`);
 						document.getElementById("image-previewer-image").src =
 							"";
 						document.getElementById(
 							"image-previewer-text",
-						).innerHTML = "No matching floorplan found";
+						).innerHTML = "";
+						currentHoveredImageName = null;
 					}
 				});
 
-				const listener2 = element.addEventListener("mouseout", (e) => {
-					// Don't switch modes on mouseout - only hide preview
+				const listener2 = path.addEventListener("mouseout", (e) => {
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "none";
@@ -3974,6 +4019,109 @@ import "../styles.css";
 				document.getElementById("image-previewer-container").style.top =
 					`${e.clientY}px`;
 			});
+
+			// Keyboard handlers for image transformation
+			// Remove any existing preview keyboard handler to avoid duplicates
+			const existingPreviewKeyHandler = (window as any).previewKeyHandler;
+			if (existingPreviewKeyHandler) {
+				document.removeEventListener("keydown", existingPreviewKeyHandler);
+			}
+
+			// Create new keyboard handler
+			(window as any).previewKeyHandler = (e: KeyboardEvent) => {
+				// Check if previewer is visible and an image is hovered
+				const previewContainer = document.getElementById("image-previewer-container");
+				if (!previewContainer || previewContainer.style.display === "none" || !currentHoveredImageName) {
+					return; // Let other handlers process the key
+				}
+
+				// Check if focus is on an input-like element
+				const activeEl = document.activeElement;
+				const isInputLike = activeEl && (
+					activeEl.tagName === "INPUT" || 
+					activeEl.tagName === "TEXTAREA" || 
+					activeEl.tagName === "SELECT" || 
+					(activeEl as HTMLElement).isContentEditable
+				);
+				if (isInputLike) {
+					return; // Don't interfere with input fields
+				}
+
+				const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+				if (!previewImg || !previewImg.src) {
+					return;
+				}
+
+				const transform = getImageTransform(currentHoveredImageName);
+				if (!transform) {
+					return;
+				}
+
+				// Get imported rotation and flip for this image to calculate final values and limits
+				const imageIdentifier = getUnitIdentifier(currentHoveredImageName);
+				let importedRotationForImage = null;
+				let importedFlipForImage = null;
+				if (imageIdentifier && importedUnitReference) {
+					const importedUnit = importedUnitReference.find((unit: any) => {
+						const unitIdentifier = getUnitIdentifier(unit.name || "");
+						return unitIdentifier === imageIdentifier;
+					});
+					if (importedUnit) {
+						importedRotationForImage = typeof importedUnit.rotation === 'string' ? parseInt(importedUnit.rotation) : importedUnit.rotation;
+						importedFlipForImage = typeof importedUnit.flip === 'string' ? importedUnit.flip === 'true' : importedUnit.flip;
+					}
+				}
+
+				// Handle ArrowLeft: rotate -90 degrees (change)
+				if (e.key === "ArrowLeft") {
+					e.preventDefault();
+					e.stopPropagation();
+					// Calculate new change value
+					const newChange = transform.rotation - 90;
+					// Calculate final rotation with new change
+					const finalRotation = importedRotationForImage !== null ? importedRotationForImage + newChange : newChange;
+					// Limit final rotation to -90 to 180
+					if (finalRotation >= -90 && finalRotation <= 180) {
+						transform.rotation = newChange;
+						applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+						updatePreviewText(currentHoveredImageName, transform);
+						console.log("Image transform updated:", transform);
+					}
+					return;
+				}
+
+				// Handle ArrowRight: rotate +90 degrees (change)
+				if (e.key === "ArrowRight") {
+					e.preventDefault();
+					e.stopPropagation();
+					// Calculate new change value
+					const newChange = transform.rotation + 90;
+					// Calculate final rotation with new change
+					const finalRotation = importedRotationForImage !== null ? importedRotationForImage + newChange : newChange;
+					// Limit final rotation to -90 to 180
+					if (finalRotation >= -90 && finalRotation <= 180) {
+						transform.rotation = newChange;
+						applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+						updatePreviewText(currentHoveredImageName, transform);
+						console.log("Image transform updated:", transform);
+					}
+					return;
+				}
+
+				// Handle F key: flip image (toggle the change)
+				if (e.key === "f" || e.key === "F") {
+					e.preventDefault();
+					e.stopPropagation();
+					transform.flip = !transform.flip; // Toggle the change
+					applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+					updatePreviewText(currentHoveredImageName, transform);
+					console.log("Image transform updated:", transform);
+					return;
+				}
+			};
+
+			// Add the keyboard handler
+			document.addEventListener("keydown", (window as any).previewKeyHandler);
 		}
 
 		fileInput.addEventListener("change", () => {
@@ -4025,8 +4173,106 @@ import "../styles.css";
 		document.body.addEventListener("drop", (e) => {
 			e.preventDefault();
 			console.log(e);
-			console.log(e.dataTransfer.files[0]);
-			handleFileChange(e.dataTransfer.files);
+			const files = Array.from(e.dataTransfer.files);
+			console.log("Dropped files:", files);
+			
+			// Separate files by type
+			const backplateImages: File[] = [];
+			const unitReferenceFiles: File[] = [];
+			const otherFiles: File[] = [];
+			
+			files.forEach((file) => {
+				const fileName = file.name.toLowerCase();
+				// Check if file name contains "backplate_image_floorplan" (case-insensitive)
+				if (fileName.includes("backplate_image_floorplan")) {
+					backplateImages.push(file);
+				}
+				// Check if file is unit-reference.json
+				else if (fileName === "unit-reference.json" || fileName.endsWith("unit-reference.json")) {
+					unitReferenceFiles.push(file);
+				}
+				// All other files
+				else {
+					otherFiles.push(file);
+				}
+			});
+			
+			// Handle backplate images - load into Check Floorplans
+			if (backplateImages.length > 0) {
+				console.log(`Loading ${backplateImages.length} backplate image(s) into Check Floorplans`);
+				// Create a FileList-like object for the uploadImages function
+				const dt = new DataTransfer();
+				backplateImages.forEach(file => dt.items.add(file));
+				const fakeEvent = {
+					target: {
+						files: dt.files
+					}
+				};
+				uploadImages(fakeEvent as any);
+			}
+			
+			// Handle unit-reference files - load into Upload unit-reference
+			if (unitReferenceFiles.length > 0) {
+				console.log(`Loading ${unitReferenceFiles.length} unit-reference file(s)`);
+				// Use the first unit-reference file
+				const file = unitReferenceFiles[0];
+				const reader = new FileReader();
+				reader.onload = (event: any) => {
+					try {
+						const jsonData = JSON.parse(event.target.result);
+						let unitsArray = null;
+						
+						// Handle different JSON structures
+						if (Array.isArray(jsonData)) {
+							unitsArray = jsonData;
+						} else if (jsonData.unitReference && Array.isArray(jsonData.unitReference.units)) {
+							unitsArray = jsonData.unitReference.units;
+						} else if (Array.isArray(jsonData.units)) {
+							unitsArray = jsonData.units;
+						} else {
+							console.error("Unexpected JSON structure:", jsonData);
+							console.log("Invalid format: Expected an array of unit objects, or an object with 'units' or 'unitReference.units' property");
+							return;
+						}
+						
+						if (unitsArray && unitsArray.length > 0) {
+							importedUnitReference = unitsArray;
+							console.log("📥 Imported unit-reference:", {
+								count: unitsArray.length,
+								units: unitsArray.map((unit: any) => ({
+									name: unit.name,
+									type: unit.type,
+									rotation: unit.rotation,
+									flip: unit.flip,
+									identifier: getUnitIdentifier(unit.name || "")
+								}))
+							});
+							
+							// Update preview if currently showing an image
+							if (currentHoveredImageName) {
+								const transform = getImageTransform(currentHoveredImageName);
+								updatePreviewText(currentHoveredImageName, transform);
+							}
+							
+							console.log(`Successfully imported ${unitsArray.length} unit(s)`);
+						} else {
+							console.log("No units found in the file");
+						}
+					} catch (error) {
+						console.error("Error parsing unit-reference JSON:", error);
+						console.log("Error parsing JSON file. Please check the format.");
+					}
+				};
+				reader.readAsText(file);
+			}
+			
+			// Handle other files with default behavior (SVG, etc.)
+			if (otherFiles.length > 0) {
+				const dt = new DataTransfer();
+				otherFiles.forEach(file => dt.items.add(file));
+				handleFileChange(dt.files);
+			}
+			
 			document
 				.querySelector(".drag-drop-prompt")
 				.classList.remove("appear");
@@ -4140,18 +4386,18 @@ import "../styles.css";
 			}
 
 			if (event.key === "ArrowLeft") {
-				if (!typing && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
+				if (!typing) {
 					rotateCircles(-45);
 				}
 			} else if (event.key === "ArrowRight") {
-				if (!typing && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
+				if (!typing) {
 					rotateCircles(45);
 				}
 			}
 
 			if (e.key == "l") {
 				console.log(e.key);
-				if ((currentControlMode === 'default' || currentControlMode === 'floorplan') && document.getElementById("showLabelsToggle")) {
+				if (document.getElementById("showLabelsToggle")) {
 					document.getElementById("showLabelsToggle").click();
 				}
 			}
@@ -5127,8 +5373,7 @@ import "../styles.css";
 
 		function spawnLabel() {
 			killLabels(true);
-			// Only proceed if labels toggle exists and we're in a mode that supports labels
-			if (document.getElementById("showLabelsToggle") && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
+			if (document.getElementById("showLabelsToggle")) {
 				if (document.getElementById("showLabelsToggle").checked) {
 					var circles = [];
 					const group = globalSvgContainer
@@ -6393,7 +6638,7 @@ import "../styles.css";
 									if (groupId.includes('patch')) {
 										svgContent += `  <!-- Dimension: ${text} | Measurement: ${measurement} | Group Id: ${groupId} -->\n`;
 										break;
-									}
+				}
 								}
 							}
 							svgContent += `  ${group}\n`;
