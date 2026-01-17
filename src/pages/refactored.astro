@@ -672,8 +672,20 @@ import "../styles.css";
 								data = atob(base64Data);
 							} else if (data.startsWith('data:image/svg+xml,')) {
 								data = decodeURIComponent(data.split(',')[1]);
+							} else {
+								// Check if it's a base64-encoded string (not a data URL)
+								// Base64 strings typically don't contain spaces and are longer than typical SVG content
+								const isLikelyBase64 = /^[A-Za-z0-9+/]+=*$/.test(data) && data.length > 100 && !data.includes('<');
+								if (isLikelyBase64) {
+									try {
+										data = atob(data);
+									} catch (e) {
+										// If atob fails, assume it's already decoded SVG content
+										console.warn('Failed to decode base64 SVG data, assuming it\'s already decoded');
+									}
+								}
+								// If it's already a string and not a data URL or base64, assume it's SVG content
 							}
-							// If it's already a string and not a data URL, assume it's SVG content
 						}
 					}
 					return { ...img, data };
@@ -705,8 +717,20 @@ import "../styles.css";
 								data = atob(base64Data);
 							} else if (data.startsWith('data:image/svg+xml,')) {
 								data = decodeURIComponent(data.split(',')[1]);
+							} else {
+								// Check if it's a base64-encoded string (not a data URL)
+								// Base64 strings typically don't contain spaces and are longer than typical SVG content
+								const isLikelyBase64 = /^[A-Za-z0-9+/]+=*$/.test(data) && data.length > 100 && !data.includes('<');
+								if (isLikelyBase64) {
+									try {
+										data = atob(data);
+									} catch (e) {
+										// If atob fails, assume it's already decoded SVG content
+										console.warn('Failed to decode base64 SVG data, assuming it\'s already decoded');
+									}
+								}
+								// If it's already a string and not a data URL or base64, assume it's SVG content
 							}
-							// If it's already a string and not a data URL, assume it's SVG content
 						}
 					}
 					return { ...img, data };
