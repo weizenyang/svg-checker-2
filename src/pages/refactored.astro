@@ -626,6 +626,7 @@ import "../styles.css";
 
 		// Control modes to prevent conflicts
 		let currentControlMode = 'default'; // 'default', 'floorplate', 'floorplan'
+		let hasFloorplateImages = false; // Track if floorplate images are present
 
 		// Parse image name from filename (4th part separated by _, contains 2 dashes)
 		function parseImageName(imageFileName) {
@@ -986,9 +987,12 @@ import "../styles.css";
 				// Load background images (tower floorplates) via simulated drag-and-drop AFTER SVGs are loaded
 				if (backgroundImages.length > 0) {
 					console.log(`🏗️ Loading ${backgroundImages.length} background images (tower floorplates) via simulated drag-and-drop`);
+					hasFloorplateImages = true;
+					switchControlMode('floorplate'); // Set floorplate mode when images are present
 					loadApiBackgroundImages(backgroundImages);
 				} else {
 					console.log('🏗️ No background images found to load');
+					hasFloorplateImages = false;
 				}
 
 				// Set up keyboard controls for image transformations
@@ -1151,14 +1155,18 @@ import "../styles.css";
 						// Add hover event listeners
 						imageElement.addEventListener("mouseenter", (e) => {
 							currentHoveredImage = imageElement;
-							switchControlMode('floorplate');
+							// Only switch to floorplate mode if we're not already in it
+							if (currentControlMode !== 'floorplate') {
+								switchControlMode('floorplate');
+							}
 							console.log(`Hovering over floorplate: ${imageData.imageName}`);
 						});
 
 						imageElement.addEventListener("mouseleave", (e) => {
 							if (currentHoveredImage === imageElement) {
 								currentHoveredImage = null;
-								switchControlMode('default');
+								// Don't switch back to default immediately - stay in floorplate mode if images are present
+								// Mode will only change when explicitly switching to floorplan mode or when no images are present
 							}
 						});
 
@@ -1260,7 +1268,10 @@ import "../styles.css";
 						// Add hover events for transformation controls
 						imageElement.addEventListener("mouseenter", (e) => {
 							currentHoveredImage = imageElement;
-							switchControlMode('floorplate');
+							// Only switch to floorplate mode if we're not already in it
+							if (currentControlMode !== 'floorplate') {
+								switchControlMode('floorplate');
+							}
 							console.log(`Hovering over thumbnail: ${image.name}`);
 							console.log('Use Left/Right arrows to rotate, F to flip');
 						});
@@ -1268,7 +1279,7 @@ import "../styles.css";
 						imageElement.addEventListener("mouseleave", (e) => {
 							if (currentHoveredImage === imageElement) {
 								currentHoveredImage = null;
-								switchControlMode('default');
+								// Don't switch back to default immediately - stay in floorplate mode if images are present
 							}
 						});
 
@@ -1327,23 +1338,36 @@ import "../styles.css";
 			console.log('Setting up image transformation keyboard controls');
 
 			document.addEventListener('keydown', (e) => {
-				// Only process if we're in floorplate mode AND have a hovered image
-				if (currentControlMode !== 'floorplate' || !currentHoveredImage) return;
+				// Handle mode switching shortcuts first
+				if (e.key === 'm' || e.key === 'M') {
+					e.preventDefault();
+					if (currentControlMode === 'floorplate' && hasFloorplateImages) {
+						switchControlMode('floorplan');
+					} else if (currentControlMode === 'floorplan') {
+						switchControlMode('default');
+					} else {
+						switchControlMode(hasFloorplateImages ? 'floorplate' : 'default');
+					}
+					return;
+				}
 
-				switch (e.key) {
-					case 'ArrowLeft':
-						e.preventDefault();
-						rotateImage(currentHoveredImage, -90);
-						break;
-					case 'ArrowRight':
-						e.preventDefault();
-						rotateImage(currentHoveredImage, 90);
-						break;
-					case 'f':
-					case 'F':
-						e.preventDefault();
-						flipImage(currentHoveredImage);
-						break;
+				// Then handle mode-specific controls
+				if (currentControlMode === 'floorplate' && currentHoveredImage) {
+					switch (e.key) {
+						case 'ArrowLeft':
+							e.preventDefault();
+							rotateImage(currentHoveredImage, -90);
+							break;
+						case 'ArrowRight':
+							e.preventDefault();
+							rotateImage(currentHoveredImage, 90);
+							break;
+						case 'f':
+						case 'F':
+							e.preventDefault();
+							flipImage(currentHoveredImage);
+							break;
+					}
 				}
 			});
 
@@ -1351,6 +1375,7 @@ import "../styles.css";
 			console.log('🎯 Hover over floorplate images and use:');
 			console.log('  ← → Arrow keys: Rotate ±90° (only in floorplate mode)');
 			console.log('  F key: Flip horizontally (only in floorplate mode)');
+			console.log('  M key: Switch between floorplate/floorplan/default modes');
 			console.log('💾 Call logImageTransformations() to view changes');
 			console.log('📤 Call exportImageTransformations() to download JSON');
 
@@ -1418,13 +1443,13 @@ import "../styles.css";
 			let modeText = '';
 			switch (mode) {
 				case 'floorplate':
-					modeText = '🏗️ Floorplate Mode (←→ rotate, F flip)';
+					modeText = '🏗️ Floorplate Mode (←→ rotate, F flip, M switch)';
 					break;
 				case 'floorplan':
-					modeText = '📐 Floorplan Mode (←→ rotate circles)';
+					modeText = '📐 Floorplan Mode (←→ rotate circles, M switch)';
 					break;
 				default:
-					modeText = '📝 Default Mode';
+					modeText = '📝 Default Mode (M switch)';
 			}
 
 			indicator.textContent = modeText;
@@ -2872,29 +2897,25 @@ import "../styles.css";
 				}
 			};
 
-			// Add mode switching for floorplan elements
-			const handleFloorplanHover = (e) => {
+			// Add mode switching for floorplan elements - only on click/interaction, not hover
+			const handleFloorplanClick = (e) => {
 				if (e.target && (e.target.tagName === 'circle' || e.target.tagName === 'polygon' || e.target.tagName === 'path' || e.target.tagName === 'rect')) {
-					switchControlMode('floorplan');
+					// Only switch to floorplan mode if we're currently in default mode (not overriding floorplate mode)
+					if (currentControlMode === 'default') {
+						switchControlMode('floorplan');
+					}
 				}
 			};
 
-			const handleFloorplanLeave = (e) => {
-				// Switch back to default mode when leaving floorplan elements
-				switchControlMode('default');
-			};
-
 			svgElement.addEventListener('contextmenu', preventContextMenu);
-			svgElement.addEventListener('mouseenter', handleFloorplanHover, true); // Use capture phase
-			svgElement.addEventListener('mouseleave', handleFloorplanLeave, true);
+			svgElement.addEventListener('click', handleFloorplanClick, true); // Use capture phase
 			
 			const allChildren = svgElement.querySelectorAll('*');
 			allChildren.forEach(child => {
 				child.addEventListener('contextmenu', preventContextMenu);
-				// Add hover listeners for individual elements
+				// Add click listeners for individual elements (only switch to floorplan mode on interaction)
 				if (child.tagName === 'circle' || child.tagName === 'polygon' || child.tagName === 'path' || child.tagName === 'rect') {
-					child.addEventListener('mouseenter', handleFloorplanHover);
-					child.addEventListener('mouseleave', handleFloorplanLeave);
+					child.addEventListener('click', handleFloorplanClick);
 				}
 			});
 		}
@@ -3787,7 +3808,7 @@ import "../styles.css";
 
 			parentSVG.querySelectorAll("path").forEach((path) => {
 				const listener = path.addEventListener("mouseover", (e) => {
-					switchControlMode('floorplan');
+					// Don't switch modes on hover - only show preview
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
@@ -3867,7 +3888,7 @@ import "../styles.css";
 				});
 
 				const listener2 = path.addEventListener("mouseout", (e) => {
-					switchControlMode('default');
+					// Don't switch modes on mouseout - only hide preview
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "none";
