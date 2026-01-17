@@ -1399,6 +1399,15 @@ import "../styles.css";
 
 		// Initialize API loading on page load
 		document.addEventListener('DOMContentLoaded', async () => {
+			// Check if there are any URL parameters
+			const urlParams = new URLSearchParams(window.location.search);
+			const hasParams = urlParams.toString().length > 0;
+
+			if (!hasParams) {
+				console.log('No URL parameters found, skipping API loading. User can load files manually.');
+				return;
+			}
+
 			const projectKey = getProjectKey();
 			console.log('Loading project:', projectKey);
 
