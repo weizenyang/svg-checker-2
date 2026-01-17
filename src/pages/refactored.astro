@@ -1100,10 +1100,28 @@ import "../styles.css";
 			if (imgCarouselContainer) {
 				console.log('Image carousel container classes before:', imgCarouselContainer.classList.value);
 				console.log('Contains hidden?', imgCarouselContainer.classList.contains("hidden"));
-				console.log('Setting display to block to ensure visibility');
-				imgCarouselContainer.style.display = 'block';
+				console.log('Computed display style:', window.getComputedStyle(imgCarouselContainer).display);
+
+				// Check parent elements
+				let parent = imgCarouselContainer.parentElement;
+				let depth = 0;
+				while (parent && depth < 5) {
+					console.log(`Parent ${depth}:`, parent.tagName, parent.id || parent.className, 'display:', window.getComputedStyle(parent).display);
+					parent = parent.parentElement;
+					depth++;
+				}
+
+				// Check sibling elements
+				const siblings = Array.from(imgCarouselContainer.parentElement?.children || []);
+				console.log('Siblings:', siblings.map(s => `${s.tagName}#${s.id || 'no-id'}.${s.className}`).join(', '));
+
+				console.log('Removing hidden class and setting display to block with !important');
+				imgCarouselContainer.classList.remove("hidden");
+				imgCarouselContainer.style.setProperty('display', 'block', 'important');
+
 				console.log('Image carousel container classes after:', imgCarouselContainer.classList.value);
 				console.log('Image carousel container display style:', imgCarouselContainer.style.display);
+				console.log('Computed display style after:', window.getComputedStyle(imgCarouselContainer).display);
 			} else {
 				console.error('Image carousel container not found!');
 			}
@@ -5738,9 +5756,9 @@ import "../styles.css";
 			return new Promise<void>((resolve, reject) => {
 				if (dxfParserLoaded && DxfParser) {
 					resolve();
-					return;
-				}
-				
+				return;
+			}
+			
 				// Check if already loading
 				if (document.querySelector('script[data-dxf-parser]')) {
 					const checkInterval = setInterval(() => {
@@ -5755,9 +5773,9 @@ import "../styles.css";
 							reject(new Error('DXF parser loading timeout'));
 						}
 					}, 10000);
-					return;
-				}
-				
+				return;
+			}
+			
 				const dxfParserScript = document.createElement('script');
 				dxfParserScript.setAttribute('data-dxf-parser', 'true');
 				// Try multiple CDN sources
@@ -5907,9 +5925,9 @@ import "../styles.css";
 					try {
 						if (!DxfParser) {
 							reject(new Error('DXF Parser not loaded yet. Please wait a moment and try again.'));
-							return;
-						}
-						
+				return;
+			}
+			
 						const parser = new DxfParser();
 						const dxf = parser.parseSync(e.target.result);
 						
