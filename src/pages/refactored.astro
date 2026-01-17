@@ -901,6 +901,15 @@ import "../styles.css";
 						}
 					}
 
+					// Show image-list-container when SVGs are loaded
+					if (svgImages.length > 0) {
+						const imageListContainer = document.getElementById("image-list-container");
+						if (imageListContainer && imageListContainer.classList.contains("hidden")) {
+							console.log('Showing image-list-container after SVG load');
+							imageListContainer.classList.remove("hidden");
+						}
+					}
+
 					// Show navigation if multiple SVGs
 					if (importedSVGs.length > 1) {
 						console.log('Showing SVG navigation for multiple SVGs');
@@ -1127,6 +1136,20 @@ import "../styles.css";
 
 			console.log(`Added ${addedCount} images to imageList. Total images now: ${imageList.length}`);
 
+			// Show the parent image-list-container first
+			const imageListContainer = document.getElementById("image-list-container");
+			console.log('Image list container element:', imageListContainer);
+			if (imageListContainer) {
+				console.log('Image list container classes before:', imageListContainer.classList.value);
+				if (imageListContainer.classList.contains("hidden")) {
+					console.log('Removing "hidden" class from image-list-container');
+					imageListContainer.classList.remove("hidden");
+				}
+				console.log('Image list container classes after:', imageListContainer.classList.value);
+			} else {
+				console.error('Image list container not found!');
+			}
+
 			// Show the image carousel UI
 			const imgCarouselContainer = document.getElementById("image-carousel-container");
 			console.log('Image carousel container element:', imgCarouselContainer);
@@ -1181,23 +1204,26 @@ import "../styles.css";
 			}
 
 			// Set up image overlay functionality
-			const currentSVG = document.getElementById("svg-container").querySelector("svg");
-			console.log('Current SVG element:', currentSVG);
-			if (currentSVG) {
-				console.log('Setting up previewBackplate for current SVG');
-				previewBackplate(currentSVG);
-			} else {
-				console.log('No current SVG found, previewBackplate not called');
-			}
+			// Wait a bit for SVG to be fully loaded into DOM
+			setTimeout(() => {
+				const currentSVG = document.getElementById("svg-container")?.querySelector("svg");
+				console.log('Current SVG element:', currentSVG);
+				if (currentSVG) {
+					console.log('Setting up previewBackplate for current SVG');
+					previewBackplate(currentSVG);
+				} else {
+					console.log('No current SVG found, previewBackplate not called');
+				}
 
-			// Also set up overlay for any existing SVGs in importedSVGs
-			if (importedSVGs.length > 0) {
-				console.log(`Setting up previewBackplate for ${importedSVGs.length} imported SVGs`);
-				importedSVGs.forEach((svgInfo, index) => {
-					console.log(`Setting up overlay for imported SVG ${index}: ${svgInfo.name}`);
-					previewBackplate(svgInfo.element);
-				});
-			}
+				// Also set up overlay for any existing SVGs in importedSVGs
+				if (importedSVGs.length > 0) {
+					console.log(`Setting up previewBackplate for ${importedSVGs.length} imported SVGs`);
+					importedSVGs.forEach((svgInfo, index) => {
+						console.log(`Setting up overlay for imported SVG ${index}: ${svgInfo.name}`);
+						previewBackplate(svgInfo.element);
+					});
+				}
+			}, 100);
 
 			console.log(`Successfully loaded ${apiImages.length} images into overlay system from ${source}`);
 
