@@ -25,6 +25,43 @@ import "../styles.css";
 			[data-project-floor].dragging {
 				background-color: rgba(0, 150, 255, 0.3) !important;
 			}
+
+			/* Toast Notifications */
+			.toast {
+				position: fixed;
+				bottom: 24px;
+				right: 24px;
+				padding: 16px 24px;
+				background-color: #333;
+				color: white;
+				border-radius: 4px;
+				box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+				opacity: 0;
+				transform: translateY(20px);
+				transition: all 0.3s;
+				pointer-events: none;
+				max-width: 400px;
+				z-index: 1000;
+			}
+
+			.toast.show {
+				opacity: 1;
+				transform: translateY(0);
+				pointer-events: auto;
+			}
+
+			.toast.success {
+				background-color: #28a745;
+			}
+
+			.toast.error {
+				background-color: #dc3545;
+			}
+
+			.toast.warning {
+				background-color: #ffc107;
+				color: #000;
+			}
 		</style>
 	</head>
 	<body class="">
@@ -534,6 +571,8 @@ import "../styles.css";
 			<svg id="svg" height="0px"></svg>
 		</section>
 
+		<!-- Toast notification -->
+		<div id="toast" class="toast"></div>
 
 	</body>
 
@@ -753,25 +792,32 @@ import "../styles.css";
 
 			// Process based on mode
 			if (convertedData.mode === 'refactored') {
-				// Load SVG floorplates and unit floorplans
+				// Load SVG floorplates and overlay images
 				if (convertedData.images && convertedData.images.length > 0) {
-					console.log('Loading SVG floorplates:', convertedData.images.length);
+					console.log('Loading SVG floorplates and images:', convertedData.images.length);
 
 					// Reset SVG state for API loading
 					importedSVGs = [];
 					currentSVGIndex = 0;
 					globalSvgContainer.innerHTML = "";
 
+					// Separate SVGs from overlay images
+					const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
+					const overlayImages = convertedData.images.filter(img => img.mimeType !== 'image/svg+xml');
+
 					// Process each SVG
-					for (const image of convertedData.images) {
-						if (image.mimeType === 'image/svg+xml') {
-							try {
-								// Load SVG using existing logic (data is already processed in convertApiData)
-								loadSVGFromData(image.data, image.imageName);
-							} catch (error) {
-								console.error(`Failed to load SVG ${image.imageName}:`, error);
-							}
+					for (const image of svgImages) {
+						try {
+							// Load SVG using existing logic (data is already processed in convertApiData)
+							loadSVGFromData(image.data, image.imageName);
+						} catch (error) {
+							console.error(`Failed to load SVG ${image.imageName}:`, error);
 						}
+					}
+
+					// Load overlay images into imageList
+					if (overlayImages.length > 0) {
+						loadApiImagesToImageList(overlayImages);
 					}
 
 					// Show navigation if multiple SVGs
@@ -780,10 +826,14 @@ import "../styles.css";
 					}
 				}
 
+				// Also load unitFloorplans for overlay if they exist
 				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
-					console.log('Loading unit floorplans:', convertedData.unitFloorplans.length);
+					console.log('Loading additional unit floorplans:', convertedData.unitFloorplans.length);
 					// Store unit floorplans for later use
 					window.unitFloorplans = convertedData.unitFloorplans;
+
+					// Add unit floorplans to imageList as well
+					loadApiImagesToImageList(convertedData.unitFloorplans);
 				}
 			} else if (convertedData.mode === 'roomscale-4') {
 				// For roomscale mode, store assets but don't auto-load (user can load manually)
@@ -845,9 +895,72 @@ import "../styles.css";
 				// Process the SVG
 				processSVG(svgElement);
 
+				// Set up image overlay if images are already loaded
+				if (imageList.length > 0) {
+					previewBackplate(svgElement);
+				}
+
 			} catch (error) {
 				console.error(`Error loading SVG ${filename}:`, error);
 			}
+		}
+
+		// Load API images into imageList for overlay functionality
+		function loadApiImagesToImageList(apiImages) {
+			// Clear existing images
+			imageList.splice(0, imageList.length);
+
+			// Add API images to imageList
+			apiImages.forEach(img => {
+				imageList.push({
+					name: img.imageName,
+					data: img.data // Already converted to data URL format
+				});
+			});
+
+			// Show the image carousel UI
+			const imgCarouselContainer = document.getElementById("image-carousel-container");
+			if (imgCarouselContainer && imgCarouselContainer.classList.contains("hidden")) {
+				imgCarouselContainer.classList.remove("hidden");
+				imgCarouselContainer.classList.add("flex");
+			}
+
+			// Update the image carousel display
+			const imageListCarousel = document.getElementById("image-list-carousel");
+			imageListCarousel.innerHTML = "";
+			imageList.forEach((image) => {
+				const listItem = document.createElement("li");
+				listItem.style.height = "100%";
+				const imageElement = document.createElement("img");
+				imageElement.src = image.data;
+				imageElement.style.height = "60px";
+				listItem.appendChild(imageElement);
+				imageListCarousel.appendChild(listItem);
+			});
+
+			// Set up image overlay functionality
+			const currentSVG = document.getElementById("svg-container").querySelector("svg");
+			if (currentSVG) {
+				previewBackplate(currentSVG);
+			}
+
+			console.log('Loaded', apiImages.length, 'images into overlay system');
+
+			// Show toast notification that floorplans are loaded
+			showToast(`Loaded ${apiImages.length} floorplan image(s) for overlay`, 'success');
+		}
+
+		// Show toast notification
+		function showToast(message, type = 'info') {
+			const toast = document.getElementById('toast');
+			if (!toast) return;
+
+			toast.textContent = message;
+			toast.className = `toast ${type} show`;
+
+			setTimeout(() => {
+				toast.classList.remove('show');
+			}, 5000);
 		}
 
 		// Initialize API loading on page load
