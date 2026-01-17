@@ -649,9 +649,32 @@ import "../styles.css";
 			if (converted.images) {
 				converted.images = converted.images.map(img => {
 					let data = img.data;
-					// Convert base64 strings to data URLs if needed
-					if (typeof data === 'string' && !data.startsWith('data:')) {
-						data = `data:${img.mimeType};base64,${data}`;
+					// For SVG files, if it's base64 encoded, keep as string for direct parsing
+					// For other image types, convert to data URLs
+					if (img.mimeType !== 'image/svg+xml') {
+						if (typeof data === 'string' && !data.startsWith('data:')) {
+							data = `data:${img.mimeType};base64,${data}`;
+						}
+					} else {
+						// For SVG, handle different data formats
+						if (data instanceof ArrayBuffer) {
+							// Convert ArrayBuffer to string
+							const decoder = new TextDecoder('utf-8');
+							data = decoder.decode(data);
+						} else if (data instanceof Uint8Array) {
+							// Convert Uint8Array to string
+							const decoder = new TextDecoder('utf-8');
+							data = decoder.decode(data);
+						} else if (typeof data === 'string') {
+							// Handle data URLs and plain content
+							if (data.startsWith('data:image/svg+xml;base64,')) {
+								const base64Data = data.split(',')[1];
+								data = atob(base64Data);
+							} else if (data.startsWith('data:image/svg+xml,')) {
+								data = decodeURIComponent(data.split(',')[1]);
+							}
+							// If it's already a string and not a data URL, assume it's SVG content
+						}
 					}
 					return { ...img, data };
 				});
@@ -660,9 +683,31 @@ import "../styles.css";
 			if (converted.unitFloorplans) {
 				converted.unitFloorplans = converted.unitFloorplans.map(img => {
 					let data = img.data;
-					// Convert base64 strings to data URLs if needed
-					if (typeof data === 'string' && !data.startsWith('data:')) {
-						data = `data:${img.mimeType};base64,${data}`;
+					// Same logic as images above
+					if (img.mimeType !== 'image/svg+xml') {
+						if (typeof data === 'string' && !data.startsWith('data:')) {
+							data = `data:${img.mimeType};base64,${data}`;
+						}
+					} else {
+						// For SVG, handle different data formats
+						if (data instanceof ArrayBuffer) {
+							// Convert ArrayBuffer to string
+							const decoder = new TextDecoder('utf-8');
+							data = decoder.decode(data);
+						} else if (data instanceof Uint8Array) {
+							// Convert Uint8Array to string
+							const decoder = new TextDecoder('utf-8');
+							data = decoder.decode(data);
+						} else if (typeof data === 'string') {
+							// Handle data URLs and plain content
+							if (data.startsWith('data:image/svg+xml;base64,')) {
+								const base64Data = data.split(',')[1];
+								data = atob(base64Data);
+							} else if (data.startsWith('data:image/svg+xml,')) {
+								data = decodeURIComponent(data.split(',')[1]);
+							}
+							// If it's already a string and not a data URL, assume it's SVG content
+						}
 					}
 					return { ...img, data };
 				});
@@ -697,12 +742,8 @@ import "../styles.css";
 					for (const image of convertedData.images) {
 						if (image.mimeType === 'image/svg+xml') {
 							try {
-								// Create a blob URL for the SVG data
-								const blob = new Blob([image.data], { type: 'image/svg+xml' });
-								const url = URL.createObjectURL(blob);
-
-								// Load SVG using existing logic
-								await loadSVGFromURL(url, image.imageName);
+								// Load SVG using existing logic (data is already processed in convertApiData)
+								loadSVGFromData(image.data, image.imageName);
 							} catch (error) {
 								console.error(`Failed to load SVG ${image.imageName}:`, error);
 							}
@@ -738,17 +779,37 @@ import "../styles.css";
 			}
 		}
 
-		// Load SVG from URL (helper function to integrate with existing logic)
-		async function loadSVGFromURL(url, filename) {
+		// Load SVG from data (helper function to integrate with existing logic)
+		function loadSVGFromData(svgData, filename) {
 			try {
-				const response = await fetch(url);
-				const svgText = await response.text();
+				// Ensure svgData is a string
+				let svgText = svgData;
+				if (typeof svgText !== 'string') {
+					console.warn(`SVG data for ${filename} is not a string, converting...`);
+					if (svgText instanceof ArrayBuffer) {
+						const decoder = new TextDecoder('utf-8');
+						svgText = decoder.decode(svgText);
+					} else if (svgText instanceof Uint8Array) {
+						const decoder = new TextDecoder('utf-8');
+						svgText = decoder.decode(svgText);
+					} else {
+						svgText = String(svgText);
+					}
+				}
+
+				// Basic validation - check if it starts with SVG tag or XML declaration
+				if (!svgText.trim().startsWith('<') && !svgText.trim().startsWith('<?xml')) {
+					console.error(`SVG content for ${filename} doesn't appear to be valid SVG/XML:`, svgText.substring(0, 200));
+					throw new Error('Content does not appear to be valid SVG');
+				}
 
 				// Parse and process the SVG similar to existing file loading
 				const parser = new DOMParser();
 				const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
 
 				if (svgDoc.querySelector('parsererror')) {
+					console.error(`SVG parsing error for ${filename}:`, svgDoc.querySelector('parsererror'));
+					console.error(`First 500 chars of SVG content:`, svgText.substring(0, 500));
 					throw new Error('Invalid SVG content');
 				}
 
@@ -761,7 +822,7 @@ import "../styles.css";
 				processSVG(svgElement);
 
 			} catch (error) {
-				console.error(`Error loading SVG from URL ${url}:`, error);
+				console.error(`Error loading SVG ${filename}:`, error);
 			}
 		}
 
