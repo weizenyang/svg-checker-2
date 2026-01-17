@@ -777,11 +777,11 @@
         function handleCsvFileSelect(e) {
             const files = Array.from(e.target.files || []);
             if (files.length === 0) return;
-
+            
             state.csvFiles = files;
             const fileNames = files.map(f => f.name).join(', ');
             document.getElementById('csvFilePath').value = fileNames;
-
+            
             loadCsvPreview(files);
         }
 
@@ -814,29 +814,29 @@
 
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
-                    try {
-                        const text = await file.text();
-                        const lines = text.split('\n').filter(line => line.trim());
-
-                        if (lines.length === 0) {
+            try {
+                const text = await file.text();
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                if (lines.length === 0) {
                             console.warn(`File ${file.name} is empty, skipping`);
                             continue;
-                        }
-
-                        // Parse CSV (simple implementation)
-                        const headers = parseCSVLine(lines[0]);
-                        const rows = lines.slice(1).map(line => {
-                            const values = parseCSVLine(line);
-                            const row = {};
+                }
+                
+                // Parse CSV (simple implementation)
+                const headers = parseCSVLine(lines[0]);
+                const rows = lines.slice(1).map(line => {
+                    const values = parseCSVLine(line);
+                    const row = {};
                             headers.forEach((header, j) => {
                                 row[header] = values[j] || '';
-                            });
+                    });
                             // Add source file info
                             row._sourceFile = file.name;
-                            return row;
-                        });
-
-                        // Detect format
+                    return row;
+                });
+                
+                // Detect format
                         const fileFormat = detectCsvFormat(headers);
                         if (!fileFormat) {
                             console.warn(`File ${file.name}: format not recognized, skipping`);
@@ -867,20 +867,20 @@
                     }
                     return;
                 }
-
+                
                 state.csvFormat = format;
                 state.csvData = allRows;
-
+                
                 // Display preview
                 displayCsvPreview(allRows, format);
-
+                
                 let statusMessage = `Loaded ${totalUnits} units from ${files.length} file(s) successfully - Format: ${format}`;
                 if (hasErrors) {
                     statusMessage += ' (some files had errors - check console)';
                 }
                 showCsvStatus(statusMessage, hasErrors ? 'warning' : 'success');
                 updateCreateButtonState();
-
+                
             } catch (error) {
                 console.error('Error loading CSV files:', error);
                 showCsvStatus(`Error loading CSV files: ${error.message}`, 'error');
@@ -943,7 +943,7 @@
                             mirrored = ['MIRROR', 'TRUE', 'FLIPPED'].includes((row['MIRROR'] || '').toUpperCase()) ? 'true' : 'false';
                             rotation = row['Rotation'] || '0';
                             break;
-
+                            
                         case 'unreal':
                             unitName = normaliseName(row['UnitID'] || '');
                             const [sanitized, isMirrored] = parseFormattedOutput(row['FormattedOutput'] || '');
@@ -951,21 +951,21 @@
                             mirrored = isMirrored ? 'true' : 'false';
                             rotation = row['Rotation_Yaw'] || '0';
                             break;
-
+                            
                         case 'new':
                             unitName = normaliseName(row['UnitNumber'] || '');
                             unitType = parseUnitTypeBase(sanitizeCode(row['Code'] || ''));
                             mirrored = (row['Mirror'] || '').toUpperCase() === 'MIRROR' ? 'true' : 'false';
                             rotation = '0';
                             break;
-
+                            
                         default: // original
                             unitName = normaliseName(row['Unit Name'] || '');
                             unitType = parseUnitTypeBase(row['Unit Type Dev Final'] || '');
                             mirrored = ['true', 'mirror', 'flipped'].includes((row['Mirrored'] || '').toLowerCase()) ? 'true' : 'false';
                             rotation = row['Rotation'] || '0';
                     }
-
+                    
                     tr.innerHTML = `
                         <td>${row._sourceFile || 'Unknown'}</td>
                         <td>${unitName}</td>
@@ -1166,15 +1166,15 @@
 
         function updateCreateButtonState() {
             const createBtn = document.getElementById('createBtn');
-
+            
             let validData = false;
             if (state.dataSource === 'csv') {
                 validData = state.csvFiles.length > 0 && state.csvData.length > 0;
             } else {
-                validData = state.unitRefFile && state.refFile &&
+                validData = state.unitRefFile && state.refFile && 
                            Object.keys(state.jsonData).length > 0;
             }
-
+            
             createBtn.disabled = !validData;
         }
 
@@ -1306,10 +1306,10 @@
                 // Create a unit for each processed type
                 processedTypes.forEach(type => {
                     units.push({
-                        name: unitName,
+                    name: unitName,
                         type: type,
-                        flip: mirrored,
-                        rotation: rotation
+                    flip: mirrored,
+                    rotation: rotation
                     });
                 });
             });

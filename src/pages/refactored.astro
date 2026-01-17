@@ -537,7 +537,7 @@ import "../styles.css";
 
 	</body>
 
-	<script>
+	<script type="module" lang="ts">
 		// import { onMount } from 'astro/client';
 		// import * as svgOp from "./svg-scripts/svg-operations"
 		import { transform } from "typescript";
@@ -547,6 +547,228 @@ import "../styles.css";
 			updateValuesModal,
 			circlesToSpawn,
 		} from "../store.js";
+
+		// Asset Delivery API Configuration
+		const API_BASE_URL = 'http://localhost:9234';
+		const LEGACY_ENDPOINTS = {
+			models: '/model',
+			csv: '/camera-csv'
+		};
+
+		// Extract project key from URL parameters
+		function getProjectKey() {
+			const urlParams = new URLSearchParams(window.location.search);
+			return urlParams.get('project') || urlParams.get('key') || urlParams.get('id') || 'default';
+		}
+
+		// Determine application mode from URL
+		function getApplicationMode() {
+			const path = window.location.pathname;
+			if (path.includes('/roomscale-4')) {
+				return 'roomscale-4';
+			} else if (path.includes('/refactored')) {
+				return 'refactored';
+			}
+			return 'refactored'; // Default to refactored mode
+		}
+
+		// Fetch project assets from primary API endpoint
+		async function fetchProjectAssets(projectKey) {
+			try {
+				const response = await fetch(`${API_BASE_URL}/api/project/${projectKey}`);
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+				const data = await response.json();
+				console.log('Fetched project assets:', data);
+				return data;
+			} catch (error) {
+				console.warn('Primary API endpoint failed, trying legacy endpoints:', error);
+				return await fetchLegacyAssets(projectKey);
+			}
+		}
+
+		// Fallback to legacy endpoints
+		async function fetchLegacyAssets(projectKey) {
+			try {
+				const [modelsResponse, csvResponse] = await Promise.allSettled([
+					fetch(`${API_BASE_URL}${LEGACY_ENDPOINTS.models}`),
+					fetch(`${API_BASE_URL}${LEGACY_ENDPOINTS.csv}`)
+				]);
+
+				const result = {
+					mode: getApplicationMode(),
+					models: [],
+					cameraCSV: null,
+					images: [],
+					unitFloorplans: []
+				};
+
+				if (modelsResponse.status === 'fulfilled' && modelsResponse.value.ok) {
+					result.models = await modelsResponse.value.json();
+				}
+
+				if (csvResponse.status === 'fulfilled' && csvResponse.value.ok) {
+					result.cameraCSV = await csvResponse.value.json();
+				}
+
+				console.log('Fetched legacy assets:', result);
+				return result;
+			} catch (error) {
+				console.error('All API endpoints failed:', error);
+				return null;
+			}
+		}
+
+		// Convert base64 string to data URL
+		function base64ToDataUrl(base64, mimeType) {
+			if (base64.startsWith('data:')) {
+				return base64; // Already a data URL
+			}
+			return `data:${mimeType};base64,${base64}`;
+		}
+
+		// Convert ArrayBuffer to data URL
+		function arrayBufferToDataUrl(buffer, mimeType) {
+			const bytes = new Uint8Array(buffer);
+			const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
+			const base64 = btoa(binary);
+			return `data:${mimeType};base64,${base64}`;
+		}
+
+		// Process fetched assets based on mode
+		async function processAssets(assets) {
+			if (!assets) {
+				console.log('No assets to process');
+				return;
+			}
+
+			console.log('Processing assets in mode:', assets.mode);
+
+			// Process models (Roomscale mode)
+			if (assets.models && assets.models.length > 0) {
+				console.log(`Processing ${assets.models.length} models`);
+				for (const model of assets.models) {
+					try {
+						let dataUrl;
+						if (typeof model.data === 'string') {
+							dataUrl = base64ToDataUrl(model.data, 'model/gltf-binary');
+						} else if (model.data instanceof ArrayBuffer) {
+							dataUrl = arrayBufferToDataUrl(model.data, 'model/gltf-binary');
+						} else if (model.data instanceof Uint8Array) {
+							dataUrl = arrayBufferToDataUrl(model.data.buffer, 'model/gltf-binary');
+						}
+
+						// Load the model into the scene (you'll need to implement this)
+						console.log(`Loading model: ${model.modelName}`);
+						// TODO: Add model loading logic here
+					} catch (error) {
+						console.error(`Failed to process model ${model.modelName}:`, error);
+					}
+				}
+			}
+
+			// Process camera CSV (Roomscale mode)
+			if (assets.cameraCSV) {
+				console.log('Processing camera CSV:', assets.cameraCSV.csvName);
+				try {
+					let csvText;
+					if (typeof assets.cameraCSV.data === 'string') {
+						csvText = assets.cameraCSV.data;
+					} else if (assets.cameraCSV.data instanceof ArrayBuffer) {
+						csvText = new TextDecoder().decode(assets.cameraCSV.data);
+					} else if (assets.cameraCSV.data instanceof Uint8Array) {
+						csvText = new TextDecoder().decode(assets.cameraCSV.data);
+					}
+
+					// Parse and use the CSV data (you'll need to implement this)
+					console.log('Camera CSV content length:', csvText.length);
+					// TODO: Add CSV processing logic here
+				} catch (error) {
+					console.error('Failed to process camera CSV:', error);
+				}
+			}
+
+			// Process images (both modes)
+			if (assets.images && assets.images.length > 0) {
+				console.log(`Processing ${assets.images.length} images`);
+				for (const image of assets.images) {
+					try {
+						let dataUrl;
+						if (typeof image.data === 'string') {
+							dataUrl = base64ToDataUrl(image.data, image.mimeType);
+						} else if (image.data instanceof ArrayBuffer) {
+							dataUrl = arrayBufferToDataUrl(image.data, image.mimeType);
+						} else if (image.data instanceof Uint8Array) {
+							dataUrl = arrayBufferToDataUrl(image.data.buffer, image.mimeType);
+						}
+
+						// For SVG files, create a File object and process as SVG
+						if (image.mimeType === 'image/svg+xml') {
+							// Convert data URL back to blob for File creation
+							const response = await fetch(dataUrl);
+							const blob = await response.blob();
+							const file = new File([blob], image.imageName, { type: image.mimeType });
+
+							console.log(`Processing SVG: ${image.imageName}`);
+							handleFileChange([file]);
+						} else {
+							// For other images (JPEG, PNG), add to image manager
+							console.log(`Adding image to manager: ${image.imageName}`);
+							// TODO: Add image manager logic here
+						}
+					} catch (error) {
+						console.error(`Failed to process image ${image.imageName}:`, error);
+					}
+				}
+			}
+
+			// Process unit floorplans (Refactored mode)
+			if (assets.unitFloorplans && assets.unitFloorplans.length > 0) {
+				console.log(`Processing ${assets.unitFloorplans.length} unit floorplans`);
+				for (const floorplan of assets.unitFloorplans) {
+					try {
+						let dataUrl;
+						if (typeof floorplan.data === 'string') {
+							dataUrl = base64ToDataUrl(floorplan.data, floorplan.mimeType);
+						} else if (floorplan.data instanceof ArrayBuffer) {
+							dataUrl = arrayBufferToDataUrl(floorplan.data, floorplan.mimeType);
+						} else if (floorplan.data instanceof Uint8Array) {
+							dataUrl = arrayBufferToDataUrl(floorplan.data.buffer, floorplan.mimeType);
+						}
+
+						// Create File object and process as unit floorplan SVG
+						const response = await fetch(dataUrl);
+						const blob = await response.blob();
+						const file = new File([blob], floorplan.imageName, { type: floorplan.mimeType });
+
+						console.log(`Processing unit floorplan: ${floorplan.imageName}`);
+						// TODO: Add unit floorplan processing logic here
+					} catch (error) {
+						console.error(`Failed to process unit floorplan ${floorplan.imageName}:`, error);
+					}
+				}
+			}
+		}
+
+		// Initialize asset loading on page load
+		async function initializeAssetLoading() {
+			const projectKey = getProjectKey();
+			const mode = getApplicationMode();
+
+			console.log(`Initializing asset loading for project: ${projectKey} in mode: ${mode}`);
+
+			try {
+				const assets = await fetchProjectAssets(projectKey);
+				if (assets) {
+					await processAssets(assets);
+				} else {
+					console.log('No assets loaded from API, user can manually upload files');
+				}
+			} catch (error) {
+				console.error('Failed to initialize asset loading:', error);
+			}
+		}
 		enum format {
 			underscore,
 			dash,
@@ -5446,6 +5668,13 @@ import "../styles.css";
 					statusDiv.style.display = 'none';
 				}, 3000);
 			});
+		}
+
+		// Initialize asset loading when the page loads
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', initializeAssetLoading);
+		} else {
+			initializeAssetLoading();
 		}
 	</script>
 </html>
