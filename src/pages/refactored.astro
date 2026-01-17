@@ -840,10 +840,9 @@ import "../styles.css";
 			if (convertedData.mode === 'refactored') {
 				console.log('Processing refactored mode assets');
 
-				// Collect all overlay images (both from images array and unitFloorplans)
-				let allOverlayImages = [];
+				let backgroundImages = [];
 
-				// Load SVG floorplates and overlay images
+				// Load SVG floorplates and collect background images
 				if (convertedData.images && convertedData.images.length > 0) {
 					console.log('Processing images array:', convertedData.images.length, 'items');
 
@@ -852,11 +851,11 @@ import "../styles.css";
 					currentSVGIndex = 0;
 					globalSvgContainer.innerHTML = "";
 
-					// Separate SVGs from overlay images
+					// Separate SVGs from background images (tower floorplates)
 					const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
-					const overlayImages = convertedData.images.filter(img => img.mimeType !== 'image/svg+xml');
+					backgroundImages = convertedData.images.filter(img => img.mimeType !== 'image/svg+xml');
 
-					console.log(`Found ${svgImages.length} SVG files and ${overlayImages.length} overlay images in images array`);
+					console.log(`Found ${svgImages.length} SVG files and ${backgroundImages.length} background images in images array`);
 
 					// Process each SVG
 					for (const image of svgImages) {
@@ -869,36 +868,35 @@ import "../styles.css";
 						}
 					}
 
-					// Add overlay images to the collection
-					allOverlayImages = allOverlayImages.concat(overlayImages);
+					// Show navigation if multiple SVGs
+					if (importedSVGs.length > 1) {
+						console.log('Showing SVG navigation for multiple SVGs');
+						spawnSVGNavigation();
+					} else if (importedSVGs.length === 1) {
+						console.log('Single SVG loaded, no navigation needed');
+					} else {
+						console.log('No SVGs were loaded');
+					}
 				}
 
-				// Also load unitFloorplans for overlay if they exist
+				// Load unitFloorplans for overlay functionality (hover check)
 				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
-					console.log('Processing unitFloorplans array:', convertedData.unitFloorplans.length, 'items');
+					console.log('📋 Processing unitFloorplans array:', convertedData.unitFloorplans.length, 'items for overlay functionality');
 					// Store unit floorplans for later use
 					window.unitFloorplans = convertedData.unitFloorplans;
 
-					// Add unit floorplans to the overlay images collection
-					allOverlayImages = allOverlayImages.concat(convertedData.unitFloorplans);
+					// Load unit floorplans into imageList for overlay functionality (hover check)
+					loadApiImagesToImageList(convertedData.unitFloorplans, 'unitFloorplans');
+				} else {
+					console.log('📋 No unitFloorplans found for overlay functionality');
 				}
 
-				// Load all overlay images into imageList
-				if (allOverlayImages.length > 0) {
-					console.log(`Loading ${allOverlayImages.length} total overlay images into imageList`);
-					loadApiImagesToImageList(allOverlayImages, 'combined');
+				// Load background images (tower floorplates) via simulated drag-and-drop AFTER SVGs are loaded
+				if (backgroundImages.length > 0) {
+					console.log(`🏗️ Loading ${backgroundImages.length} background images (tower floorplates) via simulated drag-and-drop`);
+					loadApiBackgroundImages(backgroundImages);
 				} else {
-					console.log('No overlay images found to load');
-				}
-
-				// Show navigation if multiple SVGs
-				if (importedSVGs.length > 1) {
-					console.log('Showing SVG navigation for multiple SVGs');
-					spawnSVGNavigation();
-				} else if (importedSVGs.length === 1) {
-					console.log('Single SVG loaded, no navigation needed');
-				} else {
-					console.log('No SVGs were loaded');
+					console.log('🏗️ No background images found to load');
 				}
 			} else if (convertedData.mode === 'roomscale-4') {
 				// For roomscale mode, store assets but don't auto-load (user can load manually)
@@ -981,9 +979,95 @@ import "../styles.css";
 			}
 		}
 
+		// Load API background images (tower floorplates) via simulated drag-and-drop
+		function loadApiBackgroundImages(apiImages) {
+			console.log(`🏗️ loadApiBackgroundImages called with ${apiImages.length} background images`);
+			console.log('Available SVGs:', importedSVGs.map(svg => svg.name));
+
+			if (apiImages.length === 0 || importedSVGs.length === 0) {
+				console.log('No background images or no SVGs loaded, skipping background image loading');
+				return;
+			}
+
+			apiImages.forEach((imageData) => {
+				console.log(`Processing background image: ${imageData.imageName}`);
+
+				const mediaBaseName = getBaseName(imageData.imageName);
+				// Extract last 2 segments from image name
+				const mediaNameParts = mediaBaseName.split("_");
+				const mediaLastTwoSegments = mediaNameParts.length >= 2
+					? mediaNameParts.slice(-2).join("_")
+					: mediaBaseName;
+
+				console.log(`Image name: ${imageData.imageName} -> last 2 segments: ${mediaLastTwoSegments}`);
+
+				// Loop through the imported SVG objects to find a matching name
+				importedSVGs.forEach((svgObj) => {
+					const svgBaseName = getBaseName(svgObj.name);
+					// Extract last 2 segments from SVG name
+					const svgNameParts = svgBaseName.split("_");
+					const svgLastTwoSegments = svgNameParts.length >= 2
+						? svgNameParts.slice(-2).join("_")
+						: svgBaseName;
+
+					console.log(`Comparing SVG: ${svgObj.name} (${svgLastTwoSegments}) with image (${mediaLastTwoSegments})`);
+
+					if (svgLastTwoSegments === mediaLastTwoSegments) {
+						console.log(`Found match! Loading ${imageData.imageName} as background for ${svgObj.name}`);
+
+						const svgElement = svgObj.element;
+						const viewBox = svgElement.getAttribute("viewBox").split(" ");
+
+						// Remove any existing background images
+						const existingImages = svgElement.querySelectorAll("image");
+						existingImages.forEach(img => {
+							const imgWidth = img.getAttribute("width");
+							const imgHeight = img.getAttribute("height");
+
+							if (imgWidth === viewBox[2] && imgHeight === viewBox[3]) {
+								img.remove();
+								console.log("Removed existing background image from SVG");
+							}
+						});
+
+						// Remove existing foreignObject elements (videos)
+						const existingForeignObjects = svgElement.querySelectorAll("foreignObject");
+						existingForeignObjects.forEach(fo => {
+							const foWidth = fo.getAttribute("width");
+							const foHeight = fo.getAttribute("height");
+							if (foWidth === viewBox[2] && foHeight === viewBox[3]) {
+								fo.remove();
+								console.log("Removed existing background video from SVG");
+							}
+						});
+
+						// Create and add the background image
+						const imageElement = document.createElementNS("http://www.w3.org/2000/svg", "image");
+						imageElement.setAttribute("x", viewBox[0]);
+						imageElement.setAttribute("y", viewBox[1]);
+						imageElement.setAttribute("width", viewBox[2]);
+						imageElement.setAttribute("height", viewBox[3]);
+						imageElement.setAttribute("href", imageData.data); // Use the data URL
+						imageElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+						// Insert as the first child (background)
+						if (svgElement.firstChild) {
+							svgElement.insertBefore(imageElement, svgElement.firstChild);
+						} else {
+							svgElement.appendChild(imageElement);
+						}
+
+						console.log(`Successfully added background image ${imageData.imageName} to SVG ${svgObj.name}`);
+					}
+				});
+			});
+
+			console.log(`Finished processing ${apiImages.length} background images`);
+		}
+
 		// Load API images into imageList for overlay functionality
 		function loadApiImagesToImageList(apiImages, source = 'unknown') {
-			console.log(`loadApiImagesToImageList called with ${apiImages.length} images from source: ${source}`);
+			console.log(`🔄 loadApiImagesToImageList called with ${apiImages.length} images from source: ${source}`);
 			console.log('API images:', apiImages.map(img => ({ name: img.imageName, mimeType: img.mimeType, dataLength: img.data?.length })));
 
 			if (apiImages.length === 0) {
@@ -1014,14 +1098,12 @@ import "../styles.css";
 			const imgCarouselContainer = document.getElementById("image-carousel-container");
 			console.log('Image carousel container element:', imgCarouselContainer);
 			if (imgCarouselContainer) {
-				console.log('Image carousel container classes:', imgCarouselContainer.classList.value);
-				if (imgCarouselContainer.classList.contains("hidden")) {
-					console.log('Showing image carousel container');
-					imgCarouselContainer.classList.remove("hidden");
-					imgCarouselContainer.classList.add("flex");
-				} else {
-					console.log('Image carousel container already visible');
-				}
+				console.log('Image carousel container classes before:', imgCarouselContainer.classList.value);
+				console.log('Contains hidden?', imgCarouselContainer.classList.contains("hidden"));
+				console.log('Setting display to block to ensure visibility');
+				imgCarouselContainer.style.display = 'block';
+				console.log('Image carousel container classes after:', imgCarouselContainer.classList.value);
+				console.log('Image carousel container display style:', imgCarouselContainer.style.display);
 			} else {
 				console.error('Image carousel container not found!');
 			}
