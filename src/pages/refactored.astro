@@ -624,6 +624,9 @@ import "../styles.css";
 		let imageTransformations = {}; // { "name": { flip: boolean, rotation: number } }
 		let currentHoveredImage = null;
 
+		// Control modes to prevent conflicts
+		let currentControlMode = 'default'; // 'default', 'floorplate', 'floorplan'
+
 		// Parse image name from filename (4th part separated by _, contains 2 dashes)
 		function parseImageName(imageFileName) {
 			// Remove extension
@@ -1148,12 +1151,14 @@ import "../styles.css";
 						// Add hover event listeners
 						imageElement.addEventListener("mouseenter", (e) => {
 							currentHoveredImage = imageElement;
-							console.log(`Hovering over image: ${imageData.imageName}`);
+							switchControlMode('floorplate');
+							console.log(`Hovering over floorplate: ${imageData.imageName}`);
 						});
 
 						imageElement.addEventListener("mouseleave", (e) => {
 							if (currentHoveredImage === imageElement) {
 								currentHoveredImage = null;
+								switchControlMode('default');
 							}
 						});
 
@@ -1255,6 +1260,7 @@ import "../styles.css";
 						// Add hover events for transformation controls
 						imageElement.addEventListener("mouseenter", (e) => {
 							currentHoveredImage = imageElement;
+							switchControlMode('floorplate');
 							console.log(`Hovering over thumbnail: ${image.name}`);
 							console.log('Use Left/Right arrows to rotate, F to flip');
 						});
@@ -1262,6 +1268,7 @@ import "../styles.css";
 						imageElement.addEventListener("mouseleave", (e) => {
 							if (currentHoveredImage === imageElement) {
 								currentHoveredImage = null;
+								switchControlMode('default');
 							}
 						});
 
@@ -1320,8 +1327,8 @@ import "../styles.css";
 			console.log('Setting up image transformation keyboard controls');
 
 			document.addEventListener('keydown', (e) => {
-				// Only process if we have a hovered image
-				if (!currentHoveredImage) return;
+				// Only process if we're in floorplate mode AND have a hovered image
+				if (currentControlMode !== 'floorplate' || !currentHoveredImage) return;
 
 				switch (e.key) {
 					case 'ArrowLeft':
@@ -1340,10 +1347,10 @@ import "../styles.css";
 				}
 			});
 
-			console.log('🎮 Image transformation controls enabled!');
-			console.log('🎯 Hover over images and use:');
-			console.log('  ← → Arrow keys: Rotate ±90°');
-			console.log('  F key: Flip horizontally');
+			console.log('🎮 Floorplate transformation controls enabled!');
+			console.log('🎯 Hover over floorplate images and use:');
+			console.log('  ← → Arrow keys: Rotate ±90° (only in floorplate mode)');
+			console.log('  F key: Flip horizontally (only in floorplate mode)');
 			console.log('💾 Call logImageTransformations() to view changes');
 			console.log('📤 Call exportImageTransformations() to download JSON');
 
@@ -1353,6 +1360,10 @@ import "../styles.css";
 				svg image:hover {
 					outline: 2px solid #007bff !important;
 					outline-offset: 2px;
+					cursor: crosshair;
+				}
+				.control-mode-floorplate svg image:hover {
+					outline: 3px solid #28a745 !important;
 					cursor: crosshair;
 				}
 			`;
@@ -1365,6 +1376,66 @@ import "../styles.css";
 				t.flip !== false || t.rotation !== 0
 			);
 			return transformations;
+		}
+
+		// Function to switch control modes
+		function switchControlMode(mode) {
+			const previousMode = currentControlMode;
+			currentControlMode = mode;
+
+			// Update body class for visual feedback
+			document.body.className = document.body.className.replace(/control-mode-\w+/g, '');
+			document.body.classList.add(`control-mode-${mode}`);
+
+			if (previousMode !== mode) {
+				console.log(`🔄 Control mode switched: ${previousMode} → ${mode}`);
+				showModeIndicator(mode);
+			}
+		}
+
+		// Show visual indicator of current mode
+		function showModeIndicator(mode) {
+			// Remove existing indicator
+			const existing = document.getElementById('control-mode-indicator');
+			if (existing) existing.remove();
+
+			// Create new indicator
+			const indicator = document.createElement('div');
+			indicator.id = 'control-mode-indicator';
+			indicator.style.cssText = `
+				position: fixed;
+				top: 10px;
+				right: 10px;
+				background: rgba(0,0,0,0.8);
+				color: white;
+				padding: 5px 10px;
+				border-radius: 4px;
+				font-size: 12px;
+				z-index: 10000;
+				pointer-events: none;
+			`;
+
+			let modeText = '';
+			switch (mode) {
+				case 'floorplate':
+					modeText = '🏗️ Floorplate Mode (←→ rotate, F flip)';
+					break;
+				case 'floorplan':
+					modeText = '📐 Floorplan Mode (←→ rotate circles)';
+					break;
+				default:
+					modeText = '📝 Default Mode';
+			}
+
+			indicator.textContent = modeText;
+			document.body.appendChild(indicator);
+
+			// Auto-hide after 3 seconds
+			setTimeout(() => {
+				if (indicator.parentNode) {
+					indicator.remove();
+				}
+			}, 3000);
 		}
 
 		// Export transformations data
@@ -2801,11 +2872,30 @@ import "../styles.css";
 				}
 			};
 
+			// Add mode switching for floorplan elements
+			const handleFloorplanHover = (e) => {
+				if (e.target && (e.target.tagName === 'circle' || e.target.tagName === 'polygon' || e.target.tagName === 'path' || e.target.tagName === 'rect')) {
+					switchControlMode('floorplan');
+				}
+			};
+
+			const handleFloorplanLeave = (e) => {
+				// Switch back to default mode when leaving floorplan elements
+				switchControlMode('default');
+			};
+
 			svgElement.addEventListener('contextmenu', preventContextMenu);
+			svgElement.addEventListener('mouseenter', handleFloorplanHover, true); // Use capture phase
+			svgElement.addEventListener('mouseleave', handleFloorplanLeave, true);
 			
 			const allChildren = svgElement.querySelectorAll('*');
 			allChildren.forEach(child => {
 				child.addEventListener('contextmenu', preventContextMenu);
+				// Add hover listeners for individual elements
+				if (child.tagName === 'circle' || child.tagName === 'polygon' || child.tagName === 'path' || child.tagName === 'rect') {
+					child.addEventListener('mouseenter', handleFloorplanHover);
+					child.addEventListener('mouseleave', handleFloorplanLeave);
+				}
 			});
 		}
 
@@ -3697,6 +3787,7 @@ import "../styles.css";
 
 			parentSVG.querySelectorAll("path").forEach((path) => {
 				const listener = path.addEventListener("mouseover", (e) => {
+					switchControlMode('floorplan');
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
@@ -3776,6 +3867,7 @@ import "../styles.css";
 				});
 
 				const listener2 = path.addEventListener("mouseout", (e) => {
+					switchControlMode('default');
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "none";
@@ -3957,18 +4049,18 @@ import "../styles.css";
 			}
 
 			if (event.key === "ArrowLeft") {
-				if (!typing) {
+				if (!typing && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
 					rotateCircles(-45);
 				}
 			} else if (event.key === "ArrowRight") {
-				if (!typing) {
+				if (!typing && (currentControlMode === 'default' || currentControlMode === 'floorplan')) {
 					rotateCircles(45);
 				}
 			}
 
 			if (e.key == "l") {
 				console.log(e.key);
-				if (document.getElementById("showLabelsToggle")) {
+				if ((currentControlMode === 'default' || currentControlMode === 'floorplan') && document.getElementById("showLabelsToggle")) {
 					document.getElementById("showLabelsToggle").click();
 				}
 			}
