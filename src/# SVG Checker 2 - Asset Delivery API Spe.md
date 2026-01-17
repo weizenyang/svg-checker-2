@@ -126,14 +126,14 @@ curl http://localhost:9234/api/project/my-project-key
       "mimeType": "image/svg+xml"
     },
     {
-      "imageName": "backplate_image_tower-floorplate_a_02.svg",
+      "imageName": "backplate_image_tower-floorplate_a_01.png/webp",
       "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmci...",
       "mimeType": "image/svg+xml"
     }
   ],
   "unitFloorplans": [
     {
-      "imageName": "unit_floorplan_01.svg",
+      "imageName": "unit_floorplan_01.png/webp",
       "data": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmci...",
       "mimeType": "image/svg+xml"
     }

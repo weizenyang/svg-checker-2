@@ -537,7 +537,7 @@ import "../styles.css";
 
 	</body>
 
-	<script type="module" lang="ts">
+	<script>
 		// import { onMount } from 'astro/client';
 		// import * as svgOp from "./svg-scripts/svg-operations"
 		import { transform } from "typescript";
@@ -547,228 +547,6 @@ import "../styles.css";
 			updateValuesModal,
 			circlesToSpawn,
 		} from "../store.js";
-
-		// Asset Delivery API Configuration
-		const API_BASE_URL = 'http://localhost:9234';
-		const LEGACY_ENDPOINTS = {
-			models: '/model',
-			csv: '/camera-csv'
-		};
-
-		// Extract project key from URL parameters
-		function getProjectKey() {
-			const urlParams = new URLSearchParams(window.location.search);
-			return urlParams.get('project') || urlParams.get('key') || urlParams.get('id') || 'default';
-		}
-
-		// Determine application mode from URL
-		function getApplicationMode() {
-			const path = window.location.pathname;
-			if (path.includes('/roomscale-4')) {
-				return 'roomscale-4';
-			} else if (path.includes('/refactored')) {
-				return 'refactored';
-			}
-			return 'refactored'; // Default to refactored mode
-		}
-
-		// Fetch project assets from primary API endpoint
-		async function fetchProjectAssets(projectKey) {
-			try {
-				const response = await fetch(`${API_BASE_URL}/api/project/${projectKey}`);
-				if (!response.ok) {
-					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-				}
-				const data = await response.json();
-				console.log('Fetched project assets:', data);
-				return data;
-			} catch (error) {
-				console.warn('Primary API endpoint failed, trying legacy endpoints:', error);
-				return await fetchLegacyAssets(projectKey);
-			}
-		}
-
-		// Fallback to legacy endpoints
-		async function fetchLegacyAssets(projectKey) {
-			try {
-				const [modelsResponse, csvResponse] = await Promise.allSettled([
-					fetch(`${API_BASE_URL}${LEGACY_ENDPOINTS.models}`),
-					fetch(`${API_BASE_URL}${LEGACY_ENDPOINTS.csv}`)
-				]);
-
-				const result = {
-					mode: getApplicationMode(),
-					models: [],
-					cameraCSV: null,
-					images: [],
-					unitFloorplans: []
-				};
-
-				if (modelsResponse.status === 'fulfilled' && modelsResponse.value.ok) {
-					result.models = await modelsResponse.value.json();
-				}
-
-				if (csvResponse.status === 'fulfilled' && csvResponse.value.ok) {
-					result.cameraCSV = await csvResponse.value.json();
-				}
-
-				console.log('Fetched legacy assets:', result);
-				return result;
-			} catch (error) {
-				console.error('All API endpoints failed:', error);
-				return null;
-			}
-		}
-
-		// Convert base64 string to data URL
-		function base64ToDataUrl(base64, mimeType) {
-			if (base64.startsWith('data:')) {
-				return base64; // Already a data URL
-			}
-			return `data:${mimeType};base64,${base64}`;
-		}
-
-		// Convert ArrayBuffer to data URL
-		function arrayBufferToDataUrl(buffer, mimeType) {
-			const bytes = new Uint8Array(buffer);
-			const binary = bytes.reduce((acc, byte) => acc + String.fromCharCode(byte), '');
-			const base64 = btoa(binary);
-			return `data:${mimeType};base64,${base64}`;
-		}
-
-		// Process fetched assets based on mode
-		async function processAssets(assets) {
-			if (!assets) {
-				console.log('No assets to process');
-				return;
-			}
-
-			console.log('Processing assets in mode:', assets.mode);
-
-			// Process models (Roomscale mode)
-			if (assets.models && assets.models.length > 0) {
-				console.log(`Processing ${assets.models.length} models`);
-				for (const model of assets.models) {
-					try {
-						let dataUrl;
-						if (typeof model.data === 'string') {
-							dataUrl = base64ToDataUrl(model.data, 'model/gltf-binary');
-						} else if (model.data instanceof ArrayBuffer) {
-							dataUrl = arrayBufferToDataUrl(model.data, 'model/gltf-binary');
-						} else if (model.data instanceof Uint8Array) {
-							dataUrl = arrayBufferToDataUrl(model.data.buffer, 'model/gltf-binary');
-						}
-
-						// Load the model into the scene (you'll need to implement this)
-						console.log(`Loading model: ${model.modelName}`);
-						// TODO: Add model loading logic here
-					} catch (error) {
-						console.error(`Failed to process model ${model.modelName}:`, error);
-					}
-				}
-			}
-
-			// Process camera CSV (Roomscale mode)
-			if (assets.cameraCSV) {
-				console.log('Processing camera CSV:', assets.cameraCSV.csvName);
-				try {
-					let csvText;
-					if (typeof assets.cameraCSV.data === 'string') {
-						csvText = assets.cameraCSV.data;
-					} else if (assets.cameraCSV.data instanceof ArrayBuffer) {
-						csvText = new TextDecoder().decode(assets.cameraCSV.data);
-					} else if (assets.cameraCSV.data instanceof Uint8Array) {
-						csvText = new TextDecoder().decode(assets.cameraCSV.data);
-					}
-
-					// Parse and use the CSV data (you'll need to implement this)
-					console.log('Camera CSV content length:', csvText.length);
-					// TODO: Add CSV processing logic here
-				} catch (error) {
-					console.error('Failed to process camera CSV:', error);
-				}
-			}
-
-			// Process images (both modes)
-			if (assets.images && assets.images.length > 0) {
-				console.log(`Processing ${assets.images.length} images`);
-				for (const image of assets.images) {
-					try {
-						let dataUrl;
-						if (typeof image.data === 'string') {
-							dataUrl = base64ToDataUrl(image.data, image.mimeType);
-						} else if (image.data instanceof ArrayBuffer) {
-							dataUrl = arrayBufferToDataUrl(image.data, image.mimeType);
-						} else if (image.data instanceof Uint8Array) {
-							dataUrl = arrayBufferToDataUrl(image.data.buffer, image.mimeType);
-						}
-
-						// For SVG files, create a File object and process as SVG
-						if (image.mimeType === 'image/svg+xml') {
-							// Convert data URL back to blob for File creation
-							const response = await fetch(dataUrl);
-							const blob = await response.blob();
-							const file = new File([blob], image.imageName, { type: image.mimeType });
-
-							console.log(`Processing SVG: ${image.imageName}`);
-							handleFileChange([file]);
-						} else {
-							// For other images (JPEG, PNG), add to image manager
-							console.log(`Adding image to manager: ${image.imageName}`);
-							// TODO: Add image manager logic here
-						}
-					} catch (error) {
-						console.error(`Failed to process image ${image.imageName}:`, error);
-					}
-				}
-			}
-
-			// Process unit floorplans (Refactored mode)
-			if (assets.unitFloorplans && assets.unitFloorplans.length > 0) {
-				console.log(`Processing ${assets.unitFloorplans.length} unit floorplans`);
-				for (const floorplan of assets.unitFloorplans) {
-					try {
-						let dataUrl;
-						if (typeof floorplan.data === 'string') {
-							dataUrl = base64ToDataUrl(floorplan.data, floorplan.mimeType);
-						} else if (floorplan.data instanceof ArrayBuffer) {
-							dataUrl = arrayBufferToDataUrl(floorplan.data, floorplan.mimeType);
-						} else if (floorplan.data instanceof Uint8Array) {
-							dataUrl = arrayBufferToDataUrl(floorplan.data.buffer, floorplan.mimeType);
-						}
-
-						// Create File object and process as unit floorplan SVG
-						const response = await fetch(dataUrl);
-						const blob = await response.blob();
-						const file = new File([blob], floorplan.imageName, { type: floorplan.mimeType });
-
-						console.log(`Processing unit floorplan: ${floorplan.imageName}`);
-						// TODO: Add unit floorplan processing logic here
-					} catch (error) {
-						console.error(`Failed to process unit floorplan ${floorplan.imageName}:`, error);
-					}
-				}
-			}
-		}
-
-		// Initialize asset loading on page load
-		async function initializeAssetLoading() {
-			const projectKey = getProjectKey();
-			const mode = getApplicationMode();
-
-			console.log(`Initializing asset loading for project: ${projectKey} in mode: ${mode}`);
-
-			try {
-				const assets = await fetchProjectAssets(projectKey);
-				if (assets) {
-					await processAssets(assets);
-				} else {
-					console.log('No assets loaded from API, user can manually upload files');
-				}
-			} catch (error) {
-				console.error('Failed to initialize asset loading:', error);
-			}
-		}
 		enum format {
 			underscore,
 			dash,
@@ -802,6 +580,203 @@ import "../styles.css";
 		let globalFloorsAggregated = [];
 		let aggregatePoints = false;
 		let checkboxesId = [];
+
+		// Asset Delivery API Integration
+		const API_BASE_URL = 'http://localhost:9234';
+
+		// Extract project key from URL parameters
+		function getProjectKey() {
+			const urlParams = new URLSearchParams(window.location.search);
+			return urlParams.get('project') || urlParams.get('key') || urlParams.get('id') || 'default';
+		}
+
+		// Fetch project assets from API
+		async function fetchProjectAssets(projectKey) {
+			try {
+				const response = await fetch(`${API_BASE_URL}/api/project/${projectKey}`);
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				}
+				return await response.json();
+			} catch (error) {
+				console.warn('Primary API endpoint failed, trying legacy endpoints:', error);
+
+				// Try legacy endpoints as fallback
+				try {
+					const [modelsRes, csvRes] = await Promise.allSettled([
+						fetch(`${API_BASE_URL}/model`),
+						fetch(`${API_BASE_URL}/camera-csv`)
+					]);
+
+					const result = { mode: 'roomscale-4', models: [], cameraCSV: null, images: [], unitFloorplans: [] };
+
+					if (modelsRes.status === 'fulfilled' && modelsRes.value.ok) {
+						const modelsData = await modelsRes.value.json();
+						result.models = modelsData.models || [];
+					}
+
+					if (csvRes.status === 'fulfilled' && csvRes.value.ok) {
+						const csvData = await csvRes.value.json();
+						result.cameraCSV = csvData;
+					}
+
+					return result;
+				} catch (legacyError) {
+					console.error('All API endpoints failed:', legacyError);
+					return null;
+				}
+			}
+		}
+
+		// Convert API data formats to application format
+		function convertApiData(data) {
+			const converted = { ...data };
+
+			// Convert base64 strings to Uint8Array if needed
+			if (converted.models) {
+				converted.models = converted.models.map(model => ({
+					...model,
+					data: typeof model.data === 'string' && !model.data.startsWith('data:')
+						? Uint8Array.from(atob(model.data), c => c.charCodeAt(0))
+						: model.data
+				}));
+			}
+
+			if (converted.cameraCSV && typeof converted.cameraCSV.data === 'string') {
+				converted.cameraCSV.data = converted.cameraCSV.data;
+			}
+
+			if (converted.images) {
+				converted.images = converted.images.map(img => {
+					let data = img.data;
+					// Convert base64 strings to data URLs if needed
+					if (typeof data === 'string' && !data.startsWith('data:')) {
+						data = `data:${img.mimeType};base64,${data}`;
+					}
+					return { ...img, data };
+				});
+			}
+
+			if (converted.unitFloorplans) {
+				converted.unitFloorplans = converted.unitFloorplans.map(img => {
+					let data = img.data;
+					// Convert base64 strings to data URLs if needed
+					if (typeof data === 'string' && !data.startsWith('data:')) {
+						data = `data:${img.mimeType};base64,${data}`;
+					}
+					return { ...img, data };
+				});
+			}
+
+			return converted;
+		}
+
+		// Process API response and load assets
+		async function processApiAssets(apiData) {
+			if (!apiData) return;
+
+			console.log('Processing API assets:', apiData);
+
+			const convertedData = convertApiData(apiData);
+
+			// Store assets globally for the application to use
+			window.apiAssets = convertedData;
+
+			// Process based on mode
+			if (convertedData.mode === 'refactored') {
+				// Load SVG floorplates and unit floorplans
+				if (convertedData.images && convertedData.images.length > 0) {
+					console.log('Loading SVG floorplates:', convertedData.images.length);
+
+					// Reset SVG state for API loading
+					importedSVGs = [];
+					currentSVGIndex = 0;
+					globalSvgContainer.innerHTML = "";
+
+					// Process each SVG
+					for (const image of convertedData.images) {
+						if (image.mimeType === 'image/svg+xml') {
+							try {
+								// Create a blob URL for the SVG data
+								const blob = new Blob([image.data], { type: 'image/svg+xml' });
+								const url = URL.createObjectURL(blob);
+
+								// Load SVG using existing logic
+								await loadSVGFromURL(url, image.imageName);
+							} catch (error) {
+								console.error(`Failed to load SVG ${image.imageName}:`, error);
+							}
+						}
+					}
+
+					// Show navigation if multiple SVGs
+					if (importedSVGs.length > 1) {
+						spawnSVGNavigation();
+					}
+				}
+
+				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
+					console.log('Loading unit floorplans:', convertedData.unitFloorplans.length);
+					// Store unit floorplans for later use
+					window.unitFloorplans = convertedData.unitFloorplans;
+				}
+			} else if (convertedData.mode === 'roomscale-4') {
+				// For roomscale mode, store assets but don't auto-load (user can load manually)
+				console.log('Roomscale assets loaded via API:', {
+					models: convertedData.models?.length || 0,
+					csv: convertedData.cameraCSV ? 'present' : 'none',
+					images: convertedData.images?.length || 0
+				});
+
+				// Store for manual loading by user
+				if (convertedData.cameraCSV) {
+					window.apiCameraCSV = convertedData.cameraCSV;
+				}
+				if (convertedData.models && convertedData.models.length > 0) {
+					window.apiModels = convertedData.models;
+				}
+			}
+		}
+
+		// Load SVG from URL (helper function to integrate with existing logic)
+		async function loadSVGFromURL(url, filename) {
+			try {
+				const response = await fetch(url);
+				const svgText = await response.text();
+
+				// Parse and process the SVG similar to existing file loading
+				const parser = new DOMParser();
+				const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+
+				if (svgDoc.querySelector('parsererror')) {
+					throw new Error('Invalid SVG content');
+				}
+
+				const svgElement = svgDoc.documentElement;
+
+				// Use existing SVG processing logic (same as in handleFileChange)
+				importedSVGs.push({ name: getBaseName(filename), element: svgElement });
+
+				// Process the SVG
+				processSVG(svgElement);
+
+			} catch (error) {
+				console.error(`Error loading SVG from URL ${url}:`, error);
+			}
+		}
+
+		// Initialize API loading on page load
+		document.addEventListener('DOMContentLoaded', async () => {
+			const projectKey = getProjectKey();
+			console.log('Loading project:', projectKey);
+
+			const apiData = await fetchProjectAssets(projectKey);
+			if (apiData) {
+				await processApiAssets(apiData);
+			} else {
+				console.log('No API data available, user can load files manually');
+			}
+		});
 
 		// Undo/Redo system
 		let undoStack = [];
@@ -5668,13 +5643,6 @@ import "../styles.css";
 					statusDiv.style.display = 'none';
 				}, 3000);
 			});
-		}
-
-		// Initialize asset loading when the page loads
-		if (document.readyState === 'loading') {
-			document.addEventListener('DOMContentLoaded', initializeAssetLoading);
-		} else {
-			initializeAssetLoading();
 		}
 	</script>
 </html>
