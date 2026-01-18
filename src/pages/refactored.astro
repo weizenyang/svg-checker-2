@@ -884,11 +884,22 @@ import "../styles.css";
 					currentSVGIndex = 0;
 					globalSvgContainer.innerHTML = "";
 
-					// Separate SVGs from background images (tower floorplates)
-					const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
-					backgroundImages = convertedData.images.filter(img => img.mimeType !== 'image/svg+xml');
+				// Separate SVGs from background images (tower floorplates)
+				// Also filter out unit floorplan images (they should be in unitFloorplans array, not images)
+				const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
+				backgroundImages = convertedData.images.filter(img => {
+					// Exclude SVGs
+					if (img.mimeType === 'image/svg+xml') return false;
+					// Exclude unit floorplan images (they have "backplate_image_floorplan" in name, not "backplate_image_tower-floorplate")
+					const imageName = img.imageName || '';
+					if (imageName.includes('backplate_image_floorplan') && !imageName.includes('tower-floorplate')) {
+						console.log(`⚠️ Filtering out unit floorplan from background images: ${imageName}`);
+						return false;
+					}
+					return true;
+				});
 
-					console.log(`Found ${svgImages.length} SVG files and ${backgroundImages.length} background images in images array`);
+				console.log(`Found ${svgImages.length} SVG files and ${backgroundImages.length} background images (tower floorplates) in images array`);
 
 					// Process each SVG
 					for (const image of svgImages) {
@@ -921,14 +932,37 @@ import "../styles.css";
 					}
 				}
 
-				// Load unitFloorplans for overlay functionality (hover check)
+				// Extract unit floorplan images from images array if they're present there
+				const unitFloorplanImagesFromImagesArray = convertedData.images ? convertedData.images.filter(img => {
+					const imageName = img.imageName || '';
+					return imageName.includes('backplate_image_floorplan') && !imageName.includes('tower-floorplate');
+				}) : [];
+
+				// Combine unitFloorplans from both sources
+				let allUnitFloorplans = [];
 				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
-					console.log('📋 Processing unitFloorplans array:', convertedData.unitFloorplans.length, 'items for overlay functionality');
+					allUnitFloorplans = convertedData.unitFloorplans;
+					console.log('📋 Found unitFloorplans array:', convertedData.unitFloorplans.length, 'items');
+				}
+				if (unitFloorplanImagesFromImagesArray.length > 0) {
+					console.log('📋 Found unit floorplan images in images array:', unitFloorplanImagesFromImagesArray.length, 'items');
+					// Merge with existing unitFloorplans (avoid duplicates)
+					unitFloorplanImagesFromImagesArray.forEach(img => {
+						const exists = allUnitFloorplans.some(uf => uf.imageName === img.imageName);
+						if (!exists) {
+							allUnitFloorplans.push(img);
+						}
+					});
+				}
+
+				// Load unitFloorplans for overlay functionality (hover check)
+				if (allUnitFloorplans.length > 0) {
+					console.log('📋 Processing total unitFloorplans:', allUnitFloorplans.length, 'items for overlay functionality');
 					// Store unit floorplans for later use
-					window.unitFloorplans = convertedData.unitFloorplans;
+					window.unitFloorplans = allUnitFloorplans;
 
 					// Load unit floorplans into imageList for overlay functionality (hover check)
-					loadApiImagesToImageList(convertedData.unitFloorplans, 'unitFloorplans');
+					loadApiImagesToImageList(allUnitFloorplans, 'unitFloorplans');
 				} else {
 					console.log('📋 No unitFloorplans found for overlay functionality');
 				}
