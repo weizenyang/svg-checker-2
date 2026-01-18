@@ -3730,13 +3730,13 @@ import "../styles.css";
 			imgElement.style.transformOrigin = "center center";
 			imgElement.style.transformOrigin = "50% 50%";
 			
-			// Calculate final rotation: importedRotation + change (if imported exists)
+			// For preview: only use the CHANGE rotation, not the final rotation
+			// The final rotation (importedRotation + change) is only for export
 			const rotationChange = transform.rotation || 0;
-			const finalRotation = importedRotation !== null ? importedRotation + rotationChange : rotationChange;
 			
 			// Convert from offset convention to HTML transform convention
 			// In offset logic: -90 means +90 in HTML, so HTML rotation = -offset rotation
-			const htmlRotation = -finalRotation;
+			const htmlRotation = -rotationChange;
 			
 			// Calculate final flip: importedFlip XOR change (if imported exists)
 			const finalFlip = importedFlip !== null ? (importedFlip !== transform.flip) : transform.flip;
@@ -3744,7 +3744,7 @@ import "../styles.css";
 			// Build transform string - apply rotation and flip
 			let transformParts = [];
 			
-			// Apply final rotation (converted to HTML convention)
+			// Apply change rotation only (converted to HTML convention)
 			if (htmlRotation !== 0) {
 				transformParts.push(`rotate(${htmlRotation}deg)`);
 			}
