@@ -3570,8 +3570,13 @@ import "../styles.css";
 				};
 			});
 			
+			// Wrap merged data in units key
+			const exportData = {
+				units: mergedData
+			};
+			
 			// Create and download JSON file
-			const jsonString = JSON.stringify(mergedData, null, 2);
+			const jsonString = JSON.stringify(exportData, null, 2);
 			const blob = new Blob([jsonString], { type: "application/json" });
 			const url = URL.createObjectURL(blob);
 			const a = document.createElement("a");
@@ -3582,7 +3587,7 @@ import "../styles.css";
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
 			
-			console.log("Exported unit-reference:", mergedData);
+			console.log("Exported unit-reference:", exportData);
 			console.log(`Successfully exported ${mergedData.length} unit(s)`);
 		});
 
