@@ -510,7 +510,7 @@ import "../styles.css";
 				</div>
 				
 				<div class="flex gap-2">
-					<input
+				<input
 					type="text"
 					placeholder="To Remove"
 					id="text-replacement"
@@ -3734,9 +3734,14 @@ import "../styles.css";
 			// The final values (importedRotation + change, importedFlip XOR change) are only for export
 			const rotationChange = transform.rotation || 0;
 			
-			// Convert from offset convention to HTML transform convention
-			// In offset logic: -90 means +90 in HTML, so HTML rotation = -offset rotation
-			const htmlRotation = -rotationChange;
+			// Calculate final flip to determine rotation direction (needed for rotation conversion)
+			// Final flip: importedFlip XOR change
+			const finalFlip = importedFlip !== null ? (importedFlip !== transform.flip) : transform.flip;
+			
+			// Convert rotation based on final flip state:
+			// - If final flip is true: rotation is counter-clockwise (needs negation)
+			// - If final flip is false: rotation is clockwise (no negation)
+			const htmlRotation = finalFlip ? -rotationChange : rotationChange;
 			
 			// For preview: only use the change flip, not the final flip
 			const flipChange = transform.flip || false;
