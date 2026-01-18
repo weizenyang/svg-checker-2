@@ -3729,15 +3729,19 @@ import "../styles.css";
 			const rotationChange = transform.rotation || 0;
 			const finalRotation = importedRotation !== null ? importedRotation + rotationChange : rotationChange;
 			
+			// Convert from offset convention to HTML transform convention
+			// In offset logic: -90 means +90 in HTML, so HTML rotation = -offset rotation
+			const htmlRotation = -finalRotation;
+			
 			// Calculate final flip: importedFlip XOR change (if imported exists)
 			const finalFlip = importedFlip !== null ? (importedFlip !== transform.flip) : transform.flip;
 			
 			// Build transform string - apply rotation and flip
 			let transformParts = [];
 			
-			// Apply final rotation
-			if (finalRotation !== 0) {
-				transformParts.push(`rotate(${finalRotation}deg)`);
+			// Apply final rotation (converted to HTML convention)
+			if (htmlRotation !== 0) {
+				transformParts.push(`rotate(${htmlRotation}deg)`);
 			}
 			
 			// Apply final flip
