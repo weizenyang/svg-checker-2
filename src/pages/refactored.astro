@@ -2353,23 +2353,25 @@ import "../styles.css";
 			}
 		});
 
-		function spawnCircle(id, cx, cy, data) {
-			const g = globalSvgContainer.querySelector("g");
-			const circle = document.createElementNS(
-				"http://www.w3.org/2000/svg",
-				"circle",
-			);
-			circle.setAttribute("id", id);
-			circle.setAttribute("cx", cx);
-			circle.setAttribute("cy", cy);
-			circle.setAttribute("r", "30");
-			data.forEach((e) => {
-				circle.setAttribute(e.field, e.value);
-			});
-			g.appendChild(circle);
+	function spawnCircle(id, cx, cy, data) {
+		const g = globalSvgContainer.querySelector("g");
+		const circle = document.createElementNS(
+			"http://www.w3.org/2000/svg",
+			"circle",
+		);
+		circle.setAttribute("id", id);
+		circle.setAttribute("cx", cx);
+		circle.setAttribute("cy", cy);
+		circle.setAttribute("r", "30");
+		circle.setAttribute("fill", "#87CEEB");
+		circle.setAttribute("stroke", "none");
+		data.forEach((e) => {
+			circle.setAttribute(e.field, e.value);
+		});
+		g.appendChild(circle);
 
-			return circle;
-		}
+		return circle;
+	}
 
 		//Listen to the UpdateValeusModal for circle spawn updates
 		circlesToSpawn.listen((circles) => {
@@ -3162,23 +3164,24 @@ import "../styles.css";
 					const contents = event.target.result;
 					const lines = contents.trim().split("\n");
 
-					// Check the number of columns and decide to transform
-					const firstLineFields = lines[0].split(",");
-					let transformedLines = lines;
-					let scaleToFit = false;
-					//column > 3
-					if (firstLineFields.length > 3) {
-						// Transform the data if more than three columns
-						transformedLines = lines.map((line) => {
-							const fields = line.split(",");
+				// Check the number of columns and decide to transform
+				const firstLineFields = lines[0].split(",");
+				let transformedLines = lines;
+				let scaleToFit = false;
+				//column > 3
+				if (firstLineFields.length > 3) {
+					// Transform the data if more than three columns
+					transformedLines = lines.map((line) => {
+						if (!line || line.trim() === "") return ""; // Skip empty lines
+						const fields = line.split(",");
 
-							const [name, x, y, z] = fields;
-							const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`; //Curly line for easier text separation
-							scaleToFit = true;
+						const [name, x, y, z] = fields;
+						const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`; //Curly line for easier text separation
+						scaleToFit = true;
 
-							return `${cleanedName},${-y},${-x},${name}`; // Swap x and y
-						});
-					}
+						return `${cleanedName},${-y},${-x},${name}`; // Swap x and y
+					}).filter(line => line !== ""); // Remove empty lines
+				}
 
 					var gInstance = document.createElementNS(
 						"http://www.w3.org/2000/svg",
@@ -3657,11 +3660,14 @@ import "../styles.css";
 						listItem.appendChild(imageElement);
 						imageListCarousel.appendChild(listItem);
 					});
-					previewBackplate(
-						document
-							.getElementById("svg-container")
-							.querySelector("svg"),
-					);
+					
+					// Only set up preview if SVG exists
+					const svgElement = document.getElementById("svg-container")?.querySelector("svg");
+					if (svgElement) {
+						previewBackplate(svgElement);
+					} else {
+						console.log("No SVG found yet - preview will be set up when SVG is loaded");
+					}
 				})
 				.catch((error) =>
 					console.error("Error loading images:", error),
@@ -3924,8 +3930,14 @@ import "../styles.css";
 		// Expose lookup on window for debugging/export
 		(window as any).getImageTransformLookup = getImageTransformLookup;
 
-		function previewBackplate(parentSVG) {
-			const listeners = [];
+	function previewBackplate(parentSVG) {
+		// Guard: check if parentSVG exists
+		if (!parentSVG) {
+			console.log("previewBackplate: No SVG provided, skipping setup");
+			return;
+		}
+		
+		const listeners = [];
 			listeners.forEach((e) => {
 				removeEventListener("hover", e);
 			});
@@ -4244,115 +4256,17 @@ import "../styles.css";
 				.classList.remove("appear");
 		});
 
-		document.body.addEventListener("drop", (e) => {
-			e.preventDefault();
-			console.log(e);
-			const files = Array.from(e.dataTransfer.files);
-			console.log("Dropped files:", files);
-			
-			// Separate files by type
-			const backplateImages: File[] = [];
-			const unitReferenceFiles: File[] = [];
-			const otherFiles: File[] = [];
-			
-			files.forEach((file) => {
-				const fileName = file.name.toLowerCase();
-				// Check if file name contains "backplate_image_floorplan" (case-insensitive)
-				if (fileName.includes("backplate_image_floorplan")) {
-					backplateImages.push(file);
-				}
-				// Check if file is unit-reference.json
-				else if (fileName === "unit-reference.json" || fileName.endsWith("unit-reference.json")) {
-					unitReferenceFiles.push(file);
-				}
-				// All other files
-				else {
-					otherFiles.push(file);
-				}
-			});
-			
-			// Handle backplate images - load into Check Floorplans
-			if (backplateImages.length > 0) {
-				console.log(`Loading ${backplateImages.length} backplate image(s) into Check Floorplans`);
-				// Create a FileList-like object for the uploadImages function
-				const dt = new DataTransfer();
-				backplateImages.forEach(file => dt.items.add(file));
-				const fakeEvent = {
-					target: {
-						files: dt.files
-					}
-				};
-				uploadImages(fakeEvent as any);
-			}
-			
-			// Handle unit-reference files - load into Upload unit-reference
-			if (unitReferenceFiles.length > 0) {
-				console.log(`Loading ${unitReferenceFiles.length} unit-reference file(s)`);
-				// Use the first unit-reference file
-				const file = unitReferenceFiles[0];
-				const reader = new FileReader();
-				reader.onload = (event: any) => {
-					try {
-						const jsonData = JSON.parse(event.target.result);
-						let unitsArray = null;
-						
-						// Handle different JSON structures
-						if (Array.isArray(jsonData)) {
-							unitsArray = jsonData;
-						} else if (jsonData.unitReference && Array.isArray(jsonData.unitReference.units)) {
-							unitsArray = jsonData.unitReference.units;
-						} else if (Array.isArray(jsonData.units)) {
-							unitsArray = jsonData.units;
-						} else {
-							console.error("Unexpected JSON structure:", jsonData);
-							console.log("Invalid format: Expected an array of unit objects, or an object with 'units' or 'unitReference.units' property");
-							return;
-						}
-						
-						if (unitsArray && unitsArray.length > 0) {
-							importedUnitReference = unitsArray;
-							console.log("📥 Imported unit-reference:", {
-								count: unitsArray.length,
-								units: unitsArray.map((unit: any) => ({
-									name: unit.name,
-									type: unit.type,
-									rotation: unit.rotation,
-									flip: unit.flip,
-									identifier: getUnitIdentifier(unit.name || "")
-								}))
-							});
-							
-							// Update preview if currently showing an image
-							if (currentHoveredImageName) {
-								const transform = getImageTransform(currentHoveredImageName);
-								updatePreviewText(currentHoveredImageName, transform);
-							}
-							
-							console.log(`Successfully imported ${unitsArray.length} unit(s)`);
-						} else {
-							console.log("No units found in the file");
-						}
-					} catch (error) {
-						console.error("Error parsing unit-reference JSON:", error);
-						console.log("Error parsing JSON file. Please check the format.");
-					}
-				};
-				reader.readAsText(file);
-			}
-			
-			// Handle other files with default behavior (SVG, etc.)
-			if (otherFiles.length > 0) {
-				const dt = new DataTransfer();
-				otherFiles.forEach(file => dt.items.add(file));
-				handleFileChange(dt.files);
-			}
-			
-			document
-				.querySelector(".drag-drop-prompt")
-				.classList.remove("appear");
-		});
+	document.body.addEventListener("drop", (e) => {
+		e.preventDefault();
+		console.log(e);
+		console.log(e.dataTransfer.files[0]);
+		handleFileChange(e.dataTransfer.files);
+		document
+			.querySelector(".drag-drop-prompt")
+			.classList.remove("appear");
+	});
 
-		//To check globally if is typing
+	//To check globally if is typing
 		document.addEventListener("focusin", (event) => {
 			if (
 				event.target.tagName === "INPUT" ||
