@@ -331,10 +331,36 @@ import "../styles.css";
 		scalableCanvas.addEventListener("mousedown", (e) => {
 			// Don't start panning if we're interacting with a rect or handle
 			const target = e.target as HTMLElement;
-			if (isDragging || isResizing || isDuplicating || target.tagName === 'rect' || target.classList?.contains('transform-handle')) {
+			
+			// Check if clicking directly on a rect
+			if (target.tagName === 'rect') {
 				return;
 			}
 			
+			// Check if clicking on transform handles or their children
+			if (target.classList?.contains('transform-handle') || 
+			    target.closest('.transform-handle') ||
+			    target.closest('.transform-group')) {
+				return;
+			}
+			
+			// Check if clicking inside the SVG container but not on interactive elements
+			const svg = target.closest('svg');
+			if (svg) {
+				// If we're inside an SVG, check if we clicked on a rect or its children
+				// (rects are the only interactive elements we care about)
+				const clickedRect = target.closest('rect');
+				if (clickedRect) {
+					return;
+				}
+			}
+			
+			// Don't start panning if already dragging/resizing/duplicating
+			if (isDragging || isResizing || isDuplicating) {
+				return;
+			}
+			
+			// Only start panning if clicking on the canvas background
 			isPanning = true;
 			startX = e.clientX - translateX;
 			startY = e.clientY - translateY;
