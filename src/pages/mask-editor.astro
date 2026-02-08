@@ -327,31 +327,37 @@ import "../styles.css";
 			}
 		});
 
-		// Handle panning
+		// Handle panning - check in bubble phase after rect handlers have had a chance
 		scalableCanvas.addEventListener("mousedown", (e) => {
-			// Don't start panning if we're interacting with a rect or handle
+			// If event was stopped by a rect handler, don't pan
+			if (e.defaultPrevented) {
+				return;
+			}
+			
 			const target = e.target as HTMLElement;
 			
-			// Check if clicking directly on a rect
-			if (target.tagName === 'rect') {
+			// First check: if clicking directly on a rect, don't pan
+			if (target && target.tagName === 'rect') {
 				return;
 			}
 			
-			// Check if clicking on transform handles or their children
-			if (target.classList?.contains('transform-handle') || 
+			// Second check: if clicking on transform handles
+			if (target && (target.classList?.contains('transform-handle') || 
 			    target.closest('.transform-handle') ||
-			    target.closest('.transform-group')) {
+			    target.closest('.transform-group'))) {
 				return;
 			}
 			
-			// Check if clicking inside the SVG container but not on interactive elements
-			const svg = target.closest('svg');
+			// Third check: if clicking inside SVG, check if it's on a rect
+			const svg = target?.closest('svg');
 			if (svg) {
-				// If we're inside an SVG, check if we clicked on a rect or its children
-				// (rects are the only interactive elements we care about)
-				const clickedRect = target.closest('rect');
-				if (clickedRect) {
-					return;
+				// Check if the actual target or any parent is a rect
+				let checkElement = target;
+				while (checkElement && checkElement !== svg) {
+					if (checkElement.tagName === 'rect') {
+						return;
+					}
+					checkElement = checkElement.parentElement as HTMLElement;
 				}
 			}
 			
@@ -365,7 +371,7 @@ import "../styles.css";
 			startX = e.clientX - translateX;
 			startY = e.clientY - translateY;
 			scalableCanvas.style.cursor = "grabbing";
-		});
+		}, false); // Use bubble phase so rect handlers (in capture) can stop it first
 
 		scalableCanvas.addEventListener("mousemove", (e) => {
 			if (!isPanning || isDragging || isResizing || isDuplicating) return;
@@ -559,10 +565,14 @@ import "../styles.css";
 				e.stopPropagation();
 			});
 			
-			// Prevent mousedown from starting drag
+			// Prevent mousedown from starting drag - but don't interfere with rect clicks
 			svgElement.addEventListener('mousedown', (e) => {
+				// Don't prevent if clicking on a rect - let rect handlers deal with it
+				if (e.target && e.target.tagName === 'rect') {
+					return; // Let rect handler process it
+				}
 				// Only prevent if it's on SVG elements, not our custom interactions
-				if (e.target !== svgElement && e.target.tagName !== 'rect') {
+				if (e.target !== svgElement) {
 					e.preventDefault();
 				}
 			}, true);
@@ -578,6 +588,14 @@ import "../styles.css";
 				const width = rect.getAttribute('width');
 				const height = rect.getAttribute('height');
 				console.log(`Rect ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
+				
+				// Ensure rect has stroke for selection visibility
+				if (!rect.getAttribute('stroke')) {
+					rect.setAttribute('stroke', '#007bff');
+				}
+				if (!rect.getAttribute('stroke-width')) {
+					rect.setAttribute('stroke-width', '2');
+				}
 				
 				// Add event listeners using the reusable function
 				addRectEventListeners(rect);
@@ -1516,12 +1534,14 @@ import "../styles.css";
 			
 			// Prevent mousedown from starting browser drag
 			rect.addEventListener('mousedown', (e) => {
-				console.log('Rect mousedown');
+				console.log('Rect mousedown - clicked on rect:', rect);
 				e.preventDefault();
-				e.stopPropagation();
+				e.stopPropagation(); // Stop bubbling to parent elements
 				
-				// Select the rect and immediately start dragging
+				// Select the rect first
+				console.log('Calling selectRect...');
 				selectRect(rect);
+				console.log('selectRect called, selectedRect:', selectedRect);
 				
 				// Check for Alt/Option key for duplication mode
 				if (e.altKey) {
@@ -1530,7 +1550,7 @@ import "../styles.css";
 					startDrag(e);
 				}
 				return false;
-			}, true);
+			}, true); // Capture phase - fires before bubble phase handlers
 		}
 
 		// Function to start duplication drag mode

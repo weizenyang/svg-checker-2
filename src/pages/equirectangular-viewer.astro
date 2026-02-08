@@ -1,0 +1,671 @@
+---
+import "../styles.css";
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Equirectangular Viewer</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				overflow: hidden;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+			}
+
+			#viewer-container {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: #000;
+			}
+
+			.video-controls {
+				position: fixed;
+				bottom: 30px;
+				left: 50%;
+				transform: translateX(-50%);
+				background: rgba(0, 0, 0, 0.85);
+				backdrop-filter: blur(10px);
+				border-radius: 12px;
+				padding: 15px 20px;
+				display: none;
+				flex-direction: column;
+				gap: 10px;
+				min-width: 400px;
+				box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+				z-index: 1000;
+			}
+
+			.video-controls.active {
+				display: flex;
+			}
+
+			.control-row {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+			}
+
+			.control-button {
+				background: rgba(255, 255, 255, 0.1);
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				color: white;
+				padding: 8px 12px;
+				border-radius: 6px;
+				cursor: pointer;
+				font-size: 12px;
+				transition: all 0.2s;
+			}
+
+			.control-button:hover {
+				background: rgba(255, 255, 255, 0.2);
+				border-color: rgba(255, 255, 255, 0.3);
+			}
+
+			.control-button.primary {
+				background: #007bff;
+				border-color: #0056b3;
+			}
+
+			.control-button.primary:hover {
+				background: #0056b3;
+			}
+
+			.time-display {
+				color: white;
+				font-size: 12px;
+				min-width: 100px;
+				text-align: center;
+			}
+
+			.progress-container {
+				flex: 1;
+				height: 6px;
+				background: rgba(255, 255, 255, 0.2);
+				border-radius: 3px;
+				cursor: pointer;
+				position: relative;
+			}
+
+			.progress-bar {
+				height: 100%;
+				background: #007bff;
+				border-radius: 3px;
+				width: 0%;
+			}
+
+			.volume-container {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			.volume-slider {
+				width: 80px;
+				height: 6px;
+				-webkit-appearance: none;
+				appearance: none;
+				background: rgba(255, 255, 255, 0.2);
+				border-radius: 3px;
+				outline: none;
+			}
+
+			.volume-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 14px;
+				height: 14px;
+				background: #007bff;
+				border-radius: 50%;
+				cursor: pointer;
+			}
+
+			.volume-slider::-moz-range-thumb {
+				width: 14px;
+				height: 14px;
+				background: #007bff;
+				border-radius: 50%;
+				cursor: pointer;
+				border: none;
+			}
+
+			.speed-select {
+				background: rgba(255, 255, 255, 0.1);
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				color: white;
+				padding: 6px 10px;
+				border-radius: 6px;
+				font-size: 12px;
+				cursor: pointer;
+			}
+
+			.info-panel {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				background: rgba(0, 0, 0, 0.85);
+				backdrop-filter: blur(10px);
+				border-radius: 12px;
+				padding: 15px 20px;
+				color: white;
+				font-size: 12px;
+				max-width: 300px;
+				z-index: 1000;
+				display: none;
+			}
+
+			.info-panel.active {
+				display: block;
+			}
+
+			.info-panel h3 {
+				margin: 0 0 10px 0;
+				font-size: 14px;
+				font-weight: 600;
+			}
+
+			.info-row {
+				display: flex;
+				justify-content: space-between;
+				margin-bottom: 6px;
+			}
+
+			.info-label {
+				color: rgba(255, 255, 255, 0.7);
+			}
+
+			.home-button {
+				position: fixed;
+				top: 20px;
+				left: 20px;
+				background: rgba(0, 0, 0, 0.85);
+				backdrop-filter: blur(10px);
+				border: 1px solid rgba(255, 255, 255, 0.2);
+				color: white;
+				padding: 10px 16px;
+				border-radius: 8px;
+				cursor: pointer;
+				font-size: 12px;
+				text-decoration: none;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				z-index: 1000;
+				transition: all 0.2s;
+			}
+
+			.home-button:hover {
+				background: rgba(0, 0, 0, 0.95);
+				border-color: rgba(255, 255, 255, 0.3);
+			}
+		</style>
+		
+		<!-- Three.js -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+	</head>
+	<body>
+		<div class="drag-drop-prompt">
+			<div class="animated-border">
+				<h1>Drag and Drop Equirectangular Images or Videos Here</h1>
+			</div>
+		</div>
+
+		<a href="/" class="home-button">
+			<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+				<polyline points="9 22 9 12 15 12 15 22"></polyline>
+			</svg>
+			Home
+		</a>
+
+		<div id="viewer-container"></div>
+
+		<div class="info-panel" id="info-panel">
+			<h3>Media Info</h3>
+			<div class="info-row">
+				<span class="info-label">Type:</span>
+				<span id="media-type">-</span>
+			</div>
+			<div class="info-row">
+				<span class="info-label">Resolution:</span>
+				<span id="media-resolution">-</span>
+			</div>
+			<div class="info-row">
+				<span class="info-label">Duration:</span>
+				<span id="media-duration">-</span>
+			</div>
+		</div>
+
+		<div class="video-controls" id="video-controls">
+			<div class="control-row">
+				<button class="control-button primary" id="play-pause">
+					<span id="play-icon">▶</span>
+				</button>
+				<div class="time-display" id="time-display">0:00 / 0:00</div>
+				<div class="progress-container" id="progress-container">
+					<div class="progress-bar" id="progress-bar"></div>
+				</div>
+			</div>
+			<div class="control-row">
+				<div class="volume-container">
+					<span style="color: white; font-size: 12px;">🔊</span>
+					<input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100">
+				</div>
+				<select class="speed-select" id="speed-select">
+					<option value="0.25">0.25x</option>
+					<option value="0.5">0.5x</option>
+					<option value="0.75">0.75x</option>
+					<option value="1" selected>1x</option>
+					<option value="1.25">1.25x</option>
+					<option value="1.5">1.5x</option>
+					<option value="2">2x</option>
+				</select>
+				<button class="control-button" id="fullscreen-btn">Fullscreen</button>
+			</div>
+		</div>
+
+		<script is:inline>
+			// Global variables
+			let scene, camera, renderer, sphere, texture, videoTexture;
+			let isVideo = false;
+			let videoElement = null;
+			let isDragging = false;
+			let previousMousePosition = { x: 0, y: 0 };
+			let lon = 0, lat = 0;
+			let phi = 0, theta = 0;
+
+			// Initialize Three.js scene
+			function initViewer() {
+				const container = document.getElementById('viewer-container');
+				
+				// Create scene
+				scene = new THREE.Scene();
+				
+				// Create camera
+				camera = new THREE.PerspectiveCamera(
+					75,
+					window.innerWidth / window.innerHeight,
+					0.1,
+					1000
+				);
+				camera.position.set(0, 0, 0.1);
+				
+				// Create renderer
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				container.appendChild(renderer.domElement);
+				
+				// Create sphere geometry (inverted for interior view)
+				const geometry = new THREE.SphereGeometry(500, 60, 40);
+				geometry.scale(-1, 1, 1); // Invert for interior view
+				
+				// Create material
+				const material = new THREE.MeshBasicMaterial();
+				sphere = new THREE.Mesh(geometry, material);
+				scene.add(sphere);
+				
+				// Add event listeners
+				container.addEventListener('mousedown', onMouseDown);
+				container.addEventListener('mousemove', onMouseMove);
+				container.addEventListener('mouseup', onMouseUp);
+				container.addEventListener('wheel', onWheel);
+				container.addEventListener('touchstart', onTouchStart);
+				container.addEventListener('touchmove', onTouchMove);
+				container.addEventListener('touchend', onTouchEnd);
+				
+				window.addEventListener('resize', onWindowResize);
+				
+				// Start animation loop
+				animate();
+			}
+
+			// Animation loop
+			function animate() {
+				requestAnimationFrame(animate);
+				
+				// Update camera rotation
+				lat = Math.max(-85, Math.min(85, lat));
+				phi = THREE.MathUtils.degToRad(90 - lat);
+				theta = THREE.MathUtils.degToRad(lon);
+				
+				camera.target = new THREE.Vector3(
+					500 * Math.sin(phi) * Math.cos(theta),
+					500 * Math.cos(phi),
+					500 * Math.sin(phi) * Math.sin(theta)
+				);
+				
+				camera.lookAt(camera.target);
+				
+				renderer.render(scene, camera);
+			}
+
+			// Mouse controls
+			function onMouseDown(event) {
+				isDragging = true;
+				previousMousePosition = {
+					x: event.clientX,
+					y: event.clientY
+				};
+			}
+
+			function onMouseMove(event) {
+				if (!isDragging) return;
+				
+				const deltaX = event.clientX - previousMousePosition.x;
+				const deltaY = event.clientY - previousMousePosition.y;
+				
+				lon += deltaX * 0.1;
+				lat -= deltaY * 0.1;
+				
+				previousMousePosition = {
+					x: event.clientX,
+					y: event.clientY
+				};
+			}
+
+			function onMouseUp() {
+				isDragging = false;
+			}
+
+			// Touch controls
+			let touchStartX = 0, touchStartY = 0;
+			
+			function onTouchStart(event) {
+				if (event.touches.length === 1) {
+					touchStartX = event.touches[0].clientX;
+					touchStartY = event.touches[0].clientY;
+				}
+			}
+
+			function onTouchMove(event) {
+				if (event.touches.length === 1) {
+					const deltaX = event.touches[0].clientX - touchStartX;
+					const deltaY = event.touches[0].clientY - touchStartY;
+					
+					lon += deltaX * 0.1;
+					lat -= deltaY * 0.1;
+					
+					touchStartX = event.touches[0].clientX;
+					touchStartY = event.touches[0].clientY;
+				}
+			}
+
+			function onTouchEnd() {
+				// Nothing to do
+			}
+
+			// Zoom with mouse wheel
+			function onWheel(event) {
+				event.preventDefault();
+				const fov = camera.fov + event.deltaY * 0.05;
+				camera.fov = THREE.MathUtils.clamp(fov, 10, 120);
+				camera.updateProjectionMatrix();
+			}
+
+			// Window resize
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			}
+
+			// Load media
+			function loadMedia(file) {
+				const fileName = file.name.toLowerCase();
+				const fileType = file.type;
+				
+				console.log('Loading file:', fileName, 'Type:', fileType);
+				
+				// Clean up previous media
+				if (videoElement) {
+					videoElement.pause();
+					videoElement.src = '';
+					videoElement = null;
+				}
+				
+				// Check file extension for better format detection
+				const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv', '.m4v', '.3gp', '.flv'];
+				const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+				
+				const isVideo = fileType.startsWith('video/') || 
+				                videoExtensions.some(ext => fileName.endsWith(ext));
+				const isImage = fileType.startsWith('image/') || 
+				                imageExtensions.some(ext => fileName.endsWith(ext));
+				
+				if (isImage) {
+					loadImage(file);
+				} else if (isVideo) {
+					loadVideo(file);
+				} else {
+					console.warn('Unknown file type, attempting to load as video:', fileName);
+					// Try loading as video anyway
+					loadVideo(file);
+				}
+			}
+
+			// Load image
+			function loadImage(file) {
+				console.log('Loading image file:', file.name);
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					const img = new Image();
+					img.onload = () => {
+						console.log('Image loaded:', img.width, 'x', img.height);
+						texture = new THREE.Texture(img);
+						texture.needsUpdate = true;
+						
+						// Create new material with the image texture
+						sphere.material = new THREE.MeshBasicMaterial({
+							map: texture,
+							side: THREE.DoubleSide
+						});
+						
+						isVideo = false;
+						document.getElementById('video-controls').classList.remove('active');
+						
+						// Update info panel
+						updateInfoPanel('Image', `${img.width} x ${img.height}`, '-');
+					};
+					img.src = e.target.result;
+				};
+				reader.readAsDataURL(file);
+			}
+
+			// Load video
+			function loadVideo(file) {
+				console.log('Loading video file:', file.name, 'Type:', file.type);
+				const url = URL.createObjectURL(file);
+				videoElement = document.createElement('video');
+				videoElement.src = url;
+				videoElement.loop = true;
+				videoElement.muted = false;
+				videoElement.playsInline = true;
+				videoElement.preload = 'metadata';
+				
+				videoElement.addEventListener('loadedmetadata', () => {
+					console.log('Metadata loaded:', {
+						width: videoElement.videoWidth,
+						height: videoElement.videoHeight,
+						duration: videoElement.duration,
+						readyState: videoElement.readyState
+					});
+				});
+				
+				// Wait for enough data to be loaded
+				videoElement.addEventListener('loadeddata', () => {
+					console.log('Video data loaded:', {
+						width: videoElement.videoWidth,
+						height: videoElement.videoHeight,
+						duration: videoElement.duration,
+						readyState: videoElement.readyState
+					});
+					
+					// Check if video dimensions are valid
+					if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
+						console.error('Video has invalid dimensions! Codec may not be supported.');
+						alert('This video format may not be supported by your browser. Try converting to MP4 (H.264) format.');
+						return;
+					}
+					
+					// Start playing first to ensure frames are available
+					videoElement.play().then(() => {
+						console.log('Video started playing');
+						document.getElementById('play-icon').textContent = '⏸';
+						
+						// Create texture after video starts playing
+						setTimeout(() => {
+							videoTexture = new THREE.VideoTexture(videoElement);
+							videoTexture.minFilter = THREE.LinearFilter;
+							videoTexture.magFilter = THREE.LinearFilter;
+							videoTexture.format = THREE.RGBFormat;
+							videoTexture.needsUpdate = true;
+							
+							// Create new material with the video texture
+							sphere.material = new THREE.MeshBasicMaterial({
+								map: videoTexture,
+								side: THREE.DoubleSide
+							});
+							sphere.material.needsUpdate = true;
+							
+							console.log('Video texture created and applied');
+							
+							isVideo = true;
+							document.getElementById('video-controls').classList.add('active');
+							
+							// Update info panel
+							const duration = formatTime(videoElement.duration);
+							updateInfoPanel('Video', `${videoElement.videoWidth} x ${videoElement.videoHeight}`, duration);
+							
+							// Update time display
+							updateTimeDisplay();
+						}, 100);
+					}).catch(err => {
+						console.error('Error playing video:', err);
+						alert('Error playing video: ' + err.message);
+					});
+				});
+				
+				videoElement.addEventListener('timeupdate', () => {
+					updateProgress();
+					updateTimeDisplay();
+				});
+				
+				videoElement.addEventListener('error', (e) => {
+					console.error('Video error:', e, videoElement.error);
+					let errorMsg = 'Unknown error';
+					if (videoElement.error) {
+						switch (videoElement.error.code) {
+							case 1: errorMsg = 'Video loading aborted'; break;
+							case 2: errorMsg = 'Network error'; break;
+							case 3: errorMsg = 'Video decoding failed / corrupted'; break;
+							case 4: errorMsg = 'Video format not supported'; break;
+						}
+					}
+					alert('Error loading video: ' + errorMsg + '\n\nTry converting to MP4 (H.264) format.');
+				});
+				
+				videoElement.load();
+			}
+
+			// Update info panel
+			function updateInfoPanel(type, resolution, duration) {
+				document.getElementById('media-type').textContent = type;
+				document.getElementById('media-resolution').textContent = resolution;
+				document.getElementById('media-duration').textContent = duration;
+				document.getElementById('info-panel').classList.add('active');
+			}
+
+			// Video controls
+			document.getElementById('play-pause').addEventListener('click', () => {
+				if (!videoElement) return;
+				
+				if (videoElement.paused) {
+					videoElement.play();
+					document.getElementById('play-icon').textContent = '⏸';
+				} else {
+					videoElement.pause();
+					document.getElementById('play-icon').textContent = '▶';
+				}
+			});
+
+			document.getElementById('volume-slider').addEventListener('input', (e) => {
+				if (!videoElement) return;
+				videoElement.volume = e.target.value / 100;
+			});
+
+			document.getElementById('speed-select').addEventListener('change', (e) => {
+				if (!videoElement) return;
+				videoElement.playbackRate = parseFloat(e.target.value);
+			});
+
+			document.getElementById('progress-container').addEventListener('click', (e) => {
+				if (!videoElement) return;
+				const rect = e.currentTarget.getBoundingClientRect();
+				const pos = (e.clientX - rect.left) / rect.width;
+				videoElement.currentTime = pos * videoElement.duration;
+			});
+
+			document.getElementById('fullscreen-btn').addEventListener('click', () => {
+				if (!document.fullscreenElement) {
+					document.documentElement.requestFullscreen();
+				} else {
+					document.exitFullscreen();
+				}
+			});
+
+			function updateProgress() {
+				if (!videoElement) return;
+				const progress = (videoElement.currentTime / videoElement.duration) * 100;
+				document.getElementById('progress-bar').style.width = progress + '%';
+			}
+
+			function updateTimeDisplay() {
+				if (!videoElement) return;
+				const current = formatTime(videoElement.currentTime);
+				const duration = formatTime(videoElement.duration);
+				document.getElementById('time-display').textContent = `${current} / ${duration}`;
+			}
+
+			function formatTime(seconds) {
+				if (isNaN(seconds)) return '0:00';
+				const mins = Math.floor(seconds / 60);
+				const secs = Math.floor(seconds % 60);
+				return `${mins}:${secs.toString().padStart(2, '0')}`;
+			}
+
+			// Drag and drop
+			document.body.addEventListener('dragover', (e) => {
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+					e.preventDefault();
+					document.querySelector('.drag-drop-prompt')?.classList.add('appear');
+				}
+			});
+
+			document.body.addEventListener('dragleave', (e) => {
+				if (e.dataTransfer && e.dataTransfer.types.includes('Files') && !document.body.contains(e.relatedTarget)) {
+					document.querySelector('.drag-drop-prompt')?.classList.remove('appear');
+				}
+			});
+
+			document.body.addEventListener('drop', (e) => {
+				if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+					e.preventDefault();
+					document.querySelector('.drag-drop-prompt')?.classList.remove('appear');
+					loadMedia(e.dataTransfer.files[0]);
+				}
+			});
+
+			// Initialize viewer on load
+			window.addEventListener('load', () => {
+				initViewer();
+			});
+		</script>
+	</body>
+</html>
