@@ -164,6 +164,37 @@ import "../styles.css";
 			.info-panel.active {
 				display: block;
 			}
+			
+			.performance-indicator {
+				position: fixed;
+				top: 20px;
+				left: 120px;
+				background: rgba(0, 0, 0, 0.85);
+				backdrop-filter: blur(10px);
+				border-radius: 8px;
+				padding: 8px 12px;
+				color: white;
+				font-size: 11px;
+				font-family: 'Courier New', monospace;
+				z-index: 1000;
+				display: none;
+			}
+			
+			.performance-indicator.active {
+				display: block;
+			}
+			
+			.performance-indicator .fps {
+				color: #4CAF50;
+			}
+			
+			.performance-indicator .fps.low {
+				color: #FF9800;
+			}
+			
+			.performance-indicator .fps.critical {
+				color: #F44336;
+			}
 
 			.info-panel h3 {
 				margin: 0 0 10px 0;
@@ -242,6 +273,11 @@ import "../styles.css";
 				<span id="media-duration">-</span>
 			</div>
 		</div>
+		
+		<div class="performance-indicator" id="performance-indicator">
+			<span>FPS: <span class="fps" id="fps-display">-</span></span>
+			<span style="margin-left: 12px;">Quality: <span id="quality-display">100%</span></span>
+		</div>
 
 		<div class="video-controls" id="video-controls">
 			<div class="control-row">
@@ -280,6 +316,17 @@ import "../styles.css";
 			let previousMousePosition = { x: 0, y: 0 };
 			let lon = 0, lat = 0;
 			let phi = 0, theta = 0;
+			
+			// Performance optimization variables
+			let fps = 60;
+			let lastTime = performance.now();
+			let frameCount = 0;
+			let targetFPS = 60;
+			let adaptiveQuality = true;
+			let currentQuality = 1.0; // 1.0 = full quality, 0.5 = half, etc.
+			let qualityChangeCooldown = 0;
+			let originalVideoWidth = 0;
+			let originalVideoHeight = 0;
 
 			// Initialize Three.js scene
 			function initViewer() {
@@ -297,13 +344,28 @@ import "../styles.css";
 				);
 				camera.position.set(0, 0, 0.1);
 				
-				// Create renderer
-				renderer = new THREE.WebGLRenderer({ antialias: true });
+				// Create renderer with optimizations
+				renderer = new THREE.WebGLRenderer({ 
+					antialias: false, // Disable antialiasing for better performance
+					powerPreference: "high-performance", // Prefer dedicated GPU
+					precision: "mediump" // Use medium precision for better performance
+				});
+				
+				// Limit pixel ratio for better performance on high-DPI displays
+				const pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+				renderer.setPixelRatio(pixelRatio);
 				renderer.setSize(window.innerWidth, window.innerHeight);
+				
+				// Enable texture compression if available
+				if (renderer.capabilities.isWebGL2) {
+					renderer.extensions.get('WEBGL_compressed_texture_s3tc');
+				}
+				
 				container.appendChild(renderer.domElement);
 				
 				// Create sphere geometry (inverted for interior view)
-				const geometry = new THREE.SphereGeometry(500, 60, 40);
+				// Reduced segments for better performance (60x40 -> 48x32)
+				const geometry = new THREE.SphereGeometry(500, 48, 32);
 				geometry.scale(-1, 1, 1); // Invert for interior view
 				
 				// Create material
@@ -326,9 +388,148 @@ import "../styles.css";
 				animate();
 			}
 
-			// Animation loop
+			// Performance monitoring
+			function updateFPS() {
+				frameCount++;
+				const currentTime = performance.now();
+				const delta = currentTime - lastTime;
+				
+				if (delta >= 1000) {
+					fps = Math.round((frameCount * 1000) / delta);
+					frameCount = 0;
+					lastTime = currentTime;
+					
+					// Update FPS display
+					const fpsDisplay = document.getElementById('fps-display');
+					if (fpsDisplay) {
+						fpsDisplay.textContent = fps;
+						fpsDisplay.className = 'fps';
+						if (fps < 20) fpsDisplay.className = 'fps critical';
+						else if (fps < 30) fpsDisplay.className = 'fps low';
+					}
+					
+					// Update quality display
+					const qualityDisplay = document.getElementById('quality-display');
+					if (qualityDisplay) {
+						qualityDisplay.textContent = `${(currentQuality * 100).toFixed(0)}%`;
+					}
+					
+					// Show performance indicator for videos
+					if (isVideo) {
+						document.getElementById('performance-indicator').classList.add('active');
+					}
+					
+					// Adaptive quality adjustment
+					if (adaptiveQuality && videoTexture && qualityChangeCooldown <= 0) {
+						adjustQualityBasedOnFPS();
+					}
+				}
+				
+				if (qualityChangeCooldown > 0) qualityChangeCooldown--;
+			}
+			
+			// Adaptive quality adjustment
+			function adjustQualityBasedOnFPS() {
+				if (!videoElement || !videoTexture) return;
+				
+				const targetFPS = 30; // Target 30 FPS for smooth playback
+				const qualityStep = 0.1;
+				
+				if (fps < targetFPS - 5 && currentQuality > 0.3) {
+					// FPS too low, reduce quality
+					currentQuality = Math.max(0.3, currentQuality - qualityStep);
+					applyTextureQuality();
+					qualityChangeCooldown = 60; // Wait 60 frames before next change
+					console.log(`Reducing quality to ${(currentQuality * 100).toFixed(0)}% (FPS: ${fps})`);
+				} else if (fps > targetFPS + 10 && currentQuality < 1.0) {
+					// FPS good, try increasing quality
+					currentQuality = Math.min(1.0, currentQuality + qualityStep);
+					applyTextureQuality();
+					qualityChangeCooldown = 60;
+					console.log(`Increasing quality to ${(currentQuality * 100).toFixed(0)}% (FPS: ${fps})`);
+				}
+			}
+			
+			// Canvas for downscaling video frames
+			let downscaleCanvas = null;
+			let downscaleContext = null;
+			let downscaledTexture = null;
+			
+			// Apply texture quality scaling using canvas downscaling
+			function applyTextureQuality() {
+				if (!videoElement || !videoTexture) return;
+				
+				const newWidth = Math.floor(originalVideoWidth * currentQuality);
+				const newHeight = Math.floor(originalVideoHeight * currentQuality);
+				
+				// Only downscale if quality is significantly reduced (saves performance)
+				if (currentQuality < 0.8 && newWidth > 0 && newHeight > 0) {
+					// Create canvas for downscaling if needed
+					if (!downscaleCanvas || downscaleCanvas.width !== newWidth || downscaleCanvas.height !== newHeight) {
+						downscaleCanvas = document.createElement('canvas');
+						downscaleCanvas.width = newWidth;
+						downscaleCanvas.height = newHeight;
+						downscaleContext = downscaleCanvas.getContext('2d');
+						
+						// Create texture from canvas
+						if (downscaledTexture) {
+							downscaledTexture.dispose();
+						}
+						downscaledTexture = new THREE.CanvasTexture(downscaleCanvas);
+						downscaledTexture.minFilter = THREE.LinearFilter;
+						downscaledTexture.magFilter = THREE.LinearFilter;
+						downscaledTexture.format = THREE.RGBFormat;
+						downscaledTexture.generateMipmaps = false;
+						
+						// Update material to use downscaled texture
+						sphere.material.map = downscaledTexture;
+						sphere.material.needsUpdate = true;
+						
+						console.log(`Using downscaled texture: ${newWidth}x${newHeight}`);
+					}
+					
+					// Update canvas with downscaled video frame
+					if (downscaleContext && videoElement.readyState >= 2) {
+						downscaleContext.drawImage(videoElement, 0, 0, newWidth, newHeight);
+						downscaledTexture.needsUpdate = true;
+					}
+				} else {
+					// Use original video texture at full quality
+					if (downscaledTexture) {
+						downscaledTexture.dispose();
+						downscaledTexture = null;
+					}
+					sphere.material.map = videoTexture;
+					sphere.material.needsUpdate = true;
+				}
+			}
+			
+			let lastVideoTime = 0;
+			
+			// Update downscaled texture in animation loop (only when video frame changes)
+			function updateDownscaledTexture() {
+				if (downscaleCanvas && downscaleContext && videoElement && videoElement.readyState >= 2) {
+					// Only update if video time has changed (new frame)
+					if (Math.abs(videoElement.currentTime - lastVideoTime) > 0.033) { // ~30fps update rate
+						downscaleContext.drawImage(videoElement, 0, 0, downscaleCanvas.width, downscaleCanvas.height);
+						if (downscaledTexture) {
+							downscaledTexture.needsUpdate = true;
+						}
+						lastVideoTime = videoElement.currentTime;
+					}
+				}
+			}
+			
+			// Animation loop with performance monitoring
 			function animate() {
 				requestAnimationFrame(animate);
+				
+				updateFPS();
+				
+				// Update downscaled texture if using canvas downscaling
+				if (downscaledTexture && currentQuality < 0.8) {
+					updateDownscaledTexture();
+				}
 				
 				// Update camera rotation
 				lat = Math.max(-85, Math.min(85, lat));
@@ -514,6 +715,20 @@ import "../styles.css";
 						return;
 					}
 					
+					// Store original dimensions for quality scaling
+					originalVideoWidth = videoElement.videoWidth;
+					originalVideoHeight = videoElement.videoHeight;
+					
+					// For 8K videos (>= 7680 width), start with reduced quality for smoother playback
+					if (originalVideoWidth >= 7680) {
+						currentQuality = 0.6; // Start at 60% quality for 8K
+						console.log(`8K video detected (${originalVideoWidth}x${originalVideoHeight}), starting at ${(currentQuality * 100).toFixed(0)}% quality`);
+					} else if (originalVideoWidth >= 3840) {
+						currentQuality = 0.8; // Start at 80% for 4K
+					} else {
+						currentQuality = 1.0; // Full quality for lower resolutions
+					}
+					
 					// Start playing first to ensure frames are available
 					videoElement.play().then(() => {
 						console.log('Video started playing');
@@ -522,9 +737,17 @@ import "../styles.css";
 						// Create texture after video starts playing
 						setTimeout(() => {
 							videoTexture = new THREE.VideoTexture(videoElement);
+							
+							// Optimize texture settings for performance
 							videoTexture.minFilter = THREE.LinearFilter;
 							videoTexture.magFilter = THREE.LinearFilter;
 							videoTexture.format = THREE.RGBFormat;
+							
+							// For high-res videos, use generateMipmaps: false for better performance
+							if (originalVideoWidth >= 3840) {
+								videoTexture.generateMipmaps = false;
+							}
+							
 							videoTexture.needsUpdate = true;
 							
 							// Create new material with the video texture
@@ -541,10 +764,26 @@ import "../styles.css";
 							
 							// Update info panel
 							const duration = formatTime(videoElement.duration);
-							updateInfoPanel('Video', `${videoElement.videoWidth} x ${videoElement.videoHeight}`, duration);
+							const displayRes = originalVideoWidth >= 7680 
+								? `${originalVideoWidth} x ${originalVideoHeight} (8K - Optimized)`
+								: `${originalVideoWidth} x ${originalVideoHeight}`;
+							updateInfoPanel('Video', displayRes, duration);
 							
 							// Update time display
 							updateTimeDisplay();
+							
+							// Reset performance monitoring
+							frameCount = 0;
+							lastTime = performance.now();
+							qualityChangeCooldown = 0;
+							lastVideoTime = 0;
+							
+							// Apply initial quality settings
+							if (originalVideoWidth >= 7680) {
+								setTimeout(() => {
+									applyTextureQuality();
+								}, 500); // Wait a bit for video to start playing
+							}
 						}, 100);
 					}).catch(err => {
 						console.error('Error playing video:', err);
