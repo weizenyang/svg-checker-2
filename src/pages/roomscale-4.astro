@@ -5969,16 +5969,28 @@ async function renderOverlayCanvas(cone) {
     }
     
     // Helper function to encode face ID as RGB color
+    // Avoids normals red (r>200, g<50, b<50) and blue (r<50, g<50, b>200) so Face ID and normals passes don't collide
     function faceIdToColor(faceId) {
-        // Use a hash function to convert faceId string to a color
         let hash = 0;
         for (let i = 0; i < faceId.length; i++) {
             hash = faceId.charCodeAt(i) + ((hash << 5) - hash);
         }
-        // Convert to RGB (avoid pure black/white for better detection)
-        const r = ((hash & 0xFF0000) >> 16) % 240 + 8; // 8-247
-        const g = ((hash & 0x00FF00) >> 8) % 240 + 8;
-        const b = (hash & 0x0000FF) % 240 + 8;
+        let r = ((hash & 0xFF0000) >> 16) % 240 + 8; // 8-247
+        let g = ((hash & 0x00FF00) >> 8) % 240 + 8;
+        let b = (hash & 0x0000FF) % 240 + 8;
+        const isNormalsRed = (r > 200 && g < 50 && b < 50);
+        const isNormalsBlue = (r < 50 && g < 50 && b > 200);
+        if (isNormalsRed || isNormalsBlue) {
+            // Remap out of normals bands: shift toward mid-range (green/magenta/cyan) so recognition is unambiguous
+            r = (r + 80) % 240 + 8;
+            g = (g + 120) % 240 + 8;
+            b = (b + 80) % 240 + 8;
+            if ((r > 200 && g < 50 && b < 50) || (r < 50 && g < 50 && b > 200)) {
+                r = (r + 80) % 240 + 8;
+                g = (g + 120) % 240 + 8;
+                b = (b + 80) % 240 + 8;
+            }
+        }
         return new THREE.Color(r / 255, g / 255, b / 255);
     }
     
