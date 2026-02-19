@@ -6410,6 +6410,10 @@ async function renderOverlayCanvas(cone) {
                         const newNormals = [];
                         const newColors = [];
                         
+                        // Blender-style: use mesh centroid to decide inward (reversed/red) vs outward (blue)
+                        const meshCentroid = new THREE.Vector3();
+                        new THREE.Box3().setFromObject(child).getCenter(meshCentroid);
+                        
                         if (hasIndex) {
                             const index = geometryToUse.index;
                             const faceCount = index.count / 3;
@@ -6452,16 +6456,14 @@ async function renderOverlayCanvas(cone) {
                                 const edge2 = new THREE.Vector3().subVectors(v2, v0);
                                 const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
                                 
-                                // Determine face orientation relative to camera
-                                const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
-                                const dot = faceNormalWorld.dot(toCamera);
-                                
-                                // Assign color based on orientation (same for all vertices of this face)
+                                // Blender-style: inward (normal toward mesh center) = reversed = red; outward = blue
+                                const toCentroid = new THREE.Vector3().subVectors(meshCentroid, faceCenter).normalize();
+                                const dot = faceNormalWorld.dot(toCentroid);
                                 let faceColor;
                                 if (dot > 0.0) {
-                                    faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                    faceColor = [1.0, 0.0, 0.0]; // Red (inward / reversed)
                                 } else {
-                                    faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                    faceColor = [0.0, 0.0, 1.0]; // Blue (outward)
                                 }
                                 
                                 // Compute local space normal for the geometry
@@ -6522,16 +6524,14 @@ async function renderOverlayCanvas(cone) {
                                 const edge2 = new THREE.Vector3().subVectors(v2, v0);
                                 const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
                                 
-                                // Determine face orientation relative to camera
-                                const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
-                                const dot = faceNormalWorld.dot(toCamera);
-                                
-                                // Assign color based on orientation (same for all vertices of this face)
+                                // Blender-style: inward (normal toward mesh center) = reversed = red; outward = blue
+                                const toCentroid = new THREE.Vector3().subVectors(meshCentroid, faceCenter).normalize();
+                                const dot = faceNormalWorld.dot(toCentroid);
                                 let faceColor;
                                 if (dot > 0.0) {
-                                    faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                    faceColor = [1.0, 0.0, 0.0]; // Red (inward / reversed)
                                 } else {
-                                    faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                    faceColor = [0.0, 0.0, 1.0]; // Blue (outward)
                                 }
                                 
                                 // Compute local space normal for the geometry
@@ -7440,6 +7440,10 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                     const newNormals = [];
                     const newColors = [];
                     
+                    // Blender-style: use mesh centroid to decide inward (reversed/red) vs outward (blue)
+                    const meshCentroid = new THREE.Vector3();
+                    new THREE.Box3().setFromObject(child).getCenter(meshCentroid);
+                    
                     if (hasIndex) {
                         const index = geometryToUse.index;
                         const faceCount = index.count / 3;
@@ -7482,16 +7486,14 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                             const edge2 = new THREE.Vector3().subVectors(v2, v0);
                             const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
                             
-                            // Determine face orientation relative to camera
-                            const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
-                            const dot = faceNormalWorld.dot(toCamera);
-                            
-                            // Assign color based on orientation (same for all vertices of this face)
+                            // Blender-style: inward (normal toward mesh center) = reversed = red; outward = blue
+                            const toCentroid = new THREE.Vector3().subVectors(meshCentroid, faceCenter).normalize();
+                            const dot = faceNormalWorld.dot(toCentroid);
                             let faceColor;
                             if (dot > 0.0) {
-                                faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                faceColor = [1.0, 0.0, 0.0]; // Red (inward / reversed)
                             } else {
-                                faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                faceColor = [0.0, 0.0, 1.0]; // Blue (outward)
                             }
                             
                             // Compute local space normal for the geometry
@@ -7552,16 +7554,14 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                             const edge2 = new THREE.Vector3().subVectors(v2, v0);
                             const faceNormalWorld = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
                             
-                            // Determine face orientation relative to camera
-                            const toCamera = new THREE.Vector3().subVectors(worldPos, faceCenter).normalize();
-                            const dot = faceNormalWorld.dot(toCamera);
-                            
-                            // Assign color based on orientation (same for all vertices of this face)
+                            // Blender-style: inward (normal toward mesh center) = reversed = red; outward = blue
+                            const toCentroid = new THREE.Vector3().subVectors(meshCentroid, faceCenter).normalize();
+                            const dot = faceNormalWorld.dot(toCentroid);
                             let faceColor;
                             if (dot > 0.0) {
-                                faceColor = [0.0, 0.0, 1.0]; // Blue (front-facing)
+                                faceColor = [1.0, 0.0, 0.0]; // Red (inward / reversed)
                             } else {
-                                faceColor = [1.0, 0.0, 0.0]; // Red (back-facing)
+                                faceColor = [0.0, 0.0, 1.0]; // Blue (outward)
                             }
                             
                             // Compute local space normal for the geometry
