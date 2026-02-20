@@ -249,6 +249,49 @@ import ObjectList from "../components/object-list.tsx";
                 </div>
             </div>
 
+            <!-- Density Analysis -->
+            <div class="rounded-md bg-white max-w-60 mt-3">
+                <button 
+                    id="density-toggle" 
+                    class="w-full p-2 text-left font-medium bg-gray-100 hover:bg-gray-200 transition-colors duration-75 rounded-t-md flex items-center justify-between"
+                >
+                    <span>Density Analysis</span>
+                    <span id="density-arrow" class="transform transition-transform duration-200" style="transform: rotate(-90deg);">▼</span>
+                </button>
+                <div id="density-content" class="p-3 space-y-2" style="display: none;">
+                    <div class="flex items-center gap-2 text-xs">
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="density-mode" id="density-mode-object" value="object" checked class="accent-orange-500" />
+                            <span>Objects</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="radio" name="density-mode" id="density-mode-section" value="section" class="accent-orange-500" />
+                            <span>Sections</span>
+                        </label>
+                    </div>
+                    <div class="text-xs">
+                        <label for="density-threshold" class="block mb-1">Threshold <span id="density-threshold-val" class="text-gray-500">(auto)</span></label>
+                        <input type="range" id="density-threshold" class="w-full accent-orange-400" min="0" max="100" step="1" value="50" />
+                    </div>
+                    <button
+                        id="density-analyse-btn"
+                        class="w-full bg-orange-500 text-white p-1.5 rounded-md text-xs transition-all duration-75 hover:bg-orange-600 active:bg-orange-700"
+                    >
+                        Analyse Density
+                    </button>
+                    <div id="density-results" class="hidden max-h-48 overflow-y-auto border border-gray-200 rounded text-xs"></div>
+                    <div id="density-actions" class="hidden flex gap-1">
+                        <button id="density-select-all" class="flex-1 bg-gray-200 text-gray-700 p-1 rounded text-xs hover:bg-gray-300">Select All</button>
+                        <button id="density-deselect-all" class="flex-1 bg-gray-200 text-gray-700 p-1 rounded text-xs hover:bg-gray-300">Deselect</button>
+                    </div>
+                    <div id="density-action-buttons" class="hidden flex gap-1">
+                        <button id="density-delete-btn" class="flex-1 bg-red-500 text-white p-1.5 rounded-md text-xs transition-all hover:bg-red-600 active:bg-red-700">Delete Selected</button>
+                        <button id="density-bbox-btn" class="flex-1 bg-blue-500 text-white p-1.5 rounded-md text-xs transition-all hover:bg-blue-600 active:bg-blue-700">Bounding Box</button>
+                    </div>
+                    <p id="density-status" class="text-xs text-gray-500 hidden"></p>
+                </div>
+            </div>
+
             <!-- <ObjectList client:load /> -->
 
             <button
@@ -1313,6 +1356,16 @@ import ObjectList from "../components/object-list.tsx";
     hoverFacesGroup.visible = true;
     scene.add(hoverFacesGroup);
     
+    // Group for density analysis highlights
+    const densityHighlightsGroup = new THREE.Group();
+    densityHighlightsGroup.name = "DensityHighlights";
+    densityHighlightsGroup.visible = true;
+    scene.add(densityHighlightsGroup);
+    
+    // Density analysis state
+    let densityResults = [];
+    let densityHoveredIndex = -1;
+
     // Store selected reversed face IDs
     let selectedReversedFaceIds = new Set();
     // Store manually selected face IDs (for hover/click selection)
@@ -2084,6 +2137,72 @@ import ObjectList from "../components/object-list.tsx";
         } else {
             content.style.display = 'none';
             arrow.style.transform = 'rotate(-90deg)';
+        }
+    });
+
+    // Density Analysis panel toggle
+    document.getElementById('density-toggle')?.addEventListener('click', () => {
+        const content = document.getElementById('density-content');
+        const arrow = document.getElementById('density-arrow');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(-90deg)';
+        }
+    });
+
+    document.getElementById('density-analyse-btn')?.addEventListener('click', () => {
+        const mode = (document.querySelector('input[name="density-mode"]:checked') as HTMLInputElement)?.value || 'object';
+        clearDensityHighlights();
+        if (mode === 'object') {
+            densityResults = analyseObjectDensity();
+        } else {
+            densityResults = analyseSectionDensity();
+        }
+        renderDensityResults();
+        const status = document.getElementById('density-status');
+        if (status) {
+            status.textContent = `Found ${densityResults.length} ${mode === 'object' ? 'meshes' : 'sections'}`;
+            status.classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('density-threshold')?.addEventListener('input', () => {
+        renderDensityResults();
+    });
+
+    document.getElementById('density-select-all')?.addEventListener('click', () => {
+        const thresholdSlider = document.getElementById('density-threshold') as HTMLInputElement;
+        const pct = thresholdSlider ? parseInt(thresholdSlider.value) : 50;
+        if (densityResults.length > 0) {
+            const maxD = densityResults[0].density;
+            const minD = densityResults[densityResults.length - 1].density;
+            const threshold = minD + (maxD - minD) * (pct / 100);
+            densityResults.forEach(r => { r.selected = r.density >= threshold; });
+            updateDensityHighlights();
+            renderDensityResults();
+        }
+    });
+
+    document.getElementById('density-deselect-all')?.addEventListener('click', () => {
+        densityResults.forEach(r => { r.selected = false; });
+        clearDensityHighlights();
+        renderDensityResults();
+    });
+
+    document.getElementById('density-delete-btn')?.addEventListener('click', () => {
+        const count = densityResults.filter(r => r.selected).length;
+        if (count > 0 && confirm(`Delete ${count} selected item(s)?`)) {
+            densityDeleteSelected();
+        }
+    });
+
+    document.getElementById('density-bbox-btn')?.addEventListener('click', () => {
+        const count = densityResults.filter(r => r.selected).length;
+        if (count > 0 && confirm(`Replace ${count} selected item(s) with bounding boxes?`)) {
+            densityReplaceBBox();
         }
     });
 
@@ -3531,6 +3650,32 @@ async function renderOverlayCanvas(cone) {
             
             renderer.clearDepth();
             renderer.render(hoverFacesGroup, currentCamera);
+        }
+
+        // Render density highlights on top
+        if (densityHighlightsGroup.children.length > 0) {
+            densityHighlightsGroup.children.forEach(highlightMesh => {
+                const dr = highlightMesh.userData.densityResult;
+                if (dr && dr.type === 'object' && dr.mesh) {
+                    dr.mesh.updateMatrixWorld(true);
+                    dr.mesh.matrixWorld.decompose(
+                        highlightMesh.position,
+                        highlightMesh.quaternion,
+                        highlightMesh.scale
+                    );
+                    highlightMesh.updateMatrix();
+                } else if (dr && dr.type === 'section' && dr.mesh) {
+                    dr.mesh.updateMatrixWorld(true);
+                    dr.mesh.matrixWorld.decompose(
+                        highlightMesh.position,
+                        highlightMesh.quaternion,
+                        highlightMesh.scale
+                    );
+                    highlightMesh.updateMatrix();
+                }
+            });
+            renderer.clearDepth();
+            renderer.render(densityHighlightsGroup, currentCamera);
         }
 
         // Render markers (camera cones) on top of everything
@@ -5838,6 +5983,482 @@ async function renderOverlayCanvas(cone) {
         console.log("Faces deleted successfully");
     }
     
+    // ========== DENSITY ANALYSIS ==========
+
+    function getMeshFaceCount(geometry) {
+        if (geometry.index) return geometry.index.count / 3;
+        if (geometry.attributes.position) return geometry.attributes.position.count / 3;
+        return 0;
+    }
+
+    function getWorldBoundingBox(mesh) {
+        mesh.updateMatrixWorld(true);
+        const geo = mesh.geometry;
+        if (!geo.boundingBox) geo.computeBoundingBox();
+        const box = geo.boundingBox.clone();
+        box.applyMatrix4(mesh.matrixWorld);
+        return box;
+    }
+
+    function boxVolume(box) {
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const vol = Math.abs(size.x * size.y * size.z);
+        return Math.max(vol, 1e-6);
+    }
+
+    function analyseObjectDensity() {
+        const results = [];
+        objects.forEach(obj => {
+            obj.traverse(child => {
+                if (!child.isMesh || !child.geometry) return;
+                if (child.name?.toLowerCase().includes('sphere')) return;
+                if (child.userData?.label) return;
+                const faceCount = getMeshFaceCount(child.geometry);
+                if (faceCount === 0) return;
+                const bbox = getWorldBoundingBox(child);
+                const vol = boxVolume(bbox);
+                const density = faceCount / vol;
+                results.push({
+                    type: 'object',
+                    mesh: child,
+                    faceCount,
+                    volume: vol,
+                    density,
+                    bbox,
+                    faceIndices: null,
+                    selected: false
+                });
+            });
+        });
+        results.sort((a, b) => b.density - a.density);
+        return results;
+    }
+
+    function analyseSectionDensity(gridRes = 6) {
+        const results = [];
+        objects.forEach(obj => {
+            obj.traverse(child => {
+                if (!child.isMesh || !child.geometry) return;
+                if (child.name?.toLowerCase().includes('sphere')) return;
+                if (child.userData?.label) return;
+                const geometry = child.geometry;
+                const faceCount = getMeshFaceCount(geometry);
+                if (faceCount === 0) return;
+
+                child.updateMatrixWorld(true);
+                const positions = geometry.attributes.position;
+                const hasIndex = geometry.index !== null;
+
+                const meshBox = getWorldBoundingBox(child);
+                const meshSize = new THREE.Vector3();
+                meshBox.getSize(meshSize);
+
+                const gx = Math.max(1, Math.min(gridRes, Math.ceil(meshSize.x)));
+                const gy = Math.max(1, Math.min(gridRes, Math.ceil(meshSize.y)));
+                const gz = Math.max(1, Math.min(gridRes, Math.ceil(meshSize.z)));
+
+                const cellFaces = new Map();
+
+                const totalFaces = hasIndex ? geometry.index.count / 3 : positions.count / 3;
+                for (let f = 0; f < totalFaces; f++) {
+                    let cx = 0, cy = 0, cz = 0;
+                    for (let v = 0; v < 3; v++) {
+                        let vi;
+                        if (hasIndex) {
+                            vi = geometry.index.getX(f * 3 + v);
+                        } else {
+                            vi = f * 3 + v;
+                        }
+                        const lx = positions.getX(vi);
+                        const ly = positions.getY(vi);
+                        const lz = positions.getZ(vi);
+                        const wp = new THREE.Vector3(lx, ly, lz).applyMatrix4(child.matrixWorld);
+                        cx += wp.x; cy += wp.y; cz += wp.z;
+                    }
+                    cx /= 3; cy /= 3; cz /= 3;
+
+                    const ix = Math.min(gx - 1, Math.max(0, Math.floor(((cx - meshBox.min.x) / meshSize.x) * gx)));
+                    const iy = Math.min(gy - 1, Math.max(0, Math.floor(((cy - meshBox.min.y) / meshSize.y) * gy)));
+                    const iz = Math.min(gz - 1, Math.max(0, Math.floor(((cz - meshBox.min.z) / meshSize.z) * gz)));
+                    const key = `${ix},${iy},${iz}`;
+                    if (!cellFaces.has(key)) cellFaces.set(key, { indices: [], ix, iy, iz });
+                    cellFaces.get(key).indices.push(f);
+                }
+
+                const cellW = meshSize.x / gx;
+                const cellH = meshSize.y / gy;
+                const cellD = meshSize.z / gz;
+                const cellVol = Math.max(Math.abs(cellW * cellH * cellD), 1e-6);
+
+                cellFaces.forEach((cell, key) => {
+                    const fc = cell.indices.length;
+                    const density = fc / cellVol;
+                    const cellBox = new THREE.Box3(
+                        new THREE.Vector3(
+                            meshBox.min.x + cell.ix * cellW,
+                            meshBox.min.y + cell.iy * cellH,
+                            meshBox.min.z + cell.iz * cellD
+                        ),
+                        new THREE.Vector3(
+                            meshBox.min.x + (cell.ix + 1) * cellW,
+                            meshBox.min.y + (cell.iy + 1) * cellH,
+                            meshBox.min.z + (cell.iz + 1) * cellD
+                        )
+                    );
+                    results.push({
+                        type: 'section',
+                        mesh: child,
+                        faceCount: fc,
+                        volume: cellVol,
+                        density,
+                        bbox: cellBox,
+                        faceIndices: new Set(cell.indices),
+                        selected: false
+                    });
+                });
+            });
+        });
+        results.sort((a, b) => b.density - a.density);
+        return results;
+    }
+
+    function clearDensityHighlights() {
+        while (densityHighlightsGroup.children.length > 0) {
+            const c = densityHighlightsGroup.children[0];
+            densityHighlightsGroup.remove(c);
+            if (c.geometry) c.geometry.dispose();
+            if (c.material) c.material.dispose();
+        }
+    }
+
+    function createHighlightForResult(result, color = 0xff8800, opacity = 0.35) {
+        if (result.type === 'object') {
+            const geo = result.mesh.geometry.clone();
+            const mat = new THREE.MeshBasicMaterial({
+                color,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity,
+                depthTest: true,
+                depthWrite: false
+            });
+            const highlight = new THREE.Mesh(geo, mat);
+            result.mesh.updateMatrixWorld(true);
+            result.mesh.matrixWorld.decompose(highlight.position, highlight.quaternion, highlight.scale);
+            highlight.updateMatrix();
+            highlight.userData.densityResult = result;
+            return highlight;
+        } else {
+            const mesh = result.mesh;
+            const geometry = mesh.geometry;
+            const positions = geometry.attributes.position;
+            const hasIndex = geometry.index !== null;
+            const newPos = [];
+
+            result.faceIndices.forEach(fIdx => {
+                for (let v = 0; v < 3; v++) {
+                    let vi;
+                    if (hasIndex) {
+                        vi = geometry.index.getX(fIdx * 3 + v);
+                    } else {
+                        vi = fIdx * 3 + v;
+                    }
+                    newPos.push(positions.getX(vi), positions.getY(vi), positions.getZ(vi));
+                }
+            });
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+            geo.computeVertexNormals();
+            const mat = new THREE.MeshBasicMaterial({
+                color,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity,
+                depthTest: true,
+                depthWrite: false
+            });
+            const highlight = new THREE.Mesh(geo, mat);
+            mesh.updateMatrixWorld(true);
+            mesh.matrixWorld.decompose(highlight.position, highlight.quaternion, highlight.scale);
+            highlight.updateMatrix();
+            highlight.userData.densityResult = result;
+            return highlight;
+        }
+    }
+
+    function updateDensityHighlights() {
+        clearDensityHighlights();
+        densityResults.forEach((r, idx) => {
+            if (r.selected) {
+                const h = createHighlightForResult(r, 0xff6600, 0.4);
+                h.userData.densityIdx = idx;
+                densityHighlightsGroup.add(h);
+            }
+        });
+        if (densityHoveredIndex >= 0 && densityHoveredIndex < densityResults.length) {
+            const r = densityResults[densityHoveredIndex];
+            if (!r.selected) {
+                const h = createHighlightForResult(r, 0xffcc00, 0.3);
+                h.userData.densityIdx = densityHoveredIndex;
+                densityHighlightsGroup.add(h);
+            }
+        }
+    }
+
+    function renderDensityResults() {
+        const container = document.getElementById('density-results');
+        const actions = document.getElementById('density-actions');
+        const actionButtons = document.getElementById('density-action-buttons');
+        const status = document.getElementById('density-status');
+        if (!container) return;
+
+        if (densityResults.length === 0) {
+            container.classList.add('hidden');
+            actions?.classList.add('hidden');
+            actionButtons?.classList.add('hidden');
+            if (status) { status.textContent = 'No meshes found.'; status.classList.remove('hidden'); }
+            return;
+        }
+
+        container.classList.remove('hidden');
+        actions?.classList.remove('hidden');
+        if (status) status.classList.add('hidden');
+
+        const thresholdSlider = document.getElementById('density-threshold');
+        const thresholdVal = document.getElementById('density-threshold-val');
+        const maxDensity = densityResults[0].density;
+        const minDensity = densityResults[densityResults.length - 1].density;
+
+        const pct = thresholdSlider ? parseInt(thresholdSlider.value) : 50;
+        const threshold = minDensity + (maxDensity - minDensity) * (pct / 100);
+        if (thresholdVal) thresholdVal.textContent = `(${threshold.toFixed(1)})`;
+
+        container.innerHTML = '';
+        let hasSelected = false;
+        densityResults.forEach((r, idx) => {
+            const aboveThreshold = r.density >= threshold;
+            const row = document.createElement('div');
+            row.className = `flex items-center gap-1 p-1 cursor-pointer border-b border-gray-100 ${aboveThreshold ? 'bg-orange-50' : ''}`;
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = r.selected;
+            cb.className = 'accent-orange-500 flex-shrink-0';
+            cb.addEventListener('change', (e) => {
+                r.selected = e.target.checked;
+                updateDensityHighlights();
+                updateDensityActionButtons();
+            });
+            row.appendChild(cb);
+
+            const label = document.createElement('span');
+            label.className = 'flex-1 truncate';
+            const name = r.type === 'object'
+                ? (r.mesh.name || r.mesh.parent?.name || 'Unnamed')
+                : `${r.mesh.name || 'Mesh'} [cell]`;
+            label.textContent = name;
+            label.title = `${name} — ${r.faceCount} faces, density: ${r.density.toFixed(1)}`;
+            row.appendChild(label);
+
+            const info = document.createElement('span');
+            info.className = 'text-gray-400 flex-shrink-0 whitespace-nowrap';
+            info.textContent = `${r.faceCount}f`;
+            row.appendChild(info);
+
+            const densityBadge = document.createElement('span');
+            densityBadge.className = `flex-shrink-0 px-1 rounded text-white whitespace-nowrap ${aboveThreshold ? 'bg-orange-500' : 'bg-gray-400'}`;
+            densityBadge.textContent = r.density >= 1000 ? `${(r.density / 1000).toFixed(1)}k` : r.density.toFixed(0);
+            row.appendChild(densityBadge);
+
+            row.addEventListener('mouseenter', () => {
+                densityHoveredIndex = idx;
+                updateDensityHighlights();
+            });
+            row.addEventListener('mouseleave', () => {
+                densityHoveredIndex = -1;
+                updateDensityHighlights();
+            });
+
+            container.appendChild(row);
+            if (r.selected) hasSelected = true;
+        });
+
+        updateDensityActionButtons();
+    }
+
+    function updateDensityActionButtons() {
+        const actionButtons = document.getElementById('density-action-buttons');
+        const hasSelected = densityResults.some(r => r.selected);
+        if (actionButtons) {
+            actionButtons.classList.toggle('hidden', !hasSelected);
+        }
+    }
+
+    function densityDeleteSelected() {
+        const toDelete = densityResults.filter(r => r.selected);
+        if (toDelete.length === 0) return;
+
+        toDelete.forEach(r => {
+            if (r.type === 'object') {
+                const mesh = r.mesh;
+                if (mesh.geometry) mesh.geometry.dispose();
+                if (mesh.material) {
+                    if (Array.isArray(mesh.material)) mesh.material.forEach(m => m.dispose());
+                    else mesh.material.dispose();
+                }
+                if (mesh.parent) mesh.parent.remove(mesh);
+            } else {
+                const mesh = r.mesh;
+                const geometry = mesh.geometry;
+                if (!geometry) return;
+                const positions = geometry.attributes.position;
+                const normals = geometry.attributes.normal;
+                const hasIndex = geometry.index !== null;
+                const facesToRemove = r.faceIndices;
+
+                if (hasIndex) {
+                    const oldIndex = geometry.index;
+                    const newIndices = [];
+                    const totalFaces = oldIndex.count / 3;
+                    for (let f = 0; f < totalFaces; f++) {
+                        if (!facesToRemove.has(f)) {
+                            newIndices.push(
+                                oldIndex.getX(f * 3),
+                                oldIndex.getX(f * 3 + 1),
+                                oldIndex.getX(f * 3 + 2)
+                            );
+                        }
+                    }
+                    geometry.setIndex(newIndices);
+                } else {
+                    const oldPos = positions.array;
+                    const oldNorm = normals ? normals.array : null;
+                    const newPos = [];
+                    const newNorm = [];
+                    const totalFaces = positions.count / 3;
+                    for (let f = 0; f < totalFaces; f++) {
+                        if (!facesToRemove.has(f)) {
+                            const base = f * 9;
+                            for (let i = 0; i < 9; i++) {
+                                newPos.push(oldPos[base + i]);
+                                if (oldNorm) newNorm.push(oldNorm[base + i]);
+                            }
+                        }
+                    }
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+                    if (oldNorm) geometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNorm, 3));
+                    geometry.index = null;
+                }
+                geometry.computeBoundingBox();
+                geometry.computeBoundingSphere();
+            }
+        });
+
+        densityResults = densityResults.filter(r => !r.selected);
+        clearDensityHighlights();
+        renderDensityResults();
+    }
+
+    function densityReplaceBBox() {
+        const toReplace = densityResults.filter(r => r.selected);
+        if (toReplace.length === 0) return;
+
+        toReplace.forEach(r => {
+            const bbox = r.bbox;
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+            const center = new THREE.Vector3();
+            bbox.getCenter(center);
+
+            const boxGeo = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const boxMat = new THREE.MeshBasicMaterial({
+                color: 0x4488ff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.6
+            });
+            const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+            boxMesh.position.copy(center);
+            boxMesh.name = `bbox_${r.mesh.name || 'section'}`;
+            boxMesh.userData.isBboxProxy = true;
+
+            if (r.type === 'object') {
+                const parent = r.mesh.parent || scene;
+                if (r.mesh.parent) {
+                    const invParent = new THREE.Matrix4().copy(r.mesh.parent.matrixWorld).invert();
+                    boxMesh.position.applyMatrix4(invParent);
+                }
+                parent.add(boxMesh);
+
+                if (r.mesh.geometry) r.mesh.geometry.dispose();
+                if (r.mesh.material) {
+                    if (Array.isArray(r.mesh.material)) r.mesh.material.forEach(m => m.dispose());
+                    else r.mesh.material.dispose();
+                }
+                if (r.mesh.parent) r.mesh.parent.remove(r.mesh);
+            } else {
+                const mesh = r.mesh;
+                const geometry = mesh.geometry;
+                if (!geometry) return;
+                const positions = geometry.attributes.position;
+                const normals = geometry.attributes.normal;
+                const hasIndex = geometry.index !== null;
+                const facesToRemove = r.faceIndices;
+
+                if (hasIndex) {
+                    const oldIndex = geometry.index;
+                    const newIndices = [];
+                    const totalFaces = oldIndex.count / 3;
+                    for (let f = 0; f < totalFaces; f++) {
+                        if (!facesToRemove.has(f)) {
+                            newIndices.push(
+                                oldIndex.getX(f * 3),
+                                oldIndex.getX(f * 3 + 1),
+                                oldIndex.getX(f * 3 + 2)
+                            );
+                        }
+                    }
+                    geometry.setIndex(newIndices);
+                } else {
+                    const oldPos = positions.array;
+                    const oldNorm = normals ? normals.array : null;
+                    const newPos = [];
+                    const newNorm = [];
+                    const totalFaces = positions.count / 3;
+                    for (let f = 0; f < totalFaces; f++) {
+                        if (!facesToRemove.has(f)) {
+                            const base = f * 9;
+                            for (let i = 0; i < 9; i++) {
+                                newPos.push(oldPos[base + i]);
+                                if (oldNorm) newNorm.push(oldNorm[base + i]);
+                            }
+                        }
+                    }
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+                    if (oldNorm) geometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNorm, 3));
+                    geometry.index = null;
+                }
+                geometry.computeBoundingBox();
+                geometry.computeBoundingSphere();
+
+                const parent = mesh.parent || scene;
+                if (mesh.parent) {
+                    const invParent = new THREE.Matrix4().copy(mesh.parent.matrixWorld).invert();
+                    boxMesh.position.applyMatrix4(invParent);
+                }
+                parent.add(boxMesh);
+            }
+        });
+
+        densityResults = densityResults.filter(r => !r.selected);
+        clearDensityHighlights();
+        renderDensityResults();
+    }
+
+    // ========== END DENSITY ANALYSIS ==========
+
     // Helper function to detect reversed normals relative to camera position
     function detectReversedNormalsFromCamera(cameraPosition) {
         const reversedFaces = [];
@@ -9299,6 +9920,19 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
         
         // Reset selected faces
         selectedReversedFaceIds.clear();
+        
+        // Clear density analysis state
+        densityResults = [];
+        densityHoveredIndex = -1;
+        clearDensityHighlights();
+        const densityResultsEl = document.getElementById('density-results');
+        const densityActionsEl = document.getElementById('density-actions');
+        const densityActionBtnsEl = document.getElementById('density-action-buttons');
+        const densityStatusEl = document.getElementById('density-status');
+        if (densityResultsEl) { densityResultsEl.innerHTML = ''; densityResultsEl.classList.add('hidden'); }
+        if (densityActionsEl) densityActionsEl.classList.add('hidden');
+        if (densityActionBtnsEl) densityActionBtnsEl.classList.add('hidden');
+        if (densityStatusEl) densityStatusEl.classList.add('hidden');
         
         // Force render
         renderer.render(scene, camera);
