@@ -292,6 +292,62 @@ import ObjectList from "../components/object-list.tsx";
                 </div>
             </div>
 
+            <!-- Mesh Decimation -->
+            <div class="rounded-md bg-white max-w-60 mt-3">
+                <button 
+                    id="decimate-toggle" 
+                    class="w-full p-2 text-left font-medium bg-gray-100 hover:bg-gray-200 transition-colors duration-75 rounded-t-md flex items-center justify-between"
+                >
+                    <span>Mesh Decimation</span>
+                    <span id="decimate-arrow" class="transform transition-transform duration-200" style="transform: rotate(-90deg);">▼</span>
+                </button>
+                <div id="decimate-content" class="p-3 space-y-2" style="display: none;">
+                    <div class="text-xs">
+                        <label for="decimate-ratio" class="block mb-1">Target ratio <span id="decimate-ratio-val" class="text-gray-500">(50%)</span></label>
+                        <input type="range" id="decimate-ratio" class="w-full accent-teal-500" min="5" max="95" step="5" value="50" />
+                    </div>
+                    <div class="text-xs">
+                        <label for="decimate-tolerance" class="block mb-1">Max error (tolerance) <span id="decimate-tolerance-val" class="text-gray-500">(0.5)</span></label>
+                        <input type="range" id="decimate-tolerance" class="w-full accent-teal-500" min="0" max="50" step="1" value="5" />
+                    </div>
+                    <div class="text-xs space-y-1">
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="decimate-preserve-boundaries" checked class="accent-teal-500" />
+                            <span>Preserve boundaries</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="decimate-preserve-features" checked class="accent-teal-500" />
+                            <span>Preserve sharp edges</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="decimate-volume-preserve" checked class="accent-teal-500" />
+                            <span>Volume preservation</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="decimate-camera-aware" class="accent-teal-500" />
+                            <span>Camera-aware weighting</span>
+                        </label>
+                    </div>
+                    <div class="text-xs">
+                        <label for="decimate-feature-angle" class="block mb-1">Feature angle <span id="decimate-feature-angle-val" class="text-gray-500">(30°)</span></label>
+                        <input type="range" id="decimate-feature-angle" class="w-full accent-teal-500" min="10" max="90" step="5" value="30" />
+                    </div>
+                    <button
+                        id="decimate-current-btn"
+                        class="w-full bg-teal-500 text-white p-1.5 rounded-md text-xs transition-all duration-75 hover:bg-teal-600 active:bg-teal-700"
+                    >
+                        Decimate Current Model
+                    </button>
+                    <button
+                        id="decimate-batch-btn"
+                        class="w-full bg-teal-300 text-teal-900 p-1.5 rounded-md text-xs transition-all duration-75 hover:bg-teal-400 active:bg-teal-500"
+                    >
+                        Batch Decimation…
+                    </button>
+                    <p id="decimate-status" class="text-xs text-gray-500 hidden"></p>
+                </div>
+            </div>
+
             <!-- <ObjectList client:load /> -->
 
             <button
@@ -504,6 +560,45 @@ import ObjectList from "../components/object-list.tsx";
                         <div id="batch-process-progress-bar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
                     </div>
                     <p id="batch-process-current-file" class="text-xs text-gray-500 mt-2"></p>
+                </div>
+            </div>
+        </div>
+        <!-- Batch Decimation Modal -->
+        <div id="batch-decimate-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[200] flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
+                <h2 class="text-xl font-bold mb-4">Batch Decimation</h2>
+                <p class="text-sm text-gray-600 mb-4">Upload .glb files to decimate. Settings from the Mesh Decimation panel will be used.</p>
+                <div
+                    id="batch-decimate-drop-zone"
+                    class="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4 min-h-[200px] flex flex-col"
+                >
+                    <div class="text-center text-gray-500 mb-4">
+                        <p class="mb-2">Drag and drop .glb files here</p>
+                        <p class="text-xs">or</p>
+                        <input type="file" id="batch-decimate-file-input" multiple accept=".glb" class="hidden" />
+                        <label for="batch-decimate-file-input" class="inline-block mt-2 px-4 py-2 bg-teal-500 text-white rounded-md cursor-pointer hover:bg-teal-600">
+                            Browse Files
+                        </label>
+                    </div>
+                    <div id="batch-decimate-file-list" class="flex-1 overflow-y-auto">
+                        <p class="text-sm text-gray-400 text-center">No files added yet</p>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button id="batch-decimate-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button id="batch-decimate-start" class="px-4 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        Start Decimation
+                    </button>
+                </div>
+                <div id="batch-decimate-progress" class="hidden mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Decimating…</span>
+                        <span id="batch-decimate-status" class="text-sm text-gray-600">0/0</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="batch-decimate-progress-bar" class="bg-teal-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p id="batch-decimate-current-file" class="text-xs text-gray-500 mt-2"></p>
                 </div>
             </div>
         </div>
@@ -2204,6 +2299,154 @@ import ObjectList from "../components/object-list.tsx";
         if (count > 0 && confirm(`Replace ${count} selected item(s) with bounding boxes?`)) {
             densityReplaceBBox();
         }
+    });
+
+    // Mesh Decimation panel toggle
+    document.getElementById('decimate-toggle')?.addEventListener('click', () => {
+        const content = document.getElementById('decimate-content');
+        const arrow = document.getElementById('decimate-arrow');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.display = 'none';
+            arrow.style.transform = 'rotate(-90deg)';
+        }
+    });
+
+    document.getElementById('decimate-ratio')?.addEventListener('input', (e) => {
+        const val = document.getElementById('decimate-ratio-val');
+        if (val) val.textContent = `(${e.target.value}%)`;
+    });
+    document.getElementById('decimate-tolerance')?.addEventListener('input', (e) => {
+        const val = document.getElementById('decimate-tolerance-val');
+        if (val) val.textContent = `(${(parseInt(e.target.value) / 10).toFixed(1)})`;
+    });
+    document.getElementById('decimate-feature-angle')?.addEventListener('input', (e) => {
+        const val = document.getElementById('decimate-feature-angle-val');
+        if (val) val.textContent = `(${e.target.value}°)`;
+    });
+
+    document.getElementById('decimate-current-btn')?.addEventListener('click', () => {
+        const status = document.getElementById('decimate-status');
+        if (status) { status.textContent = 'Decimating…'; status.classList.remove('hidden'); }
+        requestAnimationFrame(() => {
+            try {
+                decimateCurrentModel();
+            } catch(err) {
+                console.error('Decimation error:', err);
+                if (status) { status.textContent = `Error: ${err.message}`; }
+            }
+        });
+    });
+
+    // Batch Decimation modal
+    const batchDecimateFiles = [];
+
+    document.getElementById('decimate-batch-btn')?.addEventListener('click', () => {
+        document.getElementById('batch-decimate-modal')?.classList.remove('hidden');
+    });
+    document.getElementById('batch-decimate-cancel')?.addEventListener('click', () => {
+        document.getElementById('batch-decimate-modal')?.classList.add('hidden');
+        batchDecimateFiles.length = 0;
+        renderBatchDecimateFileList();
+    });
+
+    function renderBatchDecimateFileList() {
+        const list = document.getElementById('batch-decimate-file-list');
+        const startBtn = document.getElementById('batch-decimate-start') as HTMLButtonElement;
+        if (!list) return;
+        if (batchDecimateFiles.length === 0) {
+            list.innerHTML = '<p class="text-sm text-gray-400 text-center">No files added yet</p>';
+            if (startBtn) startBtn.disabled = true;
+            return;
+        }
+        list.innerHTML = '';
+        batchDecimateFiles.forEach((f, i) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between py-1 px-2 text-sm border-b border-gray-100';
+            row.innerHTML = `<span class="truncate">${f.name}</span><button class="text-red-500 hover:text-red-700 text-xs ml-2" data-idx="${i}">✕</button>`;
+            row.querySelector('button')?.addEventListener('click', () => {
+                batchDecimateFiles.splice(i, 1);
+                renderBatchDecimateFileList();
+            });
+            list.appendChild(row);
+        });
+        if (startBtn) startBtn.disabled = false;
+    }
+
+    function addBatchDecimateFiles(files) {
+        for (const f of files) {
+            if (f.name.toLowerCase().endsWith('.glb')) batchDecimateFiles.push(f);
+        }
+        renderBatchDecimateFileList();
+    }
+
+    const batchDecDropZone = document.getElementById('batch-decimate-drop-zone');
+    batchDecDropZone?.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); batchDecDropZone.classList.add('border-teal-500'); });
+    batchDecDropZone?.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); batchDecDropZone.classList.remove('border-teal-500'); });
+    batchDecDropZone?.addEventListener('drop', e => {
+        e.preventDefault(); e.stopPropagation(); batchDecDropZone.classList.remove('border-teal-500');
+        if (e.dataTransfer?.files) addBatchDecimateFiles(e.dataTransfer.files);
+    });
+    document.getElementById('batch-decimate-file-input')?.addEventListener('change', (e) => {
+        if (e.target.files) addBatchDecimateFiles(e.target.files);
+    });
+
+    document.getElementById('batch-decimate-start')?.addEventListener('click', async () => {
+        if (batchDecimateFiles.length === 0) return;
+        const opts = getDecimateOptions();
+        const progress = document.getElementById('batch-decimate-progress');
+        const statusEl = document.getElementById('batch-decimate-status');
+        const bar = document.getElementById('batch-decimate-progress-bar');
+        const currentFile = document.getElementById('batch-decimate-current-file');
+        const startBtn = document.getElementById('batch-decimate-start') as HTMLButtonElement;
+
+        if (progress) progress.classList.remove('hidden');
+        if (startBtn) startBtn.disabled = true;
+
+        for (let i = 0; i < batchDecimateFiles.length; i++) {
+            const file = batchDecimateFiles[i];
+            if (statusEl) statusEl.textContent = `${i + 1}/${batchDecimateFiles.length}`;
+            if (bar) bar.style.width = `${((i + 1) / batchDecimateFiles.length) * 100}%`;
+            if (currentFile) currentFile.textContent = `Processing: ${file.name}`;
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const gltf = await new Promise((resolve, reject) => {
+                    GLTFloader.parse(arrayBuffer, "", resolve, reject);
+                });
+
+                gltf.scene.traverse(child => {
+                    if (!child.isMesh || !child.geometry) return;
+                    const newGeo = decimateGeometry(child.geometry, opts, []);
+                    child.geometry.dispose();
+                    child.geometry = newGeo;
+                });
+
+                await new Promise(resolve => requestAnimationFrame(resolve));
+
+                const exporter = new GLTFExporter();
+                const result = await new Promise((resolve, reject) => {
+                    exporter.parse(gltf.scene, resolve, reject, { binary: true });
+                });
+
+                const blob = new Blob([result], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = file.name.replace('.glb', '_decimated.glb');
+                link.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error(`Error decimating ${file.name}:`, err);
+            }
+        }
+
+        if (progress) progress.classList.add('hidden');
+        document.getElementById('batch-decimate-modal')?.classList.add('hidden');
+        batchDecimateFiles.length = 0;
+        renderBatchDecimateFileList();
     });
 
     // UI panel toggle functionality
@@ -6458,6 +6701,530 @@ async function renderOverlayCanvas(cone) {
     }
 
     // ========== END DENSITY ANALYSIS ==========
+
+    // ========== MESH DECIMATION (Quadric Edge Collapse) ==========
+
+    class MinHeap {
+        constructor() { this.data = []; }
+        push(item) {
+            this.data.push(item);
+            this._bubbleUp(this.data.length - 1);
+        }
+        pop() {
+            const top = this.data[0];
+            const last = this.data.pop();
+            if (this.data.length > 0) { this.data[0] = last; this._sinkDown(0); }
+            return top;
+        }
+        peek() { return this.data[0]; }
+        get size() { return this.data.length; }
+        _bubbleUp(i) {
+            while (i > 0) {
+                const p = (i - 1) >> 1;
+                if (this.data[i].cost < this.data[p].cost) {
+                    [this.data[i], this.data[p]] = [this.data[p], this.data[i]];
+                    i = p;
+                } else break;
+            }
+        }
+        _sinkDown(i) {
+            const n = this.data.length;
+            while (true) {
+                let smallest = i;
+                const l = 2 * i + 1, r = 2 * i + 2;
+                if (l < n && this.data[l].cost < this.data[smallest].cost) smallest = l;
+                if (r < n && this.data[r].cost < this.data[smallest].cost) smallest = r;
+                if (smallest !== i) {
+                    [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+                    i = smallest;
+                } else break;
+            }
+        }
+    }
+
+    function getDecimateOptions() {
+        const ratioSlider = document.getElementById('decimate-ratio');
+        const tolSlider = document.getElementById('decimate-tolerance');
+        const featureAngleSlider = document.getElementById('decimate-feature-angle');
+        return {
+            targetRatio: (ratioSlider ? parseInt(ratioSlider.value) : 50) / 100,
+            tolerance: (tolSlider ? parseInt(tolSlider.value) : 5) / 10,
+            preserveBoundaries: (document.getElementById('decimate-preserve-boundaries') as HTMLInputElement)?.checked ?? true,
+            preserveFeatures: (document.getElementById('decimate-preserve-features') as HTMLInputElement)?.checked ?? true,
+            volumePreserve: (document.getElementById('decimate-volume-preserve') as HTMLInputElement)?.checked ?? true,
+            cameraAware: (document.getElementById('decimate-camera-aware') as HTMLInputElement)?.checked ?? false,
+            featureAngle: (featureAngleSlider ? parseInt(featureAngleSlider.value) : 30) * Math.PI / 180
+        };
+    }
+
+    function decimateGeometry(geometry, opts, cameraPositions = []) {
+        geometry = geometry.toNonIndexed();
+        geometry.computeVertexNormals();
+
+        const posAttr = geometry.attributes.position;
+        const vtxCount = posAttr.count;
+        const faceCount = vtxCount / 3;
+        if (faceCount < 4) return geometry;
+
+        const targetFaces = Math.max(4, Math.floor(faceCount * opts.targetRatio));
+
+        // Build vertex/face arrays
+        const verts = [];
+        for (let i = 0; i < vtxCount; i++) {
+            verts.push(new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)));
+        }
+
+        // Merge coincident vertices
+        const MERGE_EPS = 1e-8;
+        const vertMap = new Int32Array(vtxCount);
+        const uniqueVerts = [];
+        const vertHash = new Map();
+        for (let i = 0; i < vtxCount; i++) {
+            const v = verts[i];
+            const key = `${(v.x / MERGE_EPS | 0)},${(v.y / MERGE_EPS | 0)},${(v.z / MERGE_EPS | 0)}`;
+            if (vertHash.has(key)) {
+                vertMap[i] = vertHash.get(key);
+            } else {
+                const idx = uniqueVerts.length;
+                uniqueVerts.push(v.clone());
+                vertHash.set(key, idx);
+                vertMap[i] = idx;
+            }
+        }
+
+        const nv = uniqueVerts.length;
+        const faces = [];
+        for (let f = 0; f < faceCount; f++) {
+            const a = vertMap[f * 3], b = vertMap[f * 3 + 1], c = vertMap[f * 3 + 2];
+            if (a === b || b === c || a === c) continue;
+            faces.push([a, b, c]);
+        }
+
+        // Adjacency: vertex -> face indices
+        const vertFaces = new Array(nv);
+        for (let i = 0; i < nv; i++) vertFaces[i] = [];
+        for (let fi = 0; fi < faces.length; fi++) {
+            const f = faces[fi];
+            vertFaces[f[0]].push(fi);
+            vertFaces[f[1]].push(fi);
+            vertFaces[f[2]].push(fi);
+        }
+
+        // Boundary detection
+        const edgeCount = new Map();
+        function edgeKey(a, b) { return a < b ? `${a}_${b}` : `${b}_${a}`; }
+        for (const f of faces) {
+            for (let i = 0; i < 3; i++) {
+                const ek = edgeKey(f[i], f[(i + 1) % 3]);
+                edgeCount.set(ek, (edgeCount.get(ek) || 0) + 1);
+            }
+        }
+        const boundaryVerts = new Set();
+        edgeCount.forEach((cnt, ek) => {
+            if (cnt === 1) {
+                const [a, b] = ek.split('_').map(Number);
+                boundaryVerts.add(a);
+                boundaryVerts.add(b);
+            }
+        });
+
+        // Feature edge detection (dihedral angle)
+        const featureEdges = new Set();
+        if (opts.preserveFeatures) {
+            const edgeFaces = new Map();
+            for (let fi = 0; fi < faces.length; fi++) {
+                const f = faces[fi];
+                for (let i = 0; i < 3; i++) {
+                    const ek = edgeKey(f[i], f[(i + 1) % 3]);
+                    if (!edgeFaces.has(ek)) edgeFaces.set(ek, []);
+                    edgeFaces.get(ek).push(fi);
+                }
+            }
+            edgeFaces.forEach((fis, ek) => {
+                if (fis.length === 2) {
+                    const n0 = faceNormal(faces[fis[0]], uniqueVerts);
+                    const n1 = faceNormal(faces[fis[1]], uniqueVerts);
+                    const dot = n0.dot(n1);
+                    if (Math.acos(Math.min(1, Math.max(-1, dot))) > opts.featureAngle) {
+                        featureEdges.add(ek);
+                    }
+                }
+            });
+        }
+
+        // Camera visibility weights
+        const cameraWeights = new Float64Array(nv);
+        if (opts.cameraAware && cameraPositions.length > 0) {
+            for (let vi = 0; vi < nv; vi++) {
+                let w = 0;
+                for (const cp of cameraPositions) {
+                    const dist = uniqueVerts[vi].distanceTo(cp);
+                    w += 1 / (1 + dist);
+                }
+                cameraWeights[vi] = w;
+            }
+            const maxW = Math.max(...cameraWeights);
+            if (maxW > 0) for (let i = 0; i < nv; i++) cameraWeights[i] /= maxW;
+        }
+
+        function faceNormal(f, vs) {
+            const e1 = new THREE.Vector3().subVectors(vs[f[1]], vs[f[0]]);
+            const e2 = new THREE.Vector3().subVectors(vs[f[2]], vs[f[0]]);
+            return new THREE.Vector3().crossVectors(e1, e2).normalize();
+        }
+
+        function faceArea(f, vs) {
+            const e1 = new THREE.Vector3().subVectors(vs[f[1]], vs[f[0]]);
+            const e2 = new THREE.Vector3().subVectors(vs[f[2]], vs[f[0]]);
+            return new THREE.Vector3().crossVectors(e1, e2).length() * 0.5;
+        }
+
+        function signedVolContrib(f, vs) {
+            const a = vs[f[0]], b = vs[f[1]], c = vs[f[2]];
+            return a.dot(new THREE.Vector3().crossVectors(b, c)) / 6;
+        }
+
+        // Compute per-vertex quadric (4x4 symmetric matrix stored as 10 floats)
+        const quadrics = [];
+        for (let i = 0; i < nv; i++) quadrics.push(new Float64Array(10));
+
+        for (let fi = 0; fi < faces.length; fi++) {
+            const f = faces[fi];
+            const n = faceNormal(f, uniqueVerts);
+            const area = faceArea(f, uniqueVerts);
+            const d = -n.dot(uniqueVerts[f[0]]);
+            const w = area;
+            const q = [
+                n.x*n.x*w, n.x*n.y*w, n.x*n.z*w, n.x*d*w,
+                            n.y*n.y*w, n.y*n.z*w, n.y*d*w,
+                                        n.z*n.z*w, n.z*d*w,
+                                                    d*d*w
+            ];
+            for (const vi of f) {
+                for (let k = 0; k < 10; k++) quadrics[vi][k] += q[k];
+            }
+        }
+
+        // Boundary penalty quadrics
+        if (opts.preserveBoundaries) {
+            edgeCount.forEach((cnt, ek) => {
+                if (cnt !== 1) return;
+                const [a, b] = ek.split('_').map(Number);
+                const edgeDir = new THREE.Vector3().subVectors(uniqueVerts[b], uniqueVerts[a]).normalize();
+                const adjFaces = [];
+                for (const fi of vertFaces[a]) {
+                    const f = faces[fi];
+                    if (f && (f.includes(a) && f.includes(b))) adjFaces.push(fi);
+                }
+                if (adjFaces.length > 0) {
+                    const fn = faceNormal(faces[adjFaces[0]], uniqueVerts);
+                    const boundaryNormal = new THREE.Vector3().crossVectors(edgeDir, fn).normalize();
+                    const dd = -boundaryNormal.dot(uniqueVerts[a]);
+                    const penalty = 1000;
+                    const q = [
+                        boundaryNormal.x*boundaryNormal.x*penalty, boundaryNormal.x*boundaryNormal.y*penalty, boundaryNormal.x*boundaryNormal.z*penalty, boundaryNormal.x*dd*penalty,
+                        boundaryNormal.y*boundaryNormal.y*penalty, boundaryNormal.y*boundaryNormal.z*penalty, boundaryNormal.y*dd*penalty,
+                        boundaryNormal.z*boundaryNormal.z*penalty, boundaryNormal.z*dd*penalty,
+                        dd*dd*penalty
+                    ];
+                    for (let k = 0; k < 10; k++) { quadrics[a][k] += q[k]; quadrics[b][k] += q[k]; }
+                }
+            });
+        }
+
+        // Feature edge penalty
+        if (opts.preserveFeatures) {
+            featureEdges.forEach(ek => {
+                const [a, b] = ek.split('_').map(Number);
+                const penalty = 500;
+                const mid = new THREE.Vector3().addVectors(uniqueVerts[a], uniqueVerts[b]).multiplyScalar(0.5);
+                const edgeDir = new THREE.Vector3().subVectors(uniqueVerts[b], uniqueVerts[a]).normalize();
+                const dd = -edgeDir.dot(mid);
+                const q = [
+                    edgeDir.x*edgeDir.x*penalty, edgeDir.x*edgeDir.y*penalty, edgeDir.x*edgeDir.z*penalty, edgeDir.x*dd*penalty,
+                    edgeDir.y*edgeDir.y*penalty, edgeDir.y*edgeDir.z*penalty, edgeDir.y*dd*penalty,
+                    edgeDir.z*edgeDir.z*penalty, edgeDir.z*dd*penalty,
+                    dd*dd*penalty
+                ];
+                for (let k = 0; k < 10; k++) { quadrics[a][k] += q[k]; quadrics[b][k] += q[k]; }
+            });
+        }
+
+        function addQuadrics(a, b) {
+            const r = new Float64Array(10);
+            for (let i = 0; i < 10; i++) r[i] = a[i] + b[i];
+            return r;
+        }
+
+        function quadricError(q, v) {
+            const x = v.x, y = v.y, z = v.z;
+            return q[0]*x*x + 2*q[1]*x*y + 2*q[2]*x*z + 2*q[3]*x
+                            +   q[4]*y*y + 2*q[5]*y*z + 2*q[6]*y
+                                         +   q[7]*z*z + 2*q[8]*z
+                                                       +   q[9];
+        }
+
+        function optimalPosition(q) {
+            const a11=q[0], a12=q[1], a13=q[2], a14=q[3];
+            const a22=q[4], a23=q[5], a24=q[6];
+            const a33=q[7], a34=q[8];
+            const det = a11*(a22*a33 - a23*a23) - a12*(a12*a33 - a23*a13) + a13*(a12*a23 - a22*a13);
+            if (Math.abs(det) < 1e-15) return null;
+            const invDet = 1 / det;
+            const x = -(( (a22*a33-a23*a23)*a14 + (a13*a23-a12*a33)*a24 + (a12*a23-a13*a22)*a34 ) * invDet);
+            const y = -(( (a13*a23-a12*a33)*a14 + (a11*a33-a13*a13)*a24 + (a12*a13-a11*a23)*a34 ) * invDet);
+            const z = -(( (a12*a23-a13*a22)*a14 + (a12*a13-a11*a23)*a24 + (a11*a22-a12*a12)*a34 ) * invDet);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // Track which vertices/faces are alive
+        const vertAlive = new Uint8Array(nv).fill(1);
+        const faceAlive = new Uint8Array(faces.length).fill(1);
+        let liveFaceCount = faces.length;
+
+        // Compute initial mesh volume
+        let initialVolume = 0;
+        if (opts.volumePreserve) {
+            for (let fi = 0; fi < faces.length; fi++) {
+                initialVolume += signedVolContrib(faces[fi], uniqueVerts);
+            }
+        }
+
+        // Build edges set
+        const edgesSet = new Set();
+        for (const f of faces) {
+            for (let i = 0; i < 3; i++) {
+                edgesSet.add(edgeKey(f[i], f[(i + 1) % 3]));
+            }
+        }
+
+        function computeEdgeCost(ek) {
+            const [a, b] = ek.split('_').map(Number);
+            if (!vertAlive[a] || !vertAlive[b]) return null;
+            const qSum = addQuadrics(quadrics[a], quadrics[b]);
+            let bestPos = optimalPosition(qSum);
+            let bestCost;
+            const va = uniqueVerts[a], vb = uniqueVerts[b];
+            const mid = new THREE.Vector3().addVectors(va, vb).multiplyScalar(0.5);
+
+            if (bestPos) {
+                const distToEdge = Math.min(bestPos.distanceTo(va), bestPos.distanceTo(vb));
+                const edgeLen = va.distanceTo(vb);
+                if (distToEdge > edgeLen * 2) bestPos = null;
+            }
+
+            if (bestPos) {
+                bestCost = quadricError(qSum, bestPos);
+            } else {
+                const cA = quadricError(qSum, va);
+                const cB = quadricError(qSum, vb);
+                const cM = quadricError(qSum, mid);
+                bestCost = Math.min(cA, cB, cM);
+                bestPos = bestCost === cA ? va.clone() : bestCost === cB ? vb.clone() : mid.clone();
+            }
+
+            if (opts.cameraAware && cameraPositions.length > 0) {
+                const camW = Math.max(cameraWeights[a], cameraWeights[b]);
+                bestCost *= (1 + camW * 5);
+            }
+
+            return { edge: ek, a, b, pos: bestPos, cost: Math.max(0, bestCost), qSum };
+        }
+
+        // Initialize priority queue
+        const heap = new MinHeap();
+        const edgeVersion = new Map();
+        let versionCounter = 0;
+        edgesSet.forEach(ek => {
+            const ec = computeEdgeCost(ek);
+            if (ec) {
+                const ver = versionCounter++;
+                edgeVersion.set(ek, ver);
+                heap.push({ ...ec, version: ver });
+            }
+        });
+
+        // Collapse loop
+        while (liveFaceCount > targetFaces && heap.size > 0) {
+            const top = heap.pop();
+            if (!top) break;
+
+            const curVer = edgeVersion.get(top.edge);
+            if (curVer !== top.version) continue;
+
+            const { a, b, pos, cost, qSum } = top;
+            if (!vertAlive[a] || !vertAlive[b]) continue;
+
+            // Tolerance check
+            if (opts.tolerance > 0 && cost > opts.tolerance * opts.tolerance) break;
+
+            // Collect affected faces before collapse
+            const affectedFaces = new Set();
+            for (const fi of vertFaces[a]) if (faceAlive[fi]) affectedFaces.add(fi);
+            for (const fi of vertFaces[b]) if (faceAlive[fi]) affectedFaces.add(fi);
+
+            // Normal flip check
+            let wouldFlip = false;
+            for (const fi of affectedFaces) {
+                const f = faces[fi];
+                if (!faceAlive[fi]) continue;
+                if (f.includes(a) && f.includes(b)) continue;
+                const oldN = faceNormal(f, uniqueVerts);
+                const tempVerts = uniqueVerts.map(v => v.clone());
+                if (f.includes(a)) tempVerts[a].copy(pos);
+                if (f.includes(b)) { tempVerts[b].copy(pos); }
+                const testF = f.map(vi => vi === b ? a : vi);
+                const newN = faceNormal(testF, tempVerts);
+                if (oldN.dot(newN) < 0.1) { wouldFlip = true; break; }
+            }
+            if (wouldFlip) continue;
+
+            // Sliver check
+            let wouldSliver = false;
+            for (const fi of affectedFaces) {
+                const f = faces[fi];
+                if (!faceAlive[fi]) continue;
+                if (f.includes(a) && f.includes(b)) continue;
+                const testF = f.map(vi => vi === b ? a : vi);
+                if (testF[0] === testF[1] || testF[1] === testF[2] || testF[0] === testF[2]) continue;
+                const tempVerts = [...uniqueVerts];
+                tempVerts[a] = pos;
+                const ar = faceArea(testF, tempVerts);
+                const e1 = new THREE.Vector3().subVectors(tempVerts[testF[1]], tempVerts[testF[0]]).length();
+                const e2 = new THREE.Vector3().subVectors(tempVerts[testF[2]], tempVerts[testF[1]]).length();
+                const e3 = new THREE.Vector3().subVectors(tempVerts[testF[0]], tempVerts[testF[2]]).length();
+                const maxE = Math.max(e1, e2, e3);
+                if (maxE > 0 && ar / (maxE * maxE) < 0.01) { wouldSliver = true; break; }
+            }
+            if (wouldSliver) continue;
+
+            // Volume preservation check
+            if (opts.volumePreserve) {
+                let volBefore = 0, volAfter = 0;
+                for (const fi of affectedFaces) {
+                    if (!faceAlive[fi]) continue;
+                    const f = faces[fi];
+                    volBefore += signedVolContrib(f, uniqueVerts);
+                    if (f.includes(a) && f.includes(b)) continue;
+                    const testF = f.map(vi => vi === b ? a : vi);
+                    if (testF[0] === testF[1] || testF[1] === testF[2] || testF[0] === testF[2]) continue;
+                    const tempVerts = [...uniqueVerts];
+                    tempVerts[a] = pos;
+                    volAfter += signedVolContrib(testF, tempVerts);
+                }
+                const volChange = Math.abs(volAfter - volBefore);
+                if (volChange > Math.abs(initialVolume) * 0.001) continue;
+            }
+
+            // Perform collapse: merge b into a
+            uniqueVerts[a].copy(pos);
+            quadrics[a] = qSum;
+            vertAlive[b] = 0;
+
+            // Update faces
+            for (const fi of vertFaces[b]) {
+                if (!faceAlive[fi]) continue;
+                const f = faces[fi];
+                if (f.includes(a) && f.includes(b)) {
+                    faceAlive[fi] = 0;
+                    liveFaceCount--;
+                    continue;
+                }
+                for (let i = 0; i < 3; i++) {
+                    if (f[i] === b) f[i] = a;
+                }
+                if (f[0] === f[1] || f[1] === f[2] || f[0] === f[2]) {
+                    faceAlive[fi] = 0;
+                    liveFaceCount--;
+                    continue;
+                }
+                if (!vertFaces[a].includes(fi)) vertFaces[a].push(fi);
+            }
+
+            // Rebuild affected edges
+            const neighborVerts = new Set();
+            for (const fi of vertFaces[a]) {
+                if (!faceAlive[fi]) continue;
+                for (const vi of faces[fi]) {
+                    if (vi !== a && vertAlive[vi]) neighborVerts.add(vi);
+                }
+            }
+            neighborVerts.forEach(nb => {
+                const ek = edgeKey(a, nb);
+                const ec = computeEdgeCost(ek);
+                if (ec) {
+                    const ver = versionCounter++;
+                    edgeVersion.set(ek, ver);
+                    heap.push({ ...ec, version: ver });
+                }
+            });
+        }
+
+        // Rebuild geometry from alive faces
+        const newPositions = [];
+        for (let fi = 0; fi < faces.length; fi++) {
+            if (!faceAlive[fi]) continue;
+            const f = faces[fi];
+            for (const vi of f) {
+                const v = uniqueVerts[vi];
+                newPositions.push(v.x, v.y, v.z);
+            }
+        }
+
+        const result = new THREE.BufferGeometry();
+        result.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+        result.computeVertexNormals();
+        result.computeBoundingBox();
+        result.computeBoundingSphere();
+        return result;
+    }
+
+    function decimateCurrentModel() {
+        const opts = getDecimateOptions();
+        const status = document.getElementById('decimate-status');
+
+        const cameraPositions = [];
+        if (opts.cameraAware) {
+            markers.forEach(m => {
+                if (m.cameraPos) {
+                    const wp = new THREE.Vector3();
+                    m.getWorldPosition(wp);
+                    cameraPositions.push(wp);
+                }
+            });
+        }
+
+        let totalBefore = 0, totalAfter = 0;
+        objects.forEach(obj => {
+            obj.traverse(child => {
+                if (!child.isMesh || !child.geometry) return;
+                if (child.name?.toLowerCase().includes('sphere')) return;
+                if (child.userData?.label) return;
+
+                const before = getMeshFaceCount(child.geometry);
+                totalBefore += before;
+
+                const localCamPos = cameraPositions.map(cp => {
+                    const inv = new THREE.Matrix4().copy(child.matrixWorld).invert();
+                    return cp.clone().applyMatrix4(inv);
+                });
+
+                const newGeo = decimateGeometry(child.geometry, opts, localCamPos);
+                const after = getMeshFaceCount(newGeo);
+                totalAfter += after;
+
+                child.geometry.dispose();
+                child.geometry = newGeo;
+            });
+        });
+
+        if (status) {
+            status.textContent = `Decimated: ${totalBefore} → ${totalAfter} faces (${((1 - totalAfter/totalBefore)*100).toFixed(1)}% reduction)`;
+            status.classList.remove('hidden');
+        }
+    }
+
+    // ========== END MESH DECIMATION ==========
 
     // Helper function to detect reversed normals relative to camera position
     function detectReversedNormalsFromCamera(cameraPosition) {
