@@ -62,6 +62,12 @@ import "../styles.css";
 				background-color: #ffc107;
 				color: #000;
 			}
+
+			/* Paths without matching floorplan images */
+			path.no-matching-floorplan {
+				fill: #ef4444 !important;
+				fill-opacity: 0.6;
+			}
 		</style>
 	</head>
 	<body class="">
@@ -3409,7 +3415,11 @@ import "../styles.css";
 			} else {
 				label.textContent = "Custom Matching (Text replacement + substring)";
 			}
+			highlightPathsWithoutMatchingImages();
+		});
 
+		document.getElementById("text-replacement").addEventListener("input", () => {
+			highlightPathsWithoutMatchingImages();
 		});
 		
 		document.getElementById("check-floorplans-button").addEventListener("change", (e) => {
@@ -3588,7 +3598,9 @@ import "../styles.css";
 			// 4. hide the floating previewer if it exists
 			const previewer = document.getElementById("image-previewer-container");
 			if (previewer) previewer.style.display = "none";
-			
+
+			// 5. Re-highlight paths (all will be red with no images)
+			highlightPathsWithoutMatchingImages();
 		});
 
 
@@ -3911,6 +3923,49 @@ import "../styles.css";
 		// Expose lookup on window for debugging/export
 		(window as any).getImageTransformLookup = getImageTransformLookup;
 
+		// Find matching floorplan image for a path ID (same logic as hover handler)
+		function findMatchingImage(pathId) {
+			if (!pathId || imageList.length === 0) return null;
+			const textReplacement = document.getElementById("text-replacement")?.value || "";
+			if (useDefaultMatching) {
+				const pathIdParts = pathId.split("_");
+				const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
+				const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
+				let match = imageList.find((image) => {
+					const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
+					return imageNormalized.includes(pathNormalized);
+				});
+				if (!match) {
+					match = imageList.find((image) =>
+						image.name.split("_").join("").split("-").join("").includes(
+							pathId.split("_").join("").split("-").join("").replace(textReplacement, "")
+						)
+					);
+				}
+				return match || null;
+			}
+			return imageList.find((image) =>
+				image.name.split("_").join("").split("-").join("").includes(
+					pathId.split("_").join("").split("-").join("").replace(textReplacement, "")
+				)
+			) || null;
+		}
+
+		// Highlight paths that don't have a corresponding floorplan image
+		function highlightPathsWithoutMatchingImages() {
+			const svgElement = document.getElementById("svg-container")?.querySelector("svg");
+			if (!svgElement) return;
+			svgElement.querySelectorAll("path").forEach((path) => {
+				const pathId = path.getAttribute("id") || path.id;
+				const hasMatch = pathId ? !!findMatchingImage(pathId) : false;
+				if (hasMatch) {
+					path.classList.remove("no-matching-floorplan");
+				} else if (pathId) {
+					path.classList.add("no-matching-floorplan");
+				}
+			});
+		}
+
 		function previewBackplate(parentSVG) {
 		// Guard: check if parentSVG exists
 		if (!parentSVG) {
@@ -3957,64 +4012,7 @@ import "../styles.css";
 					document.getElementById(
 						"image-previewer-container",
 					).style.display = "block";
-					const textReplacement = document.getElementById("text-replacement").value;
-					
-					let selectedImage;
-					
-					if (useDefaultMatching) {
-						// DEFAULT MATCHING LOGIC:
-						// Extract final 3 elements from Path ID (separated by _)
-						// Match to 4th element of image name (separated by _)
-						// Remove all separators (space, -, _) during matching
-						
-						const pathIdParts = e.target.id.split("_");
-						const pathFinalThreeElements = pathIdParts.slice(-3).join("_");
-						const pathNormalized = pathFinalThreeElements.replace(/[\s\-_]/g, "").toLowerCase();
-						
-						selectedImage = imageList.filter((image) => {
-							// Normalize the entire image name
-							const imageNormalized = image.name.replace(/[\s\-_]/g, "").toLowerCase();
-							
-							// Check if normalized path appears in normalized image name
-							return imageNormalized.includes(pathNormalized);
-						})[0];
-						
-						// FALLBACK: Use custom logic if default matching fails
-						if (!selectedImage) {
-							selectedImage = imageList.filter((image) => {
-								return image.name
-									.split("_")
-									.join("")
-									.split("-")
-									.join("")
-									.includes(
-										e.target.id
-											.split("_")
-											.join("")
-											.split("-")
-											.join("")
-											.replace(textReplacement, ""),
-									);
-							})[0];
-						}
-					} else {
-						// CUSTOM MATCHING LOGIC (Original "To Remove" logic):
-						selectedImage = imageList.filter((image) => {
-							return image.name
-								.split("_")
-								.join("")
-								.split("-")
-								.join("")
-								.includes(
-									e.target.id
-										.split("_")
-										.join("")
-										.split("-")
-										.join("")
-										.replace(textReplacement, ""),
-								);
-						})[0];
-					}
+					const selectedImage = findMatchingImage(e.target.id);
 
 					if (selectedImage) {
 						// console.log(selectedImage)
@@ -4079,6 +4077,7 @@ import "../styles.css";
 				listeners.push(listener);
 				listeners.push(listener2);
 			});
+			highlightPathsWithoutMatchingImages();
 			globalSvgContainer.addEventListener("mousemove", (e) => {
 				document.getElementById(
 					"image-previewer-container",

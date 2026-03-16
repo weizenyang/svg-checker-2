@@ -2327,17 +2327,16 @@ import ObjectList from "../components/object-list.tsx";
         if (val) val.textContent = `(${e.target.value}°)`;
     });
 
-    document.getElementById('decimate-current-btn')?.addEventListener('click', () => {
-        const status = document.getElementById('decimate-status');
-        if (status) { status.textContent = 'Decimating…'; status.classList.remove('hidden'); }
-        requestAnimationFrame(() => {
-            try {
-                decimateCurrentModel();
-            } catch(err) {
-                console.error('Decimation error:', err);
-                if (status) { status.textContent = `Error: ${err.message}`; }
-            }
-        });
+    document.getElementById('decimate-current-btn')?.addEventListener('click', async () => {
+        try {
+            await decimateCurrentModel();
+        } catch(err) {
+            console.error('Decimation error:', err);
+            const status = document.getElementById('decimate-status');
+            if (status) { status.textContent = `Error: ${err.message}`; status.classList.remove('hidden'); }
+            const btn = document.getElementById('decimate-current-btn') as HTMLButtonElement;
+            if (btn) btn.disabled = false;
+        }
     });
 
     // Batch Decimation modal
@@ -2417,12 +2416,18 @@ import ObjectList from "../components/object-list.tsx";
                     GLTFloader.parse(arrayBuffer, "", resolve, reject);
                 });
 
+                const batchMeshes = [];
                 gltf.scene.traverse(child => {
                     if (!child.isMesh || !child.geometry) return;
-                    const newGeo = decimateGeometry(child.geometry, opts, []);
+                    batchMeshes.push(child);
+                });
+                for (const child of batchMeshes) {
+                    const newGeo = await decimateGeometry(child.geometry, opts, [], (pct) => {
+                        if (currentFile) currentFile.textContent = `Processing: ${file.name} (${(pct * 100).toFixed(0)}%)`;
+                    });
                     child.geometry.dispose();
                     child.geometry = newGeo;
-                });
+                }
 
                 await new Promise(resolve => requestAnimationFrame(resolve));
 
@@ -6757,7 +6762,7 @@ async function renderOverlayCanvas(cone) {
         };
     }
 
-    function decimateGeometry(geometry, opts, cameraPositions = []) {
+    async function decimateGeometry(geometry, opts, cameraPositions = [], onProgress = null) {
         geometry = geometry.toNonIndexed();
         geometry.computeVertexNormals();
 
@@ -7044,7 +7049,11 @@ async function renderOverlayCanvas(cone) {
             }
         });
 
-        // Collapse loop
+        // Collapse loop (async chunked to avoid blocking main thread)
+        const YIELD_INTERVAL = 200;
+        let collapseCount = 0;
+        const totalToCollapse = liveFaceCount - targetFaces;
+
         while (liveFaceCount > targetFaces && heap.size > 0) {
             const top = heap.pop();
             if (!top) break;
@@ -7158,7 +7167,17 @@ async function renderOverlayCanvas(cone) {
                     heap.push({ ...ec, version: ver });
                 }
             });
+
+            collapseCount++;
+            if (collapseCount % YIELD_INTERVAL === 0) {
+                if (onProgress && totalToCollapse > 0) {
+                    onProgress(Math.min(1, collapseCount / totalToCollapse), liveFaceCount);
+                }
+                await new Promise(r => setTimeout(r, 0));
+            }
         }
+
+        if (onProgress) onProgress(1, liveFaceCount);
 
         // Rebuild geometry from alive faces
         const newPositions = [];
@@ -7179,9 +7198,11 @@ async function renderOverlayCanvas(cone) {
         return result;
     }
 
-    function decimateCurrentModel() {
+    async function decimateCurrentModel() {
         const opts = getDecimateOptions();
         const status = document.getElementById('decimate-status');
+        const btn = document.getElementById('decimate-current-btn') as HTMLButtonElement;
+        if (btn) btn.disabled = true;
 
         const cameraPositions = [];
         if (opts.cameraAware) {
@@ -7194,34 +7215,50 @@ async function renderOverlayCanvas(cone) {
             });
         }
 
-        let totalBefore = 0, totalAfter = 0;
+        const meshes = [];
         objects.forEach(obj => {
             obj.traverse(child => {
                 if (!child.isMesh || !child.geometry) return;
                 if (child.name?.toLowerCase().includes('sphere')) return;
                 if (child.userData?.label) return;
-
-                const before = getMeshFaceCount(child.geometry);
-                totalBefore += before;
-
-                const localCamPos = cameraPositions.map(cp => {
-                    const inv = new THREE.Matrix4().copy(child.matrixWorld).invert();
-                    return cp.clone().applyMatrix4(inv);
-                });
-
-                const newGeo = decimateGeometry(child.geometry, opts, localCamPos);
-                const after = getMeshFaceCount(newGeo);
-                totalAfter += after;
-
-                child.geometry.dispose();
-                child.geometry = newGeo;
+                meshes.push(child);
             });
         });
 
+        let totalBefore = 0, totalAfter = 0;
+        for (let mi = 0; mi < meshes.length; mi++) {
+            const child = meshes[mi];
+            const before = getMeshFaceCount(child.geometry);
+            totalBefore += before;
+
+            const localCamPos = cameraPositions.map(cp => {
+                const inv = new THREE.Matrix4().copy(child.matrixWorld).invert();
+                return cp.clone().applyMatrix4(inv);
+            });
+
+            const meshName = child.name || `mesh ${mi + 1}`;
+            if (status) {
+                status.textContent = `Decimating ${meshName} (${mi + 1}/${meshes.length})…`;
+                status.classList.remove('hidden');
+            }
+
+            const newGeo = await decimateGeometry(child.geometry, opts, localCamPos, (pct, liveFaces) => {
+                if (status) {
+                    status.textContent = `${meshName} (${mi + 1}/${meshes.length}): ${(pct * 100).toFixed(0)}% — ${liveFaces} faces`;
+                }
+            });
+            const after = getMeshFaceCount(newGeo);
+            totalAfter += after;
+
+            child.geometry.dispose();
+            child.geometry = newGeo;
+        }
+
         if (status) {
-            status.textContent = `Decimated: ${totalBefore} → ${totalAfter} faces (${((1 - totalAfter/totalBefore)*100).toFixed(1)}% reduction)`;
+            status.textContent = `Done: ${totalBefore} → ${totalAfter} faces (${((1 - totalAfter/Math.max(totalBefore,1))*100).toFixed(1)}% reduction)`;
             status.classList.remove('hidden');
         }
+        if (btn) btn.disabled = false;
     }
 
     // ========== END MESH DECIMATION ==========

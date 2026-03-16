@@ -6,6 +6,7 @@ from xml.dom import minidom
 import matplotlib.pyplot as plt
 import re
 import os
+import shutil
 
 def list_dxf_layers(dxf_file):
     doc = ezdxf.readfile(dxf_file)
@@ -191,20 +192,153 @@ def add_svg_comments(svg_file, doc):
     print(f"Added {comments_added} comments to groups")
 
 
+def _parse_svg_size(svg_path):
+    """Parse SVG viewBox or width/height. Returns (minx, miny, w, h) or None on failure."""
+    try:
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+    except Exception:
+        return None
+
+    view_box = root.get("viewBox")
+    if view_box:
+        parts = view_box.strip().replace(",", " ").split()
+        if len(parts) != 4:
+            return None
+        try:
+            return float(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])
+        except ValueError:
+            return None
+
+    # fallback to width/height (strip units: px, pt, etc.)
+    def parse_len(s, default=1):
+        if s is None:
+            return default
+        s = re.sub(r"[a-zA-Z%]+", "", str(s).strip())
+        try:
+            return float(s) if s else default
+        except ValueError:
+            return default
+
+    w = parse_len(root.get("width"), 1)
+    h = parse_len(root.get("height"), 1)
+    return 0, 0, w, h
+
+
+def split_svg_halves_if_needed(svg_path, base_name):
+    """
+    If base_name starts with 'd_s' and SVG aspect ratio > 1.8 (landscape),
+    split the SVG into left and right halves and export as base_0.svg and base_1.svg.
+    Returns True if split was done, False otherwise.
+    """
+    if not base_name.startswith("d_s"):
+        return False
+    if not os.path.isfile(svg_path):
+        return False
+
+    try:
+        parsed = _parse_svg_size(svg_path)
+        if parsed is None:
+            return False
+        minx, miny, w, h = parsed
+
+        if h <= 0:
+            return False
+        aspect = w / h
+        # landscape and aspect > 1.8
+        if w <= h or aspect <= 1.8:
+            return False
+
+        base_path = os.path.splitext(svg_path)[0]
+        half_w = w / 2
+        # We do NOT change the original viewBox/width/height; instead we clip the content
+        # into left/right halves using clipPath rectangles in the same coordinate system.
+
+        for i, (x_start, suffix) in enumerate([(minx, "_0"), (minx + half_w, "_1")]):
+            tree_copy = ET.parse(svg_path)
+            root_copy = tree_copy.getroot()
+
+            # Determine SVG namespace
+            if root_copy.tag.startswith("{"):
+                ns_uri = root_copy.tag.split("}", 1)[0][1:]
+                ns = f"{{{ns_uri}}}"
+            else:
+                ns = ""
+
+            # Ensure there is a <defs> element
+            defs = None
+            for child in list(root_copy):
+                if child.tag == f"{ns}defs":
+                    defs = child
+                    break
+            if defs is None:
+                defs = ET.Element(f"{ns}defs")
+                # Insert defs at the top so it doesn't affect drawing order
+                root_copy.insert(0, defs)
+
+            clip_id = f"{base_name}{suffix}_clip"
+            clip_path_el = ET.SubElement(defs, f"{ns}clipPath", id=clip_id)
+            ET.SubElement(
+                clip_path_el,
+                f"{ns}rect",
+                x=str(x_start),
+                y=str(miny),
+                width=str(half_w),
+                height=str(h),
+            )
+
+            # Wrap all non-defs children in a group that uses the clip-path
+            content_children = [c for c in list(root_copy) if c is not defs]
+            if content_children:
+                group = ET.Element(f"{ns}g", {"clip-path": f"url(#{clip_id})"})
+                for c in content_children:
+                    root_copy.remove(c)
+                    group.append(c)
+                root_copy.append(group)
+
+            out_path = base_path + suffix + ".svg"
+            try:
+                ET.indent(tree_copy, space="  ")
+            except AttributeError:
+                pass
+            tree_copy.write(out_path, encoding='unicode', xml_declaration=True)
+            print(f"Split half saved to {out_path}")
+        return True
+    except Exception as e:
+        print(f"Split failed for {svg_path}: {e}")
+        return False
+
+
 if __name__ == "__main__":
 
-    dxf_folder = "/Users/weizenyang/Downloads/the wilds DXF- dims"
+    dxf_folder = "/Users/weizenyang/Downloads/the wilds-dxf "
+    dxf_folder = os.path.normpath(dxf_folder.strip())
     dxf_files = [f for f in os.listdir(dxf_folder) if f.endswith('.dxf')]
+
+    unsplit_dir = os.path.join(dxf_folder, "d_s_unsplit")
+    os.makedirs(unsplit_dir, exist_ok=True)
 
     for dxf_filename in dxf_files:
         dxf_file = os.path.join(dxf_folder, dxf_filename)
         print(f"Processing: {dxf_file}")
-        
-        doc = format_dimension_text(dxf_file)
-        output_file = os.path.join(dxf_folder, f"{dxf_filename.split('.')[0]}.svg")
 
-        # list_dxf_layers(dxf_file)
-        # investigate_dimensions(dxf_file, layer_name="KT-Dim")
+        doc = format_dimension_text(dxf_file)
+        output_file = os.path.join(dxf_folder, f"{os.path.splitext(dxf_filename)[0]}.svg")
 
         dxf_layer_to_svg(doc, output_file, ["KT-Dim"])
         add_svg_comments(output_file, doc)
+
+        base_name = os.path.splitext(dxf_filename)[0]
+        did_split = split_svg_halves_if_needed(output_file, base_name)
+        # Always put full d_s SVG in d_s_unsplit (root keeps only _0/_1 halves when split)
+        if base_name.startswith("d_s"):
+            output_abs = os.path.abspath(output_file)
+            dest = os.path.join(unsplit_dir, os.path.basename(output_file))
+            if os.path.isfile(output_abs):
+                try:
+                    shutil.move(output_abs, dest)
+                    print(f"Moved to d_s_unsplit: {dest}")
+                except Exception as e:
+                    print(f"Failed to move {output_abs} to {dest}: {e}")
+            else:
+                print(f"Output file missing, skip move: {output_abs}")
