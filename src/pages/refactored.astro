@@ -3696,6 +3696,14 @@ import "../styles.css";
 			updateProgress();
 			try {
 				for (const svgEl of svgsToProcess) {
+					// Keep the viewer in sync: move to this SVG as if the user pressed "next"
+					if (importedSVGs?.length > 0) {
+						const idx = importedSVGs.findIndex((s) => s.element === svgEl);
+						if (idx !== -1) {
+							currentSVGIndex = idx;
+							processSVG(importedSVGs[currentSVGIndex].element);
+						}
+					}
 					const paths = svgEl.querySelectorAll("path");
 					for (const pathEl of paths) {
 						const pathId = pathEl.getAttribute("id") || pathEl.id;
