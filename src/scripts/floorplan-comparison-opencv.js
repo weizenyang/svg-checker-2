@@ -14,6 +14,9 @@ const MAX_COMPARE_DIM = 512;
 const MIN_CONTOUR_AREA = 100;
 const MORPH_PREPROCESS_DIM = 384;
 
+// Cache floorplan preprocessing per image URL to speed up batch runs
+const floorplanProcessedCache = new Map(); // key: floorplanDataUrl, value: ImageData
+
 let cvReady = false;
 let cvLoadPromise = null;
 
@@ -78,7 +81,7 @@ function matToDataUrl(mat) {
 function drawOrbKeypoints(srcMat) {
   const gray = new cv.Mat();
   cv.cvtColor(srcMat, gray, cv.COLOR_RGBA2GRAY);
-  const orb = cv.ORB_create ? cv.ORB_create(500) : new cv.ORB(500);
+  const orb = cv.ORB_create ? cv.ORB_create(300) : new cv.ORB(300);
   const kp = new cv.KeyPointVector();
   const desc = new cv.Mat();
   orb.detectAndCompute(gray, new cv.Mat(), kp, desc);
@@ -225,7 +228,8 @@ function orbMatchWithInlierRatio(mat1, mat2, logCtx = {}) {
   const prep1 = preprocessGrayForOrb(mat1);
   const prep2 = preprocessGrayForOrb(mat2);
   try {
-    orb = cv.ORB_create ? cv.ORB_create(200) : new cv.ORB(200);
+    // Slightly fewer keypoints for speed
+    orb = cv.ORB_create ? cv.ORB_create(150) : new cv.ORB(150);
   } catch (e) {
     prep1.delete();
     prep2.delete();
@@ -486,7 +490,7 @@ function drawOrbInliers(mat1, mat2) {
 
   let orb;
   try {
-    orb = cv.ORB_create ? cv.ORB_create(200) : new cv.ORB(200);
+    orb = cv.ORB_create ? cv.ORB_create(150) : new cv.ORB(150);
   } catch (e) {
     gray1.delete();
     gray2.delete();
@@ -1037,20 +1041,26 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
   await loadOpenCV();
 
   const cutout = await extractPathCutout(svgElement, pathElement);
-  const floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+  let floorplanProcessed;
 
-  const preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, !!opts.includeIntermediates);
-  const floorplanCropped = preprocessResult?.final ?? preprocessResult;
+  if (floorplanProcessedCache.has(floorplanDataUrl)) {
+    floorplanProcessed = floorplanProcessedCache.get(floorplanDataUrl);
+  } else {
+    const floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+    const preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, !!opts.includeIntermediates);
+    const floorplanCropped = preprocessResult?.final ?? preprocessResult;
 
-  const cw = cutout.width;
-  const ch = cutout.height;
-  const cutoutLongest = Math.max(cw, ch);
-  const fw = floorplanCropped.width;
-  const fh = floorplanCropped.height;
-  const scale = cutoutLongest / Math.max(fw, fh);
-  const targetW = Math.max(1, Math.round(fw * scale));
-  const targetH = Math.max(1, Math.round(fh * scale));
-  const floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
+    const cw = cutout.width;
+    const ch = cutout.height;
+    const cutoutLongest = Math.max(cw, ch);
+    const fw = floorplanCropped.width;
+    const fh = floorplanCropped.height;
+    const scale = cutoutLongest / Math.max(fw, fh);
+    const targetW = Math.max(1, Math.round(fw * scale));
+    const targetH = Math.max(1, Math.round(fh * scale));
+    floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
+    floorplanProcessedCache.set(floorplanDataUrl, floorplanProcessed);
+  }
 
   const cutoutMat = imageDataToMat(cutout);
   const cutoutGray = new cv.Mat();

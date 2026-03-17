@@ -3695,6 +3695,7 @@ import "../styles.css";
 			};
 			updateProgress();
 			try {
+				let batchCount = 0;
 				for (const svgEl of svgsToProcess) {
 					// Keep the viewer in sync: move to this SVG as if the user pressed "next"
 					if (importedSVGs?.length > 0) {
@@ -3735,6 +3736,12 @@ import "../styles.css";
 							completedTasks++;
 						}
 						updateProgress();
+
+						// Yield every few paths to keep UI responsive
+						batchCount++;
+						if (batchCount % 10 === 0) {
+							await new Promise((resolve) => setTimeout(resolve, 0));
+						}
 					}
 				}
 				results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -3752,7 +3759,28 @@ import "../styles.css";
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement("a");
 				a.href = url;
-				a.download = `batch-opencv-${new Date().toISOString().slice(0, 10)}.csv`;
+
+				// Derive CSV name from common prefix of loaded SVGs
+				let baseName = "batch-opencv";
+				if (Array.isArray(importedSVGs) && importedSVGs.length > 0) {
+					const names = importedSVGs
+						.map((s) => s.name || "")
+						.filter(Boolean)
+						.map((n) => n.replace(/\.svg$/i, ""));
+					if (names.length > 0) {
+						let prefix = names[0];
+						for (let i = 1; i < names.length; i++) {
+							const cur = names[i];
+							let j = 0;
+							while (j < prefix.length && j < cur.length && prefix[j] === cur[j]) j++;
+							prefix = prefix.slice(0, j);
+							if (!prefix) break;
+						}
+						if (prefix && prefix.length > 2) baseName = prefix;
+					}
+				}
+
+				a.download = `${baseName || "batch-opencv"}-opencv-${new Date().toISOString().slice(0, 10)}.csv`;
 				document.body.appendChild(a);
 				a.click();
 				document.body.removeChild(a);
