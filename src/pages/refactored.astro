@@ -538,9 +538,16 @@ import "../styles.css";
 
 			<div
 				id="editor-button-container"
-				style="display: flex; flex-direction: row; justify-content: space-between;"
+				style="display: flex; flex-direction: row; justify-content: space-between; align-items: center;"
 			>
 				<h3>Viewer</h3>
+				<button
+					id="download-canvas-zip-btn"
+					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm"
+					type="button"
+				>
+					Download ZIP
+				</button>
 			</div>
 			<div
 				class="aspect-square max-h-[91vh] max-w-[91vh]"
@@ -570,6 +577,8 @@ import "../styles.css";
 		// import { onMount } from 'astro/client';
 		// import * as svgOp from "./svg-scripts/svg-operations"
 		import { transform } from "typescript";
+		import JSZip from "jszip";
+		import { runFloorplanComparison } from "../scripts/floorplan-comparison.js";
 		import {
 			currentValuesList,
 			updateValuesList,
@@ -613,6 +622,7 @@ import "../styles.css";
 		// Image transformation lookup for preview images
 		let imageTransformLookup = {};
 		let currentHoveredImageName = null;
+		let currentHoveredPathElement = null;
 		
 		// Imported unit-reference data
 		let importedUnitReference = null;
@@ -1089,6 +1099,7 @@ import "../styles.css";
 						imageElement.setAttribute("height", viewBox[3]);
 						imageElement.setAttribute("href", imageData.data); // Use the data URL
 						imageElement.setAttribute("preserveAspectRatio", "xMidYMid meet");
+						imageElement.setAttribute("data-original-filename", imageData.imageName || "");
 
 						// Insert as the first child (background)
 						if (svgElement.firstChild) {
@@ -2859,6 +2870,7 @@ import "../styles.css";
 								svgImage.setAttributeNS(null, "y", "0");
 								svgImage.setAttributeNS(null, "width", viewBox[2]);
 								svgImage.setAttributeNS(null, "height", viewBox[3]);
+								svgImage.setAttributeNS(null, "data-original-filename", mediaFile.name || "");
 								// Insert the image as the first child (or adjust position as needed)
 								console.log("Adding new background image to SVG");
 								svgElement.insertBefore(svgImage, svgElement.firstChild);
@@ -3095,7 +3107,7 @@ import "../styles.css";
 						svgImage.setAttributeNS(null, "y", "0");
 						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
 						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
-
+						svgImage.setAttributeNS(null, "data-original-filename", file.name || "");
 						console.log("Adding new background image");
 						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
 					}
@@ -3603,6 +3615,102 @@ import "../styles.css";
 			highlightPathsWithoutMatchingImages();
 		});
 
+		const downloadZipBtn = document.getElementById("download-canvas-zip-btn");
+		if (downloadZipBtn) downloadZipBtn.addEventListener("click", async () => {
+			const btn = document.getElementById("download-canvas-zip-btn");
+			const currentSVGObj = importedSVGs?.[currentSVGIndex];
+			if (!currentSVGObj) {
+				showToast("No SVG loaded to download", "warning");
+				return;
+			}
+			btn.disabled = true;
+			btn.textContent = "Zipping...";
+			try {
+				const zip = new JSZip();
+				const svgEl = currentSVGObj.element;
+				const viewBox = svgEl.getAttribute("viewBox")?.split(" ").map(Number) || [0, 0, 4096, 4096];
+				const vbW = viewBox[2];
+				const vbH = viewBox[3];
+				const seen = new Set();
+
+				// 1. Current SVG
+				let svgName = currentSVGObj.name || "floorplan";
+				if (!svgName.toLowerCase().endsWith(".svg")) svgName += ".svg";
+				zip.file(svgName, new XMLSerializer().serializeToString(svgEl.cloneNode(true)));
+				seen.add(svgName);
+
+				// 2. Floorplan images that match path IDs in this SVG
+				const matchingFloorplans = new Map();
+				svgEl.querySelectorAll("path[id]").forEach((path) => {
+					const match = findMatchingImage(path.id || path.getAttribute("id"));
+					if (match && !matchingFloorplans.has(match.name)) {
+						matchingFloorplans.set(match.name, match);
+					}
+				});
+				matchingFloorplans.forEach((img) => {
+					let name = img.name || "image";
+					if (!name.includes(".")) {
+						const m = (img.data || "").match(/data:image\/(\w+);/);
+						name += m ? "." + m[1] : ".png";
+					}
+					if (seen.has(name)) {
+						const base = name.replace(/\.[^/.]+$/, "");
+						const ext = name.split(".").pop();
+						let i = 1;
+						while (seen.has(`${base}_${i}.${ext}`)) i++;
+						name = `${base}_${i}.${ext}`;
+					}
+					seen.add(name);
+					const m = (img.data || "").match(/^data:[^;]+;base64,(.+)$/);
+					if (m) zip.file(name, m[1], { base64: true });
+				});
+
+				// 3. Background (tower floorplate) images from SVG
+				let bgCount = 0;
+				svgEl.querySelectorAll("image").forEach((imgEl, idx) => {
+					const w = imgEl.getAttribute("width");
+					const h = imgEl.getAttribute("height");
+					if (w == vbW && h == vbH) {
+						const href = imgEl.getAttribute("href") || imgEl.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+						const origName = imgEl.getAttribute("data-original-filename");
+						let name = origName || `tower-floorplate_${idx}.png`;
+						if (!name.includes(".")) {
+							const mt = (href || "").match(/data:image\/(\w+);/);
+							name += mt ? "." + mt[1] : ".png";
+						}
+						if (seen.has(name)) {
+							const base = name.replace(/\.[^/.]+$/, "");
+							const ext = name.split(".").pop();
+							let i = 1;
+							while (seen.has(`${base}_${i}.${ext}`)) i++;
+							name = `${base}_${i}.${ext}`;
+						}
+						seen.add(name);
+						const m = (href || "").match(/^data:[^;]+;base64,(.+)$/);
+						if (m) {
+							zip.file(name, m[1], { base64: true });
+							bgCount++;
+						}
+					}
+				});
+
+				const count = 1 + matchingFloorplans.size + bgCount;
+				const blob = await zip.generateAsync({ type: "blob" });
+				const a = document.createElement("a");
+				a.href = URL.createObjectURL(blob);
+				a.download = "canvas-files.zip";
+				a.click();
+				URL.revokeObjectURL(a.href);
+				showToast(`Downloaded ${count} file(s)`, "success");
+			} catch (err) {
+				console.error("ZIP download error:", err);
+				showToast("Download failed", "error");
+			} finally {
+				btn.disabled = false;
+				btn.textContent = "Download ZIP";
+			}
+		});
+
 
 		function uploadImages(e) {
 			const files = Array.from(e.target.files);
@@ -3978,33 +4086,70 @@ import "../styles.css";
 				removeEventListener("hover", e);
 			});
 
-			let previewerInstance = document.getElementById("image-previewer");
-			console.log("previewing")
-			if (!previewerInstance) {
+			let previewerContainer = document.getElementById("image-previewer-container");
+			console.log("previewing");
+			if (!previewerContainer) {
 				const newPreviewer = document.createElement("div");
 				const previewerImg = document.createElement("img");
 				const previewerText = document.createElement("p");
+				const compareBtn = document.createElement("button");
+				const compareScores = document.createElement("div");
+				compareBtn.textContent = "Compare Floorplan";
+				compareBtn.id = "compare-floorplan-btn";
+				compareBtn.style.cssText = "margin-top:8px;padding:4px 8px;font-size:10px;cursor:pointer;background:#4a90d9;color:white;border:none;border-radius:4px;";
+				compareScores.id = "compare-floorplan-scores";
+				compareScores.style.cssText = "font-size:10px;margin-top:6px;color:#333;";
 				newPreviewer.id = "image-previewer-container";
 				newPreviewer.style.padding = "5px";
 				newPreviewer.style.position = "fixed";
 				newPreviewer.style.display = "flex";
-				newPreviewer.style.flexDirection = "flex-column";
+				newPreviewer.style.flexDirection = "column";
 				newPreviewer.style.backgroundColor = "#cccccccc";
 				newPreviewer.style.borderRadius = "10px";
-				newPreviewer.style.alignContent = "align-center";
-				newPreviewer.style.justifyContent = "justify-center";
-				newPreviewer.style.justifyItems = "justify-center";
+				newPreviewer.style.alignContent = "center";
+				newPreviewer.style.justifyContent = "center";
+				newPreviewer.style.justifyItems = "center";
 				newPreviewer.style.transform = "translate(-50%, -113%)";
 				newPreviewer.style.width = "310px";
 				previewerImg.id = "image-previewer-image";
 				previewerImg.style.width = "300px";
 				previewerImg.style.marginBottom = "10px";
 				newPreviewer.appendChild(previewerImg);
+				newPreviewer.appendChild(previewerText);
+				newPreviewer.appendChild(compareBtn);
+				newPreviewer.appendChild(compareScores);
 				previewerText.id = "image-previewer-text";
 				previewerText.style.fontSize = "10px";
 				previewerText.style.fontWeight = "normal";
-				newPreviewer.appendChild(previewerText);
 				document.querySelector("body").appendChild(newPreviewer);
+
+				compareBtn.addEventListener("click", async () => {
+					const svgEl = document.querySelector("#svg-container svg");
+					const pathEl = currentHoveredPathElement;
+					const img = imageList.find((i) => i.name === currentHoveredImageName);
+					if (!svgEl || !pathEl || !img?.data) {
+						showToast("Need path and floorplan to compare", "warning");
+						return;
+					}
+					compareBtn.disabled = true;
+					compareBtn.textContent = "Comparing...";
+					const scoresEl = document.getElementById("compare-floorplan-scores");
+					if (scoresEl) scoresEl.textContent = "";
+					try {
+						const result = await runFloorplanComparison(svgEl, pathEl, img.data);
+						if (scoresEl) {
+							scoresEl.innerHTML = `Silhouette: ${result.silhouette}% · Direct: ${result.direct}% · Edge: ${result.edge}%`;
+						}
+						showToast(`Scores: Silhouette ${result.silhouette}%, Direct ${result.direct}%, Edge ${result.edge}%`, "success");
+					} catch (err) {
+						console.error("Floorplan comparison error:", err);
+						if (scoresEl) scoresEl.textContent = "Comparison failed";
+						showToast("Comparison failed", "error");
+					} finally {
+						compareBtn.disabled = false;
+						compareBtn.textContent = "Compare Floorplan";
+					}
+				});
 			}
 
 			parentSVG.querySelectorAll("path").forEach((path) => {
@@ -4015,7 +4160,9 @@ import "../styles.css";
 					const selectedImage = findMatchingImage(e.target.id);
 
 					if (selectedImage) {
-						// console.log(selectedImage)
+						currentHoveredPathElement = e.target;
+						const scoresEl = document.getElementById("compare-floorplan-scores");
+						if (scoresEl) scoresEl.textContent = "";
 						const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
 						previewImg.src = selectedImage.data;
 						
@@ -4065,6 +4212,7 @@ import "../styles.css";
 							"image-previewer-text",
 						).innerHTML = "";
 						currentHoveredImageName = null;
+						currentHoveredPathElement = null;
 					}
 				});
 
