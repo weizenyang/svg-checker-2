@@ -521,6 +521,19 @@ import "../styles.css";
 						type="button">
 						Export unit-reference
 					</button>
+					<div class="flex flex-col items-end space-y-1 self-end">
+						<button id="batch-opencv-button"
+							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm"
+							type="button">
+							Batch OpenCV
+						</button>
+						<div id="batch-opencv-progress" class="hidden w-48 text-xs text-neutral-700">
+							<div class="w-full bg-neutral-200 h-1 rounded">
+								<div id="batch-opencv-progress-bar" class="h-1 bg-blue-500 rounded" style="width:0%"></div>
+							</div>
+							<div id="batch-opencv-progress-text" class="mt-1 text-right">0 / 0</div>
+						</div>
+					</div>
 				</div>
 				
 				<div
@@ -579,6 +592,7 @@ import "../styles.css";
 		import { transform } from "typescript";
 		import JSZip from "jszip";
 		import { runFloorplanComparison } from "../scripts/floorplan-comparison.js";
+		import { runFloorplanComparisonOpencv } from "../scripts/floorplan-comparison-opencv.js";
 		import {
 			currentValuesList,
 			updateValuesList,
@@ -623,6 +637,7 @@ import "../styles.css";
 		let imageTransformLookup = {};
 		let currentHoveredImageName = null;
 		let currentHoveredPathElement = null;
+		let previewPinned = false;
 		
 		// Imported unit-reference data
 		let importedUnitReference = null;
@@ -1114,6 +1129,49 @@ import "../styles.css";
 			});
 
 			console.log(`Finished processing ${apiImages.length} background images`);
+		}
+
+		// Load backplate_image_floorplan files from File[] into imageList (Check Floorplans). Call after SVG load.
+		function loadFloorplanFilesToImageList(files) {
+			const floorplanFiles = Array.from(files).filter((f) => {
+				const isImage = f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp';
+				const hasFloorplanInName = f.name.includes('backplate_image_floorplan') && !f.name.includes('tower-floorplate');
+				return isImage && hasFloorplanInName;
+			});
+			if (floorplanFiles.length === 0) return;
+			console.log(`📋 Auto-loading ${floorplanFiles.length} backplate_image_floorplan file(s) into Check Floorplans`);
+			Promise.all(floorplanFiles.map((file) => new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = (e) => resolve({ name: file.name, data: e.target?.result as string });
+				reader.onerror = reject;
+				reader.readAsDataURL(file);
+			}))).then((results) => {
+				imageList.splice(0, imageList.length);
+				imageList.push(...results);
+				const imageListContainer = document.getElementById("image-list-container");
+				if (imageListContainer?.classList.contains("hidden")) imageListContainer.classList.remove("hidden");
+				const imgCarouselContainer = document.getElementById("image-carousel-container");
+				if (imgCarouselContainer?.classList.contains("hidden")) {
+					imgCarouselContainer.classList.remove("hidden");
+					imgCarouselContainer.classList.add("flex");
+				}
+				const imageListCarousel = document.getElementById("image-list-carousel");
+				if (imageListCarousel) {
+					imageListCarousel.innerHTML = "";
+					imageList.forEach((image) => {
+						const listItem = document.createElement("li");
+						listItem.style.height = "100%";
+						const imageElement = document.createElement("img");
+						imageElement.src = image.data;
+						imageElement.style.height = "60px";
+						listItem.appendChild(imageElement);
+						imageListCarousel.appendChild(listItem);
+					});
+				}
+				const svgElement = document.getElementById("svg-container")?.querySelector("svg");
+				if (svgElement) previewBackplate(svgElement);
+				showToast(`Loaded ${results.length} floorplan image(s) for overlay`, 'success');
+			}).catch((err) => console.error('Error loading floorplan images:', err));
 		}
 
 		// Load API images into imageList for overlay functionality
@@ -2942,7 +3000,7 @@ import "../styles.css";
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
 						document.getElementById("image-list-container").classList.remove("hidden")
 					}
-				Array.from(files).forEach((fileToProcess, index) => {
+				filesToProcess.forEach((fileToProcess, index) => {
 					const reader = new FileReader();
 					reader.onload = () => {
 						const svgString = reader.result;
@@ -2955,7 +3013,7 @@ import "../styles.css";
 						const svgElement = svgDoc.documentElement;
 						importedSVGs.push({ name: getBaseName(fileToProcess.name), element: svgElement });
 
-						// Once all files have been processed, show the first one and spawn navigation
+						// Once all SVGs have been processed, show the first one and spawn navigation
 						if (importedSVGs.length === filesToProcess.length) {
 							currentSVGIndex = 0;
 							processSVG(importedSVGs[currentSVGIndex].element);
@@ -2967,6 +3025,8 @@ import "../styles.css";
 									document.getElementById("svg-nav");
 								if (existingNav) existingNav.remove();
 							}
+							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
+							loadFloorplanFilesToImageList(files);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3014,6 +3074,8 @@ import "../styles.css";
 									document.getElementById("svg-nav");
 								if (existingNav) existingNav.remove();
 							}
+							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
+							loadFloorplanFilesToImageList(files);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3592,6 +3654,114 @@ import "../styles.css";
 			console.log(`Successfully exported ${mergedData.length} unit(s)`);
 		});
 
+		document.getElementById("batch-opencv-button").addEventListener("click", async () => {
+			const btn = document.getElementById("batch-opencv-button");
+			const progressContainer = document.getElementById("batch-opencv-progress");
+			const progressBar = document.getElementById("batch-opencv-progress-bar");
+			const progressText = document.getElementById("batch-opencv-progress-text");
+			const svgsToProcess = importedSVGs?.length > 0
+				? importedSVGs.map((s) => s.element)
+				: (() => { const el = document.querySelector("#svg-container svg"); return el ? [el] : []; })();
+			if (svgsToProcess.length === 0 || imageList.length === 0) {
+				showToast("Load SVG and floorplan images first", "warning");
+				return;
+			}
+			btn.disabled = true;
+			btn.textContent = "Processing...";
+			if (progressContainer && progressBar && progressText) {
+				progressContainer.classList.remove("hidden");
+				progressBar.style.width = "0%";
+				progressText.textContent = "0 / 0";
+			}
+			const results = [];
+			let totalTasks = 0;
+			let completedTasks = 0;
+			// Pre-count total paths that have matching images so progress is accurate
+			for (const svgEl of svgsToProcess) {
+				const paths = svgEl.querySelectorAll("path");
+				for (const pathEl of paths) {
+					const pathId = pathEl.getAttribute("id") || pathEl.id;
+					if (!pathId) continue;
+					const img = findMatchingImage(pathId);
+					if (!img?.data) continue;
+					totalTasks++;
+				}
+			}
+			const updateProgress = () => {
+				if (!progressBar || !progressText || totalTasks === 0) return;
+				const pct = Math.min(100, Math.round((completedTasks / totalTasks) * 100));
+				progressBar.style.width = `${pct}%`;
+				progressText.textContent = `${completedTasks} / ${totalTasks}`;
+			};
+			updateProgress();
+			try {
+				for (const svgEl of svgsToProcess) {
+					const paths = svgEl.querySelectorAll("path");
+					for (const pathEl of paths) {
+						const pathId = pathEl.getAttribute("id") || pathEl.id;
+						if (!pathId) continue;
+						const img = findMatchingImage(pathId);
+						if (!img?.data) continue;
+						try {
+							const r = await runFloorplanComparisonOpencv(svgEl, pathEl, img.data, { includeIntermediates: false });
+							completedTasks++;
+							const correctOrientation = r.bestRotation === 0 && !r.bestOrbFlipped;
+							results.push({
+								name: pathId,
+								orb: r.orb,
+								contour: r.contour,
+								bestRotation: r.bestRotation,
+								bestFlip: r.bestOrbFlipped ? "Flip" : "",
+								correct_orientation: correctOrientation
+							});
+						} catch (err) {
+							console.warn(`Batch OpenCV failed for ${pathId}:`, err);
+							results.push({
+								name: pathId,
+								orb: "",
+								contour: "",
+								bestRotation: "",
+								bestFlip: "",
+								correct_orientation: false
+							});
+							completedTasks++;
+						}
+						updateProgress();
+					}
+				}
+				results.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+				const headers = ["name", "orb", "contour", "bestRotation", "bestFlip", "correct_orientation"];
+				const escapeCsv = (v) => {
+					const s = String(v);
+					return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+				};
+				const rows = [headers.map(escapeCsv).join(",")];
+				for (const r of results) {
+					rows.push(headers.map((h) => escapeCsv(r[h])).join(","));
+				}
+				const csv = rows.join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `batch-opencv-${new Date().toISOString().slice(0, 10)}.csv`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				showToast(`Exported ${results.length} results`, "success");
+			} catch (err) {
+				console.error("Batch OpenCV error:", err);
+				showToast(err instanceof Error ? err.message : "Batch OpenCV failed", "error");
+			} finally {
+				btn.disabled = false;
+				btn.textContent = "Batch OpenCV";
+				if (progressContainer) {
+					progressContainer.classList.add("hidden");
+				}
+			}
+		});
+
 		document.getElementById("clear-images").addEventListener("click", () => {
 			// 1. empty the array that the previewer uses
 			imageList.splice(0, imageList.length);
@@ -4093,12 +4263,20 @@ import "../styles.css";
 				const previewerImg = document.createElement("img");
 				const previewerText = document.createElement("p");
 				const compareBtn = document.createElement("button");
+				const compareOpencvBtn = document.createElement("button");
 				const compareScores = document.createElement("div");
 				compareBtn.textContent = "Compare Floorplan";
 				compareBtn.id = "compare-floorplan-btn";
 				compareBtn.style.cssText = "margin-top:8px;padding:4px 8px;font-size:10px;cursor:pointer;background:#4a90d9;color:white;border:none;border-radius:4px;";
+				compareOpencvBtn.textContent = "Compare (OpenCV)";
+				compareOpencvBtn.id = "compare-opencv-btn";
+				compareOpencvBtn.style.cssText = "margin-top:4px;margin-left:4px;padding:4px 8px;font-size:10px;cursor:pointer;background:#2d7a4f;color:white;border:none;border-radius:4px;";
 				compareScores.id = "compare-floorplan-scores";
 				compareScores.style.cssText = "font-size:10px;margin-top:6px;color:#333;";
+				const compareBtnsRow = document.createElement("div");
+				compareBtnsRow.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;align-items:center;";
+				compareBtnsRow.appendChild(compareBtn);
+				compareBtnsRow.appendChild(compareOpencvBtn);
 				newPreviewer.id = "image-previewer-container";
 				newPreviewer.style.padding = "5px";
 				newPreviewer.style.position = "fixed";
@@ -4111,12 +4289,14 @@ import "../styles.css";
 				newPreviewer.style.justifyItems = "center";
 				newPreviewer.style.transform = "translate(-50%, -113%)";
 				newPreviewer.style.width = "310px";
+				const imgWrapper = document.createElement("div");
+				imgWrapper.style.cssText = "position:relative;width:300px;height:300px;min-height:300px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;background:#f0f0f0;border-radius:4px;overflow:hidden;";
 				previewerImg.id = "image-previewer-image";
-				previewerImg.style.width = "300px";
-				previewerImg.style.marginBottom = "10px";
-				newPreviewer.appendChild(previewerImg);
+				previewerImg.style.cssText = "max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;";
+				imgWrapper.appendChild(previewerImg);
+				newPreviewer.appendChild(imgWrapper);
 				newPreviewer.appendChild(previewerText);
-				newPreviewer.appendChild(compareBtn);
+				newPreviewer.appendChild(compareBtnsRow);
 				newPreviewer.appendChild(compareScores);
 				previewerText.id = "image-previewer-text";
 				previewerText.style.fontSize = "10px";
@@ -4128,31 +4308,190 @@ import "../styles.css";
 					const pathEl = currentHoveredPathElement;
 					const img = imageList.find((i) => i.name === currentHoveredImageName);
 					if (!svgEl || !pathEl || !img?.data) {
-						showToast("Need path and floorplan to compare", "warning");
+						const scoresEl2 = document.getElementById("compare-floorplan-scores");
+						if (scoresEl2) scoresEl2.textContent = "Need path and floorplan to compare";
 						return;
 					}
 					compareBtn.disabled = true;
 					compareBtn.textContent = "Comparing...";
 					const scoresEl = document.getElementById("compare-floorplan-scores");
 					if (scoresEl) scoresEl.textContent = "";
+					const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+					const previewText = document.getElementById("image-previewer-text");
 					try {
-						const result = await runFloorplanComparison(svgEl, pathEl, img.data);
+						const result = await runFloorplanComparison(svgEl, pathEl, img.data, { includeIntermediates: true });
 						if (scoresEl) {
 							scoresEl.innerHTML = `Silhouette: ${result.silhouette}% · Direct: ${result.direct}% · Edge: ${result.edge}%`;
 						}
-						showToast(`Scores: Silhouette ${result.silhouette}%, Direct ${result.direct}%, Edge ${result.edge}%`, "success");
+						if (result.intermediates && result.intermediates.length > 0) {
+							previewPinned = true;
+							let carouselIdx = 0;
+							const items = result.intermediates;
+							const carouselLabel = document.createElement("div");
+							carouselLabel.setAttribute("data-compare-carousel", "");
+							carouselLabel.style.cssText = "font-size:10px;margin-bottom:4px;color:#333;min-height:1.2em;";
+							const prevBtn = document.createElement("button");
+							prevBtn.setAttribute("data-compare-carousel", "");
+							prevBtn.textContent = "‹";
+							prevBtn.style.cssText = "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.5);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;pointer-events:auto;";
+							const nextBtn = document.createElement("button");
+							nextBtn.setAttribute("data-compare-carousel", "");
+							nextBtn.textContent = "›";
+							nextBtn.style.cssText = "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.5);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;pointer-events:auto;";
+							const backBtn = document.createElement("button");
+							backBtn.setAttribute("data-compare-carousel", "");
+							backBtn.textContent = "Back";
+							backBtn.style.cssText = "margin-top:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#666;color:white;border:none;border-radius:4px;";
+							const container = document.getElementById("image-previewer-container");
+							const imgWrapperEl = previewImg.parentElement;
+							previewImg.style.display = "block";
+							previewText.style.display = "none";
+							compareBtn.style.display = "none";
+							const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+							if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+							if (!container.querySelector("[data-compare-carousel]")) {
+								container.insertBefore(carouselLabel, imgWrapperEl);
+								if (imgWrapperEl) {
+									imgWrapperEl.appendChild(prevBtn);
+									imgWrapperEl.appendChild(nextBtn);
+								}
+								container.appendChild(backBtn);
+							}
+							const updateCarousel = () => {
+								carouselLabel.textContent = items[carouselIdx].label;
+								previewImg.src = items[carouselIdx].dataUrl;
+								prevBtn.style.visibility = carouselIdx <= 0 ? "hidden" : "visible";
+								nextBtn.style.visibility = carouselIdx >= items.length - 1 ? "hidden" : "visible";
+							};
+							updateCarousel();
+							prevBtn.onclick = () => { if (carouselIdx > 0) { carouselIdx--; updateCarousel(); } };
+							nextBtn.onclick = () => { if (carouselIdx < items.length - 1) { carouselIdx++; updateCarousel(); } };
+							backBtn.onclick = () => {
+								carouselLabel.remove();
+								prevBtn.remove();
+								nextBtn.remove();
+								backBtn.remove();
+								previewText.style.display = "";
+								compareBtn.style.display = "";
+								const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+								if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+								previewImg.src = img.data;
+								updatePreviewText(img.name, getImageTransform(img.name));
+							};
+						}
 					} catch (err) {
 						console.error("Floorplan comparison error:", err);
-						if (scoresEl) scoresEl.textContent = "Comparison failed";
-						showToast("Comparison failed", "error");
+						const msg = err instanceof Error ? err.message : "Comparison failed";
+						if (scoresEl) scoresEl.textContent = msg;
 					} finally {
 						compareBtn.disabled = false;
 						compareBtn.textContent = "Compare Floorplan";
 					}
 				});
+
+				compareOpencvBtn.addEventListener("click", async () => {
+					const svgEl = document.querySelector("#svg-container svg");
+					const pathEl = currentHoveredPathElement;
+					const img = imageList.find((i) => i.name === currentHoveredImageName);
+					if (!svgEl || !pathEl || !img?.data) {
+						const scoresEl2 = document.getElementById("compare-floorplan-scores");
+						if (scoresEl2) scoresEl2.textContent = "Need path and floorplan to compare";
+						return;
+					}
+					compareOpencvBtn.disabled = true;
+					compareOpencvBtn.textContent = "Loading...";
+					const scoresEl = document.getElementById("compare-floorplan-scores");
+					if (scoresEl) scoresEl.textContent = "Loading OpenCV.js...";
+					const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+					const previewText = document.getElementById("image-previewer-text");
+					const compareBtnEl = document.getElementById("compare-floorplan-btn");
+					try {
+						compareOpencvBtn.textContent = "Comparing...";
+						if (scoresEl) scoresEl.textContent = "";
+						const result = await runFloorplanComparisonOpencv(svgEl, pathEl, img.data, { includeIntermediates: true });
+						pathEl.setAttribute("data-best-orientation", String(result.bestRotation));
+						pathEl.setAttribute("data-best-flipped", String(!!result.bestOrbFlipped));
+						if (scoresEl) {
+							const orientLabel = result.bestOrbFlipped ? `${result.bestRotation}° (flipped)` : `${result.bestRotation}°`;
+							scoresEl.innerHTML = `ORB: ${result.orb}% · Contour: ${result.contour}% · Best: ${orientLabel}`;
+						}
+						if (result.intermediates && result.intermediates.length > 0) {
+							previewPinned = true;
+							let carouselIdx = 0;
+							const items = result.intermediates;
+							const carouselLabel = document.createElement("div");
+							carouselLabel.setAttribute("data-compare-carousel", "");
+							carouselLabel.style.cssText = "font-size:10px;margin-bottom:4px;color:#333;min-height:1.2em;";
+							const prevBtn = document.createElement("button");
+							prevBtn.setAttribute("data-compare-carousel", "");
+							prevBtn.textContent = "‹";
+							prevBtn.style.cssText = "position:absolute;left:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.5);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;pointer-events:auto;";
+							const nextBtn = document.createElement("button");
+							nextBtn.setAttribute("data-compare-carousel", "");
+							nextBtn.textContent = "›";
+							nextBtn.style.cssText = "position:absolute;right:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.5);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;pointer-events:auto;";
+							const backBtn = document.createElement("button");
+							backBtn.setAttribute("data-compare-carousel", "");
+							backBtn.textContent = "Back";
+							backBtn.style.cssText = "margin-top:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#666;color:white;border:none;border-radius:4px;";
+							const container = document.getElementById("image-previewer-container");
+							const imgWrapperEl = previewImg.parentElement;
+							previewImg.style.display = "block";
+							previewText.style.display = "none";
+							if (compareBtnEl) compareBtnEl.style.display = "none";
+							compareOpencvBtn.style.display = "none";
+							if (!container.querySelector("[data-compare-carousel]")) {
+								container.insertBefore(carouselLabel, imgWrapperEl);
+								if (imgWrapperEl) {
+									imgWrapperEl.appendChild(prevBtn);
+									imgWrapperEl.appendChild(nextBtn);
+								}
+								container.appendChild(backBtn);
+							}
+							const updateCarousel = () => {
+								carouselLabel.textContent = items[carouselIdx].label;
+								previewImg.src = items[carouselIdx].dataUrl;
+								prevBtn.style.visibility = carouselIdx <= 0 ? "hidden" : "visible";
+								nextBtn.style.visibility = carouselIdx >= items.length - 1 ? "hidden" : "visible";
+							};
+							updateCarousel();
+							prevBtn.onclick = () => { if (carouselIdx > 0) { carouselIdx--; updateCarousel(); } };
+							nextBtn.onclick = () => { if (carouselIdx < items.length - 1) { carouselIdx++; updateCarousel(); } };
+							backBtn.onclick = () => {
+								carouselLabel.remove();
+								prevBtn.remove();
+								nextBtn.remove();
+								backBtn.remove();
+								previewText.style.display = "";
+								if (compareBtnEl) compareBtnEl.style.display = "";
+								compareOpencvBtn.style.display = "";
+								previewImg.src = img.data;
+								updatePreviewText(img.name, getImageTransform(img.name));
+							};
+						}
+					} catch (err) {
+						console.error("OpenCV comparison error:", err);
+						const msg = err instanceof Error ? err.message : "OpenCV comparison failed";
+						if (scoresEl) scoresEl.textContent = msg;
+					} finally {
+						compareOpencvBtn.disabled = false;
+						compareOpencvBtn.textContent = "Compare (OpenCV)";
+					}
+				});
 			}
 
 			parentSVG.querySelectorAll("path").forEach((path) => {
+				path.addEventListener("mousedown", (e) => {
+					const selectedImage = findMatchingImage(e.target.id);
+					if (selectedImage) {
+						previewPinned = true;
+						const preview = document.getElementById("image-previewer-container");
+						if (preview) {
+							preview.style.left = `${e.clientX}px`;
+							preview.style.top = `${e.clientY}px`;
+						}
+					}
+				});
 				const listener = path.addEventListener("mouseover", (e) => {
 					document.getElementById(
 						"image-previewer-container",
@@ -4160,10 +4499,25 @@ import "../styles.css";
 					const selectedImage = findMatchingImage(e.target.id);
 
 					if (selectedImage) {
+						const container = document.getElementById("image-previewer-container");
+						const hasCarousel = container?.querySelector("[data-compare-carousel]");
+						// Keep carousel visible when re-hovering same path while viewing intermediates
+						if (hasCarousel && previewPinned && currentHoveredPathElement === e.target) {
+							currentHoveredPathElement = e.target;
+							currentHoveredImageName = selectedImage.name;
+							return;
+						}
 						currentHoveredPathElement = e.target;
 						const scoresEl = document.getElementById("compare-floorplan-scores");
 						if (scoresEl) scoresEl.textContent = "";
 						const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+						container?.querySelectorAll("[data-compare-carousel]").forEach(el => el.remove());
+						const compareBtnEl = document.getElementById("compare-floorplan-btn");
+						const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+						if (compareBtnEl) compareBtnEl.style.display = "";
+						if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+						const previewTextEl = document.getElementById("image-previewer-text");
+						if (previewTextEl) previewTextEl.style.display = "";
 						previewImg.src = selectedImage.data;
 						
 						// Track current hovered image name
@@ -4217,9 +4571,11 @@ import "../styles.css";
 				});
 
 				const listener2 = path.addEventListener("mouseout", (e) => {
-					document.getElementById(
-						"image-previewer-container",
-					).style.display = "none";
+					const preview = document.getElementById("image-previewer-container");
+					if (previewPinned) return;
+					const related = (e as MouseEvent).relatedTarget as Node | null;
+					if (related && preview?.contains(related)) return;
+					preview.style.display = "none";
 				});
 
 				listeners.push(listener);
@@ -4227,11 +4583,31 @@ import "../styles.css";
 			});
 			highlightPathsWithoutMatchingImages();
 			globalSvgContainer.addEventListener("mousemove", (e) => {
-				document.getElementById(
-					"image-previewer-container",
-				).style.left = `${e.clientX}px`;
-				document.getElementById("image-previewer-container").style.top =
-					`${e.clientY}px`;
+				if (!previewPinned) {
+					const preview = document.getElementById("image-previewer-container");
+					if (preview) {
+						preview.style.left = `${e.clientX}px`;
+						preview.style.top = `${e.clientY}px`;
+					}
+				}
+			});
+			document.addEventListener("click", (e) => {
+				const preview = document.getElementById("image-previewer-container");
+				if (!preview || preview.style.display === "none") return;
+				const target = e.target as Element;
+				const isOnPreview = preview.contains(target);
+				const isOnPath = target.closest("#svg-container path");
+				if (!isOnPreview && !isOnPath) {
+					previewPinned = false;
+					preview.style.display = "none";
+					preview.querySelectorAll("[data-compare-carousel]").forEach(el => el.remove());
+					const pt = document.getElementById("image-previewer-text");
+					const cb = document.getElementById("compare-floorplan-btn");
+					const cob = document.getElementById("compare-opencv-btn");
+					if (pt) pt.style.display = "";
+					if (cb) cb.style.display = "";
+					if (cob) cob.style.display = "";
+				}
 			});
 
 			// Keyboard handlers for image transformation
