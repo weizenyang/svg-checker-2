@@ -1042,12 +1042,13 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
 
   const cutout = await extractPathCutout(svgElement, pathElement);
   let floorplanProcessed;
+  let floorplanRaw = null;
+  let preprocessResult = null;
 
-  if (floorplanProcessedCache.has(floorplanDataUrl)) {
-    floorplanProcessed = floorplanProcessedCache.get(floorplanDataUrl);
-  } else {
-    const floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
-    const preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, !!opts.includeIntermediates);
+  if (opts.includeIntermediates) {
+    // When intermediates are requested, always recompute so we have floorplanRaw and logs
+    floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+    preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, true);
     const floorplanCropped = preprocessResult?.final ?? preprocessResult;
 
     const cw = cutout.width;
@@ -1059,7 +1060,25 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
     const targetW = Math.max(1, Math.round(fw * scale));
     const targetH = Math.max(1, Math.round(fh * scale));
     floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
-    floorplanProcessedCache.set(floorplanDataUrl, floorplanProcessed);
+  } else {
+    if (floorplanProcessedCache.has(floorplanDataUrl)) {
+      floorplanProcessed = floorplanProcessedCache.get(floorplanDataUrl);
+    } else {
+      floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+      preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, false);
+      const floorplanCropped = preprocessResult?.final ?? preprocessResult;
+
+      const cw = cutout.width;
+      const ch = cutout.height;
+      const cutoutLongest = Math.max(cw, ch);
+      const fw = floorplanCropped.width;
+      const fh = floorplanCropped.height;
+      const scale = cutoutLongest / Math.max(fw, fh);
+      const targetW = Math.max(1, Math.round(fw * scale));
+      const targetH = Math.max(1, Math.round(fh * scale));
+      floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
+      floorplanProcessedCache.set(floorplanDataUrl, floorplanProcessed);
+    }
   }
 
   const cutoutMat = imageDataToMat(cutout);
