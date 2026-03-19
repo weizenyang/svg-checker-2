@@ -1,0 +1,680 @@
+---
+import "../styles.css";
+---
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<title>3-Column CSV Input</title>
+	</head>
+	<body class="bg-neutral-100 min-h-screen flex flex-col">
+		<!-- Hidden: full-page CSV drop + file input (no visible drop zone) -->
+		<input type="file" id="file-input" accept=".csv,text/csv" class="sr-only" tabindex="-1" aria-hidden="true" />
+
+		<main class="flex-1 flex flex-col p-4 md:p-6 max-w-7xl w-full mx-auto">
+			<h1 class="text-xl font-semibold mb-4">3-Column Input</h1>
+
+			<!-- Main: large preview (styled table from input data) -->
+			<section class="flex-1 min-h-0 mb-6 rounded-xl border border-neutral-300 bg-white shadow-sm overflow-auto">
+				<div class="p-4 h-full min-h-[360px]">
+					<div class="h-full" id="preview-table-wrap" class="preview-table-wrap">
+						<table id="preview-table" class="preview-table w-[654px] text-left">
+							<tbody id="preview-tbody">
+								<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV anywhere, or add rows below.</td></tr>
+							</tbody>
+						</table>
+					</div>
+					
+				</div>
+			</section>
+
+			<!-- Secondary: edit data (compact) -->
+			<section class="rounded-lg border border-neutral-300 bg-white overflow-hidden">
+				<div class="p-3 border-b border-neutral-200 flex flex-wrap gap-2 items-center justify-between">
+					<div class="font-medium text-sm">Edit data · Paste CSV · Add / delete rows</div>
+					<div class="flex gap-2">
+						<button type="button" id="export-png" class="px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800 text-sm">
+							Export PNG (4096)
+						</button>
+						<button type="button" id="export-csv" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">Export CSV</button>
+					</div>
+				</div>
+				<div class="px-3 pb-3 pt-3 space-y-3">
+					<div class="flex flex-wrap gap-2 items-center">
+						<textarea
+							id="csv-paste"
+							placeholder="Paste headless CSV (e.g. a,b,c&#10;d,e,f)"
+							spellcheck="false"
+							autocomplete="off"
+							autocapitalize="off"
+							autocorrect="off"
+							class="min-w-[200px] flex-1 min-h-[60px] p-2 text-sm border border-neutral-300 rounded font-mono resize-y"
+							rows="2"
+						></textarea>
+						<button type="button" id="import-paste-btn" class="px-3 py-2 rounded bg-neutral-200 hover:bg-neutral-300 text-sm shrink-0">
+							Import
+						</button>
+					</div>
+					<div class="rounded border border-neutral-200 overflow-hidden max-h-[240px] overflow-y-auto">
+						<table class="w-full text-left text-sm">
+							<thead class="bg-neutral-100 sticky top-0">
+								<tr>
+									<th class="p-1.5 font-medium w-1/3 align-top">
+										<div class="flex flex-col gap-1">
+											<div class="leading-none">A</div>
+											<div class="flex flex-wrap gap-1 items-center">
+												<select id="weight-col-0" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
+													<option value="regular">Regular</option>
+													<option value="bold" selected>Bold</option>
+												</select>
+												<label class="text-xs text-neutral-600 flex items-center gap-1">
+													<span>Tracking</span>
+													<input id="tracking-col-0" type="number" step="0.1" value="-0.6" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
+												</label>
+											</div>
+										</div>
+									</th>
+									<th class="p-1.5 font-medium w-1/3 align-top">
+										<div class="flex flex-col gap-1">
+											<div class="leading-none">B</div>
+											<div class="flex flex-wrap gap-1 items-center">
+												<select id="weight-col-1" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
+													<option value="regular" selected>Regular</option>
+													<option value="bold">Bold</option>
+												</select>
+												<label class="text-xs text-neutral-600 flex items-center gap-1">
+													<span>Tracking</span>
+													<input id="tracking-col-1" type="number" step="0.1" value="-0.6" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
+												</label>
+											</div>
+										</div>
+									</th>
+									<th class="p-1.5 font-medium w-1/3 align-top">
+										<div class="flex flex-col gap-1">
+											<div class="leading-none">C</div>
+											<div class="flex flex-wrap gap-1 items-center">
+												<select id="weight-col-2" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
+													<option value="regular" selected>Regular</option>
+													<option value="bold">Bold</option>
+												</select>
+												<label class="text-xs text-neutral-600 flex items-center gap-1">
+													<span>Tracking</span>
+													<input id="tracking-col-2" type="number" step="0.1" value="-2" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
+												</label>
+											</div>
+										</div>
+									</th>
+									<th class="p-1.5 w-16"></th>
+								</tr>
+							</thead>
+							<tbody id="rows">
+								<tr class="border-t border-neutral-200">
+									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="0" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="1" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+									<td class="p-1"><button type="button" class="delete-row px-2 py-1 text-xs rounded bg-red-100 text-red-800 hover:bg-red-200">Del</button></td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<div
+						id="token-palette"
+						class="p-2 rounded-lg border border-neutral-200 bg-white/90 backdrop-blur shadow-sm z-[1000]"
+						style="display:none; position: fixed;"
+					>
+						<div class="flex flex-wrap items-center justify-between gap-2">
+							<div class="text-xs text-neutral-600">
+								Token palette (click to insert into the focused cell)
+							</div>
+						</div>
+						<div class="mt-2 flex flex-wrap gap-2">
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="’" aria-pressed="false">’</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="'" aria-pressed="false">'</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="/" aria-pressed="false">/</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="LIVING" aria-pressed="false">LIVING</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="DINING" aria-pressed="false">DINING</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="KITCHEN" aria-pressed="false">KITCHEN</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BEDROOM" aria-pressed="false">BEDROOM</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="POWDER" aria-pressed="false">POWDER</button>
+							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BALCONY" aria-pressed="false">BALCONY</button>
+						</div>
+					</div>
+					<div class="flex gap-2">
+						<button type="button" id="add-row" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">Add row</button>
+					</div>
+				</div>
+			</section>
+		</main>
+
+		<style>
+			.preview-table-wrap {
+				/* Placeholder for your custom style later */
+			}
+			.preview-table {
+				border-collapse: collapse;
+				font-kerning: normal;
+				text-rendering: geometricPrecision;
+			}
+			.preview-table td {
+				padding: 0;
+				border-bottom: 1px solid #e5e7eb;
+				letter-spacing: normal;
+			}
+			.preview-table p {
+				letter-spacing: inherit;
+				white-space: pre-wrap;
+			}
+			.preview-table tbody tr:hover {
+				background: #f9fafb;
+			}
+		</style>
+
+		<script>
+			function parseCSVLine(line) {
+				const out = [];
+				let cur = '';
+				let inQuotes = false;
+				for (let i = 0; i < line.length; i++) {
+					const c = line[i];
+					if (c === '"') inQuotes = !inQuotes;
+					else if (c === ',' && !inQuotes) {
+						out.push(cur.trim());
+						cur = '';
+					} else cur += c;
+				}
+				out.push(cur.trim());
+				return out.slice(0, 3);
+			}
+
+			function parseCSV(text) {
+				const rows = [];
+				const lines = text.split(/\r?\n/).filter((l) => l.trim());
+				for (const line of lines) {
+					const cells = parseCSVLine(line);
+					if (cells.some((c) => c.length > 0)) rows.push(cells);
+				}
+				return rows;
+			}
+
+			const tbody = document.getElementById('rows');
+			const previewTbody = document.getElementById('preview-tbody');
+			const fileInput = document.getElementById('file-input') as HTMLInputElement;
+			const csvPaste = document.getElementById('csv-paste') as HTMLTextAreaElement;
+			const importPasteBtn = document.getElementById('import-paste-btn');
+			const addRowBtn = document.getElementById('add-row');
+			const exportCsvBtn = document.getElementById('export-csv');
+			const exportPngBtn = document.getElementById('export-png');
+			const trackingInputs = [
+				document.getElementById('tracking-col-0') as HTMLInputElement,
+				document.getElementById('tracking-col-1') as HTMLInputElement,
+				document.getElementById('tracking-col-2') as HTMLInputElement
+			];
+			const weightSelects = [
+				document.getElementById('weight-col-0') as HTMLSelectElement,
+				document.getElementById('weight-col-1') as HTMLSelectElement,
+				document.getElementById('weight-col-2') as HTMLSelectElement
+			];
+
+			const STORAGE_KEY = 'three-column-rows-v1';
+			let isHydrating = true;
+
+			function persistRowsToLocalStorage(rows: string[][]) {
+				try {
+					const filtered = rows.filter(([a, b, c]) => {
+						const sa = String(a ?? '').trim();
+						const sb = String(b ?? '').trim();
+						const sc = String(c ?? '').trim();
+						return sa.length > 0 || sb.length > 0 || sc.length > 0;
+					});
+					localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+				} catch {
+					// LocalStorage can be unavailable (private mode, etc). Ignore safely.
+				}
+			}
+
+			function loadRowsFromLocalStorage(): string[][] {
+				try {
+					const raw = localStorage.getItem(STORAGE_KEY);
+					if (!raw) return [];
+					const parsed = JSON.parse(raw);
+					if (!Array.isArray(parsed)) return [];
+					return parsed
+						.filter((r) => Array.isArray(r) && r.length >= 3)
+						.slice(0, 200) // safety cap
+						.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')]);
+				} catch {
+					return [];
+				}
+			}
+
+			function trackingFor(col: number) {
+				const raw = trackingInputs[col]?.value ?? '-0.6';
+				const n = Number.parseFloat(raw);
+				if (!Number.isFinite(n)) return '-0.6px';
+				return `${n}px`;
+			}
+
+			function weightClassFor(col: number) {
+				return weightSelects[col]?.value === 'bold' ? 'monospace821-bold' : 'monospace821-regular';
+			}
+
+			function getTableData() {
+				const rows: string[][] = [];
+				tbody.querySelectorAll('tr').forEach((tr) => {
+					const inputs = tr.querySelectorAll('.cell-input');
+					if (inputs.length >= 3) {
+						rows.push([
+							(inputs[0] as HTMLInputElement).value,
+							(inputs[1] as HTMLInputElement).value,
+							(inputs[2] as HTMLInputElement).value
+						]);
+					}
+				});
+				return rows;
+			}
+
+			function renderPreview() {
+				const data = getTableData();
+				previewTbody.innerHTML = '';
+				if (data.length === 0) {
+					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV anywhere, or add rows below.</td></tr>';
+					if (!isHydrating) persistRowsToLocalStorage(data);
+					return;
+				}
+				data.forEach(([a, b, c]) => {
+					const tr = document.createElement('tr');
+					// Fit content tightly to avoid any extra row sizing from table layout.
+					tr.style.height = 'fit-content';
+					tr.style.verticalAlign = 'top';
+					const t0 = trackingFor(0);
+					const t1 = trackingFor(1);
+					const t2 = trackingFor(2);
+					const w0 = weightClassFor(0);
+					const w1 = weightClassFor(1);
+					const w2 = weightClassFor(2);
+
+					const td0 = document.createElement('td');
+					td0.style.textAlign = 'start';
+					td0.style.width = '337px';
+					const p0 = document.createElement('p');
+					p0.className = w0;
+					p0.style.marginLeft = '17px';
+					p0.style.fontSize = '14.4px';
+					p0.style.lineHeight = '14.4px';
+					p0.style.textAlign = 'middle';
+					p0.style.flexWrap = 'wrap';
+					p0.style.alignContent = 'center';
+					p0.style.height = '14.4px';
+					p0.style.letterSpacing = t0;
+					p0.style.whiteSpace = 'pre';
+					p0.textContent = a ?? '';
+					td0.appendChild(p0);
+
+					const td1 = document.createElement('td');
+					td1.style.textAlign = 'start';
+					const p1 = document.createElement('p');
+					p1.className = w1;
+					p1.style.margin = '0';
+					p1.style.fontSize = '14.4px';
+					p1.style.lineHeight = '14.4px';
+					p1.style.textAlign = 'middle';
+					p1.style.flexWrap = 'wrap';
+					p1.style.alignContent = 'center';
+					p1.style.height = '14.4px';
+					p1.style.letterSpacing = t1;
+					p1.style.whiteSpace = 'pre';
+					p1.textContent = b ?? '';
+					td1.appendChild(p1);
+
+					const td2 = document.createElement('td');
+					td2.style.textAlign = 'end';
+					const p2 = document.createElement('p');
+					p2.className = w2;
+					p2.style.marginRight = '21px';
+					p2.style.fontSize = '14.4px';
+					p2.style.height = '14.4px';
+					p2.style.lineHeight = '14.4px';
+					p2.style.textAlign = 'middle';
+					p2.style.flexWrap = 'wrap';
+					p2.style.alignContent = 'center';
+					p2.style.letterSpacing = t2;
+					p2.style.whiteSpace = 'pre';
+					p2.textContent = c ?? '';
+					td2.appendChild(p2);
+
+					tr.appendChild(td0);
+					tr.appendChild(td1);
+					tr.appendChild(td2);
+					previewTbody.appendChild(tr);
+
+					// Pixel-precise divider line directly under each preview row
+					const sepTr = document.createElement('tr');
+					sepTr.style.height = 'fit-content';
+					sepTr.style.verticalAlign = 'top';
+					const sepTd = document.createElement('td');
+					sepTd.colSpan = 3;
+					sepTd.style.borderBottom = 'none';
+
+					const topSpacer = document.createElement('div');
+					topSpacer.style.height = '8px';
+					topSpacer.style.width = '100%';
+					sepTd.appendChild(topSpacer);
+
+					const sepDiv = document.createElement('div');
+					sepDiv.className = 'h-[2px] w-[654px] bg-black';
+					sepTd.appendChild(sepDiv);
+
+					const belowLine = document.createElement('div');
+					belowLine.style.height = '7px';
+					belowLine.style.width = '100%';
+					sepTd.appendChild(belowLine);
+					sepTr.appendChild(sepTd);
+					previewTbody.appendChild(sepTr);
+				});
+
+				if (!isHydrating) persistRowsToLocalStorage(data);
+			}
+
+			function escapeHtml(s) {
+				const div = document.createElement('div');
+				div.textContent = s;
+				return div.innerHTML;
+			}
+
+			function addRow(cells: string[] = ['', '', '']) {
+				const tr = document.createElement('tr');
+				tr.className = 'border-t border-neutral-200';
+				tr.innerHTML = `
+					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="0" value="${escapeHtml(cells[0] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="1" value="${escapeHtml(cells[1] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="2" value="${escapeHtml(cells[2] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1"><button type="button" class="delete-row px-2 py-1 text-xs rounded bg-red-100 text-red-800 hover:bg-red-200">Del</button></td>
+				`;
+				tr.querySelector('.delete-row')!.addEventListener('click', () => {
+					tr.remove();
+					renderPreview();
+				});
+				tbody.appendChild(tr);
+				tr.querySelectorAll('.cell-input').forEach((el) => {
+					el.addEventListener('input', () => {
+						renderPreview();
+					});
+				});
+				renderPreview();
+			}
+
+			// Hydrate editor state from localStorage
+			tbody.innerHTML = '';
+			const savedRows = loadRowsFromLocalStorage();
+			if (savedRows.length > 0) {
+				savedRows.forEach((cells) => addRow(cells));
+			} else {
+				addRow(['', '', '']);
+			}
+			isHydrating = false;
+			renderPreview();
+
+			function importRows(rows: string[][]) {
+				rows.forEach((cells) => addRow(cells));
+			}
+
+			function handleCsvFile(file: File) {
+				if (!file.name.toLowerCase().endsWith('.csv')) return;
+				const reader = new FileReader();
+				reader.onload = () => {
+					const rows = parseCSV(String(reader.result));
+					importRows(rows);
+				};
+				reader.readAsText(file);
+			}
+
+			// Full-page drop (hidden, no visible zone)
+			document.addEventListener('dragover', (e) => {
+				e.preventDefault();
+			});
+			document.addEventListener('drop', (e) => {
+				e.preventDefault();
+				const file = e.dataTransfer?.files?.[0];
+				if (file) handleCsvFile(file);
+			});
+
+			fileInput.addEventListener('change', () => {
+				const file = fileInput.files?.[0];
+				if (!file) return;
+				handleCsvFile(file);
+				fileInput.value = '';
+			});
+
+			addRowBtn.addEventListener('click', () => addRow());
+
+			importPasteBtn.addEventListener('click', () => {
+				const text = (csvPaste.value ?? '').trim();
+				if (!text) return;
+				const rows = parseCSV(text);
+				rows.forEach((cells) => addRow(cells));
+				csvPaste.value = '';
+			});
+
+			function escapeCsvCell(s: string) {
+				const str = String(s ?? '');
+				if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+					return '"' + str.replace(/"/g, '""') + '"';
+				}
+				return str;
+			}
+
+			exportCsvBtn.addEventListener('click', () => {
+				const rows = getTableData().map((cells) => cells.map(escapeCsvCell).join(','));
+				const csv = rows.join('\n');
+				const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = 'three-column.csv';
+				a.click();
+				URL.revokeObjectURL(url);
+			});
+
+			function exportPreviewToPng4096() {
+				const CANVAS_SIZE = 4096;
+				const LINE_WIDTH = 654;
+				const COL1_X = 17;
+				const COL2_X = 337;
+				const COL3_RIGHT_PAD = 21;
+
+				const previewWrap = document.getElementById('preview-table-wrap');
+				const previewTable = document.getElementById('preview-table');
+				const previewLines = previewWrap
+					? (Array.from(previewWrap.querySelectorAll('div.h-\\[2px\\]')) as HTMLDivElement[])
+					: [];
+				if (!previewWrap || !previewTable || previewLines.length === 0) return;
+
+				const wrapRect = previewWrap.getBoundingClientRect();
+				const tableRect = previewTable.getBoundingClientRect();
+
+				// Center the entire preview group (table + line) inside 4096x4096
+				const groupW = Math.max(LINE_WIDTH, wrapRect.width);
+				// Include the full preview wrap height (spacers are part of the look now).
+				const groupH = Math.max(1, wrapRect.bottom - tableRect.top);
+				const offsetX = Math.round((CANVAS_SIZE - groupW) / 2);
+				const offsetY = Math.round((CANVAS_SIZE - groupH) / 2);
+
+				const canvas = document.createElement('canvas');
+				canvas.width = CANVAS_SIZE;
+				canvas.height = CANVAS_SIZE;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) return;
+
+				ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); // transparent
+				ctx.textBaseline = 'alphabetic';
+
+				// Draw every 2px divider line under each preview row
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 2;
+				for (const lineDiv of previewLines) {
+					const r = lineDiv.getBoundingClientRect();
+					const y = offsetY + (r.top - tableRect.top) + r.height / 2;
+					ctx.beginPath();
+					ctx.moveTo(offsetX, y);
+					ctx.lineTo(offsetX + LINE_WIDTH, y);
+					ctx.stroke();
+				}
+
+				// Draw all preview <p> text at their exact DOM positions (including letter-spacing),
+				// so the PNG export matches the on-screen preview.
+				ctx.fillStyle = '#111111';
+				const textEls = Array.from(previewTable.querySelectorAll('tbody tr td p')) as HTMLElement[];
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'alphabetic';
+
+				for (const el of textEls) {
+					const r = el.getBoundingClientRect();
+					const s = getComputedStyle(el);
+
+					const fontWeight = s.fontWeight;
+					const fontSize = s.fontSize || '14.4px';
+					const fontFamily = s.fontFamily;
+					const fontLineHeight = parseFloat(s.lineHeight || s.fontSize || '14.4') || parseFloat(fontSize);
+					const letterSpacingStr = s.letterSpacing || '0px';
+					const letterSpacing = letterSpacingStr === 'normal' ? 0 : Number.parseFloat(letterSpacingStr);
+
+					// Baseline within the line box: tuned for the preview's lineHeight == fontSize.
+					const baselineY = offsetY + (r.top - tableRect.top) + fontLineHeight * 0.8;
+
+					ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
+
+					const text = (el.textContent ?? '');
+					if (!text) continue;
+
+					// Determine alignment from CSS textAlign.
+					const cssAlign = (s.textAlign ?? '').toLowerCase();
+					const mode = cssAlign.includes('right') || cssAlign === 'end' ? 'right' : cssAlign.includes('center') || cssAlign.includes('middle') ? 'center' : 'left';
+
+					// Compute total width including letter-spacing.
+					let totalWidth = 0;
+					const chars = Array.from(text);
+					for (let i = 0; i < chars.length; i++) {
+						const w = ctx.measureText(chars[i]).width;
+						totalWidth += w;
+						if (i < chars.length - 1) totalWidth += letterSpacing;
+					}
+
+					const leftX = offsetX + (r.left - tableRect.left);
+					const rightX = offsetX + (r.right - tableRect.left);
+					const centerX = leftX + r.width / 2;
+
+					let x = leftX;
+					if (mode === 'center') x = centerX - totalWidth / 2;
+					if (mode === 'right') x = rightX - totalWidth;
+
+					let advance = 0;
+					for (let i = 0; i < chars.length; i++) {
+						const ch = chars[i];
+						ctx.fillText(ch, x + advance, baselineY);
+						const w = ctx.measureText(ch).width;
+						advance += w + (i < chars.length - 1 ? letterSpacing : 0);
+					}
+				}
+
+				canvas.toBlob((blob) => {
+					if (!blob) return;
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = 'table-4096.png';
+					a.click();
+					URL.revokeObjectURL(url);
+				}, 'image/png');
+			}
+
+			exportPngBtn?.addEventListener('click', exportPreviewToPng4096);
+
+			[...trackingInputs, ...weightSelects].forEach((el) => {
+				el?.addEventListener('input', () => renderPreview());
+				el?.addEventListener('change', () => renderPreview());
+			});
+
+			// Token palette: click token to insert into focused A/B/C cell
+			const tokenPalette = document.getElementById('token-palette');
+			const tokenBtns = tokenPalette ? Array.from(tokenPalette.querySelectorAll('.token-btn')) as HTMLButtonElement[] : [];
+
+			let activeCellInput: HTMLInputElement | null = null;
+
+			function hideTokenPalette() {
+				if (tokenPalette) tokenPalette.style.display = 'none';
+			}
+
+			function showTokenPaletteBelowInput(input: HTMLInputElement) {
+				if (!tokenPalette) return;
+				activeCellInput = input;
+
+				// Show first so we can measure width.
+				tokenPalette.style.display = 'block';
+
+				const rect = input.getBoundingClientRect();
+
+				// Exact dropdown-like alignment: directly above the input.
+				// (We must measure after display:block, so offsetHeight is available.)
+				const desiredTop = rect.top - tokenPalette.offsetHeight - 12;
+				tokenPalette.style.left = `${rect.left}px`;
+				tokenPalette.style.top = `${Math.max(8, desiredTop)}px`;
+
+				// Match dropdown width to the input (at least a minimum for usability).
+				const desiredMinWidth = Math.round(rect.width);
+				tokenPalette.style.minWidth = `${Math.max(120, desiredMinWidth)}px`;
+
+				// Prevent going off-screen to the right.
+				const maxLeft = window.innerWidth - tokenPalette.offsetWidth - 8;
+				const clampedLeft = Math.max(8, Math.min(rect.left, maxLeft));
+				tokenPalette.style.left = `${clampedLeft}px`;
+			}
+
+			function insertTokenIntoActiveCell(token: string) {
+				if (!activeCellInput) return;
+				if (!token) return;
+
+				const currentTrimmed = (activeCellInput.value ?? '').trim();
+				const tokenIsSlash = token === '/';
+				const tokenIsApostrophe = token === '’' || token === "'";
+				const tokenIsSymbol = tokenIsSlash || tokenIsApostrophe;
+				const prevEndsWithSlash = currentTrimmed.endsWith('/');
+
+				const sep = currentTrimmed.length === 0
+					? ''
+					: prevEndsWithSlash || tokenIsSymbol
+						? ''
+						: ' / ';
+
+				const next = currentTrimmed.length === 0 ? token : `${currentTrimmed}${sep}${token}`;
+				activeCellInput.value = next;
+				activeCellInput.dispatchEvent(new Event('input', { bubbles: true }));
+			}
+
+			document.addEventListener('focusin', (e) => {
+				const t = e.target as HTMLElement | null;
+				if (t?.classList?.contains('cell-input')) {
+					showTokenPaletteBelowInput(t as HTMLInputElement);
+				}
+			});
+
+			document.addEventListener('mousedown', (e) => {
+				const target = e.target as HTMLElement | null;
+				if (!tokenPalette || tokenPalette.style.display === 'none') return;
+				if (!target) return;
+				if (tokenPalette.contains(target)) return;
+				if (target.classList?.contains('cell-input')) return;
+				hideTokenPalette();
+			});
+
+			tokenBtns.forEach((btn) => {
+				btn.addEventListener('click', () => {
+					const token = btn.getAttribute('data-token') ?? '';
+					insertTokenIntoActiveCell(token);
+				});
+			});
+
+			renderPreview();
+		</script>
+	</body>
+</html>

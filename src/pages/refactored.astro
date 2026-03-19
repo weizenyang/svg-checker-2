@@ -102,7 +102,7 @@ import "../styles.css";
 
 					<p class="ml-2">Home</p>
 				</a>
-				<section class="container">
+				<!-- <section class="container">
 					<input
 						class="dropdown"
 						id="custom-formatting"
@@ -155,7 +155,7 @@ import "../styles.css";
 							/>Full Underscore
 						</div>
 					</div>
-				</section>
+				</section> -->
 
 				<section class="container">
 					<!-- <h3>2. Then, Import Files here</h3> -->
@@ -234,7 +234,7 @@ import "../styles.css";
 						class="sub-item"
 						style="display: flex; flex-direction: column; margin-bottom: 10px;"
 					>
-						<p class="w-full text-xs m-0 p-0">Edit Points:</p>
+						<p class="w-full text-xs m-0 p-0">Labels</p>
 						<div
 							class="grid grid-cols-2 button-gap gap-1 flex-start"
 							id="edit-options"
@@ -252,7 +252,7 @@ import "../styles.css";
 								Flip Y</button
 							>
 						</div>
-						<p class="w-full text-xs m-0 mt-2 p-0">Edit Canvas:</p>
+						<p class="w-full text-xs m-0 mt-2 p-0">Canvas</p>
 						<div
 							class="grid grid-cols-2 button-gap gap-1 flex-start"
 							id="canvas-edit-options"
@@ -323,7 +323,7 @@ import "../styles.css";
 							class="input-style"
 						/>
 						<div
-							class="button-gap"
+							class="button-gap gap-1"
 							style="display: flex; margin-top: 10px;"
 						>
 							<button
@@ -342,7 +342,7 @@ import "../styles.css";
 						style="display: flex; flex-direction: column;"
 					>
 						<p style="padding: 0 0px 10px 0em; margin: 0px;">
-							Point Properties:
+							Label Properties:
 						</p>
 						<input
 							id="item-id"
@@ -351,10 +351,10 @@ import "../styles.css";
 							style="margin-top: 10px;"
 							class="input-style"
 						/>
-
-						<div
-							class="button-gap"
-							style="display: flex; margin-top: 10px;"
+						<div class="flex flex-row gap-2">
+							<div
+							class="button-gap w-full"
+							style="display: flex; margin-top: 5px;"
 						>
 							<button
 								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
@@ -362,20 +362,22 @@ import "../styles.css";
 							>
 						</div>
 						<div
-							class="button-gap"
-							style="display: flex; margin-top: 10px;"
+							class="button-gap w-full"
+							style="display: flex; margin-top: 5px;"
 						>
 							<button
 								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="add-point">Add Point</button
+								id="add-point">+ Add Point</button
 							>
+						</div>
 						</div>
 						<div
 							class="button-gap"
-							style="display: flex; margin-top: 10px;"
+							style="display: flex; margin-top: 5px;"
 						>
 							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
+								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded text-white hover:opacity-90"
+								style="background-color: #b91c1c;"
 								id="delete-point">Delete</button
 							>
 						</div>
@@ -420,7 +422,7 @@ import "../styles.css";
 								stroke-width="2"></line>
 						</svg></button
 					>
-					<div class="">
+					<div class="hidden">
 						<input
 							type="checkbox"
 							id="yx-flip"
@@ -473,7 +475,7 @@ import "../styles.css";
 					</label>
 				</div>
 				
-				<div class="flex gap-2">
+				<div class="flex gap-1">
 				<input
 					type="text"
 					placeholder="To Remove"

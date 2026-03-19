@@ -424,3 +424,25 @@ h3 {
     cursor: pointer;
     text-decoration: underline;
 }
+
+@font-face {
+    font-family: 'monospace821';
+    font-weight: 700;
+    src: url(/fonts/table-creator/MONOSPACE821BOLDBT.TTF);
+}
+
+@font-face {
+    font-family: 'monospace821';
+    font-weight: 400;
+    src: url(/fonts/table-creator/MONOSPACE821BT.TTF);
+}
+
+.monospace821-bold {
+    font-family: 'monospace821';
+    font-weight: 700;
+}
+
+.monospace821-regular {
+    font-family: 'monospace821';
+    font-weight: 400;
+}
