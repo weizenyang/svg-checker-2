@@ -10,10 +10,30 @@ import "../styles.css";
 	</head>
 	<body class="bg-neutral-100 min-h-screen flex flex-col">
 		<!-- Hidden: full-page CSV drop + file input (no visible drop zone) -->
-		<input type="file" id="file-input" accept=".csv,text/csv" class="sr-only" tabindex="-1" aria-hidden="true" />
+		<input type="file" id="file-input" accept=".csv,text/csv" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
 
 		<main class="flex-1 flex flex-col p-4 md:p-6 max-w-7xl w-full mx-auto">
-			<h1 class="text-xl font-semibold mb-4">3-Column Input</h1>
+			<h1 class="text-xl font-semibold mb-3">3-Column Input</h1>
+
+			<!-- Sheets: one tab per CSV file / paste; horizontal scroll when many -->
+			<div class="mb-4 flex items-stretch gap-2 min-w-0">
+				<div
+					id="sheet-tabs-scroll"
+					class="sheet-tabs-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden rounded-lg border border-neutral-200 bg-white px-1 py-1"
+					role="tablist"
+					aria-label="Imported CSV sheets"
+				>
+					<div id="sheet-tabs" class="flex flex-nowrap gap-1 w-max min-h-[2.25rem] items-center"></div>
+				</div>
+				<button
+					type="button"
+					id="add-sheet-btn"
+					class="shrink-0 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-sm font-medium"
+					title="New empty sheet"
+				>
+					+
+				</button>
+			</div>
 
 			<!-- Main: large preview (styled table from input data) -->
 			<section class="flex-1 min-h-0 mb-6 rounded-xl border border-neutral-300 bg-white shadow-sm overflow-auto">
@@ -32,19 +52,38 @@ import "../styles.css";
 			<!-- Secondary: edit data (compact) -->
 			<section class="rounded-lg border border-neutral-300 bg-white overflow-hidden">
 				<div class="p-3 border-b border-neutral-200 flex flex-wrap gap-2 items-center justify-between">
-					<div class="font-medium text-sm">Edit data · Paste CSV · Add / delete rows</div>
-					<div class="flex gap-2">
+					<div class="font-medium text-sm">Edit data · Multi-file CSV · Add / delete rows</div>
+					<div class="flex flex-wrap gap-2">
+						<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">
+							Import CSV file(s)
+						</button>
 						<button type="button" id="export-png" class="px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800 text-sm">
 							Export PNG (4096)
 						</button>
 						<button type="button" id="export-csv" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">Export CSV</button>
+						<div id="batch-export-group" class="hidden flex flex-wrap gap-2 items-center">
+							<button
+								type="button"
+								id="batch-export-csv"
+								class="px-3 py-1.5 rounded border border-neutral-400 bg-white hover:bg-neutral-50 text-sm"
+							>
+								Export all CSV
+							</button>
+							<button
+								type="button"
+								id="batch-export-png"
+								class="px-3 py-1.5 rounded border border-neutral-400 bg-neutral-800 text-white hover:bg-neutral-700 text-sm"
+							>
+								Export all PNG (4096)
+							</button>
+						</div>
 					</div>
 				</div>
 				<div class="px-3 pb-3 pt-3 space-y-3">
 					<div class="flex flex-wrap gap-2 items-center">
 						<textarea
 							id="csv-paste"
-							placeholder="Paste headless CSV (e.g. a,b,c&#10;d,e,f)"
+							placeholder="Paste CSV → adds a new tab (3 columns: label, metric, imperial). Does not merge with other files."
 							spellcheck="false"
 							autocomplete="off"
 							autocapitalize="off"
@@ -148,6 +187,17 @@ import "../styles.css";
 		</main>
 
 		<style>
+			.sheet-tabs-scroll {
+				-webkit-overflow-scrolling: touch;
+				scrollbar-width: thin;
+			}
+			.sheet-tabs-scroll::-webkit-scrollbar {
+				height: 8px;
+			}
+			.sheet-tabs-scroll::-webkit-scrollbar-thumb {
+				background: #d4d4d4;
+				border-radius: 4px;
+			}
 			.preview-table-wrap {
 				/* Placeholder for your custom style later */
 			}
@@ -171,27 +221,70 @@ import "../styles.css";
 		</style>
 
 		<script>
-			function parseCSVLine(line) {
+			const MAX_IMPORT_ROWS = 200;
+			const MAX_SHEETS = 40;
+
+			/** @typedef {{ id: string, label: string, rows: string[][] }} Sheet */
+
+			function uid() {
+				return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
+			}
+
+			function readFileAsText(file) {
+				return new Promise((resolve, reject) => {
+					const r = new FileReader();
+					r.onload = () => resolve(String(r.result));
+					r.onerror = () => reject(r.error ?? new Error('read failed'));
+					r.readAsText(file, 'UTF-8');
+				});
+			}
+
+			function sanitizeFilenameBase(name) {
+				const s = String(name ?? 'three-column').replace(/\.csv$/i, '').trim() || 'three-column';
+				return s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'three-column';
+			}
+
+			/** RFC-style CSV line: comma-separated, `"` escapes quotes. Returns all fields. */
+			function parseCSVLineAll(line) {
 				const out = [];
 				let cur = '';
 				let inQuotes = false;
 				for (let i = 0; i < line.length; i++) {
 					const c = line[i];
-					if (c === '"') inQuotes = !inQuotes;
-					else if (c === ',' && !inQuotes) {
+					if (c === '"') {
+						if (inQuotes && line[i + 1] === '"') {
+							cur += '"';
+							i++;
+						} else inQuotes = !inQuotes;
+					} else if (c === ',' && !inQuotes) {
 						out.push(cur.trim());
 						cur = '';
 					} else cur += c;
 				}
 				out.push(cur.trim());
-				return out.slice(0, 3);
+				return out;
+			}
+
+			/** First two commas split A/B; remainder joins as C (imperial text may contain commas). */
+			function normalizeToThreeColumns(cells) {
+				if (!cells || cells.length === 0) return ['', '', ''];
+				if (cells.length === 1) return [cells[0], '', ''];
+				if (cells.length === 2) return [cells[0], cells[1], ''];
+				return [cells[0], cells[1], cells.slice(2).join(',')];
+			}
+
+			function stripUtf8Bom(text) {
+				if (text && text.charCodeAt(0) === 0xfeff) return text.slice(1);
+				return text;
 			}
 
 			function parseCSV(text) {
 				const rows = [];
-				const lines = text.split(/\r?\n/).filter((l) => l.trim());
+				const cleaned = stripUtf8Bom(String(text ?? ''));
+				const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
 				for (const line of lines) {
-					const cells = parseCSVLine(line);
+					const raw = parseCSVLineAll(line);
+					const cells = normalizeToThreeColumns(raw);
 					if (cells.some((c) => c.length > 0)) rows.push(cells);
 				}
 				return rows;
@@ -202,9 +295,13 @@ import "../styles.css";
 			const fileInput = document.getElementById('file-input') as HTMLInputElement;
 			const csvPaste = document.getElementById('csv-paste') as HTMLTextAreaElement;
 			const importPasteBtn = document.getElementById('import-paste-btn');
+			const importCsvBtn = document.getElementById('import-csv-btn');
 			const addRowBtn = document.getElementById('add-row');
 			const exportCsvBtn = document.getElementById('export-csv');
 			const exportPngBtn = document.getElementById('export-png');
+			const batchExportGroup = document.getElementById('batch-export-group');
+			const batchExportCsvBtn = document.getElementById('batch-export-csv');
+			const batchExportPngBtn = document.getElementById('batch-export-png');
 			const trackingInputs = [
 				document.getElementById('tracking-col-0') as HTMLInputElement,
 				document.getElementById('tracking-col-1') as HTMLInputElement,
@@ -216,36 +313,79 @@ import "../styles.css";
 				document.getElementById('weight-col-2') as HTMLSelectElement
 			];
 
-			const STORAGE_KEY = 'three-column-rows-v1';
+			const STORAGE_KEY = 'three-column-sheets-v2';
+			const STORAGE_KEY_V1 = 'three-column-rows-v1';
+
+			/** @type {Sheet[]} */
+			let sheets = [];
+			let activeIndex = 0;
 			let isHydrating = true;
 
-			function persistRowsToLocalStorage(rows: string[][]) {
+			function normalizeSheetRows(rows) {
+				const list = Array.isArray(rows) ? rows : [];
+				const out = list
+					.filter((r) => Array.isArray(r) && r.length >= 3)
+					.slice(0, MAX_IMPORT_ROWS)
+					.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')]);
+				return out.length > 0 ? out : [['', '', '']];
+			}
+
+			function persistState() {
 				try {
-					const filtered = rows.filter(([a, b, c]) => {
-						const sa = String(a ?? '').trim();
-						const sb = String(b ?? '').trim();
-						const sc = String(c ?? '').trim();
-						return sa.length > 0 || sb.length > 0 || sc.length > 0;
-					});
-					localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+					const payload = {
+						v: 2,
+						activeIndex,
+						sheets: sheets.slice(0, MAX_SHEETS).map((s) => ({
+							id: s.id,
+							label: String(s.label ?? 'Sheet').slice(0, 120),
+							rows: normalizeSheetRows(s.rows)
+						}))
+					};
+					localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 				} catch {
-					// LocalStorage can be unavailable (private mode, etc). Ignore safely.
+					// private mode, quota, etc.
 				}
 			}
 
-			function loadRowsFromLocalStorage(): string[][] {
+			function loadState() {
 				try {
 					const raw = localStorage.getItem(STORAGE_KEY);
-					if (!raw) return [];
-					const parsed = JSON.parse(raw);
-					if (!Array.isArray(parsed)) return [];
-					return parsed
-						.filter((r) => Array.isArray(r) && r.length >= 3)
-						.slice(0, 200) // safety cap
-						.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')]);
+					if (raw) {
+						const p = JSON.parse(raw);
+						if (p && p.v === 2 && Array.isArray(p.sheets) && p.sheets.length > 0) {
+							const loaded = p.sheets.slice(0, MAX_SHEETS).map((s, i) => ({
+								id: typeof s.id === 'string' && s.id ? s.id : uid(),
+								label: typeof s.label === 'string' && s.label ? s.label : `Sheet ${i + 1}`,
+								rows: normalizeSheetRows(s.rows)
+							}));
+							let ai = Number(p.activeIndex) || 0;
+							if (ai < 0 || ai >= loaded.length) ai = 0;
+							return { sheets: loaded, activeIndex: ai };
+						}
+					}
+					const v1 = localStorage.getItem(STORAGE_KEY_V1);
+					if (v1) {
+						const parsed = JSON.parse(v1);
+						if (Array.isArray(parsed) && parsed.length > 0) {
+							const rows = parsed
+								.filter((r) => Array.isArray(r) && r.length >= 3)
+								.slice(0, MAX_IMPORT_ROWS)
+								.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')]);
+							if (rows.length > 0) {
+								return {
+									sheets: [{ id: uid(), label: 'Sheet 1', rows }],
+									activeIndex: 0
+								};
+							}
+						}
+					}
 				} catch {
-					return [];
+					// ignore
 				}
+				return {
+					sheets: [{ id: uid(), label: 'Sheet 1', rows: [['', '', '']] }],
+					activeIndex: 0
+				};
 			}
 
 			function trackingFor(col: number) {
@@ -276,10 +416,13 @@ import "../styles.css";
 
 			function renderPreview() {
 				const data = getTableData();
+				if (!isHydrating && sheets[activeIndex]) {
+					sheets[activeIndex].rows = data;
+					persistState();
+				}
 				previewTbody.innerHTML = '';
 				if (data.length === 0) {
-					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV anywhere, or add rows below.</td></tr>';
-					if (!isHydrating) persistRowsToLocalStorage(data);
+					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop CSV file(s) anywhere, use Import, or add rows below.</td></tr>';
 					return;
 				}
 				data.forEach(([a, b, c]) => {
@@ -372,8 +515,6 @@ import "../styles.css";
 					sepTr.appendChild(sepTd);
 					previewTbody.appendChild(sepTr);
 				});
-
-				if (!isHydrating) persistRowsToLocalStorage(data);
 			}
 
 			function escapeHtml(s) {
@@ -382,7 +523,8 @@ import "../styles.css";
 				return div.innerHTML;
 			}
 
-			function addRow(cells: string[] = ['', '', '']) {
+			function addRow(cells: string[] = ['', '', ''], options?: { silent?: boolean }) {
+				const silent = options?.silent === true;
 				const tr = document.createElement('tr');
 				tr.className = 'border-t border-neutral-200';
 				tr.innerHTML = `
@@ -401,49 +543,186 @@ import "../styles.css";
 						renderPreview();
 					});
 				});
-				renderPreview();
+				if (!silent) renderPreview();
 			}
 
-			// Hydrate editor state from localStorage
-			tbody.innerHTML = '';
-			const savedRows = loadRowsFromLocalStorage();
-			if (savedRows.length > 0) {
-				savedRows.forEach((cells) => addRow(cells));
-			} else {
-				addRow(['', '', '']);
+			const sheetTabsEl = document.getElementById('sheet-tabs');
+			const addSheetBtn = document.getElementById('add-sheet-btn');
+
+			function commitActiveSheet() {
+				if (!sheets[activeIndex]) return;
+				sheets[activeIndex].rows = getTableData();
 			}
+
+			function replaceEditorRows(rows) {
+				const capped = normalizeSheetRows(rows).slice(0, MAX_IMPORT_ROWS);
+				tbody.innerHTML = '';
+				for (let i = 0; i < capped.length; i++) {
+					addRow(capped[i], { silent: i < capped.length - 1 });
+				}
+			}
+
+			function scrollActiveTabIntoView() {
+				const el = sheetTabsEl?.querySelector(`[data-sheet-tab="${activeIndex}"]`);
+				if (el && 'scrollIntoView' in el) {
+					el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+				}
+			}
+
+			function renderTabBar() {
+				if (!sheetTabsEl) return;
+				sheetTabsEl.innerHTML = '';
+				sheets.forEach((sheet, i) => {
+					const wrap = document.createElement('div');
+					wrap.className = 'inline-flex items-stretch shrink-0 rounded-md border border-neutral-200 overflow-hidden';
+					const tab = document.createElement('button');
+					tab.type = 'button';
+					tab.setAttribute('role', 'tab');
+					tab.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+					tab.dataset.sheetTab = String(i);
+					tab.className =
+						i === activeIndex
+							? 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-800 text-white'
+							: 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-100 text-neutral-800 hover:bg-neutral-200';
+					tab.textContent = sheet.label;
+					tab.title = sheet.label;
+					tab.addEventListener('click', () => setActiveSheet(i));
+
+					const close = document.createElement('button');
+					close.type = 'button';
+					close.setAttribute('aria-label', `Close ${sheet.label}`);
+					close.className =
+						'px-1.5 text-sm leading-none border-l border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40 disabled:hover:bg-neutral-50 disabled:hover:text-neutral-600';
+					close.textContent = '×';
+					close.disabled = sheets.length <= 1;
+					close.addEventListener('click', (ev) => {
+						ev.stopPropagation();
+						removeSheet(i);
+					});
+
+					wrap.appendChild(tab);
+					wrap.appendChild(close);
+					sheetTabsEl.appendChild(wrap);
+				});
+				updateBatchExportVisibility();
+			}
+
+			function updateBatchExportVisibility() {
+				if (!batchExportGroup) return;
+				if (sheets.length > 1) batchExportGroup.classList.remove('hidden');
+				else batchExportGroup.classList.add('hidden');
+			}
+
+			function setActiveSheet(i) {
+				if (i === activeIndex) return;
+				commitActiveSheet();
+				activeIndex = Math.max(0, Math.min(i, sheets.length - 1));
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+				scrollActiveTabIntoView();
+			}
+
+			function removeSheet(index) {
+				commitActiveSheet();
+				if (sheets.length <= 1) {
+					sheets[0].rows = [['', '', '']];
+					replaceEditorRows(sheets[0].rows);
+					renderTabBar();
+					renderPreview();
+					return;
+				}
+				sheets.splice(index, 1);
+				if (activeIndex >= sheets.length) activeIndex = sheets.length - 1;
+				else if (index < activeIndex) activeIndex--;
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+				scrollActiveTabIntoView();
+			}
+
+			function addEmptySheet() {
+				commitActiveSheet();
+				if (sheets.length >= MAX_SHEETS) return;
+				const n = sheets.length + 1;
+				sheets.push({ id: uid(), label: `Sheet ${n}`, rows: [['', '', '']] });
+				activeIndex = sheets.length - 1;
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+				scrollActiveTabIntoView();
+			}
+
+			async function importCsvFiles(fileList) {
+				const files = Array.from(fileList ?? []).filter((f): f is File => f instanceof File && (f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv'));
+				if (!files.length) return;
+				commitActiveSheet();
+				let added = 0;
+				let firstNewIndex = -1;
+				for (const file of files) {
+					if (sheets.length >= MAX_SHEETS) break;
+					const text = await readFileAsText(file);
+					const rows = parseCSV(text);
+					const body = rows.length > 0 ? rows.slice(0, MAX_IMPORT_ROWS) : [['', '', '']];
+					const label = file.name.replace(/\.csv$/i, '') || 'Imported';
+					sheets.push({ id: uid(), label, rows: body });
+					if (firstNewIndex < 0) firstNewIndex = sheets.length - 1;
+					added++;
+				}
+				if (added > 0 && firstNewIndex >= 0) {
+					activeIndex = firstNewIndex;
+					replaceEditorRows(sheets[activeIndex].rows);
+					renderTabBar();
+					renderPreview();
+					scrollActiveTabIntoView();
+				}
+			}
+
+			function importPastedCsv(text) {
+				const rows = parseCSV(text);
+				if (!rows.length) return;
+				commitActiveSheet();
+				if (sheets.length >= MAX_SHEETS) return;
+				const body = rows.slice(0, MAX_IMPORT_ROWS);
+				let label = 'Pasted';
+				let n = 2;
+				while (sheets.some((s) => s.label === label)) {
+					label = `Pasted (${n})`;
+					n++;
+				}
+				sheets.push({ id: uid(), label, rows: body });
+				activeIndex = sheets.length - 1;
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+				scrollActiveTabIntoView();
+			}
+
+			tbody.innerHTML = '';
+			const loaded = loadState();
+			sheets = loaded.sheets;
+			activeIndex = loaded.activeIndex;
+			replaceEditorRows(sheets[activeIndex].rows);
+			renderTabBar();
 			isHydrating = false;
 			renderPreview();
+			scrollActiveTabIntoView();
 
-			function importRows(rows: string[][]) {
-				rows.forEach((cells) => addRow(cells));
-			}
-
-			function handleCsvFile(file: File) {
-				if (!file.name.toLowerCase().endsWith('.csv')) return;
-				const reader = new FileReader();
-				reader.onload = () => {
-					const rows = parseCSV(String(reader.result));
-					importRows(rows);
-				};
-				reader.readAsText(file);
-			}
-
-			// Full-page drop (hidden, no visible zone)
 			document.addEventListener('dragover', (e) => {
 				e.preventDefault();
 			});
 			document.addEventListener('drop', (e) => {
 				e.preventDefault();
-				const file = e.dataTransfer?.files?.[0];
-				if (file) handleCsvFile(file);
+				const dt = e.dataTransfer?.files;
+				if (dt?.length) void importCsvFiles(dt);
 			});
 
 			fileInput.addEventListener('change', () => {
-				const file = fileInput.files?.[0];
-				if (!file) return;
-				handleCsvFile(file);
-				fileInput.value = '';
+				const files = fileInput.files;
+				if (!files?.length) return;
+				void importCsvFiles(files).finally(() => {
+					fileInput.value = '';
+				});
 			});
 
 			addRowBtn.addEventListener('click', () => addRow());
@@ -451,10 +730,15 @@ import "../styles.css";
 			importPasteBtn.addEventListener('click', () => {
 				const text = (csvPaste.value ?? '').trim();
 				if (!text) return;
-				const rows = parseCSV(text);
-				rows.forEach((cells) => addRow(cells));
+				importPastedCsv(text);
 				csvPaste.value = '';
 			});
+
+			importCsvBtn?.addEventListener('click', () => {
+				fileInput?.click();
+			});
+
+			addSheetBtn?.addEventListener('click', () => addEmptySheet());
 
 			function escapeCsvCell(s: string) {
 				const str = String(s ?? '');
@@ -464,19 +748,29 @@ import "../styles.css";
 				return str;
 			}
 
+			function sheetRowsToCsv(rows: string[][]) {
+				return rows.map((cells) => cells.map(escapeCsvCell).join(',')).join('\n');
+			}
+
+			function delayMs(ms: number) {
+				return new Promise((r) => setTimeout(r, ms));
+			}
+
 			exportCsvBtn.addEventListener('click', () => {
-				const rows = getTableData().map((cells) => cells.map(escapeCsvCell).join(','));
-				const csv = rows.join('\n');
+				commitActiveSheet();
+				const csv = sheetRowsToCsv(getTableData());
 				const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement('a');
 				a.href = url;
-				a.download = 'three-column.csv';
+				const base = sanitizeFilenameBase(sheets[activeIndex]?.label ?? 'three-column');
+				a.download = `${base}.csv`;
 				a.click();
 				URL.revokeObjectURL(url);
 			});
 
-			function exportPreviewToPng4096() {
+			function exportPreviewToPng4096(filenameLabel?: string): Promise<void> {
+				return new Promise((resolve) => {
 				const CANVAS_SIZE = 4096;
 				const LINE_WIDTH = 654;
 				const COL1_X = 17;
@@ -488,7 +782,10 @@ import "../styles.css";
 				const previewLines = previewWrap
 					? (Array.from(previewWrap.querySelectorAll('div.h-\\[2px\\]')) as HTMLDivElement[])
 					: [];
-				if (!previewWrap || !previewTable || previewLines.length === 0) return;
+				if (!previewWrap || !previewTable || previewLines.length === 0) {
+					resolve();
+					return;
+				}
 
 				const wrapRect = previewWrap.getBoundingClientRect();
 				const tableRect = previewTable.getBoundingClientRect();
@@ -504,7 +801,10 @@ import "../styles.css";
 				canvas.width = CANVAS_SIZE;
 				canvas.height = CANVAS_SIZE;
 				const ctx = canvas.getContext('2d');
-				if (!ctx) return;
+				if (!ctx) {
+					resolve();
+					return;
+				}
 
 				ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); // transparent
 				ctx.textBaseline = 'alphabetic';
@@ -577,18 +877,56 @@ import "../styles.css";
 					}
 				}
 
+				const base = sanitizeFilenameBase(filenameLabel ?? sheets[activeIndex]?.label ?? 'table');
 				canvas.toBlob((blob) => {
-					if (!blob) return;
+					if (!blob) {
+						resolve();
+						return;
+					}
 					const url = URL.createObjectURL(blob);
 					const a = document.createElement('a');
 					a.href = url;
-					a.download = 'table-4096.png';
+					a.download = `${base}-4096.png`;
 					a.click();
 					URL.revokeObjectURL(url);
+					resolve();
 				}, 'image/png');
+				});
 			}
 
-			exportPngBtn?.addEventListener('click', exportPreviewToPng4096);
+			exportPngBtn?.addEventListener('click', () => {
+				void exportPreviewToPng4096();
+			});
+
+			batchExportCsvBtn?.addEventListener('click', async () => {
+				if (sheets.length < 2) return;
+				commitActiveSheet();
+				for (let i = 0; i < sheets.length; i++) {
+					const sheet = sheets[i];
+					const csv = sheetRowsToCsv(sheet.rows);
+					const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = `${sanitizeFilenameBase(sheet.label)}.csv`;
+					a.click();
+					URL.revokeObjectURL(url);
+					await delayMs(220);
+				}
+			});
+
+			batchExportPngBtn?.addEventListener('click', async () => {
+				if (sheets.length < 2) return;
+				commitActiveSheet();
+				const saved = activeIndex;
+				for (let i = 0; i < sheets.length; i++) {
+					setActiveSheet(i);
+					await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+					await exportPreviewToPng4096(sheets[i].label);
+					await delayMs(180);
+				}
+				setActiveSheet(saved);
+			});
 
 			[...trackingInputs, ...weightSelects].forEach((el) => {
 				el?.addEventListener('input', () => renderPreview());

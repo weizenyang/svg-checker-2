@@ -549,6 +549,128 @@ import "../styles.css";
 					>
 					</ul>
 				</div>
+
+				<div
+					id="shape-benchmark-section"
+					class="mt-3 p-2 bg-amber-50/90 rounded-sm border border-amber-200/70"
+				>
+					<p class="text-sm font-medium mb-0.5">Silhouette benchmark (experimental)</p>
+					<p class="text-xs text-neutral-600 mb-2">
+						Binary-mask silhouette match: ranks by combined Score (default ~half IoU / half Chamfer) using amplified Euclidean edge distance plus a spread penalty (low σ preferred). Same rotation search and preprocess as before. Same OpenCV crop/bg step as Compare before masks; no ORB/SIFT in the bench.
+						Hover any path with an id and use &quot;Silhouette bench&quot; in the preview — Check Floorplans is not required. Batch export runs the same benchmark for every path with an id across loaded SVGs, then downloads a CSV. Floorplans whose cropped aspect ratio is too far from the cutout&apos;s (default max span 2.5×) are skipped before scoring. Optional &quot;Flash preprocess in preview&quot; applies only to single-path runs from the preview (not batch). Duplicate benchmark files are deduped by content hash when loading.
+						<strong class="font-medium">Preprocess cache:</strong> cropped floor images (same JS pipeline as silhouette IoU) are kept in memory; benchmark scores are also cached per path/cutout/max grid. Use export/import ZIP to persist fingerprints after a first pass—reloading the same floorplan files matches by content hash and skips expensive preprocessing.
+						Optional <strong class="font-medium">unit reference JSON</strong> (<code class="text-[11px]">units[]</code> with <code class="text-[11px]">name</code> + <code class="text-[11px]">type</code>): for each path whose id contains a unit <code class="text-[11px]">name</code> (normalized), only benchmark images whose underscore tokens match the <code class="text-[11px]">type</code> rules are scored (see implementation). Paths with no matching unit still use the full image set.
+					</p>
+					<div class="flex flex-wrap gap-2 items-center">
+						<label
+							for="shape-benchmark-files"
+							class="cursor-pointer flex w-fit align-center text-center bg-amber-100 hover:bg-amber-200 p-1 pl-2 pr-2 rounded-sm text-sm"
+						>
+							Load benchmark images
+						</label>
+						<input
+							type="file"
+							id="shape-benchmark-files"
+							accept="image/png,image/jpeg,image/webp"
+							multiple
+							class="hidden"
+						/>
+						<span id="shape-benchmark-count" class="text-xs text-neutral-600">0 images</span>
+						<button
+							type="button"
+							id="shape-benchmark-clear"
+							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+						>
+							Clear set
+						</button>
+						<label class="flex items-center gap-1.5 text-xs text-neutral-700 cursor-pointer select-none ml-1">
+							<input
+								type="checkbox"
+								id="shape-bench-flash-preprocess"
+								class="rounded border-neutral-400"
+							/>
+							Flash preprocess in preview
+						</label>
+						<button
+							type="button"
+							id="silhouette-bench-export-preprocess-cache"
+							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+						>
+							Export preprocess ZIP
+						</button>
+						<label
+							class="cursor-pointer flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+						>
+							Import preprocess ZIP
+							<input
+								type="file"
+								id="silhouette-bench-import-preprocess-cache"
+								accept=".zip,application/zip"
+								class="hidden"
+							/>
+						</label>
+					</div>
+					<div class="flex flex-wrap gap-2 items-center mt-2">
+						<label
+							for="unit-reference-json-input"
+							class="cursor-pointer flex w-fit align-center text-center bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 p-1 pl-2 pr-2 rounded-sm text-xs text-emerald-900"
+						>
+							Load unit reference JSON
+						</label>
+						<input
+							type="file"
+							id="unit-reference-json-input"
+							accept=".json,application/json"
+							class="hidden"
+						/>
+						<button
+							type="button"
+							id="unit-reference-json-clear"
+							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+						>
+							Clear unit filter
+						</button>
+						<span id="unit-reference-json-status" class="text-xs text-neutral-600 max-w-[280px] leading-tight"
+							>No unit filter file</span>
+					</div>
+					<div class="flex flex-wrap gap-2 items-end mt-2">
+						<button
+							type="button"
+							id="batch-shape-bench-button"
+							class="flex align-center text-center bg-amber-200 hover:bg-amber-300 p-1 pl-2 pr-2 rounded-sm text-sm border border-amber-300/80"
+						>
+							Batch Silhouette bench
+						</button>
+						<div id="batch-shape-bench-progress" class="hidden w-48 text-xs text-neutral-700">
+							<div class="w-full bg-neutral-200 h-1 rounded">
+								<div
+									id="batch-shape-bench-progress-bar"
+									class="h-1 bg-amber-600 rounded"
+									style="width:0%"
+								></div>
+							</div>
+							<div id="batch-shape-bench-progress-text" class="mt-1 text-right truncate" title="">
+								0 / 0
+							</div>
+						</div>
+					</div>
+					<div id="shape-benchmark-progress" class="hidden w-full max-w-md mt-2 text-xs text-neutral-700">
+						<div class="w-full bg-neutral-200 h-1.5 rounded">
+							<div
+								id="shape-benchmark-progress-bar"
+								class="h-1.5 bg-amber-600 rounded transition-[width] duration-150"
+								style="width:0%"
+							></div>
+						</div>
+						<div id="shape-benchmark-progress-text" class="mt-1 text-neutral-600 truncate" title="">
+							0 / 0
+						</div>
+					</div>
+					<div
+						id="shape-benchmark-results"
+						class="hidden mt-2 overflow-x-auto max-h-72 overflow-y-auto text-xs border border-neutral-200 rounded-sm bg-white"
+					></div>
+				</div>
 			</div>
 
 			<div
@@ -556,13 +678,40 @@ import "../styles.css";
 				style="display: flex; flex-direction: row; justify-content: space-between; align-items: center;"
 			>
 				<h3>Viewer</h3>
-				<button
-					id="download-canvas-zip-btn"
-					class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm"
-					type="button"
-				>
-					Download ZIP
-				</button>
+				<div class="relative" id="download-canvas-zip-wrap">
+					<button
+						id="download-canvas-zip-trigger"
+						class="flex items-center gap-1 text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm"
+						type="button"
+						aria-expanded="false"
+						aria-haspopup="true"
+					>
+						<span id="download-canvas-zip-label">Download ZIP</span>
+						<span class="text-[10px] opacity-70" aria-hidden="true">▾</span>
+					</button>
+					<div
+						id="download-canvas-zip-menu"
+						class="hidden absolute right-0 top-full z-50 mt-0.5 min-w-[11rem] rounded-sm border border-neutral-200 bg-white py-0.5 text-sm shadow-md"
+						role="menu"
+					>
+						<button
+							type="button"
+							class="download-canvas-zip-option block w-full px-3 py-2 text-left hover:bg-neutral-100"
+							role="menuitem"
+							data-zip-scope="this"
+						>
+							This SVG
+						</button>
+						<button
+							type="button"
+							class="download-canvas-zip-option block w-full px-3 py-2 text-left hover:bg-neutral-100"
+							role="menuitem"
+							data-zip-scope="all"
+						>
+							All Loaded
+						</button>
+					</div>
+				</div>
 			</div>
 			<div
 				class="aspect-square max-h-[91vh] max-w-[91vh]"
@@ -593,8 +742,19 @@ import "../styles.css";
 		// import * as svgOp from "./svg-scripts/svg-operations"
 		import { transform } from "typescript";
 		import JSZip from "jszip";
-		import { runFloorplanComparison } from "../scripts/floorplan-comparison.js";
-		import { runFloorplanComparisonOpencv } from "../scripts/floorplan-comparison-opencv.js";
+		import {
+			runFloorplanComparison,
+			imageDataToDataUrl,
+			exportSilhouettePreprocessCacheZipBlob,
+			importSilhouettePreprocessCacheFromZipArrayBuffer,
+			getSilhouettePreprocessCacheStats,
+		} from "../scripts/floorplan-comparison.js";
+		import {
+			runFloorplanComparisonOpencv,
+			runSilhouetteBenchmarkBatch,
+			dedupeBenchmarkCandidatesByIdenticalContent,
+			shapeBenchCompareRowsForRank,
+		} from "../scripts/floorplan-comparison-opencv.js";
 		import {
 			currentValuesList,
 			updateValuesList,
@@ -640,7 +800,227 @@ import "../styles.css";
 		let currentHoveredImageName = null;
 		let currentHoveredPathElement = null;
 		let previewPinned = false;
-		
+		/** Re-open ranked carousel when re-hovering the same path after the panel was cleared. */
+		let lastShapeBenchRankCarousel: null | {
+			pathId: string;
+			/** Carousel label for the score column (e.g. IoU %). */
+			featureColumnLabel?: string;
+			items: Array<{
+				rank: number;
+				name: string;
+				data: string;
+				rankScore: number;
+				orbProduction: number;
+				orbMax8: number;
+				contourMax8: number;
+				legacySilhouette: number;
+				bestPoseLabel?: string;
+				silhouetteVisual?: {
+					gridPx: { w: number; h: number };
+					formula: string;
+					cutoutMaskUrl: string;
+					floorMaskUrl: string;
+					overlapUrl: string;
+				};
+			}>;
+		} = null;
+		/** After "Back" on ranked carousel, re-hover shows floorplan text until next Shape bench. */
+		let shapeBenchCarouselDismissedPathId: string | null = null;
+
+		type SilhouetteBenchRankEntry = {
+			featureColumnLabel?: string;
+			scored?: number;
+			total?: number;
+			items: Array<{
+				rank: number;
+				name: string;
+				data: string;
+				rankScore: number;
+				orbProduction: number;
+				orbMax8: number;
+				contourMax8: number;
+				legacySilhouette: number;
+				bestPoseLabel?: string;
+				silhouetteIou?: number;
+				silhouetteChamfer?: number;
+				silhouetteChamferMeanPx?: number;
+				silhouetteChamferStdPx?: number;
+				silhouetteVisual?: unknown;
+			}>;
+		};
+
+		/** Per loaded SVG element (same reference as `importedSVGs[].element`) — survives arrow navigation. */
+		const silhouetteBenchRankBySvgEl = new Map<Element, Map<string, SilhouetteBenchRankEntry>>();
+
+		function ensureSilhouetteBenchRankMapForSvg(svgEl: Element): Map<string, SilhouetteBenchRankEntry> {
+			let inner = silhouetteBenchRankBySvgEl.get(svgEl);
+			if (!inner) {
+				inner = new Map();
+				silhouetteBenchRankBySvgEl.set(svgEl, inner);
+			}
+			return inner;
+		}
+
+		function getSilhouetteBenchRankEntryForPathOnSvg(
+			svgEl: Element | null | undefined,
+			pathId: string,
+		): SilhouetteBenchRankEntry | undefined {
+			if (!svgEl || !pathId) return undefined;
+			return silhouetteBenchRankBySvgEl.get(svgEl)?.get(pathId);
+		}
+
+		let silBenchHoverPanelRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+		function setSilhouetteBenchRankForPath(
+			pathId: string,
+			rankedCarousel: Array<{
+				rank: number;
+				name: string;
+				data: string;
+				rankScore: number;
+				orbProduction: number;
+				orbMax8: number;
+				contourMax8: number;
+				legacySilhouette: number;
+				bestPoseLabel?: string;
+				silhouetteIou?: number;
+				silhouetteChamfer?: number;
+				silhouetteChamferMeanPx?: number;
+				silhouetteChamferStdPx?: number;
+				silhouetteVisual?: unknown;
+			}>,
+			opts?: { featureColumnLabel?: string; scored?: number; total?: number },
+			rankSvgEl?: Element | null,
+		) {
+			if (!pathId || !rankedCarousel?.length) return;
+			const svgEl = rankSvgEl ?? document.querySelector("#svg-container svg");
+			if (!svgEl) return;
+			const inner = ensureSilhouetteBenchRankMapForSvg(svgEl);
+			inner.set(pathId, {
+				items: rankedCarousel.map((it) => ({ ...it })),
+				featureColumnLabel: opts?.featureColumnLabel,
+				scored: opts?.scored,
+				total: opts?.total,
+			});
+			const hid = currentHoveredPathElement?.getAttribute?.("id") || currentHoveredPathElement?.id;
+			if (hid !== pathId) return;
+			const preview = document.getElementById("image-previewer-container");
+			if (!preview || preview.style.display === "none") return;
+			if (silBenchHoverPanelRefreshTimer != null) clearTimeout(silBenchHoverPanelRefreshTimer);
+			silBenchHoverPanelRefreshTimer = setTimeout(() => {
+				silBenchHoverPanelRefreshTimer = null;
+				refreshHoverPanelSilhouetteRankIfActive(pathId);
+			}, 90);
+		}
+
+		/** Update floating hover rank carousel when this path is hovered (live bench / batch). One image decoded at a time via ‹ ›. */
+		function refreshHoverPanelSilhouetteRankIfActive(pathId: string) {
+			const hid = currentHoveredPathElement?.getAttribute?.("id") || currentHoveredPathElement?.id;
+			if (hid !== pathId) return;
+			if (shapeBenchCarouselDismissedPathId === pathId) return;
+			const domSvg = document.querySelector("#svg-container svg");
+			const entry = getSilhouetteBenchRankEntryForPathOnSvg(domSvg, pathId);
+			if (!entry?.items?.length) return;
+			const preview = document.getElementById("image-previewer-container");
+			if (!preview || preview.style.display === "none") return;
+			const s = entry.scored;
+			const t = entry.total;
+			showShapeBenchmarkRankCarousel(entry.items, {
+				pathId,
+				featureColumnLabel: entry.featureColumnLabel ?? "Score",
+				...(s != null && t != null ? { scored: s, total: t } : {}),
+			});
+		}
+
+		/** Live rank carousel in the floating preview; updated during Shape bench partial results. */
+		let shapeBenchRankCarouselUI: null | {
+			pathId: string;
+			items: Array<{
+				rank: number;
+				name: string;
+				data: string;
+				rankScore: number;
+				orbProduction: number;
+				orbMax8: number;
+				contourMax8: number;
+				legacySilhouette: number;
+				bestPoseLabel?: string;
+				silhouetteVisual?: {
+					gridPx: { w: number; h: number };
+					formula: string;
+					cutoutMaskUrl: string;
+					floorMaskUrl: string;
+					overlapUrl: string;
+				};
+			}>;
+			index: number;
+			pendingLine: string;
+			featureColumnLabel: string;
+			label: HTMLDivElement;
+			prevBtn: HTMLButtonElement;
+			nextBtn: HTMLButtonElement;
+			backBtn: HTMLButtonElement;
+			previewImg: HTMLImageElement;
+			previewText: HTMLElement;
+			compareBtnEl: HTMLElement | null;
+			compareOpencvBtnEl: HTMLElement | null;
+			compareShapeBenchBtnEl: HTMLElement | null;
+			iouExplainWrap: HTMLDivElement | null;
+			iouCutImg: HTMLImageElement | null;
+			iouFloorImg: HTMLImageElement | null;
+			iouOverlapImg: HTMLImageElement | null;
+			iouFormulaEl: HTMLDivElement | null;
+		} = null;
+
+		function destroyShapeBenchRankCarouselUI() {
+			const c = shapeBenchRankCarouselUI;
+			if (!c) return;
+			c.label.remove();
+			c.prevBtn.remove();
+			c.nextBtn.remove();
+			c.backBtn.remove();
+			if (c.iouExplainWrap) c.iouExplainWrap.remove();
+			shapeBenchRankCarouselUI = null;
+		}
+
+		/** Shape bench: show each OpenCV preprocess step (raw → bg removed → morph → crop) in the floating image preview. */
+		async function shapeBenchPreprocessFlashStepHandler(info: {
+			label: string;
+			imageData: ImageData;
+			candidateName: string;
+			stepIndex: number;
+			stepTotal: number;
+		}) {
+			const container = document.getElementById("image-previewer-container");
+			const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+			const previewText = document.getElementById("image-previewer-text");
+			if (!container || !previewImg || !previewText) return;
+			if (info.stepIndex === 0) {
+				destroyShapeBenchRankCarouselUI();
+			}
+			container.style.display = "block";
+			previewPinned = true;
+			previewText.style.display = "block";
+			const compareBtnEl = document.getElementById("compare-floorplan-btn");
+			const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+			const compareShapeBenchBtnEl = document.getElementById("compare-shape-bench-btn");
+			if (compareBtnEl) compareBtnEl.style.display = "none";
+			if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+			if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "none";
+			previewImg.src = imageDataToDataUrl(info.imageData);
+			const esc = (s: string) =>
+				String(s)
+					.replace(/&/g, "&amp;")
+					.replace(/</g, "&lt;")
+					.replace(/>/g, "&gt;")
+					.replace(/"/g, "&quot;");
+			previewText.style.whiteSpace = "pre-wrap";
+			previewText.style.fontSize = "10px";
+			previewText.style.lineHeight = "1.35";
+			previewText.style.color = "#1a1a1a";
+			previewText.innerHTML = `${esc(info.candidateName)}\n<span style="color:#b45309">Preprocess preview ${info.stepIndex + 1}/${info.stepTotal}</span>\n${esc(info.label)}\n<code style="font-size:9px">${info.imageData.width}×${info.imageData.height}</code>`;
+		}
+
 		// Imported unit-reference data
 		let importedUnitReference = null;
 
@@ -1031,13 +1411,9 @@ import "../styles.css";
 				console.log(`Processing SVG with processSVG: ${filename}`);
 				processSVG(svgElement);
 
-				// Set up image overlay if images are already loaded
-				if (imageList.length > 0) {
-					console.log(`Setting up image overlay for ${filename} with ${imageList.length} images`);
-					previewBackplate(svgElement);
-				} else {
-					console.log(`No images in imageList yet for ${filename}`);
-				}
+				// Hover preview + Shape bench need path listeners even when Check Floorplans is empty
+				console.log(`Setting up preview / overlay for ${filename} (imageList: ${imageList.length})`);
+				previewBackplate(svgElement);
 
 				console.log(`Successfully loaded SVG: ${filename}`);
 
@@ -2794,6 +3170,41 @@ import "../styles.css";
 
 			// Append the SVG element to the div element
 			const svgContainer = document.getElementById("svg-container");
+			lastShapeBenchRankCarousel = null;
+			shapeBenchCarouselDismissedPathId = null;
+			if (silBenchHoverPanelRefreshTimer != null) {
+				clearTimeout(silBenchHoverPanelRefreshTimer);
+				silBenchHoverPanelRefreshTimer = null;
+			}
+			destroyShapeBenchRankCarouselUI();
+			previewPinned = false;
+			currentHoveredPathElement = null;
+			currentHoveredImageName = null;
+			const hoverPreviewHost = document.getElementById("image-previewer-container");
+			if (hoverPreviewHost) {
+				hoverPreviewHost.style.display = "none";
+				hoverPreviewHost
+					.querySelectorAll("[data-compare-carousel], [data-benchmark-rank-carousel]")
+					.forEach((el) => el.remove());
+			}
+			const hoverPreviewImg = document.getElementById("image-previewer-image") as HTMLImageElement | null;
+			if (hoverPreviewImg) {
+				hoverPreviewImg.src = "";
+				hoverPreviewImg.style.display = "";
+			}
+			const hoverPreviewText = document.getElementById("image-previewer-text");
+			if (hoverPreviewText) {
+				hoverPreviewText.style.display = "";
+				hoverPreviewText.replaceChildren();
+			}
+			const hcb = document.getElementById("compare-floorplan-btn");
+			const hcob = document.getElementById("compare-opencv-btn");
+			const hcsb = document.getElementById("compare-shape-bench-btn");
+			if (hcb) hcb.style.display = "";
+			if (hcob) hcob.style.display = "";
+			if (hcsb) hcsb.style.display = "";
+			const hscores = document.getElementById("compare-floorplan-scores");
+			if (hscores) hscores.textContent = "";
 			svgContainer.innerHTML = "";
 			// Ensure container has overflow hidden to prevent going out of bounds
 			svgContainer.style.overflow = 'hidden';
@@ -2806,12 +3217,9 @@ import "../styles.css";
 
 			console.log(imageList.length)
 
-			if (imageList.length > 0) {
-					previewBackplate(
-						document
-							.getElementById("svg-container")
-							.querySelector("svg"),
-					)
+			const svgInContainer = document.getElementById("svg-container")?.querySelector("svg");
+			if (svgInContainer) {
+				previewBackplate(svgInContainer);
 			}
 
 			// Set type for export filename
@@ -3480,6 +3888,681 @@ import "../styles.css";
 		}
 
 		const imageList = [];
+		/** @type {{ name: string, data: string }[]} */
+		const shapeBenchmarkCandidates = [];
+
+		/** @type {{ name: string, type: string }[] | null} Loaded unit reference (optional silhouette candidate filter). */
+		let unitReferenceFilterUnits: { name: string; type: string }[] | null = null;
+
+		function normalizeUnitReferencePathKey(s: string): string {
+			return s.trim().toLowerCase().replace(/-/g, "_");
+		}
+
+		/**
+		 * Longest JSON `name` wins (shortest is guaranteed contained in path id; longest is most specific).
+		 * @returns `type` string or null if no JSON / no row matches this path id.
+		 */
+		function findUnitTypeForPathId(pathId: string): string | null {
+			if (!unitReferenceFilterUnits?.length) return null;
+			const p = normalizeUnitReferencePathKey(pathId);
+			let best: { name: string; type: string } | null = null;
+			let bestLen = -1;
+			for (const u of unitReferenceFilterUnits) {
+				const n = normalizeUnitReferencePathKey(u.name);
+				if (!n || n.length >= p.length) continue;
+				if (!p.includes(n)) continue;
+				if (n.length > bestLen) {
+					bestLen = n.length;
+					best = u;
+				}
+			}
+			return best?.type ?? null;
+		}
+
+		/**
+		 * Silhouette benchmark image filter from unit `type` (underscore-separated).
+		 * - Image basename tokens: 6th (1-based) must equal type 3rd; 7th’s first char must equal type 4th’s first char.
+		 * - If type 4th ends with `m` (mirror line), 7th must start with same first letter and end with `m`.
+		 */
+		function benchmarkImagePassesUnitType(imageFileName: string, typeStr: string): boolean {
+			const base = imageFileName.replace(/\.[^.]+$/i, "");
+			const imgParts = base.split("_");
+			if (imgParts.length < 7) return false;
+			const typeParts = typeStr.split("_").filter((t) => t.length);
+			if (typeParts.length < 4) return false;
+			const type3 = typeParts[2];
+			const type4 = typeParts[3];
+			const img6 = imgParts[5];
+			const img7 = imgParts[6];
+			if (img6 !== type3) return false;
+			if (!type4.length || !img7.length) return false;
+			if (type4[0].toLowerCase() !== img7[0].toLowerCase()) return false;
+			const lastType4 = type4[type4.length - 1].toLowerCase();
+			if (lastType4 === "m") {
+				if (img7[img7.length - 1].toLowerCase() !== "m") return false;
+			}
+			return true;
+		}
+
+		/**
+		 * @returns Filtered list and whether a unit rule applied (path matched JSON `name`).
+		 */
+		function applyUnitReferenceCandidateFilter(
+			pathId: string,
+			kept: { name: string; data: string }[],
+		): { candidates: { name: string; data: string }[]; ruleMatched: boolean; typeStr: string | null } {
+			const typeStr = findUnitTypeForPathId(pathId);
+			if (typeStr == null) {
+				return { candidates: kept, ruleMatched: false, typeStr: null };
+			}
+			const candidates = kept.filter((c) => benchmarkImagePassesUnitType(c.name, typeStr));
+			return { candidates, ruleMatched: true, typeStr };
+		}
+
+		function updateUnitReferenceJsonStatus() {
+			const el = document.getElementById("unit-reference-json-status");
+			if (!el) return;
+			if (!unitReferenceFilterUnits?.length) {
+				el.textContent = "No unit filter file";
+			} else {
+				el.textContent = `${unitReferenceFilterUnits.length} unit ref row(s) — paths matching a name score a filtered subset`;
+			}
+		}
+
+		function updateShapeBenchmarkCountLabel() {
+			const el = document.getElementById("shape-benchmark-count");
+			if (el) {
+				el.textContent =
+					shapeBenchmarkCandidates.length === 0
+						? "0 images"
+						: `${shapeBenchmarkCandidates.length} image(s)`;
+			}
+		}
+
+		/**
+		 * @param {{ pathId: string, rows: any[] }} result
+		 * @param {{ statusLine?: string, tableMode?: "silhouette" }} [extra] - non-empty while benchmark is in progress
+		 */
+		function renderShapeBenchmarkTable(result, extra = {}) {
+			const wrap = document.getElementById("shape-benchmark-results");
+			if (!wrap) return;
+			const statusLine = extra.statusLine;
+			const hasSilDetail = result.rows.some((r) => typeof r.silhouetteIou === "number");
+			/** Batch-level Chamfer metric knobs (same on every row; shown once, not as redundant columns). */
+			const chamferTuningRow = result.rows.find(
+				(r) => typeof r.chamferBlend === "number" && !Number.isNaN(r.chamferBlend),
+			);
+			/** Per-image Chamfer geometry: lower is better; do not use max-based row highlight. */
+			const chamferPerImageMetricKeys = new Set([
+				"silhouetteChamferMeanPx",
+				"silhouetteChamferStdPx",
+			]);
+			const formatSilhouetteTableCell = (key: string, v: unknown) => {
+				if (v === undefined || v === null) return "";
+				if (
+					chamferPerImageMetricKeys.has(key) &&
+					typeof v === "number" &&
+					!Number.isNaN(v)
+				) {
+					return v.toFixed(2);
+				}
+				return v as string | number;
+			};
+			const cols = hasSilDetail
+				? [
+						{ key: "rankScore", label: "Score %" },
+						{ key: "silhouetteIou", label: "IoU %" },
+						{ key: "silhouetteChamfer", label: "Chamfer %" },
+						{ key: "silhouetteChamferMeanPx", label: "Chf μ px" },
+						{ key: "silhouetteChamferStdPx", label: "Chf σ px" },
+						{ key: "bestPoseLabel", label: "Best pose" },
+					]
+				: [
+						{ key: "rankScore", label: "IoU %" },
+						{ key: "bestPoseLabel", label: "Best pose" },
+					];
+			const colCount = 1 + cols.length;
+			const sortedRows = [...result.rows].sort((a, b) => {
+				if (b.rankScore !== a.rankScore) return b.rankScore - a.rankScore;
+				if (hasSilDetail) {
+					if ((b.silhouetteIou ?? 0) !== (a.silhouetteIou ?? 0))
+						return (b.silhouetteIou ?? 0) - (a.silhouetteIou ?? 0);
+					if ((b.silhouetteChamfer ?? 0) !== (a.silhouetteChamfer ?? 0))
+						return (b.silhouetteChamfer ?? 0) - (a.silhouetteChamfer ?? 0);
+				}
+				if (b.orbMax8 !== a.orbMax8) return b.orbMax8 - a.orbMax8;
+				if (b.contourMax8 !== a.contourMax8) return b.contourMax8 - a.contourMax8;
+				if (b.legacySilhouette !== a.legacySilhouette) return b.legacySilhouette - a.legacySilhouette;
+				if (b.contour0 !== a.contour0) return b.contour0 - a.contour0;
+				return a.name.localeCompare(b.name);
+			});
+			const bests = {};
+			for (const { key } of cols) {
+				if (key === "bestPoseLabel" || chamferPerImageMetricKeys.has(key)) continue;
+				const vals = sortedRows
+					.map((r) => r[key])
+					.filter((v) => typeof v === "number" && !Number.isNaN(v));
+				bests[key] = vals.length ? Math.max(...vals) : 0;
+			}
+			const esc = (s) =>
+				String(s)
+					.replace(/&/g, "&amp;")
+					.replace(/</g, "&lt;")
+					.replace(/>/g, "&gt;")
+					.replace(/"/g, "&quot;");
+			let html = `<p class="p-2 text-xs font-medium border-b border-neutral-200 bg-neutral-50">Path: <code>${esc(result.pathId)}</code></p>`;
+			const blendExplain = hasSilDetail
+				? "Silhouette bench: best pose over four 90° rotations and mirrored floor. The floorplan mask is stretched (non-uniform) to fill the cutout comparison frame at each pose, then IoU and Chamfer run on that grid. Rank blends IoU with Chamfer on Euclidean edge distances: effective distance = mean + weight×spread (σ) on both masks, then amplified so small outline differences matter more (defaults in floorplan-comparison.js). Rows sorted by Score (best first)."
+				: "Silhouette bench: max IoU over four 90° rotations; horizontal flip is tried only if the best unflipped IoU is below 70%. Rows sorted by IoU (best first). Highlighted = best IoU.";
+			html += `<p class="px-2 py-1.5 text-[11px] text-neutral-600 border-b border-neutral-200 bg-white">${blendExplain}`;
+			if (hasSilDetail && chamferTuningRow) {
+				const b = chamferTuningRow.chamferBlend;
+				const d0 = chamferTuningRow.chamferDiagFrac;
+				const ex = chamferTuningRow.chamferExponent;
+				const sw = chamferTuningRow.chamferVarWeight;
+				const am = chamferTuningRow.chamferDistAmplify;
+				const parts = [
+					`Chf w ${typeof b === "number" && !Number.isNaN(b) ? b.toFixed(2) : "—"}`,
+					`d₀ frac ${typeof d0 === "number" && !Number.isNaN(d0) ? d0.toFixed(3) : "—"}`,
+					`exp ${typeof ex === "number" && !Number.isNaN(ex) ? ex.toFixed(3) : "—"}`,
+					`σ w ${typeof sw === "number" && !Number.isNaN(sw) ? sw.toFixed(3) : "—"}`,
+					`amp ${typeof am === "number" && !Number.isNaN(am) ? am.toFixed(3) : "—"}`,
+				];
+				html += `<p class="px-2 py-1 text-[11px] text-neutral-700 border-b border-neutral-200 bg-neutral-50/90 font-mono tabular-nums"><span class="font-sans font-semibold text-neutral-800 mr-1.5">Chamfer tuning</span>(same for all rows): ${esc(parts.join(" · "))}</p>`;
+			}
+			if (hasSilDetail) {
+				html += `<p class="px-2 py-1 text-[10px] text-neutral-600 border-b border-neutral-200 bg-white">Chf μ px / Chf σ px: symmetric mean distance and spread of boundary samples (Euclidean DT) at comparison-grid resolution for each image&rsquo;s <strong>best pose</strong>; grid pixels, lower is tighter alignment.</p>`;
+			}
+			if (statusLine) {
+				html +=
+					' <span class="text-amber-900 font-medium">Live:</span> table re-sorts after each image finishes.</p>';
+			} else {
+				html += "</p>";
+			}
+			html += '<table class="w-full border-collapse text-left"><thead><tr class="border-b border-neutral-200 bg-neutral-50">';
+			html += '<th class="p-1.5 sticky left-0 bg-neutral-50 z-10 max-w-[100px]">Rank · image</th>';
+			for (const { label } of cols) {
+				html += `<th class="p-1.5 whitespace-nowrap">${esc(label)}</th>`;
+			}
+			html += "</tr></thead><tbody>";
+			sortedRows.forEach((row, i) => {
+				html += "<tr class=\"border-b border-neutral-100 hover:bg-neutral-50/80\">";
+				html += `<td class="p-1.5 sticky left-0 bg-white font-medium max-w-[100px] truncate" title="${esc(row.name)}"><span class="tabular-nums font-semibold text-amber-900">${i + 1}.</span> ${esc(row.name)}</td>`;
+				for (const { key } of cols) {
+					const v = row[key];
+					const display = formatSilhouetteTableCell(key, v);
+					const isBest =
+						key !== "bestPoseLabel" &&
+						!chamferPerImageMetricKeys.has(key) &&
+						sortedRows.length > 1 &&
+						v !== undefined &&
+						v !== null &&
+						typeof v === "number" &&
+						v === bests[key];
+					html += `<td class="p-1.5 tabular-nums ${isBest ? "bg-amber-100 font-semibold" : ""}">${display}</td>`;
+				}
+				html += "</tr>";
+			});
+			if (statusLine) {
+				html += `<tr class="border-b border-amber-200 bg-amber-50/90"><td colspan="${colCount}" class="p-1.5 text-[11px] text-amber-950">${esc(statusLine)}</td></tr>`;
+			}
+			html += "</tbody></table>";
+
+			const visualRows = sortedRows.filter((r) => r.silhouetteVisual);
+			if (visualRows.length > 0) {
+				html += `<div class="border-t border-amber-200/80 bg-white p-2">`;
+				html += `<p class="text-xs font-semibold text-neutral-900 mb-1">How scores are derived (top ${visualRows.length} by table rank — best first, not load order)</p>`;
+				html += `<p class="text-[11px] text-neutral-600 mb-3 leading-snug">Table <strong>Score</strong> blends fill IoU with boundary Chamfer on the same grid. Overlap viz uses filled binary silhouettes. <span class="text-amber-900 font-medium">Yellow</span> = intersection (both), <span class="text-blue-700 font-medium">blue</span> = cutout-only, <span class="text-red-700 font-medium">red</span> = floorplan-only. Fill IoU = intersection ÷ union.</p>`;
+				sortedRows.forEach((row, rankIdx) => {
+					if (!row.silhouetteVisual) return;
+					const tableRank = rankIdx + 1;
+					const v = row.silhouetteVisual;
+					const pose = row.bestPoseLabel ? esc(String(row.bestPoseLabel)) : "";
+					html += `<div class="mb-4 last:mb-0 pb-3 last:pb-0 border-b border-neutral-100 last:border-0">`;
+					html += `<p class="text-xs font-medium text-neutral-800 mb-1"><span class="tabular-nums text-amber-900 font-semibold">#${tableRank}</span> ${esc(row.name)}${pose ? ` · ${pose}` : ""} — <span class="tabular-nums">${esc(String(row.rankScore))}%</span></p>`;
+					html += `<p class="text-[11px] text-neutral-700 mb-2 font-mono tabular-nums">${esc(v.formula)}</p>`;
+					html += `<div class="flex flex-wrap gap-3 items-end">`;
+					html += `<div class="text-center max-w-[140px]"><img src="${v.cutoutMaskUrl}" alt="" class="mx-auto border border-neutral-200 rounded-sm bg-neutral-900 max-h-36 w-auto object-contain" style="image-rendering:pixelated"/><div class="text-[10px] text-neutral-500 mt-0.5">${esc(String(v.gridPx.w))}×${esc(String(v.gridPx.h))} · Cutout</div></div>`;
+					html += `<div class="text-center max-w-[140px]"><img src="${v.floorMaskUrl}" alt="" class="mx-auto border border-neutral-200 rounded-sm bg-neutral-900 max-h-36 w-auto object-contain" style="image-rendering:pixelated"/><div class="text-[10px] text-neutral-500 mt-0.5">Floorplan (pose)</div></div>`;
+					html += `<div class="text-center max-w-[140px]"><img src="${v.overlapUrl}" alt="" class="mx-auto border border-neutral-200 rounded-sm max-h-36 w-auto object-contain" style="image-rendering:pixelated"/><div class="text-[10px] text-neutral-500 mt-0.5">Overlap</div></div>`;
+					html += `</div></div>`;
+				});
+				html += `</div>`;
+			}
+
+			wrap.innerHTML = html;
+			wrap.classList.remove("hidden");
+		}
+
+		/** Ranked benchmark images: best first. Same preview container as floorplan hover; refreshes in place during live Shape bench. */
+		function showShapeBenchmarkRankCarousel(
+			items: Array<{
+				rank: number;
+				name: string;
+				data: string;
+				rankScore: number;
+				orbProduction: number;
+				orbMax8: number;
+				contourMax8: number;
+				legacySilhouette: number;
+				bestPoseLabel?: string;
+				silhouetteVisual?: {
+					gridPx: { w: number; h: number };
+					formula: string;
+					cutoutMaskUrl: string;
+					floorMaskUrl: string;
+					overlapUrl: string;
+				};
+			}>,
+			opts?: { pathId?: string; scored?: number; total?: number; featureColumnLabel?: string },
+		) {
+			if (!items.length) return;
+			const pathId = opts?.pathId ?? "unknown";
+			const featureColumnLabel = opts?.featureColumnLabel ?? "IoU";
+			const pendingLine =
+				opts?.scored != null && opts?.total != null && opts.scored < opts.total
+					? `Benchmark: ${opts.scored} / ${opts.total} scored (live ranking)`
+					: "";
+
+			previewPinned = true;
+			const container = document.getElementById("image-previewer-container");
+			const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+			const previewText = document.getElementById("image-previewer-text");
+			if (!container || !previewImg || !previewText) return;
+			container.style.display = "block";
+
+			const compareBtnEl = document.getElementById("compare-floorplan-btn");
+			const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+			const compareShapeBenchBtnEl = document.getElementById("compare-shape-bench-btn");
+
+			const runUpdate = () => {
+				const c = shapeBenchRankCarouselUI;
+				if (!c) return;
+				const it = c.items[c.index];
+				if (!it) return;
+				const extra = c.pendingLine ? `\n${c.pendingLine}` : "";
+				const featLbl = c.featureColumnLabel ?? "IoU";
+				if (it.bestPoseLabel) {
+					const silExtra =
+						typeof it.silhouetteIou === "number" && typeof it.silhouetteChamfer === "number"
+							? `\nIoU ${it.silhouetteIou}% · Chamfer ${it.silhouetteChamfer}%${
+									typeof it.silhouetteChamferMeanPx === "number" &&
+									typeof it.silhouetteChamferStdPx === "number"
+										? `\nChf μ ${it.silhouetteChamferMeanPx.toFixed(2)} px · σ ${it.silhouetteChamferStdPx.toFixed(2)} px`
+										: ""
+								}`
+							: "";
+					c.label.textContent = `#${it.rank} of ${c.items.length} — ${it.name}\n${featLbl} ${it.orbMax8}%${silExtra} · pose ${it.bestPoseLabel}${extra}`;
+				} else {
+					c.label.textContent = `#${it.rank} of ${c.items.length} — ${it.name}\nblend ${it.rankScore} · ${featLbl} ${it.orbMax8} · Cnt max8 ${it.contourMax8} · Leg sil ${it.legacySilhouette}${extra}`;
+				}
+				c.previewImg.src = it.data;
+
+				const v = it.silhouetteVisual;
+				if (c.iouExplainWrap && c.iouCutImg && c.iouFloorImg && c.iouOverlapImg && c.iouFormulaEl) {
+					if (v) {
+						c.iouExplainWrap.style.display = "block";
+						c.iouCutImg.src = v.cutoutMaskUrl;
+						c.iouFloorImg.src = v.floorMaskUrl;
+						c.iouOverlapImg.src = v.overlapUrl;
+						c.iouFormulaEl.textContent = `${v.formula} · overlap: yellow = both, blue = cutout-only, red = floor-only`;
+					} else {
+						c.iouExplainWrap.style.display = "none";
+					}
+				}
+
+				c.prevBtn.style.visibility = c.index <= 0 ? "hidden" : "visible";
+				c.nextBtn.style.visibility = c.index >= c.items.length - 1 ? "hidden" : "visible";
+			};
+
+			const mountBackHandler = () => {
+				const c = shapeBenchRankCarouselUI;
+				if (!c) return;
+				c.backBtn.onclick = () => {
+					const pathElBack = currentHoveredPathElement as SVGPathElement | null;
+					const pathIdBack = pathElBack?.getAttribute?.("id") || pathElBack?.id;
+					if (pathIdBack) shapeBenchCarouselDismissedPathId = pathIdBack;
+					destroyShapeBenchRankCarouselUI();
+					previewText.style.display = "";
+					const pathEl = currentHoveredPathElement as SVGPathElement | null;
+					const pathIdHover = pathEl?.getAttribute?.("id") || pathEl?.id;
+					const sel = pathIdHover ? findMatchingImage(pathIdHover) : null;
+					if (sel) {
+						if (compareBtnEl) compareBtnEl.style.display = "";
+						if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+						if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+						previewImg.src = sel.data;
+						currentHoveredImageName = sel.name;
+						const transform = getImageTransform(sel.name);
+						updatePreviewText(sel.name, transform);
+					} else if (pathIdHover) {
+						const hasBench = shapeBenchmarkCandidates.length > 0;
+						if (compareBtnEl) compareBtnEl.style.display = "none";
+						if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+						if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+						previewImg.src = "";
+						previewText.replaceChildren();
+						const wrap = document.createElement("span");
+						wrap.style.cssText = "color:#444;line-height:1.35;";
+						wrap.append("Path ");
+						const code = document.createElement("code");
+						code.style.fontSize = "9px";
+						code.textContent = pathIdHover;
+						wrap.appendChild(code);
+						wrap.appendChild(document.createElement("br"));
+						wrap.append("No Check Floorplans image for this path.");
+						wrap.appendChild(document.createElement("br"));
+						wrap.append(
+							hasBench
+								? "Silhouette bench uses the benchmark image set."
+								: "Load benchmark images in the panel below for Silhouette bench.",
+						);
+						previewText.appendChild(wrap);
+						currentHoveredImageName = null;
+					} else {
+						if (compareBtnEl) compareBtnEl.style.display = "";
+						if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+						if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+						previewImg.src = "";
+						currentHoveredImageName = null;
+					}
+				};
+			};
+
+			const needRemount =
+				!shapeBenchRankCarouselUI ||
+				shapeBenchRankCarouselUI.pathId !== pathId ||
+				!container.contains(shapeBenchRankCarouselUI.label);
+
+			if (needRemount) {
+				destroyShapeBenchRankCarouselUI();
+				container.querySelectorAll("[data-benchmark-rank-carousel]").forEach((el) => el.remove());
+				if (compareBtnEl) compareBtnEl.style.display = "none";
+				if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+				if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "none";
+				previewText.style.display = "none";
+
+				const imgWrapperEl = previewImg.parentElement;
+				const carouselLabel = document.createElement("div");
+				carouselLabel.setAttribute("data-benchmark-rank-carousel", "");
+				carouselLabel.style.cssText =
+					"font-size:10px;margin-bottom:4px;color:#1a1a1a;min-height:2.6em;line-height:1.25;white-space:pre-wrap;";
+				const prevBtn = document.createElement("button");
+				prevBtn.setAttribute("data-benchmark-rank-carousel", "");
+				prevBtn.textContent = "‹";
+				prevBtn.style.cssText =
+					"position:absolute;left:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.55);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;";
+				const nextBtn = document.createElement("button");
+				nextBtn.setAttribute("data-benchmark-rank-carousel", "");
+				nextBtn.textContent = "›";
+				nextBtn.style.cssText =
+					"position:absolute;right:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:rgba(0,0,0,.55);color:white;cursor:pointer;border-radius:4px;font-size:18px;line-height:1;z-index:2;";
+				const backBtn = document.createElement("button");
+				backBtn.setAttribute("data-benchmark-rank-carousel", "");
+				backBtn.textContent = "Back";
+				backBtn.style.cssText =
+					"margin-top:6px;padding:4px 8px;font-size:10px;cursor:pointer;background:#666;color:white;border:none;border-radius:4px;";
+
+				const iouExplainWrap = document.createElement("div");
+				iouExplainWrap.setAttribute("data-benchmark-rank-carousel", "");
+				iouExplainWrap.style.cssText =
+					"display:none;width:100%;max-width:300px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.12);";
+				const iouHint = document.createElement("div");
+				iouHint.style.cssText =
+					"font-size:9px;color:#444;margin-bottom:4px;text-align:center;line-height:1.35;";
+				iouHint.textContent =
+					"IoU breakdown (shown for the first 20 processed images · same pixel grid as the score)";
+				const iouRow = document.createElement("div");
+				iouRow.style.cssText =
+					"display:flex;gap:5px;justify-content:center;align-items:flex-end;flex-wrap:wrap;";
+				const mkCol = (caption: string) => {
+					const im = document.createElement("img");
+					im.alt = "";
+					im.style.cssText =
+						"display:block;margin:0 auto;max-height:76px;width:auto;border:1px solid #c4c4c4;border-radius:3px;image-rendering:pixelated;background:#1a1a1a;";
+					const cap = document.createElement("div");
+					cap.style.cssText = "font-size:8px;color:#666;margin-top:3px;text-align:center;max-width:90px;line-height:1.2;";
+					cap.textContent = caption;
+					const col = document.createElement("div");
+					col.style.cssText = "flex:0 0 auto;text-align:center;";
+					col.appendChild(im);
+					col.appendChild(cap);
+					return { col, im };
+				};
+				const { col: colCut, im: iouCutImg } = mkCol("Cutout mask");
+				const { col: colFloor, im: iouFloorImg } = mkCol("Floor (pose)");
+				const { col: colOv, im: iouOverlapImg } = mkCol("Overlap");
+				iouRow.appendChild(colCut);
+				iouRow.appendChild(colFloor);
+				iouRow.appendChild(colOv);
+				const iouFormulaEl = document.createElement("div");
+				iouFormulaEl.style.cssText =
+					"font-size:9px;color:#333;margin-top:6px;line-height:1.35;text-align:center;font-family:ui-monospace,monospace;";
+				iouExplainWrap.appendChild(iouHint);
+				iouExplainWrap.appendChild(iouRow);
+				iouExplainWrap.appendChild(iouFormulaEl);
+
+				container.insertBefore(carouselLabel, imgWrapperEl || null);
+				if (imgWrapperEl) {
+					imgWrapperEl.appendChild(prevBtn);
+					imgWrapperEl.appendChild(nextBtn);
+				}
+				container.appendChild(iouExplainWrap);
+				container.appendChild(backBtn);
+
+				shapeBenchRankCarouselUI = {
+					pathId,
+					items: items.map((it) => ({ ...it })),
+					index: 0,
+					pendingLine,
+					featureColumnLabel,
+					label: carouselLabel,
+					prevBtn,
+					nextBtn,
+					backBtn,
+					previewImg,
+					previewText,
+					compareBtnEl,
+					compareOpencvBtnEl,
+					compareShapeBenchBtnEl,
+					iouExplainWrap,
+					iouCutImg,
+					iouFloorImg,
+					iouOverlapImg,
+					iouFormulaEl,
+				};
+
+				prevBtn.onclick = () => {
+					if (shapeBenchRankCarouselUI && shapeBenchRankCarouselUI.index > 0) {
+						shapeBenchRankCarouselUI.index--;
+						runUpdate();
+					}
+				};
+				nextBtn.onclick = () => {
+					if (
+						shapeBenchRankCarouselUI &&
+						shapeBenchRankCarouselUI.index < shapeBenchRankCarouselUI.items.length - 1
+					) {
+						shapeBenchRankCarouselUI.index++;
+						runUpdate();
+					}
+				};
+				mountBackHandler();
+				runUpdate();
+			} else {
+				shapeBenchRankCarouselUI.items = items.map((it) => ({ ...it }));
+				shapeBenchRankCarouselUI.pendingLine = pendingLine;
+				shapeBenchRankCarouselUI.featureColumnLabel = featureColumnLabel;
+				shapeBenchRankCarouselUI.index = Math.min(
+					shapeBenchRankCarouselUI.index,
+					Math.max(0, items.length - 1),
+				);
+				runUpdate();
+			}
+		}
+
+		document.getElementById("shape-benchmark-files")?.addEventListener("change", (e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const files = input.files;
+			if (!files?.length) return;
+			shapeBenchmarkCandidates.length = 0;
+			let pending = files.length;
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+				if (!file.type.startsWith("image/")) {
+					pending--;
+					if (pending === 0) updateShapeBenchmarkCountLabel();
+					continue;
+				}
+				const reader = new FileReader();
+				reader.onload = (ev) => {
+					const data = ev.target?.result as string;
+					if (data) shapeBenchmarkCandidates.push({ name: file.name, data });
+					pending--;
+					if (pending === 0) {
+						updateShapeBenchmarkCountLabel();
+						showToast(`Loaded ${shapeBenchmarkCandidates.length} benchmark image(s)`, "success");
+					}
+				};
+				reader.onerror = () => {
+					pending--;
+					if (pending === 0) updateShapeBenchmarkCountLabel();
+				};
+				reader.readAsDataURL(file);
+			}
+			input.value = "";
+		});
+
+		document.getElementById("shape-benchmark-clear")?.addEventListener("click", () => {
+			shapeBenchmarkCandidates.length = 0;
+			lastShapeBenchRankCarousel = null;
+			shapeBenchCarouselDismissedPathId = null;
+			silhouetteBenchRankBySvgEl.clear();
+			if (silBenchHoverPanelRefreshTimer != null) {
+				clearTimeout(silBenchHoverPanelRefreshTimer);
+				silBenchHoverPanelRefreshTimer = null;
+			}
+			updateShapeBenchmarkCountLabel();
+			const wrap = document.getElementById("shape-benchmark-results");
+			if (wrap) {
+				wrap.innerHTML = "";
+				wrap.classList.add("hidden");
+			}
+			destroyShapeBenchRankCarouselUI();
+			document
+				.getElementById("image-previewer-container")
+				?.querySelectorAll("[data-benchmark-rank-carousel]")
+				.forEach((el) => el.remove());
+		});
+
+		document.getElementById("unit-reference-json-input")?.addEventListener("change", (e) => {
+			const input = e.currentTarget as HTMLInputElement;
+			const file = input.files?.[0];
+			input.value = "";
+			if (!file) return;
+			const reader = new FileReader();
+			reader.onload = () => {
+				try {
+					const text = String(reader.result ?? "");
+					const j = JSON.parse(text) as unknown;
+					let rawList: unknown[] | null = null;
+					if (Array.isArray(j)) rawList = j;
+					else if (
+						j &&
+						typeof j === "object" &&
+						"units" in j &&
+						Array.isArray((j as { units: unknown }).units)
+					) {
+						rawList = (j as { units: unknown[] }).units;
+					}
+					if (!rawList) {
+						showToast('JSON must be { "units": [...] } or a top-level array', "warning");
+						return;
+					}
+					const next: { name: string; type: string }[] = [];
+					for (const row of rawList) {
+						if (!row || typeof row !== "object") continue;
+						const name = String((row as { name?: unknown }).name ?? "").trim();
+						const type = String((row as { type?: unknown }).type ?? "").trim();
+						if (name && type) next.push({ name, type });
+					}
+					if (next.length === 0) {
+						showToast("No valid name/type entries in JSON", "warning");
+						return;
+					}
+					unitReferenceFilterUnits = next;
+					updateUnitReferenceJsonStatus();
+					showToast(`Unit reference loaded (${next.length} row(s))`, "success");
+				} catch (err) {
+					console.error(err);
+					showToast("Could not parse unit reference JSON", "error");
+				}
+			};
+			reader.onerror = () => showToast("Failed to read JSON file", "error");
+			reader.readAsText(file);
+		});
+
+		document.getElementById("unit-reference-json-clear")?.addEventListener("click", () => {
+			unitReferenceFilterUnits = null;
+			updateUnitReferenceJsonStatus();
+			showToast("Unit filter cleared", "success");
+		});
+
+		document
+			.getElementById("silhouette-bench-export-preprocess-cache")
+			?.addEventListener("click", async () => {
+				try {
+					const blob = await exportSilhouettePreprocessCacheZipBlob();
+					if (!blob) {
+						showToast(
+							"No preprocess entries in cache yet—run silhouette bench on your images first",
+							"warning",
+						);
+						return;
+					}
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement("a");
+					a.href = url;
+					a.download = `silhouette-bench-preprocess-cache-${new Date().toISOString().slice(0, 10)}.zip`;
+					a.click();
+					URL.revokeObjectURL(url);
+					const st = getSilhouettePreprocessCacheStats();
+					showToast(
+						`Exported preprocess ZIP (${st.byFingerprint} fingerprint entries)`,
+						"success",
+					);
+				} catch (err) {
+					console.error(err);
+					showToast("Export preprocess ZIP failed", "error");
+				}
+			});
+
+		document
+			.getElementById("silhouette-bench-import-preprocess-cache")
+			?.addEventListener("change", async (e) => {
+				const input = e.currentTarget as HTMLInputElement;
+				const file = input.files?.[0];
+				input.value = "";
+				if (!file) return;
+				try {
+					const buf = await file.arrayBuffer();
+					const { imported, totalInManifest } =
+						await importSilhouettePreprocessCacheFromZipArrayBuffer(buf);
+					showToast(
+						`Imported ${imported} / ${totalInManifest} preprocess image(s) from ZIP`,
+						imported > 0 ? "success" : "warning",
+					);
+				} catch (err) {
+					console.error(err);
+					showToast(
+						err instanceof Error ? err.message : "Import preprocess ZIP failed",
+						"error",
+					);
+				}
+			});
+
+		updateShapeBenchmarkCountLabel();
+
 		let useDefaultMatching = true; // Default matching mode enabled by default
 		
 		// Toggle for matching mode
@@ -3822,103 +4905,6 @@ import "../styles.css";
 			// 5. Re-highlight paths (all will be red with no images)
 			highlightPathsWithoutMatchingImages();
 		});
-
-		const downloadZipBtn = document.getElementById("download-canvas-zip-btn");
-		if (downloadZipBtn) downloadZipBtn.addEventListener("click", async () => {
-			const btn = document.getElementById("download-canvas-zip-btn");
-			const currentSVGObj = importedSVGs?.[currentSVGIndex];
-			if (!currentSVGObj) {
-				showToast("No SVG loaded to download", "warning");
-				return;
-			}
-			btn.disabled = true;
-			btn.textContent = "Zipping...";
-			try {
-				const zip = new JSZip();
-				const svgEl = currentSVGObj.element;
-				const viewBox = svgEl.getAttribute("viewBox")?.split(" ").map(Number) || [0, 0, 4096, 4096];
-				const vbW = viewBox[2];
-				const vbH = viewBox[3];
-				const seen = new Set();
-
-				// 1. Current SVG
-				let svgName = currentSVGObj.name || "floorplan";
-				if (!svgName.toLowerCase().endsWith(".svg")) svgName += ".svg";
-				zip.file(svgName, new XMLSerializer().serializeToString(svgEl.cloneNode(true)));
-				seen.add(svgName);
-
-				// 2. Floorplan images that match path IDs in this SVG
-				const matchingFloorplans = new Map();
-				svgEl.querySelectorAll("path[id]").forEach((path) => {
-					const match = findMatchingImage(path.id || path.getAttribute("id"));
-					if (match && !matchingFloorplans.has(match.name)) {
-						matchingFloorplans.set(match.name, match);
-					}
-				});
-				matchingFloorplans.forEach((img) => {
-					let name = img.name || "image";
-					if (!name.includes(".")) {
-						const m = (img.data || "").match(/data:image\/(\w+);/);
-						name += m ? "." + m[1] : ".png";
-					}
-					if (seen.has(name)) {
-						const base = name.replace(/\.[^/.]+$/, "");
-						const ext = name.split(".").pop();
-						let i = 1;
-						while (seen.has(`${base}_${i}.${ext}`)) i++;
-						name = `${base}_${i}.${ext}`;
-					}
-					seen.add(name);
-					const m = (img.data || "").match(/^data:[^;]+;base64,(.+)$/);
-					if (m) zip.file(name, m[1], { base64: true });
-				});
-
-				// 3. Background (tower floorplate) images from SVG
-				let bgCount = 0;
-				svgEl.querySelectorAll("image").forEach((imgEl, idx) => {
-					const w = imgEl.getAttribute("width");
-					const h = imgEl.getAttribute("height");
-					if (w == vbW && h == vbH) {
-						const href = imgEl.getAttribute("href") || imgEl.getAttributeNS("http://www.w3.org/1999/xlink", "href");
-						const origName = imgEl.getAttribute("data-original-filename");
-						let name = origName || `tower-floorplate_${idx}.png`;
-						if (!name.includes(".")) {
-							const mt = (href || "").match(/data:image\/(\w+);/);
-							name += mt ? "." + mt[1] : ".png";
-						}
-						if (seen.has(name)) {
-							const base = name.replace(/\.[^/.]+$/, "");
-							const ext = name.split(".").pop();
-							let i = 1;
-							while (seen.has(`${base}_${i}.${ext}`)) i++;
-							name = `${base}_${i}.${ext}`;
-						}
-						seen.add(name);
-						const m = (href || "").match(/^data:[^;]+;base64,(.+)$/);
-						if (m) {
-							zip.file(name, m[1], { base64: true });
-							bgCount++;
-						}
-					}
-				});
-
-				const count = 1 + matchingFloorplans.size + bgCount;
-				const blob = await zip.generateAsync({ type: "blob" });
-				const a = document.createElement("a");
-				a.href = URL.createObjectURL(blob);
-				a.download = "canvas-files.zip";
-				a.click();
-				URL.revokeObjectURL(a.href);
-				showToast(`Downloaded ${count} file(s)`, "success");
-			} catch (err) {
-				console.error("ZIP download error:", err);
-				showToast("Download failed", "error");
-			} finally {
-				btn.disabled = false;
-				btn.textContent = "Download ZIP";
-			}
-		});
-
 
 		function uploadImages(e) {
 			const files = Array.from(e.target.files);
@@ -4267,6 +5253,477 @@ import "../styles.css";
 			) || null;
 		}
 
+		function sanitizeZipFolderSegment(name) {
+			return (
+				String(name || "svg")
+					.replace(/\.svg$/i, "")
+					.replace(/[/\\:*?"<>|]+/g, "_")
+					.replace(/\s+/g, "_")
+					.slice(0, 64) || "svg"
+			);
+		}
+
+		/**
+		 * Add one SVG file, matched floorplans, and full-viewbox background images to zip.
+		 * @param {InstanceType<typeof JSZip>} zip
+		 * @param {{ name: string, element: SVGElement }} svgObj
+		 * @param {string} pathPrefix use "" for flat zip or "folder/" for nested
+		 * @returns {{ fileCount: number }}
+		 */
+		function addSvgBundleToZip(zip, svgObj, pathPrefix) {
+			const prefix = pathPrefix || "";
+			const svgEl = svgObj.element;
+			const viewBox = svgEl.getAttribute("viewBox")?.split(" ").map(Number) || [0, 0, 4096, 4096];
+			const vbW = viewBox[2];
+			const vbH = viewBox[3];
+			const seen = new Set();
+
+			let svgName = svgObj.name || "floorplan";
+			if (!svgName.toLowerCase().endsWith(".svg")) svgName += ".svg";
+			zip.file(prefix + svgName, new XMLSerializer().serializeToString(svgEl.cloneNode(true)));
+			seen.add(svgName);
+
+			const matchingFloorplans = new Map();
+			svgEl.querySelectorAll("path[id]").forEach((path) => {
+				const match = findMatchingImage(path.id || path.getAttribute("id"));
+				if (match && !matchingFloorplans.has(match.name)) {
+					matchingFloorplans.set(match.name, match);
+				}
+			});
+			matchingFloorplans.forEach((img) => {
+				let name = img.name || "image";
+				if (!name.includes(".")) {
+					const m = (img.data || "").match(/data:image\/(\w+);/);
+					name += m ? "." + m[1] : ".png";
+				}
+				if (seen.has(name)) {
+					const base = name.replace(/\.[^/.]+$/, "");
+					const ext = name.split(".").pop();
+					let i = 1;
+					while (seen.has(`${base}_${i}.${ext}`)) i++;
+					name = `${base}_${i}.${ext}`;
+				}
+				seen.add(name);
+				const m = (img.data || "").match(/^data:[^;]+;base64,(.+)$/);
+				if (m) zip.file(prefix + name, m[1], { base64: true });
+			});
+
+			let bgCount = 0;
+			svgEl.querySelectorAll("image").forEach((imgEl, idx) => {
+				const w = imgEl.getAttribute("width");
+				const h = imgEl.getAttribute("height");
+				if (w == vbW && h == vbH) {
+					const href =
+						imgEl.getAttribute("href") || imgEl.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+					const origName = imgEl.getAttribute("data-original-filename");
+					let name = origName || `tower-floorplate_${idx}.png`;
+					if (!name.includes(".")) {
+						const mt = (href || "").match(/data:image\/(\w+);/);
+						name += mt ? "." + mt[1] : ".png";
+					}
+					if (seen.has(name)) {
+						const base = name.replace(/\.[^/.]+$/, "");
+						const ext = name.split(".").pop();
+						let i = 1;
+						while (seen.has(`${base}_${i}.${ext}`)) i++;
+						name = `${base}_${i}.${ext}`;
+					}
+					seen.add(name);
+					const m = (href || "").match(/^data:[^;]+;base64,(.+)$/);
+					if (m) {
+						zip.file(prefix + name, m[1], { base64: true });
+						bgCount++;
+					}
+				}
+			});
+
+			return { fileCount: 1 + matchingFloorplans.size + bgCount };
+		}
+
+		async function runDownloadCanvasZip(scope) {
+			const trigger = document.getElementById("download-canvas-zip-trigger");
+			const label = document.getElementById("download-canvas-zip-label");
+			if (!trigger || !label) return;
+
+			if (scope === "this") {
+				const currentSVGObj = importedSVGs?.[currentSVGIndex];
+				if (!currentSVGObj) {
+					showToast("No SVG loaded to download", "warning");
+					return;
+				}
+				trigger.disabled = true;
+				label.textContent = "Zipping…";
+				try {
+					const zip = new JSZip();
+					const { fileCount } = addSvgBundleToZip(zip, currentSVGObj, "");
+					const blob = await zip.generateAsync({ type: "blob" });
+					const a = document.createElement("a");
+					a.href = URL.createObjectURL(blob);
+					a.download = "canvas-files.zip";
+					a.click();
+					URL.revokeObjectURL(a.href);
+					showToast(`Downloaded ${fileCount} file(s) (this SVG)`, "success");
+				} catch (err) {
+					console.error("ZIP download error:", err);
+					showToast("Download failed", "error");
+				} finally {
+					trigger.disabled = false;
+					label.textContent = "Download ZIP";
+				}
+				return;
+			}
+
+			if (scope === "all") {
+				if (!importedSVGs?.length) {
+					showToast("No SVGs loaded to download", "warning");
+					return;
+				}
+				trigger.disabled = true;
+				label.textContent = "Zipping…";
+				try {
+					const zip = new JSZip();
+					let totalFiles = 0;
+					importedSVGs.forEach((svgObj, idx) => {
+						const folder = `${idx}_${sanitizeZipFolderSegment(svgObj.name)}`;
+						const { fileCount } = addSvgBundleToZip(zip, svgObj, `${folder}/`);
+						totalFiles += fileCount;
+					});
+					const blob = await zip.generateAsync({ type: "blob" });
+					const a = document.createElement("a");
+					a.href = URL.createObjectURL(blob);
+					a.download = "all-canvas-files.zip";
+					a.click();
+					URL.revokeObjectURL(a.href);
+					showToast(
+						`Downloaded ${totalFiles} file(s) from ${importedSVGs.length} SVG(s)`,
+						"success",
+					);
+				} catch (err) {
+					console.error("ZIP download error:", err);
+					showToast("Download failed", "error");
+				} finally {
+					trigger.disabled = false;
+					label.textContent = "Download ZIP";
+				}
+			}
+		}
+
+		(() => {
+			const wrap = document.getElementById("download-canvas-zip-wrap");
+			const trigger = document.getElementById("download-canvas-zip-trigger");
+			const menu = document.getElementById("download-canvas-zip-menu");
+			if (!wrap || !trigger || !menu) return;
+
+			function closeMenu() {
+				menu.classList.add("hidden");
+				trigger.setAttribute("aria-expanded", "false");
+			}
+			function toggleMenu() {
+				const open = menu.classList.contains("hidden");
+				if (open) {
+					menu.classList.remove("hidden");
+					trigger.setAttribute("aria-expanded", "true");
+				} else closeMenu();
+			}
+
+			trigger.addEventListener("click", (e) => {
+				e.stopPropagation();
+				toggleMenu();
+			});
+			menu.querySelectorAll(".download-canvas-zip-option").forEach((el) => {
+				el.addEventListener("click", async (e) => {
+					e.stopPropagation();
+					const scope = el.getAttribute("data-zip-scope");
+					closeMenu();
+					await runDownloadCanvasZip(scope);
+				});
+			});
+			document.addEventListener("click", closeMenu);
+		})();
+
+		document.getElementById("batch-shape-bench-button")?.addEventListener("click", async () => {
+			const btn = document.getElementById("batch-shape-bench-button") as HTMLButtonElement | null;
+			const progressContainer = document.getElementById("batch-shape-bench-progress");
+			const progressBar = document.getElementById("batch-shape-bench-progress-bar");
+			const progressText = document.getElementById("batch-shape-bench-progress-text");
+			const svgsToProcess =
+				importedSVGs?.length > 0
+					? importedSVGs.map((s) => s.element)
+					: (() => {
+							const el = document.querySelector("#svg-container svg");
+							return el ? [el] : [];
+						})();
+			if (svgsToProcess.length === 0) {
+				showToast("Load an SVG first", "warning");
+				return;
+			}
+			if (shapeBenchmarkCandidates.length === 0) {
+				showToast("Load benchmark images in the Silhouette benchmark panel", "warning");
+				return;
+			}
+			let totalTasks = 0;
+			for (const svgEl of svgsToProcess) {
+				for (const pathEl of svgEl.querySelectorAll("path")) {
+					const pathId = pathEl.getAttribute("id") || pathEl.id;
+					if (pathId) totalTasks++;
+				}
+			}
+			if (totalTasks === 0) {
+				showToast("No paths with an id attribute in the loaded SVG(s)", "warning");
+				return;
+			}
+			if (!btn) return;
+			btn.disabled = true;
+			const prevBtnText = btn.textContent;
+			btn.textContent = "Processing…";
+			if (progressContainer && progressBar && progressText) {
+				progressContainer.classList.remove("hidden");
+				progressBar.style.width = "0%";
+				progressText.textContent = "0 / 0";
+				progressText.removeAttribute("title");
+			}
+			const escapeCsv = (v: unknown) => {
+				const s = String(v ?? "");
+				return s.includes(",") || s.includes('"') || s.includes("\n")
+					? `"${s.replace(/"/g, '""')}"`
+					: s;
+			};
+			/** @type {Record<string, string>[]} */
+			const csvRecords = [];
+			let completedTasks = 0;
+			const updateProgress = (detail?: string) => {
+				if (!progressBar || !progressText || totalTasks === 0) return;
+				const pct = Math.min(100, Math.round((completedTasks / totalTasks) * 100));
+				progressBar.style.width = `${pct}%`;
+				progressText.textContent = `${completedTasks} / ${totalTasks}`;
+				if (detail) progressText.setAttribute("title", detail);
+				else progressText.removeAttribute("title");
+			};
+			updateProgress();
+			try {
+				const rawList = shapeBenchmarkCandidates.map((c) => ({ name: c.name, data: c.data }));
+				const { kept, dropped, originalCount } =
+					await dedupeBenchmarkCandidatesByIdenticalContent(rawList);
+				if (kept.length === 0) {
+					showToast("No benchmark images left after deduplication", "warning");
+					return;
+				}
+				let batchCount = 0;
+				for (const svgEl of svgsToProcess) {
+					const svgMeta = importedSVGs?.find((s) => s.element === svgEl);
+					const svgFile = svgMeta?.name || "current.svg";
+					if (importedSVGs?.length > 0) {
+						const idx = importedSVGs.findIndex((s) => s.element === svgEl);
+						if (idx !== -1) {
+							currentSVGIndex = idx;
+							processSVG(importedSVGs[currentSVGIndex].element);
+						}
+					}
+					const paths = svgEl.querySelectorAll("path");
+					for (const pathEl of paths) {
+						const pathId = pathEl.getAttribute("id") || pathEl.id;
+						if (!pathId) continue;
+						updateProgress(pathId);
+						try {
+							const {
+								candidates: keptForPath,
+								ruleMatched: unitRuleMatched,
+								typeStr: unitTypeStr,
+							} = applyUnitReferenceCandidateFilter(pathId, kept);
+							if (unitRuleMatched && keptForPath.length === 0) {
+								csvRecords.push({
+									svg_file: svgFile,
+									path_id: pathId,
+									benchmark_image: "",
+									rank_in_path: "",
+									score_pct: "",
+									iou_pct: "",
+									chamfer_pct: "",
+									chf_mean_px: "",
+									chf_std_px: "",
+									chf_blend: "",
+									chf_d0_frac: "",
+									chf_exp: "",
+									chf_sigma_w: "",
+									chf_amp: "",
+									best_pose: "",
+									status: "unit_filter_no_candidates",
+									detail: unitTypeStr ? `type ${unitTypeStr}` : "",
+								});
+								completedTasks++;
+								updateProgress(pathId);
+								continue;
+							}
+							const result = await runSilhouetteBenchmarkBatch(svgEl, pathEl, keptForPath, {
+								logTimings: false,
+								shapeBenchFlashPreprocessSteps: false,
+								silhouetteVisualFirstN: 0,
+								onProgress: () => {},
+								onPartialResult: (snap) => {
+									const handled = snap.candidatesHandled ?? snap.rows.length;
+									if (snap.rankedCarousel.length > 0) {
+										setSilhouetteBenchRankForPath(pathId, snap.rankedCarousel, {
+											featureColumnLabel: "Score",
+											scored: handled,
+											total: keptForPath.length,
+										}, svgEl);
+									}
+								},
+							});
+							if (result.rankedCarousel.length > 0) {
+								setSilhouetteBenchRankForPath(pathId, result.rankedCarousel, {
+									featureColumnLabel: "Score",
+									scored: result.rows.length,
+									total: keptForPath.length,
+								}, svgEl);
+							}
+							const sortedRows = [...result.rows].sort(shapeBenchCompareRowsForRank);
+							sortedRows.forEach((row, i) => {
+								csvRecords.push({
+									svg_file: svgFile,
+									path_id: pathId,
+									benchmark_image: row.name,
+									rank_in_path: String(i + 1),
+									score_pct: String(row.rankScore ?? ""),
+									iou_pct: String(row.silhouetteIou ?? ""),
+									chamfer_pct: String(row.silhouetteChamfer ?? ""),
+									chf_mean_px: String(row.silhouetteChamferMeanPx ?? ""),
+									chf_std_px: String(row.silhouetteChamferStdPx ?? ""),
+									chf_blend: String(row.chamferBlend ?? ""),
+									chf_d0_frac: String(row.chamferDiagFrac ?? ""),
+									chf_exp: String(row.chamferExponent ?? ""),
+									chf_sigma_w: String(row.chamferVarWeight ?? ""),
+									chf_amp: String(row.chamferDistAmplify ?? ""),
+									best_pose: String(row.bestPoseLabel ?? ""),
+									status: "ok",
+									detail: "",
+								});
+							});
+							for (const f of result.filteredOut || []) {
+								csvRecords.push({
+									svg_file: svgFile,
+									path_id: pathId,
+									benchmark_image: f.name,
+									rank_in_path: "",
+									score_pct: "",
+									iou_pct: "",
+									chamfer_pct: "",
+									chf_mean_px: "",
+									chf_std_px: "",
+									chf_blend: "",
+									chf_d0_frac: "",
+									chf_exp: "",
+									chf_sigma_w: "",
+									chf_amp: "",
+									best_pose: "",
+									status: "aspect_filtered",
+									detail: f.reason || "",
+								});
+							}
+						} catch (err) {
+							console.warn(`Batch Silhouette bench failed for ${pathId}:`, err);
+							const msg = err instanceof Error ? err.message : String(err);
+							csvRecords.push({
+								svg_file: svgFile,
+								path_id: pathId,
+								benchmark_image: "",
+								rank_in_path: "",
+								score_pct: "",
+								iou_pct: "",
+								chamfer_pct: "",
+								chf_mean_px: "",
+								chf_std_px: "",
+								chf_blend: "",
+								chf_d0_frac: "",
+								chf_exp: "",
+								chf_sigma_w: "",
+								chf_amp: "",
+								best_pose: "",
+								status: "error",
+								detail: msg,
+							});
+						}
+						completedTasks++;
+						updateProgress(pathId);
+						batchCount++;
+						if (batchCount % 10 === 0) {
+							await new Promise((resolve) => setTimeout(resolve, 0));
+						}
+					}
+				}
+				const headers = [
+					"svg_file",
+					"path_id",
+					"benchmark_image",
+					"rank_in_path",
+					"score_pct",
+					"iou_pct",
+					"chamfer_pct",
+					"chf_mean_px",
+					"chf_std_px",
+					"chf_blend",
+					"chf_d0_frac",
+					"chf_exp",
+					"chf_sigma_w",
+					"chf_amp",
+					"best_pose",
+					"status",
+					"detail",
+				];
+				csvRecords.sort((a, b) => {
+					const s = a.svg_file.localeCompare(b.svg_file);
+					if (s !== 0) return s;
+					const p = a.path_id.localeCompare(b.path_id);
+					if (p !== 0) return p;
+					const st = a.status.localeCompare(b.status);
+					if (st !== 0) return st;
+					return a.benchmark_image.localeCompare(b.benchmark_image);
+				});
+				const rows = [headers.map((h) => escapeCsv(h)).join(",")];
+				for (const r of csvRecords) {
+					rows.push(headers.map((h) => escapeCsv(r[h])).join(","));
+				}
+				const csv = rows.join("\n");
+				const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				let baseName = "batch-silhouette-bench";
+				if (Array.isArray(importedSVGs) && importedSVGs.length > 0) {
+					const names = importedSVGs
+						.map((s) => s.name || "")
+						.filter(Boolean)
+						.map((n) => n.replace(/\.svg$/i, ""));
+					if (names.length > 0) {
+						let prefix = names[0];
+						for (let i = 1; i < names.length; i++) {
+							const cur = names[i];
+							let j = 0;
+							while (j < prefix.length && j < cur.length && prefix[j] === cur[j]) j++;
+							prefix = prefix.slice(0, j);
+							if (!prefix) break;
+						}
+						if (prefix && prefix.length > 2) baseName = prefix;
+					}
+				}
+				a.download = `${baseName || "batch-silhouette-bench"}-silhouette-bench-${new Date().toISOString().slice(0, 10)}.csv`;
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+				const dedupeNote =
+					dropped.length > 0 ? ` (${kept.length} unique benchmark images from ${originalCount})` : "";
+				showToast(`Exported ${csvRecords.length} row(s) for ${totalTasks} path(s)${dedupeNote}`, "success");
+			} catch (err) {
+				console.error("Batch Silhouette bench error:", err);
+				showToast(err instanceof Error ? err.message : "Batch Silhouette bench failed", "error");
+			} finally {
+				btn.disabled = false;
+				btn.textContent = prevBtnText || "Batch Silhouette bench";
+				if (progressContainer) progressContainer.classList.add("hidden");
+			}
+		});
+
 		// Highlight paths that don't have a corresponding floorplan image
 		function highlightPathsWithoutMatchingImages() {
 			const svgElement = document.getElementById("svg-container")?.querySelector("svg");
@@ -4288,11 +5745,6 @@ import "../styles.css";
 			console.log("previewBackplate: No SVG provided, skipping setup");
 			return;
 		}
-		
-			const listeners = [];
-			listeners.forEach((e) => {
-				removeEventListener("hover", e);
-			});
 
 			let previewerContainer = document.getElementById("image-previewer-container");
 			console.log("previewing");
@@ -4302,6 +5754,7 @@ import "../styles.css";
 				const previewerText = document.createElement("p");
 				const compareBtn = document.createElement("button");
 				const compareOpencvBtn = document.createElement("button");
+				const compareShapeBenchBtn = document.createElement("button");
 				const compareScores = document.createElement("div");
 				compareBtn.textContent = "Compare Floorplan";
 				compareBtn.id = "compare-floorplan-btn";
@@ -4309,12 +5762,19 @@ import "../styles.css";
 				compareOpencvBtn.textContent = "Compare (OpenCV)";
 				compareOpencvBtn.id = "compare-opencv-btn";
 				compareOpencvBtn.style.cssText = "margin-top:4px;margin-left:4px;padding:4px 8px;font-size:10px;cursor:pointer;background:#2d7a4f;color:white;border:none;border-radius:4px;";
+				compareShapeBenchBtn.textContent = "Silhouette bench";
+				compareShapeBenchBtn.id = "compare-shape-bench-btn";
+				compareShapeBenchBtn.title =
+					"Silhouette bench: IoU + boundary Chamfer vs benchmark floorplans (4×90° + mirrored search)";
+				compareShapeBenchBtn.style.cssText =
+					"margin-top:4px;padding:4px 8px;font-size:10px;cursor:pointer;background:#b45309;color:white;border:none;border-radius:4px;";
 				compareScores.id = "compare-floorplan-scores";
 				compareScores.style.cssText = "font-size:10px;margin-top:6px;color:#333;";
 				const compareBtnsRow = document.createElement("div");
 				compareBtnsRow.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;align-items:center;";
 				compareBtnsRow.appendChild(compareBtn);
 				compareBtnsRow.appendChild(compareOpencvBtn);
+				compareBtnsRow.appendChild(compareShapeBenchBtn);
 				newPreviewer.id = "image-previewer-container";
 				newPreviewer.style.padding = "5px";
 				newPreviewer.style.position = "fixed";
@@ -4387,6 +5847,8 @@ import "../styles.css";
 							compareBtn.style.display = "none";
 							const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
 							if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+							const compareShapeBenchBtnEl = document.getElementById("compare-shape-bench-btn");
+							if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "none";
 							if (!container.querySelector("[data-compare-carousel]")) {
 								container.insertBefore(carouselLabel, imgWrapperEl);
 								if (imgWrapperEl) {
@@ -4411,8 +5873,10 @@ import "../styles.css";
 								backBtn.remove();
 								previewText.style.display = "";
 								compareBtn.style.display = "";
-								const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
-								if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+								const compareOpencvBtnEl2 = document.getElementById("compare-opencv-btn");
+								if (compareOpencvBtnEl2) compareOpencvBtnEl2.style.display = "";
+								const compareShapeBenchBtnEl2 = document.getElementById("compare-shape-bench-btn");
+								if (compareShapeBenchBtnEl2) compareShapeBenchBtnEl2.style.display = "";
 								previewImg.src = img.data;
 								updatePreviewText(img.name, getImageTransform(img.name));
 							};
@@ -4478,6 +5942,8 @@ import "../styles.css";
 							previewText.style.display = "none";
 							if (compareBtnEl) compareBtnEl.style.display = "none";
 							compareOpencvBtn.style.display = "none";
+							const compareShapeBenchBtnEl = document.getElementById("compare-shape-bench-btn");
+							if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "none";
 							if (!container.querySelector("[data-compare-carousel]")) {
 								container.insertBefore(carouselLabel, imgWrapperEl);
 								if (imgWrapperEl) {
@@ -4503,6 +5969,8 @@ import "../styles.css";
 								previewText.style.display = "";
 								if (compareBtnEl) compareBtnEl.style.display = "";
 								compareOpencvBtn.style.display = "";
+								const compareShapeBenchBtnEl2 = document.getElementById("compare-shape-bench-btn");
+								if (compareShapeBenchBtnEl2) compareShapeBenchBtnEl2.style.display = "";
 								previewImg.src = img.data;
 								updatePreviewText(img.name, getImageTransform(img.name));
 							};
@@ -4516,13 +5984,387 @@ import "../styles.css";
 						compareOpencvBtn.textContent = "Compare (OpenCV)";
 					}
 				});
+
+				compareShapeBenchBtn.addEventListener("click", async () => {
+					const svgEl = document.querySelector("#svg-container svg");
+					const pathEl = currentHoveredPathElement;
+					const scoresEl = document.getElementById("compare-floorplan-scores");
+					if (!svgEl || !pathEl) {
+						if (scoresEl) scoresEl.textContent = "Hover a path first";
+						return;
+					}
+					if (shapeBenchmarkCandidates.length === 0) {
+						showToast("Load benchmark images in the Silhouette benchmark panel", "warning");
+						if (scoresEl) scoresEl.textContent = "No benchmark images loaded";
+						return;
+					}
+					const benchPathIdEarly =
+						pathEl.getAttribute("id") || pathEl.id || "unknown";
+					const escBenchPath = String(benchPathIdEarly)
+						.replace(/&/g, "&amp;")
+						.replace(/</g, "&lt;")
+						.replace(/>/g, "&gt;")
+						.replace(/"/g, "&quot;");
+					shapeBenchCarouselDismissedPathId = null;
+					const benchResultsWrap = document.getElementById("shape-benchmark-results");
+					if (benchResultsWrap) {
+						benchResultsWrap.classList.remove("hidden");
+						benchResultsWrap.innerHTML = `<p class="p-2 text-xs font-medium border-b border-neutral-200 bg-neutral-50">Silhouette bench · Path: <code>${escBenchPath}</code></p><p class="p-2 text-xs text-neutral-600">Deduplicating and preparing…</p>`;
+					}
+					compareShapeBenchBtn.disabled = true;
+					const prevLabel = compareShapeBenchBtn.textContent;
+					compareShapeBenchBtn.textContent = "Running…";
+					if (scoresEl) scoresEl.textContent = "Running silhouette benchmark…";
+					const progressWrap = document.getElementById("shape-benchmark-progress");
+					const progressBar = document.getElementById("shape-benchmark-progress-bar");
+					const progressText = document.getElementById("shape-benchmark-progress-text");
+					const updateBenchProgress = (done: number, total: number, detail?: string) => {
+						if (!progressBar || !progressText) return;
+						const pct = total <= 0 ? 0 : Math.min(100, Math.round((done / total) * 100));
+						progressBar.style.width = `${pct}%`;
+						const line =
+							total <= 0
+								? "0 / 0"
+								: detail
+									? `${done} / ${total} — ${detail}`
+									: `${done} / ${total}`;
+						progressText.textContent = line;
+						progressText.setAttribute("title", detail || line);
+					};
+					if (progressWrap && progressBar && progressText) {
+						progressWrap.classList.remove("hidden");
+						progressBar.style.width = "0%";
+						updateBenchProgress(0, shapeBenchmarkCandidates.length, "Hashing / deduping…");
+					}
+					try {
+						const rawList = shapeBenchmarkCandidates.map((c) => ({ name: c.name, data: c.data }));
+						const { kept, dropped, originalCount } =
+							await dedupeBenchmarkCandidatesByIdenticalContent(rawList);
+						if (dropped.length > 0) {
+							console.log("[Silhouette bench] Deduped identical bytes:", dropped);
+						}
+						if (kept.length === 0) {
+							if (scoresEl) scoresEl.textContent = "Nothing to compare after dedupe";
+							showToast("No images left after deduplication", "warning");
+							return;
+						}
+						const {
+							candidates: keptForBench,
+							ruleMatched: unitRuleForBench,
+							typeStr: unitTypeForBench,
+						} = applyUnitReferenceCandidateFilter(benchPathIdEarly, kept);
+						if (unitRuleForBench && keptForBench.length === 0) {
+							if (scoresEl) {
+								scoresEl.textContent =
+									"No benchmark images pass the unit reference filter for this path";
+							}
+							showToast(
+								"No images pass unit reference filter — check type vs image names",
+								"warning",
+							);
+							if (benchResultsWrap) {
+								const escType =
+									String(unitTypeForBench ?? "")
+										.replace(/&/g, "&amp;")
+										.replace(/</g, "&lt;")
+										.replace(/>/g, "&gt;")
+										.replace(/"/g, "&quot;") || "—";
+								benchResultsWrap.innerHTML = `<p class="p-2 text-xs font-medium border-b border-neutral-200 bg-neutral-50">Silhouette bench · Path: <code>${escBenchPath}</code></p><p class="p-2 text-xs text-amber-900">Unit filter matched this path but no images passed token rules (type: <code>${escType}</code>).</p>`;
+							}
+							return;
+						}
+						const totalBench = keptForBench.length;
+						updateBenchProgress(0, totalBench, "Preparing…");
+						const flashPreEl = document.getElementById(
+							"shape-bench-flash-preprocess",
+						) as HTMLInputElement | null;
+						const result = await runSilhouetteBenchmarkBatch(svgEl, pathEl, keptForBench, {
+							shapeBenchFlashPreprocessSteps: !!flashPreEl?.checked,
+							onPreprocessFlashStep: shapeBenchPreprocessFlashStepHandler,
+							onProgress: ({ done, total, name, phase }) => {
+								if (phase === "cutout") {
+									updateBenchProgress(0, total, total ? "Cutout + silhouettes…" : "");
+									return;
+								}
+								updateBenchProgress(done, total, name || "");
+							},
+							onPartialResult: (snap) => {
+								const handled = snap.candidatesHandled ?? snap.rows.length;
+								const filtN = snap.filteredOut?.length ?? 0;
+								const pending = handled < totalBench;
+								renderShapeBenchmarkTable(snap, {
+									statusLine: pending
+										? `${snap.rows.length} ranked · ${handled} / ${totalBench} processed${filtN ? ` · ${filtN} skipped (aspect)` : ""}`
+										: filtN
+											? `${snap.rows.length} ranked · ${filtN} skipped (aspect vs cutout)`
+											: "",
+								});
+								if (snap.rankedCarousel.length > 0) {
+									showShapeBenchmarkRankCarousel(snap.rankedCarousel, {
+										pathId: snap.pathId,
+										scored: handled,
+										total: totalBench,
+										featureColumnLabel: "Score",
+									});
+									const benchPathIdPartial = pathEl.getAttribute("id") || pathEl.id;
+									if (benchPathIdPartial) {
+										lastShapeBenchRankCarousel = {
+											pathId: benchPathIdPartial,
+											featureColumnLabel: "Score",
+											items: snap.rankedCarousel.map((it) => ({ ...it })),
+										};
+										setSilhouetteBenchRankForPath(benchPathIdPartial, snap.rankedCarousel, {
+											featureColumnLabel: "Score",
+											scored: handled,
+											total: totalBench,
+										}, svgEl);
+									}
+								}
+							},
+						});
+						renderShapeBenchmarkTable(result);
+						const benchPathId = pathEl.getAttribute("id") || pathEl.id;
+						if (benchPathId) {
+							lastShapeBenchRankCarousel = {
+								pathId: benchPathId,
+								featureColumnLabel: "Score",
+								items: result.rankedCarousel.map((it) => ({ ...it })),
+							};
+							if (result.rankedCarousel.length > 0) {
+								setSilhouetteBenchRankForPath(benchPathId, result.rankedCarousel, {
+									featureColumnLabel: "Score",
+									scored: result.rows.length,
+									total: keptForBench.length,
+								}, svgEl);
+							}
+						}
+						showShapeBenchmarkRankCarousel(result.rankedCarousel, {
+							pathId: result.pathId,
+							scored: result.rows.length,
+							total: keptForBench.length,
+							featureColumnLabel: "Score",
+						});
+						const dedupeBit =
+							dropped.length > 0 ? ` · ${kept.length} unique (${originalCount} loaded)` : "";
+						const filtBit =
+							result.filteredOut?.length > 0
+								? ` · ${result.filteredOut.length} skipped (aspect gate vs cutout)`
+								: "";
+						if (scoresEl) {
+							scoresEl.textContent = `Score rank (IoU + Chamfer, best first) · ${result.rows.length} image(s)${dedupeBit}${filtBit}`;
+						}
+						showToast(
+							dropped.length > 0
+								? `Silhouette benchmark done — ${kept.length} unique (${dropped.length} duplicate name(s) skipped, shorter name kept)`
+								: "Silhouette benchmark done — ranked preview carousel (best first)",
+							"success",
+						);
+					} catch (err) {
+						console.error("Silhouette benchmark error:", err);
+						const msg = err instanceof Error ? err.message : "Silhouette benchmark failed";
+						if (scoresEl) scoresEl.textContent = msg;
+						showToast(msg, "error");
+					} finally {
+						if (progressWrap) progressWrap.classList.add("hidden");
+						if (progressBar) progressBar.style.width = "0%";
+						if (progressText) {
+							progressText.textContent = "0 / 0";
+							progressText.removeAttribute("title");
+						}
+						compareShapeBenchBtn.disabled = false;
+						compareShapeBenchBtn.textContent = prevLabel || "Silhouette bench";
+					}
+				});
 			}
 
-			parentSVG.querySelectorAll("path").forEach((path) => {
-				path.addEventListener("mousedown", (e) => {
-					const selectedImage = findMatchingImage(e.target.id);
-					if (selectedImage) {
-						previewPinned = true;
+			const PREVIEW_HOVER_KEY = "__floorplanPreviewHoverDelegates";
+			const prevHoverDel = (parentSVG as any)[PREVIEW_HOVER_KEY];
+			if (prevHoverDel) {
+				parentSVG.removeEventListener("mousedown", prevHoverDel.mousedown);
+				parentSVG.removeEventListener("mouseover", prevHoverDel.mouseover);
+				parentSVG.removeEventListener("mouseout", prevHoverDel.mouseout);
+				delete (parentSVG as any)[PREVIEW_HOVER_KEY];
+			}
+
+			const onPathMousedown = (e: MouseEvent) => {
+				const pathEl = (e.target as Element | null)?.closest?.("path") as SVGPathElement | null;
+				if (!pathEl || !parentSVG.contains(pathEl)) return;
+				const pathId = pathEl.getAttribute("id") || pathEl.id;
+				if (!pathId) return;
+				previewPinned = true;
+				const preview = document.getElementById("image-previewer-container");
+				if (preview) {
+					preview.style.left = `${e.clientX}px`;
+					preview.style.top = `${e.clientY}px`;
+				}
+			};
+			const onPathMouseover = (e: MouseEvent) => {
+				const pathEl = (e.target as Element | null)?.closest?.("path") as SVGPathElement | null;
+				if (!pathEl || !parentSVG.contains(pathEl)) return;
+				const pvShow = document.getElementById("image-previewer-container");
+				if (pvShow) pvShow.style.display = "block";
+				const pathId = pathEl.getAttribute("id") || pathEl.id;
+				const selectedImage = pathId ? findMatchingImage(pathId) : null;
+				const container = document.getElementById("image-previewer-container");
+				const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
+				const scoresEl = document.getElementById("compare-floorplan-scores");
+				const hasCompareCarousel = container?.querySelector("[data-compare-carousel]");
+				const hasRankBenchCarousel = container?.querySelector("[data-benchmark-rank-carousel]");
+				const sameHoveredPath = currentHoveredPathElement === pathEl;
+				// Keep compare / bench carousels when re-hovering the same path after the panel was
+				// hidden by mouseout (previewPinned is still false). Requiring previewPinned caused
+				// carousels to be torn down on every re-hover.
+				if (selectedImage) {
+					if (hasCompareCarousel && sameHoveredPath) {
+						currentHoveredPathElement = pathEl;
+						currentHoveredImageName = selectedImage.name;
+						return;
+					}
+				}
+				if (hasRankBenchCarousel && sameHoveredPath) {
+					currentHoveredPathElement = pathEl;
+					if (selectedImage) currentHoveredImageName = selectedImage.name;
+					else currentHoveredImageName = null;
+					return;
+				}
+				if (scoresEl) scoresEl.textContent = "";
+				container?.querySelectorAll("[data-compare-carousel]").forEach((el) => el.remove());
+				destroyShapeBenchRankCarouselUI();
+				const compareBtnEl = document.getElementById("compare-floorplan-btn");
+				const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
+				const compareShapeBenchBtnEl = document.getElementById("compare-shape-bench-btn");
+
+				const rankSvg = parentSVG;
+				const silRankEntry = pathId ? getSilhouetteBenchRankEntryForPathOnSvg(rankSvg, pathId) : undefined;
+				if (
+					pathId &&
+					shapeBenchCarouselDismissedPathId !== pathId &&
+					silRankEntry?.items?.length
+				) {
+					currentHoveredPathElement = pathEl;
+					if (selectedImage) currentHoveredImageName = selectedImage.name;
+					else currentHoveredImageName = null;
+					const rs = silRankEntry.scored;
+					const rt = silRankEntry.total;
+					showShapeBenchmarkRankCarousel(silRankEntry.items, {
+						pathId,
+						featureColumnLabel: silRankEntry.featureColumnLabel ?? "Score",
+						...(rs != null && rt != null ? { scored: rs, total: rt } : {}),
+					});
+					return;
+				}
+
+				if (selectedImage) {
+					currentHoveredPathElement = pathEl;
+					if (compareBtnEl) compareBtnEl.style.display = "";
+					if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+					if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+					const previewTextEl = document.getElementById("image-previewer-text");
+					if (previewTextEl) previewTextEl.style.display = "";
+					previewImg.src = selectedImage.data;
+
+					// Track current hovered image name
+					currentHoveredImageName = selectedImage.name;
+
+					// Get or create transformation entry
+					const transform = getImageTransform(selectedImage.name);
+
+					// Get imported rotation and flip for this image
+					const imageIdentifier = getUnitIdentifier(selectedImage.name);
+					let importedRotationForImage = null;
+					let importedFlipForImage = null;
+					if (imageIdentifier && importedUnitReference) {
+						const importedUnit = importedUnitReference.find((unit: any) => {
+							const unitIdentifier = getUnitIdentifier(unit.name || "");
+							return unitIdentifier === imageIdentifier;
+						});
+						if (importedUnit) {
+							importedRotationForImage = typeof importedUnit.rotation === 'string' ? parseInt(importedUnit.rotation) : importedUnit.rotation;
+							importedFlipForImage = typeof importedUnit.flip === 'string' ? importedUnit.flip === 'true' : importedUnit.flip;
+						}
+					}
+
+					// Update preview text with transform values
+					updatePreviewText(selectedImage.name, transform);
+
+					// Apply saved transformation after image loads
+					previewImg.onload = () => {
+						if (transform) {
+							applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+							updatePreviewText(selectedImage.name, transform);
+						}
+					};
+
+					// If image is already loaded, apply immediately
+					if (previewImg.complete) {
+						if (transform) {
+							applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
+							updatePreviewText(selectedImage.name, transform);
+						}
+					}
+				} else if (pathId) {
+					const hasBench = shapeBenchmarkCandidates.length > 0;
+					currentHoveredPathElement = pathEl;
+					currentHoveredImageName = null;
+					if (compareBtnEl) compareBtnEl.style.display = "none";
+					if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "none";
+					if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+					previewImg.src = "";
+					const previewTextEl = document.getElementById("image-previewer-text");
+					if (previewTextEl) {
+						previewTextEl.style.display = "";
+						previewTextEl.replaceChildren();
+						const wrap = document.createElement("span");
+						wrap.style.cssText = "color:#444;line-height:1.35;";
+						wrap.append("Path ");
+						const code = document.createElement("code");
+						code.style.fontSize = "9px";
+						code.textContent = pathId;
+						wrap.appendChild(code);
+						wrap.appendChild(document.createElement("br"));
+						wrap.append("No Check Floorplans image for this path.");
+						wrap.appendChild(document.createElement("br"));
+						wrap.append(
+							hasBench
+								? "Silhouette bench uses the benchmark image set."
+								: "Load benchmark images in the panel below for Silhouette bench.",
+						);
+						previewTextEl.appendChild(wrap);
+					}
+				} else {
+					previewImg.src = "";
+					const previewTextEl = document.getElementById("image-previewer-text");
+					if (previewTextEl) previewTextEl.innerHTML = "";
+					currentHoveredImageName = null;
+					currentHoveredPathElement = null;
+					if (compareBtnEl) compareBtnEl.style.display = "";
+					if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
+					if (compareShapeBenchBtnEl) compareShapeBenchBtnEl.style.display = "";
+				}
+			};
+			const onPathMouseout = (e: MouseEvent) => {
+				const pathEl = (e.target as Element | null)?.closest?.("path");
+				if (!pathEl || !parentSVG.contains(pathEl)) return;
+				const preview = document.getElementById("image-previewer-container");
+				if (!preview) return;
+				if (previewPinned) return;
+				const related = e.relatedTarget as Node | null;
+				if (related && preview.contains(related)) return;
+				preview.style.display = "none";
+			};
+			(parentSVG as any)[PREVIEW_HOVER_KEY] = {
+				mousedown: onPathMousedown,
+				mouseover: onPathMouseover,
+				mouseout: onPathMouseout,
+			};
+			parentSVG.addEventListener("mousedown", onPathMousedown);
+			parentSVG.addEventListener("mouseover", onPathMouseover);
+			parentSVG.addEventListener("mouseout", onPathMouseout);
+			highlightPathsWithoutMatchingImages();
+			if (!(window as any).__floorplanPreviewMoveClickBound) {
+				(window as any).__floorplanPreviewMoveClickBound = true;
+				globalSvgContainer.addEventListener("mousemove", (e) => {
+					if (!previewPinned) {
 						const preview = document.getElementById("image-previewer-container");
 						if (preview) {
 							preview.style.left = `${e.clientX}px`;
@@ -4530,123 +6372,33 @@ import "../styles.css";
 						}
 					}
 				});
-				const listener = path.addEventListener("mouseover", (e) => {
-					document.getElementById(
-						"image-previewer-container",
-					).style.display = "block";
-					const selectedImage = findMatchingImage(e.target.id);
-
-					if (selectedImage) {
-						const container = document.getElementById("image-previewer-container");
-						const hasCarousel = container?.querySelector("[data-compare-carousel]");
-						// Keep carousel visible when re-hovering same path while viewing intermediates
-						if (hasCarousel && previewPinned && currentHoveredPathElement === e.target) {
-							currentHoveredPathElement = e.target;
-							currentHoveredImageName = selectedImage.name;
-							return;
+				document.addEventListener("click", (e) => {
+					const preview = document.getElementById("image-previewer-container");
+					if (!preview || preview.style.display === "none") return;
+					const target = e.target as Element;
+					const isOnPreview = preview.contains(target);
+					const isOnPath = target.closest("#svg-container path");
+					if (!isOnPreview && !isOnPath) {
+						previewPinned = false;
+						preview.style.display = "none";
+						// Keep compare / Shape-bench carousels in the DOM so re-opening the preview
+						// (re-hover or click path) does not require running compare again.
+						const stillHasCarousel =
+							!!preview.querySelector("[data-compare-carousel]") ||
+							!!preview.querySelector("[data-benchmark-rank-carousel]");
+						if (!stillHasCarousel) {
+							const pt = document.getElementById("image-previewer-text");
+							const cb = document.getElementById("compare-floorplan-btn");
+							const cob = document.getElementById("compare-opencv-btn");
+							const csb = document.getElementById("compare-shape-bench-btn");
+							if (pt) pt.style.display = "";
+							if (cb) cb.style.display = "";
+							if (cob) cob.style.display = "";
+							if (csb) csb.style.display = "";
 						}
-						currentHoveredPathElement = e.target;
-						const scoresEl = document.getElementById("compare-floorplan-scores");
-						if (scoresEl) scoresEl.textContent = "";
-						const previewImg = document.getElementById("image-previewer-image") as HTMLImageElement;
-						container?.querySelectorAll("[data-compare-carousel]").forEach(el => el.remove());
-						const compareBtnEl = document.getElementById("compare-floorplan-btn");
-						const compareOpencvBtnEl = document.getElementById("compare-opencv-btn");
-						if (compareBtnEl) compareBtnEl.style.display = "";
-						if (compareOpencvBtnEl) compareOpencvBtnEl.style.display = "";
-						const previewTextEl = document.getElementById("image-previewer-text");
-						if (previewTextEl) previewTextEl.style.display = "";
-						previewImg.src = selectedImage.data;
-						
-						// Track current hovered image name
-						currentHoveredImageName = selectedImage.name;
-						
-						// Get or create transformation entry
-						const transform = getImageTransform(selectedImage.name);
-						
-						// Get imported rotation and flip for this image
-						const imageIdentifier = getUnitIdentifier(selectedImage.name);
-						let importedRotationForImage = null;
-						let importedFlipForImage = null;
-						if (imageIdentifier && importedUnitReference) {
-							const importedUnit = importedUnitReference.find((unit: any) => {
-								const unitIdentifier = getUnitIdentifier(unit.name || "");
-								return unitIdentifier === imageIdentifier;
-							});
-							if (importedUnit) {
-								importedRotationForImage = typeof importedUnit.rotation === 'string' ? parseInt(importedUnit.rotation) : importedUnit.rotation;
-								importedFlipForImage = typeof importedUnit.flip === 'string' ? importedUnit.flip === 'true' : importedUnit.flip;
-							}
-						}
-						
-						// Update preview text with transform values
-						updatePreviewText(selectedImage.name, transform);
-						
-						// Apply saved transformation after image loads
-						previewImg.onload = () => {
-							if (transform) {
-								applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
-								updatePreviewText(selectedImage.name, transform);
-							}
-						};
-						
-						// If image is already loaded, apply immediately
-						if (previewImg.complete) {
-							if (transform) {
-								applyImageTransform(previewImg, transform, importedRotationForImage, importedFlipForImage);
-								updatePreviewText(selectedImage.name, transform);
-							}
-						}
-					} else {
-						document.getElementById("image-previewer-image").src =
-							"";
-						document.getElementById(
-							"image-previewer-text",
-						).innerHTML = "";
-						currentHoveredImageName = null;
-						currentHoveredPathElement = null;
 					}
 				});
-
-				const listener2 = path.addEventListener("mouseout", (e) => {
-					const preview = document.getElementById("image-previewer-container");
-					if (previewPinned) return;
-					const related = (e as MouseEvent).relatedTarget as Node | null;
-					if (related && preview?.contains(related)) return;
-					preview.style.display = "none";
-				});
-
-				listeners.push(listener);
-				listeners.push(listener2);
-			});
-			highlightPathsWithoutMatchingImages();
-			globalSvgContainer.addEventListener("mousemove", (e) => {
-				if (!previewPinned) {
-					const preview = document.getElementById("image-previewer-container");
-					if (preview) {
-						preview.style.left = `${e.clientX}px`;
-						preview.style.top = `${e.clientY}px`;
-					}
-				}
-			});
-			document.addEventListener("click", (e) => {
-				const preview = document.getElementById("image-previewer-container");
-				if (!preview || preview.style.display === "none") return;
-				const target = e.target as Element;
-				const isOnPreview = preview.contains(target);
-				const isOnPath = target.closest("#svg-container path");
-				if (!isOnPreview && !isOnPath) {
-					previewPinned = false;
-					preview.style.display = "none";
-					preview.querySelectorAll("[data-compare-carousel]").forEach(el => el.remove());
-					const pt = document.getElementById("image-previewer-text");
-					const cb = document.getElementById("compare-floorplan-btn");
-					const cob = document.getElementById("compare-opencv-btn");
-					if (pt) pt.style.display = "";
-					if (cb) cb.style.display = "";
-					if (cob) cob.style.display = "";
-				}
-			});
+			}
 
 			// Keyboard handlers for image transformation
 			// Remove any existing preview keyboard handler to avoid duplicates

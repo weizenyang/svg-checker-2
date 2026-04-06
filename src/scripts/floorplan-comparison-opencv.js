@@ -8,14 +8,50 @@
  * Requires OpenCV.js to be loaded (e.g. script src before use).
  */
 
-import { extractPathCutout, loadFloorplanImageData } from './floorplan-comparison.js';
+import {
+  extractPathCutout,
+  loadFloorplanImageData,
+  compareFloorplanToCutout,
+  compareSilhouetteOnlyToCutout,
+  resolveSilhouetteChamferOpts,
+  floorplanCutoutMinAspectSpanAllowingFloor90,
+  FLOORPLAN_CUTOUT_DEFAULT_MAX_ASPECT_SPAN
+} from './floorplan-comparison.js';
+import { cheapFloorFingerprintHex } from './floorplan-bench-fingerprint.js';
+
+/** Keys expected by compareSilhouetteOnlyToCutout from resolveSilhouetteChamferOpts output. */
+function silhouetteChamferOptsForCompare(cols) {
+  return {
+    silhouetteChamferBlend: cols.chamferBlend,
+    silhouetteChamferDiagFrac: cols.chamferDiagFrac,
+    silhouetteChamferExponent: cols.chamferExponent,
+    silhouetteChamferVarWeight: cols.chamferVarWeight,
+    silhouetteChamferDistAmplify: cols.chamferDistAmplify
+  };
+}
 
 const MAX_COMPARE_DIM = 512;
 const MIN_CONTOUR_AREA = 100;
 const MORPH_PREPROCESS_DIM = 384;
 
-// Cache floorplan preprocessing per image URL to speed up batch runs
-const floorplanProcessedCache = new Map(); // key: floorplanDataUrl, value: ImageData
+// Cache resized OpenCV preprocess per (floorplan URL + cutout dimensions) — scale depends on cutout longest edge
+const floorplanProcessedCache = new Map(); // key: cacheKey(url,cutout), value: ImageData
+
+function floorplanProcessedCacheKey(floorplanDataUrl, cutout) {
+  return `${floorplanDataUrl}\0${cutout.width}x${cutout.height}`;
+}
+
+/**
+ * Cropped OpenCV preprocess before resize-to-cutout. Key = data URL + variant (blur vs silhouette no-blur).
+ * Shape bench / Compare use Gaussian blur; Silhouette bench aspect gate uses skipGaussianBlur.
+ */
+const FLOORPLAN_CROPPED_PREPROCESS_CACHE_MAX = 200;
+const floorplanCroppedPreprocessCache = new Map();
+
+/** @param {boolean} skipGaussianBlur */
+function floorplanCroppedPreprocessCacheKey(floorplanDataUrl, skipGaussianBlur) {
+  return `${floorplanDataUrl}\0cvCrop:${skipGaussianBlur ? 'noGauss' : 'gauss'}`;
+}
 
 let cvReady = false;
 let cvLoadPromise = null;
@@ -981,13 +1017,34 @@ function gaussianBlurSlight(imgData) {
  * Uses the same pipeline as floorplan-comparison but with less aggressive bg removal.
  * @param {ImageData} imgData
  * @param {boolean} [captureIntermediates] - if true, returns { final, intermediates }
+ * @param {boolean} [logTimings] - console [OpenCV preprocess] per-step ms (skipped when captureIntermediates)
+ * @param {boolean} [skipGaussianBlur] - if true (silhouette OpenCV path), use raw copy instead of gaussianBlurSlight
  */
-function preprocessFloorplanForOpencv(imgData, captureIntermediates = false) {
+function preprocessFloorplanForOpencv(
+  imgData,
+  captureIntermediates = false,
+  logTimings = false,
+  skipGaussianBlur = false
+) {
+  const log = (step, ms) => {
+    if (logTimings && !captureIntermediates) {
+      console.log(`[OpenCV preprocess]   ${step}: ${ms.toFixed(1)}ms`);
+    }
+  };
   const intermediates = [];
-  let floorplanBlurred = gaussianBlurSlight(new ImageData(new Uint8ClampedArray(imgData.data), imgData.width, imgData.height));
+  let t = performance.now();
+  const srcCopy = new ImageData(new Uint8ClampedArray(imgData.data), imgData.width, imgData.height);
+  let floorplanBlurred = skipGaussianBlur ? srcCopy : gaussianBlurSlight(srcCopy);
+  log(
+    skipGaussianBlur ? 'gaussianBlurSlight (skipped — silhouette)' : 'gaussianBlurSlight',
+    performance.now() - t
+  );
+  t = performance.now();
   let floorplanNoBg = removeFloorplanBackgroundStrict(floorplanBlurred);
+  log('removeFloorplanBackgroundStrict', performance.now() - t);
   if (captureIntermediates) intermediates.push({ label: 'Floorplan (bg removed, strict flood fill)', data: floorplanNoBg });
 
+  t = performance.now();
   const fw = floorplanNoBg.width;
   const fh = floorplanNoBg.height;
   const bgMask = new Uint8Array(fw * fh);
@@ -999,13 +1056,116 @@ function preprocessFloorplanForOpencv(imgData, captureIntermediates = false) {
   const opened = morphologicalOpening(smallMask, sw, sh, 10);
   const fullMask = upsampleMask(opened, sw, sh, fw, fh);
   let floorplanCleaned = applyRemovalMaskToImageData(floorplanNoBg, fullMask);
+  log(`morph (downscale mask ${sw}×${sh}, kernel 10 → full res)`, performance.now() - t);
   if (captureIntermediates) intermediates.push({ label: 'Floorplan (loose pixels removed)', data: floorplanCleaned });
 
+  t = performance.now();
   floorplanCleaned = cropToContentBounds(floorplanCleaned);
+  log('cropToContentBounds', performance.now() - t);
   if (captureIntermediates) intermediates.push({ label: 'Floorplan (cropped)', data: floorplanCleaned });
 
   if (captureIntermediates) return { final: floorplanCleaned, intermediates };
   return floorplanCleaned;
+}
+
+/**
+ * Same as OpenCV floorplan path before resize-to-cutout: load, preprocessFloorplanForOpencv (strict bg, morph, crop).
+ * LRU by data URL so Shape bench gate and getProcessedFloorplanImageDataForCutout share one preprocess per file.
+ * @param {string} floorplanDataUrl
+ * @param {Object} [options]
+ * @param {boolean} [options.captureAndFlash] - bypass cache read; decode raw + run preprocess with intermediates; call onPreprocessStep for raw then each step
+ * @param {(info: { label: string, imageData: ImageData, candidateName: string, stepIndex: number, stepTotal: number, floorplanDataUrl: string }) => void | Promise<void>} [options.onPreprocessStep]
+ * @param {number} [options.stepDwellMs] - ms to pause after each step (default 550)
+ * @param {string} [options.candidateName] - for UI
+ * @param {boolean} [options.logTimings] - console [OpenCV preprocess] decode + sub-steps (no-op with captureAndFlash)
+ * @param {boolean} [options.skipGaussianBlur] - silhouette bench: skip blur before strict bg removal (default false)
+ * @returns {Promise<ImageData>}
+ */
+async function getFloorplanCroppedPreprocessedImageData(floorplanDataUrl, options = {}) {
+  const {
+    captureAndFlash = false,
+    onPreprocessStep = null,
+    stepDwellMs = 550,
+    candidateName = '',
+    logTimings = false,
+    skipGaussianBlur = false
+  } = options;
+  const bypassCache = !!captureAndFlash;
+  const wantLog = logTimings === true && !captureAndFlash;
+  const nameTag = candidateName ? ` ${candidateName}` : '';
+  const cropCacheKey = floorplanCroppedPreprocessCacheKey(floorplanDataUrl, skipGaussianBlur);
+
+  if (!bypassCache) {
+    const hit = floorplanCroppedPreprocessCache.get(cropCacheKey);
+    if (hit) {
+      floorplanCroppedPreprocessCache.delete(cropCacheKey);
+      floorplanCroppedPreprocessCache.set(cropCacheKey, hit);
+      if (wantLog) {
+        console.log(`[OpenCV preprocess]${nameTag} cache HIT (cropped LRU) — skipped decode + pipeline`);
+      }
+      return hit;
+    }
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  if (captureAndFlash && typeof onPreprocessStep === 'function') {
+    const floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+    const { final, intermediates } = preprocessFloorplanForOpencv(
+      floorplanRaw,
+      true,
+      false,
+      skipGaussianBlur
+    );
+    const stepTotal = 1 + intermediates.length;
+    let stepIndex = 0;
+    const emit = async (label, imageData) => {
+      await onPreprocessStep({
+        label,
+        imageData,
+        candidateName,
+        stepIndex,
+        stepTotal,
+        floorplanDataUrl
+      });
+      stepIndex += 1;
+      await sleep(stepDwellMs);
+    };
+    await emit('1. Raw decoded (full resolution)', floorplanRaw);
+    for (const step of intermediates) {
+      await emit(step.label, step.data);
+    }
+    const cropped = final;
+    if (floorplanCroppedPreprocessCache.has(cropCacheKey)) {
+      floorplanCroppedPreprocessCache.delete(cropCacheKey);
+    }
+    floorplanCroppedPreprocessCache.set(cropCacheKey, cropped);
+    while (floorplanCroppedPreprocessCache.size > FLOORPLAN_CROPPED_PREPROCESS_CACHE_MAX) {
+      const oldest = floorplanCroppedPreprocessCache.keys().next().value;
+      floorplanCroppedPreprocessCache.delete(oldest);
+    }
+    return cropped;
+  }
+
+  let t = performance.now();
+  const floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
+  if (wantLog) {
+    console.log(
+      `[OpenCV preprocess]${nameTag} loadFloorplanImageData (${floorplanRaw.width}×${floorplanRaw.height}): ${(performance.now() - t).toFixed(1)}ms`
+    );
+    console.log(`[OpenCV preprocess]${nameTag} pipeline steps (strict bg / morph / crop):`);
+  }
+  const pre = preprocessFloorplanForOpencv(floorplanRaw, false, wantLog, skipGaussianBlur);
+  const cropped = pre && typeof pre === 'object' && 'final' in pre ? pre.final : pre;
+  if (floorplanCroppedPreprocessCache.has(cropCacheKey)) {
+    floorplanCroppedPreprocessCache.delete(cropCacheKey);
+  }
+  floorplanCroppedPreprocessCache.set(cropCacheKey, cropped);
+  while (floorplanCroppedPreprocessCache.size > FLOORPLAN_CROPPED_PREPROCESS_CACHE_MAX) {
+    const oldest = floorplanCroppedPreprocessCache.keys().next().value;
+    floorplanCroppedPreprocessCache.delete(oldest);
+  }
+  return cropped;
 }
 
 /** Resize ImageData to target dimensions and apply WebP re-encode for lower bitdepth. Returns Promise<ImageData>. */
@@ -1031,16 +1191,108 @@ function resizeWithWebP(imgData, targetW, targetH, quality = 0.82) {
 }
 
 /**
+ * Scale cropped preprocess to match cutout longest edge (same as getProcessedFloorplanImageDataForCutout).
+ * @param {ImageData} floorplanCropped
+ * @param {ImageData} cutout
+ */
+async function resizeFloorplanCroppedToCutoutLongestEdge(floorplanCropped, cutout) {
+  const cw = cutout.width;
+  const ch = cutout.height;
+  const cutoutLongest = Math.max(cw, ch);
+  const fw = floorplanCropped.width;
+  const fh = floorplanCropped.height;
+  const scale = cutoutLongest / Math.max(fw, fh);
+  const targetW = Math.max(1, Math.round(fw * scale));
+  const targetH = Math.max(1, Math.round(fh * scale));
+  return resizeWithWebP(floorplanCropped, targetW, targetH);
+}
+
+/**
+ * Cropped preprocess vs cutout: aspect ratio (w/h), not absolute size; min span over floor crop 0° and 90° (bbox w/h swap). Uses same cropped image as OpenCV pre-resize.
+ * @param {string} dataUrl
+ * @param {ImageData} cutout
+ * @param {number} maxAspectSpan - reject if max(floorAR/cutAR, cutAR/floorAR) exceeds this (> 1)
+ * @returns {Promise<null | { reason: string, fw: number, fh: number, cw: number, ch: number, floorAspect: number, cutoutAspect: number, aspectSpan: number, maxAspectRatio: number }>}
+ */
+async function shapeBenchFloorplanFailsAspectGate(dataUrl, cutout, maxAspectSpan, getCroppedOptions = {}) {
+  const cw = cutout.width;
+  const ch = cutout.height;
+  if (cw < 1 || ch < 1) return null;
+  const cutoutAspect = cw / ch;
+  let cropped;
+  try {
+    cropped = await getFloorplanCroppedPreprocessedImageData(dataUrl, getCroppedOptions);
+  } catch {
+    return {
+      reason: 'decode',
+      fw: 0,
+      fh: 0,
+      cw,
+      ch,
+      floorAspect: 0,
+      cutoutAspect,
+      aspectSpan: Infinity,
+      maxAspectRatio: maxAspectSpan
+    };
+  }
+  const fw = cropped.width;
+  const fh = cropped.height;
+  if (fw < 1 || fh < 1) {
+    return {
+      reason: 'badSize',
+      fw,
+      fh,
+      cw,
+      ch,
+      floorAspect: 0,
+      cutoutAspect,
+      aspectSpan: Infinity,
+      maxAspectRatio: maxAspectSpan
+    };
+  }
+  const floorAspect = fw / fh;
+  const aspectSpan = floorplanCutoutMinAspectSpanAllowingFloor90(cw, ch, fw, fh);
+  if (aspectSpan > maxAspectSpan) {
+    return {
+      reason: 'aspectRatio',
+      fw,
+      fh,
+      cw,
+      ch,
+      floorAspect,
+      cutoutAspect,
+      aspectSpan,
+      maxAspectRatio: maxAspectSpan
+    };
+  }
+  return null;
+}
+
+/**
  * Main OpenCV comparison. Returns ORB score, contour score, best rotation.
  * @param {SVGElement} svgElement
  * @param {SVGPathElement} pathElement
  * @param {string} floorplanDataUrl
- * @param {Object} [opts] - { includeIntermediates: boolean }
+ * @param {Object} [opts]
+ * @param {boolean} [opts.includeIntermediates]
+ * @param {boolean} [opts.skipAspectRatioCheck] - skip cutout vs cropped-floorplan AR gate
+ * @param {number|false} [opts.maxAspectSpan] - max AR span (default 2.5); false disables
+ * @param {number|false} [opts.shapeBenchMaxAspectRatio] - alias for maxAspectSpan
+ * @param {number|false} [opts.shapeBenchMaxDimensionRatio] - deprecated alias
  */
 export async function runFloorplanComparisonOpencv(svgElement, pathElement, floorplanDataUrl, opts = {}) {
   await loadOpenCV();
 
   const cutout = await extractPathCutout(svgElement, pathElement);
+
+  const aspectOpt = opts.shapeBenchMaxAspectRatio ?? opts.shapeBenchMaxDimensionRatio ?? opts.maxAspectSpan;
+  let maxAspectSpan = FLOORPLAN_CUTOUT_DEFAULT_MAX_ASPECT_SPAN;
+  if (opts.skipAspectRatioCheck === true) maxAspectSpan = null;
+  else if (aspectOpt === false) maxAspectSpan = null;
+  else if (typeof aspectOpt === 'number' && aspectOpt > 1) {
+    maxAspectSpan = aspectOpt;
+  }
+
   let floorplanProcessed;
   let floorplanRaw = null;
   let preprocessResult = null;
@@ -1050,6 +1302,20 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
     floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
     preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, true);
     const floorplanCropped = preprocessResult?.final ?? preprocessResult;
+
+    if (maxAspectSpan != null) {
+      const span = floorplanCutoutMinAspectSpanAllowingFloor90(
+        cutout.width,
+        cutout.height,
+        floorplanCropped.width,
+        floorplanCropped.height
+      );
+      if (span > maxAspectSpan) {
+        throw new Error(
+          `Aspect ratio mismatch: cutout ${cutout.width}×${cutout.height} vs floorplan (cropped) ${floorplanCropped.width}×${floorplanCropped.height} — span ${span.toFixed(2)} > ${maxAspectSpan} (min over 0°/90° floor crop orientation). Use a floorplan with similar proportions, or pass maxAspectSpan:false to compare anyway.`
+        );
+      }
+    }
 
     const cw = cutout.width;
     const ch = cutout.height;
@@ -1061,23 +1327,23 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
     const targetH = Math.max(1, Math.round(fh * scale));
     floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
   } else {
-    if (floorplanProcessedCache.has(floorplanDataUrl)) {
-      floorplanProcessed = floorplanProcessedCache.get(floorplanDataUrl);
+    const cacheKey = floorplanProcessedCacheKey(floorplanDataUrl, cutout);
+    if (floorplanProcessedCache.has(cacheKey)) {
+      floorplanProcessed = floorplanProcessedCache.get(cacheKey);
     } else {
-      floorplanRaw = await loadFloorplanImageData(floorplanDataUrl);
-      preprocessResult = preprocessFloorplanForOpencv(floorplanRaw, false);
-      const floorplanCropped = preprocessResult?.final ?? preprocessResult;
-
-      const cw = cutout.width;
-      const ch = cutout.height;
-      const cutoutLongest = Math.max(cw, ch);
-      const fw = floorplanCropped.width;
-      const fh = floorplanCropped.height;
-      const scale = cutoutLongest / Math.max(fw, fh);
-      const targetW = Math.max(1, Math.round(fw * scale));
-      const targetH = Math.max(1, Math.round(fh * scale));
-      floorplanProcessed = await resizeWithWebP(floorplanCropped, targetW, targetH);
-      floorplanProcessedCache.set(floorplanDataUrl, floorplanProcessed);
+      if (maxAspectSpan != null) {
+        const gate = await shapeBenchFloorplanFailsAspectGate(floorplanDataUrl, cutout, maxAspectSpan, {});
+        if (gate) {
+          const arNote =
+            gate.reason === 'aspectRatio'
+              ? ` cropped ${gate.fw}×${gate.fh} vs cutout ${gate.cw}×${gate.ch} (span ${gate.aspectSpan.toFixed(2)} > ${gate.maxAspectRatio})`
+              : ` (${gate.reason})`;
+          throw new Error(`Floorplan skipped${arNote}. Pass maxAspectSpan:false to compare anyway.`);
+        }
+      }
+      const floorplanCropped = await getFloorplanCroppedPreprocessedImageData(floorplanDataUrl);
+      floorplanProcessed = await resizeFloorplanCroppedToCutoutLongestEdge(floorplanCropped, cutout);
+      floorplanProcessedCache.set(cacheKey, floorplanProcessed);
     }
   }
 
@@ -1132,11 +1398,9 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
 
   tryOrientations(floorplanForRot, false);
 
-  if (bestScore < 0.7) {
-    const floorplanFlipped = flipMat(floorplanForRot, 1);
-    tryOrientations(floorplanFlipped, true);
-    floorplanFlipped.delete();
-  }
+  const floorplanFlipped = flipMat(floorplanForRot, 1);
+  tryOrientations(floorplanFlipped, true);
+  floorplanFlipped.delete();
 
   const orbScoreNorm = Math.min(100, Math.round(bestScore * 100));
 
@@ -1253,4 +1517,854 @@ export async function runFloorplanComparisonOpencv(svgElement, pathElement, floo
   }
 
   return result;
+}
+
+/**
+ * ORB composite scores (0–100) in one pass over all 8 poses. Cutout fixed; floorplan rotated/flipped.
+ * orbProduction and orbMax8 both use the best score over unflipped + H-flip (same rule as runFloorplanComparisonOpencv).
+ * @param {cv.Mat} cutoutGray - CV_8UC1
+ * @param {cv.Mat} floorRgba - CV_8UC4
+ * @returns {{ orbProduction: number, orbMax8: number }}
+ */
+function orbProductionAndMax8Percents(cutoutGray, floorRgba) {
+  const maxOverFourRots = (src) => {
+    let m = 0;
+    for (const rot of [0, 1, 2, 3]) {
+      const fpRot = rotateMat90(src, rot);
+      const fpGray = new cv.Mat();
+      cv.cvtColor(fpRot, fpGray, cv.COLOR_RGBA2GRAY);
+      const r = orbMatchWithInlierRatio(cutoutGray, fpGray, {});
+      if (r.score > m) m = r.score;
+      fpGray.delete();
+      fpRot.delete();
+    }
+    return m;
+  };
+  const floorForRot = new cv.Mat();
+  floorRgba.copyTo(floorForRot);
+  const bestUnflipped = maxOverFourRots(floorForRot);
+  const flipped = flipMat(floorForRot, 1);
+  const bestFlipped = maxOverFourRots(flipped);
+  flipped.delete();
+  floorForRot.delete();
+
+  const orbMax8Raw = Math.max(bestUnflipped, bestFlipped);
+  const orbProductionRaw = orbMax8Raw;
+
+  return {
+    orbProduction: Math.min(100, Math.round(orbProductionRaw * 100)),
+    orbMax8: Math.min(100, Math.round(orbMax8Raw * 100))
+  };
+}
+
+/**
+ * Contour (Hu) scores. Cutout is fixed; only the floorplan is rotated/flipped.
+ * contour0 = as-stored floorplan vs cutout; contourMax8 = best over 4×90° × H-flip.
+ * @param {cv.Mat} cutoutMat - RGBA
+ * @param {cv.Mat} floorRgba - RGBA
+ * @returns {{ contour0: number, contourMax8: number }}
+ */
+function contourScoresFixedVsMax8(cutoutMat, floorRgba) {
+  const floorBase = new cv.Mat();
+  floorRgba.copyTo(floorBase);
+  const contour0 = contourMatchScore(cutoutMat, floorBase, false);
+
+  let contourMax8 = contour0;
+  for (const flipped of [false, true]) {
+    let base;
+    if (flipped) {
+      base = flipMat(floorBase, 1);
+    } else {
+      base = new cv.Mat();
+      floorBase.copyTo(base);
+    }
+    for (let rot = 0; rot < 4; rot++) {
+      const m = rotateMat90(base, rot);
+      const s = contourMatchScore(cutoutMat, m, false);
+      if (s > contourMax8) contourMax8 = s;
+      m.delete();
+    }
+    base.delete();
+  }
+  floorBase.delete();
+  return { contour0, contourMax8 };
+}
+
+/**
+ * Async: resized floorplan ImageData aligned to cutout (same as runFloorplanComparisonOpencv).
+ * @param {string} floorplanDataUrl
+ * @param {ImageData} cutout
+ */
+async function getProcessedFloorplanImageDataForCutout(floorplanDataUrl, cutout, options = {}) {
+  const logTimings = options.logTimings === true;
+  const cacheKey = floorplanProcessedCacheKey(floorplanDataUrl, cutout);
+  if (floorplanProcessedCache.has(cacheKey)) {
+    if (logTimings) {
+      console.log(`[OpenCV preprocess] cache HIT (resized-to-cutout) — skipped crop fetch + WebP resize`);
+    }
+    return floorplanProcessedCache.get(cacheKey);
+  }
+  const t0 = performance.now();
+  const floorplanCropped = await getFloorplanCroppedPreprocessedImageData(floorplanDataUrl, {
+    logTimings,
+    candidateName: options.candidateName
+  });
+  const t1 = performance.now();
+  const floorplanProcessed = await resizeFloorplanCroppedToCutoutLongestEdge(floorplanCropped, cutout);
+  if (logTimings) {
+    console.log(
+      `[OpenCV preprocess] resizeFloorplanCroppedToCutoutLongestEdge (WebP): ${(performance.now() - t1).toFixed(1)}ms | cropped→sized total: ${(performance.now() - t0).toFixed(1)}ms`
+    );
+  }
+  floorplanProcessedCache.set(cacheKey, floorplanProcessed);
+  return floorplanProcessed;
+}
+
+/**
+ * SHA-256 hex of raw image bytes from a data URL (identical files → same hash).
+ * @param {string} dataUrl
+ * @returns {Promise<string>}
+ */
+async function sha256HexFromDataUrl(dataUrl) {
+  const res = await fetch(dataUrl);
+  const buf = await res.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  const bytes = new Uint8Array(digest);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex;
+}
+
+/**
+ * Blend rank score: ORB max8 + contour max8 + legacy silhouette (7 parts: 3 + 3 + 1).
+ * Matches full Compare (OpenCV) feature set for Shape bench ranking.
+ */
+function shapeBenchBlendRankScore(contourMax8Pct, orbMax8Pct, legacySilhouette) {
+  return Math.round((contourMax8Pct * 3 + orbMax8Pct * 3 + legacySilhouette) / 7);
+}
+
+/** Ranked carousel slice from current row list (same sort as final batch result). */
+/** Same ordering as ranked table / carousel (best rankScore first). */
+export function shapeBenchCompareRowsForRank(a, b) {
+  if (b.rankScore !== a.rankScore) return b.rankScore - a.rankScore;
+  if ((b.silhouetteIou ?? 0) !== (a.silhouetteIou ?? 0)) return (b.silhouetteIou ?? 0) - (a.silhouetteIou ?? 0);
+  if ((b.silhouetteChamfer ?? 0) !== (a.silhouetteChamfer ?? 0))
+    return (b.silhouetteChamfer ?? 0) - (a.silhouetteChamfer ?? 0);
+  if (b.orbMax8 !== a.orbMax8) return b.orbMax8 - a.orbMax8;
+  if (b.contourMax8 !== a.contourMax8) return b.contourMax8 - a.contourMax8;
+  if (b.legacySilhouette !== a.legacySilhouette) return b.legacySilhouette - a.legacySilhouette;
+  if (b.contour0 !== a.contour0) return b.contour0 - a.contour0;
+  return a.name.localeCompare(b.name);
+}
+
+function shapeBenchRankedCarouselFromRows(rows) {
+  return [...rows]
+    .sort(shapeBenchCompareRowsForRank)
+    .map((r, i) => ({
+      rank: i + 1,
+      name: r.name,
+      data: r.data,
+      rankScore: r.rankScore,
+      orbProduction: r.orbProduction,
+      orbMax8: r.orbMax8,
+      contourMax8: r.contourMax8,
+      legacySilhouette: r.legacySilhouette,
+      ...(r.bestPoseLabel != null ? { bestPoseLabel: r.bestPoseLabel } : {}),
+      ...(r.silhouetteVisual ? { silhouetteVisual: r.silhouetteVisual } : {}),
+      ...(r.silhouetteIou != null ? { silhouetteIou: r.silhouetteIou } : {}),
+      ...(r.silhouetteChamfer != null ? { silhouetteChamfer: r.silhouetteChamfer } : {}),
+      ...(typeof r.silhouetteChamferMeanPx === 'number'
+        ? { silhouetteChamferMeanPx: r.silhouetteChamferMeanPx }
+        : {}),
+      ...(typeof r.silhouetteChamferStdPx === 'number'
+        ? { silhouetteChamferStdPx: r.silhouetteChamferStdPx }
+        : {})
+    }));
+}
+
+const SHAPE_BENCH_RESULT_CACHE_MAX = 500;
+
+/** Cutout side of session cache key: path id + raster size (no pixel hash). */
+function shapeBenchCutoutSessionKey(pathId, cutout) {
+  return `${pathId}\0${cutout.width}x${cutout.height}`;
+}
+
+/**
+ * Cached scores per (cheap floor fingerprint + path id + cutout width×height).
+ * Keys use prefix sbOC1 so entries without ORB (older generations) are not reused.
+ * LRU: get refreshes entry; overflow drops oldest inserts.
+ * @type {Map<string, { contour0: number, contourMax8: number, orbProduction: number, orbMax8: number, legacySilhouette: number, legacyDirect: number, legacyEdge: number }>}
+ */
+const shapeBenchmarkResultCache = new Map();
+
+function shapeBenchResultCacheGet(key) {
+  const v = shapeBenchmarkResultCache.get(key);
+  if (!v) return undefined;
+  shapeBenchmarkResultCache.delete(key);
+  shapeBenchmarkResultCache.set(key, v);
+  return v;
+}
+
+function shapeBenchResultCacheSet(key, value) {
+  if (shapeBenchmarkResultCache.has(key)) shapeBenchmarkResultCache.delete(key);
+  shapeBenchmarkResultCache.set(key, value);
+  while (shapeBenchmarkResultCache.size > SHAPE_BENCH_RESULT_CACHE_MAX) {
+    const oldest = shapeBenchmarkResultCache.keys().next().value;
+    shapeBenchmarkResultCache.delete(oldest);
+  }
+}
+
+/** Clear cached Shape bench scores (e.g. after SVG reload if desired). */
+export function clearShapeBenchmarkResultCache() {
+  shapeBenchmarkResultCache.clear();
+}
+
+const SILHOUETTE_BENCH_RESULT_CACHE_MAX = 500;
+
+/** Cutout + grid for Silhouette bench result cache key. */
+function silhouetteBenchCutoutSessionKey(pathId, cutout, maxCompareDim) {
+  return `${pathId}\0${cutout.width}x${cutout.height}\0${maxCompareDim}`;
+}
+
+/**
+ * Cached Silhouette bench rows per (cheap floor fp + path + cutout size + maxCompareDim).
+ * Prefix silSB7: floorplan stretched to fill cutout grid (non-uniform); invalidates silSB6 scores.
+ * @type {Map<string, { rankScore: number, orbMax8: number, bestPoseLabel: string, silhouetteIou: number, silhouetteChamfer: number, silhouetteChamferMeanPx?: number, silhouetteChamferStdPx?: number }>}
+ */
+const silhouetteBenchmarkResultCache = new Map();
+
+function silhouetteBenchResultCacheGet(key) {
+  const v = silhouetteBenchmarkResultCache.get(key);
+  if (!v) return undefined;
+  silhouetteBenchmarkResultCache.delete(key);
+  silhouetteBenchmarkResultCache.set(key, v);
+  return v;
+}
+
+function silhouetteBenchResultCacheSet(key, value) {
+  if (silhouetteBenchmarkResultCache.has(key)) silhouetteBenchmarkResultCache.delete(key);
+  silhouetteBenchmarkResultCache.set(key, value);
+  while (silhouetteBenchmarkResultCache.size > SILHOUETTE_BENCH_RESULT_CACHE_MAX) {
+    const oldest = silhouetteBenchmarkResultCache.keys().next().value;
+    silhouetteBenchmarkResultCache.delete(oldest);
+  }
+}
+
+/** Clear cached Silhouette bench scores. */
+export function clearSilhouetteBenchmarkResultCache() {
+  silhouetteBenchmarkResultCache.clear();
+}
+
+/**
+ * Group candidates with identical decoded image bytes. Within each group, keep the one with the
+ * shortest filename (ties broken by localeCompare). Drops the rest before benchmarking.
+ *
+ * @param {Array<{ name: string, data: string }>} candidates
+ * @returns {Promise<{ kept: typeof candidates, dropped: Array<{ droppedName: string, keptName: string }>, originalCount: number }>}
+ */
+export async function dedupeBenchmarkCandidatesByIdenticalContent(candidates) {
+  /** @type {Map<string, Array<{ name: string, data: string }>>} */
+  const groups = new Map();
+  for (const c of candidates) {
+    const hex = await sha256HexFromDataUrl(c.data);
+    if (!groups.has(hex)) groups.set(hex, []);
+    groups.get(hex).push(c);
+  }
+
+  const kept = [];
+  /** @type {Array<{ droppedName: string, keptName: string }>} */
+  const dropped = [];
+
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      if (a.name.length !== b.name.length) return a.name.length - b.name.length;
+      return a.name.localeCompare(b.name);
+    });
+    kept.push(list[0]);
+    for (let i = 1; i < list.length; i++) {
+      dropped.push({ droppedName: list[i].name, keptName: list[0].name });
+    }
+  }
+
+  return { kept, dropped, originalCount: candidates.length };
+}
+
+/**
+ * Shape bench detection pipeline (high level):
+ * 1. [UI] dedupeBenchmarkCandidatesByIdenticalContent — same bytes → keep shortest filename (not here).
+ * 2. loadOpenCV.js
+ * 3. extractPathCutout → result cache key uses path id + cutout width×height (no cutout pixel hash)
+ * 4. cutout → cv.Mat RGBA (fixed; floorplan is rotated/flipped in contour scoring)
+ * 5. Per candidate:
+ *    a. Cheap floor fingerprint (head/tail sample SHA-256) + path id + cutout width×height → session result cache hit? return row.
+ *    b. Else: aspect gate — cropped preprocess vs cutout width÷height only (scale ignored); span is min over floor bbox as-is and w/h swapped (0°/90°). opts.shapeBenchMaxAspectRatio default 2.5, false disables (shapeBenchMaxDimensionRatio is a deprecated alias)
+ *    c. Else: getProcessedFloorplanImageDataForCutout — strict flood-fill bg, morph, crop, resize to cutout longest edge, WebP — timings under [OpenCV preprocess] when opts.logTimings
+ *    d. orbProductionAndMax8Percents — ORB inlier match vs cutout (production rule + max over 8 poses, same as Compare OpenCV)
+ *    e. contourScoresFixedVsMax8 — Hu matchShapes, best over 4×90° + H-flip
+ *    f. compareFloorplanToCutout — legacy JS (4× rotation): silhouette / direct / edge; timed as “legacy match” when opts.logTimings
+ * 6. rankScore = blend(round((3×Cnt max8 + 3×Orb max8 + Leg sil) / 7)); sort rankedCarousel. Session caches: floorplanProcessedCache (URL+cutout size), shapeBenchmarkResultCache (sbOC1 + cheap floor fp + path + cutout dims).
+ *
+ * Benchmark multiple floorplan candidates against one SVG path cutout.
+ * The cutout is treated as canonical (no rotation/flip). Each candidate floorplan is scored
+ * after searching its pose (90° steps and optional horizontal flip). Higher score ⇒ better match
+ * for that metric; compare scores across rows to rank which floorplan fits the cutout best.
+ * Does not mutate path attributes or reuse Compare / Compare (OpenCV) UI.
+ *
+ * @param {SVGElement} svgElement
+ * @param {SVGPathElement} pathElement
+ * @param {Array<{ name: string, data: string }>} candidates - data URLs
+ * @param {Object} [opts]
+ * @param {boolean} [opts.logTimings] - default true: console [Shape bench] candidate timings + [OpenCV preprocess] decode/blur/bg/morph/crop/resize lines (aspect gate reuses cropped cache — may log cache HIT)
+ * @param {number | false} [opts.shapeBenchMaxAspectRatio] - default 2.5: reject if max(croppedAR/cutAR,cutAR/croppedAR) exceeds this (AR = width/height). false disables.
+ * @param {number | false} [opts.shapeBenchMaxDimensionRatio] - deprecated alias for shapeBenchMaxAspectRatio
+ * @param {boolean} [opts.shapeBenchFlashPreprocessSteps] - if true, show each preprocess step (raw + OpenCV intermediates) in UI via onPreprocessFlashStep before aspect gate
+ * @param {number} [opts.shapeBenchFlashPreprocessDelayMs] - dwell per step (default 550)
+ * @param {(info: { label: string, imageData: ImageData, candidateName: string, stepIndex: number, stepTotal: number, floorplanDataUrl: string }) => void | Promise<void>} [opts.onPreprocessFlashStep]
+ * @param {(info: { done: number, total: number, name?: string, phase?: string }) => void} [opts.onProgress] - done runs 0..total (0 after cutout ready, +1 per candidate including size-filter skips)
+ * @param {(snap: { pathId: string, rows: object[], rankedCarousel: object[], benchCache: { hits: number, misses: number }, candidatesHandled: number, filteredOut: object[] }) => void} [opts.onPartialResult] - after cutout (0 rows) and after each candidate; rankedCarousel reflects current partial ranking
+ * @returns {Promise<{ pathId: string, rows: Array<object>, rankedCarousel: Array<{
+ *   rank: number, name: string, data: string, rankScore: number,
+ *   orbProduction: number, orbMax8: number, contourMax8: number, legacySilhouette: number
+ * }>, benchCache: { hits: number, misses: number }, filteredOut: Array<{ name: string, reason: string, fw: number, fh: number, cw: number, ch: number, floorAspect: number, cutoutAspect: number, aspectSpan: number, maxAspectRatio: number }>, candidatesHandled: number }>}
+ * Note: dedupeBenchmarkCandidatesByIdenticalContent still uses full-file SHA-256; session cache uses cheap fingerprint only.
+ */
+export async function runShapeBenchmarkBatch(svgElement, pathElement, candidates, opts = {}) {
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+  const onPartialResult = typeof opts.onPartialResult === 'function' ? opts.onPartialResult : null;
+  const logTimings = opts.logTimings !== false;
+  const total = candidates.length;
+  const aspectOpt = opts.shapeBenchMaxAspectRatio ?? opts.shapeBenchMaxDimensionRatio;
+  let maxAspectSpan = FLOORPLAN_CUTOUT_DEFAULT_MAX_ASPECT_SPAN;
+  if (aspectOpt === false) maxAspectSpan = null;
+  else if (typeof aspectOpt === 'number' && aspectOpt > 1) {
+    maxAspectSpan = aspectOpt;
+  }
+
+  await loadOpenCV();
+  onProgress?.({ done: 0, total, phase: 'cutout' });
+  const pathId = pathElement?.id ?? pathElement?.getAttribute?.('id') ?? 'unknown';
+  const tCutout0 = performance.now();
+  const cutout = await extractPathCutout(svgElement, pathElement);
+  const cutoutSessionKey = shapeBenchCutoutSessionKey(pathId, cutout);
+  const cutoutSetupMs = performance.now() - tCutout0;
+
+  /** @type {cv.Mat | null} */
+  let cutoutMat = null;
+  const ensureCutoutMat = () => {
+    if (!cutoutMat) {
+      cutoutMat = imageDataToMat(cutout);
+    }
+    return cutoutMat;
+  };
+
+  /** @type {cv.Mat | null} */
+  let cutoutGrayForOrb = null;
+  const ensureCutoutGrayForOrb = () => {
+    if (!cutoutGrayForOrb) {
+      cutoutGrayForOrb = new cv.Mat();
+      cv.cvtColor(ensureCutoutMat(), cutoutGrayForOrb, cv.COLOR_RGBA2GRAY);
+    }
+    return cutoutGrayForOrb;
+  };
+
+  if (logTimings) {
+    console.log(
+      '%c[Shape bench] Pipeline%c see JSDoc on runShapeBenchmarkBatch. Timings exclude OpenCV floor preprocess+resize (step 5b).',
+      'font-weight:bold',
+      'font-weight:normal'
+    );
+    console.log(
+      `[Shape bench] cutout extract: ${cutoutSetupMs.toFixed(1)}ms (path: ${pathId}, session key ${cutout.width}×${cutout.height}; cv.Mat deferred until first scored candidate)`
+    );
+    if (maxAspectSpan != null) {
+      console.log(
+        `[Shape bench] Aspect gate: min over floor 0°/90° (bbox w×h vs h×w) of max(floor AR÷cut AR, cut AR÷floor AR) ≤ ${maxAspectSpan} (AR = width÷height; cropped = preprocess before resize; cutout ${cutout.width}×${cutout.height})`
+      );
+    }
+  }
+  const rows = [];
+  /** @type {Map<string, Awaited<ReturnType<typeof compareFloorplanToCutout>>>} */
+  const legacyByFloorplanDataUrl = new Map();
+  let benchCacheHits = 0;
+  let benchCacheMisses = 0;
+  let candidatesHandled = 0;
+  /** @type {Array<{ name: string, reason: string, fw: number, fh: number, cw: number, ch: number, floorAspect: number, cutoutAspect: number, aspectSpan: number, maxAspectRatio: number }>} */
+  const filteredOut = [];
+
+  const emitPartial = () => {
+    onPartialResult?.({
+      pathId,
+      rows: [...rows],
+      rankedCarousel: shapeBenchRankedCarouselFromRows(rows),
+      benchCache: { hits: benchCacheHits, misses: benchCacheMisses },
+      candidatesHandled,
+      filteredOut: filteredOut.map((f) => ({ ...f }))
+    });
+  };
+
+  emitPartial();
+
+  /** @type {Map<string, string>} */
+  const floorFpByDataUrl = new Map();
+
+  for (const c of candidates) {
+    const tKey0 = performance.now();
+    let floorFp = floorFpByDataUrl.get(c.data);
+    if (floorFp === undefined) {
+      floorFp = await cheapFloorFingerprintHex(c.data);
+      floorFpByDataUrl.set(c.data, floorFp);
+    }
+    const cacheKey = `sbOC1\0${floorFp}\0${cutoutSessionKey}`;
+    const keyMs = performance.now() - tKey0;
+    const cached = shapeBenchResultCacheGet(cacheKey);
+    if (cached) {
+      benchCacheHits += 1;
+      if (logTimings) {
+        console.log(
+          `[Shape bench] ${c.name} | result cache HIT (floor fp ${keyMs.toFixed(1)}ms) — skipped ORB/contour/legacy`
+        );
+      }
+      const rankScore = shapeBenchBlendRankScore(
+        cached.contourMax8,
+        cached.orbMax8,
+        cached.legacySilhouette
+      );
+      rows.push({
+        name: c.name,
+        data: c.data,
+        contour0: cached.contour0,
+        contourMax8: cached.contourMax8,
+        orbProduction: cached.orbProduction,
+        orbMax8: cached.orbMax8,
+        legacySilhouette: cached.legacySilhouette,
+        legacyDirect: cached.legacyDirect,
+        legacyEdge: cached.legacyEdge,
+        rankScore
+      });
+      candidatesHandled += 1;
+      onProgress?.({
+        done: candidatesHandled,
+        total,
+        name: `${c.name} (cached)`,
+        phase: 'candidate'
+      });
+      emitPartial();
+      continue;
+    }
+
+    const preprocessFlashOpts =
+      opts.shapeBenchFlashPreprocessSteps && typeof opts.onPreprocessFlashStep === 'function'
+        ? {
+            captureAndFlash: true,
+            onPreprocessStep: opts.onPreprocessFlashStep,
+            stepDwellMs: opts.shapeBenchFlashPreprocessDelayMs ?? 550,
+            candidateName: c.name
+          }
+        : null;
+
+    if (maxAspectSpan != null) {
+      const gate = await shapeBenchFloorplanFailsAspectGate(
+        c.data,
+        cutout,
+        maxAspectSpan,
+        preprocessFlashOpts
+          ? { ...preprocessFlashOpts }
+          : logTimings
+            ? { logTimings: true, candidateName: c.name }
+            : {}
+      );
+      if (gate) {
+        filteredOut.push({
+          name: c.name,
+          reason: gate.reason,
+          fw: gate.fw,
+          fh: gate.fh,
+          cw: gate.cw,
+          ch: gate.ch,
+          floorAspect: gate.floorAspect,
+          cutoutAspect: gate.cutoutAspect,
+          aspectSpan: gate.aspectSpan,
+          maxAspectRatio: gate.maxAspectRatio
+        });
+        if (logTimings) {
+          const arNote =
+            gate.reason === 'aspectRatio'
+              ? ` cropped AR ${gate.floorAspect.toFixed(4)} vs cutout AR ${gate.cutoutAspect.toFixed(4)} (min 0°/90° span ${gate.aspectSpan.toFixed(2)} > ${gate.maxAspectRatio})`
+              : '';
+          console.log(
+            `[Shape bench] ${c.name} | skipped (aspect gate): ${gate.reason} cropped ${gate.fw}×${gate.fh} vs cutout ${gate.cw}×${gate.ch}${arNote}`
+          );
+        }
+        candidatesHandled += 1;
+        onProgress?.({
+          done: candidatesHandled,
+          total,
+          name: `${c.name} (aspect filter)`,
+          phase: 'candidate'
+        });
+        emitPartial();
+        continue;
+      }
+    } else if (preprocessFlashOpts) {
+      await getFloorplanCroppedPreprocessedImageData(c.data, preprocessFlashOpts);
+    }
+
+    benchCacheMisses += 1;
+    const floorplanProcessed = await getProcessedFloorplanImageDataForCutout(c.data, cutout, {
+      logTimings,
+      candidateName: c.name
+    });
+    const floorplanMat = imageDataToMat(floorplanProcessed);
+
+    const tOrb = performance.now();
+    const { orbProduction, orbMax8 } = orbProductionAndMax8Percents(ensureCutoutGrayForOrb(), floorplanMat);
+    const orbMs = performance.now() - tOrb;
+
+    const tContour = performance.now();
+    const { contour0, contourMax8 } = contourScoresFixedVsMax8(ensureCutoutMat(), floorplanMat);
+    const contourMs = performance.now() - tContour;
+
+    floorplanMat.delete();
+
+    const hadLegacyMemo = legacyByFloorplanDataUrl.has(c.data);
+    let legacy = legacyByFloorplanDataUrl.get(c.data);
+    if (!legacy) {
+      legacy = await compareFloorplanToCutout(cutout, c.data, {
+        shapeBenchTiming: logTimings,
+        ...(maxAspectSpan != null ? { skipAspectRatioCheck: true } : { maxAspectSpan: false })
+      });
+      legacyByFloorplanDataUrl.set(c.data, legacy);
+    }
+    if (logTimings) {
+      const memo = hadLegacyMemo ? ' | legacy (batch memo)' : '';
+      console.log(
+        `[Shape bench] ${c.name} | fp ${keyMs.toFixed(1)}ms | ORB: ${orbMs.toFixed(1)}ms | contour(Hu×8): ${contourMs.toFixed(1)}ms${memo}`
+      );
+    }
+
+    const contourMax8Pct = Math.round(contourMax8 * 100);
+    const rankScore = shapeBenchBlendRankScore(contourMax8Pct, orbMax8, legacy.silhouette);
+
+    const row = {
+      name: c.name,
+      data: c.data,
+      contour0: Math.round(contour0 * 100),
+      contourMax8: contourMax8Pct,
+      orbProduction,
+      orbMax8,
+      legacySilhouette: legacy.silhouette,
+      legacyDirect: legacy.direct,
+      legacyEdge: legacy.edge,
+      rankScore
+    };
+    rows.push(row);
+    shapeBenchResultCacheSet(cacheKey, {
+      contour0: row.contour0,
+      contourMax8: row.contourMax8,
+      orbProduction: row.orbProduction,
+      orbMax8: row.orbMax8,
+      legacySilhouette: row.legacySilhouette,
+      legacyDirect: row.legacyDirect,
+      legacyEdge: row.legacyEdge
+    });
+    candidatesHandled += 1;
+    onProgress?.({ done: candidatesHandled, total, name: c.name, phase: 'candidate' });
+    emitPartial();
+  }
+
+  if (cutoutGrayForOrb) {
+    cutoutGrayForOrb.delete();
+  }
+  if (cutoutMat) {
+    cutoutMat.delete();
+  }
+
+  const rankedCarousel = shapeBenchRankedCarouselFromRows(rows);
+
+  return {
+    pathId,
+    rows,
+    rankedCarousel,
+    benchCache: { hits: benchCacheHits, misses: benchCacheMisses },
+    filteredOut,
+    candidatesHandled
+  };
+}
+
+/**
+ * Benchmark candidates with silhouette IoU only (no ORB/SIFT/OpenCV scoring loop).
+ * Same dedupe/aspect-gate flow as Shape bench; scoring via compareSilhouetteOnlyToCutout (pure JS, smaller raster).
+ *
+ * @param {SVGElement} svgElement
+ * @param {SVGPathElement} pathElement
+ * @param {Array<{ name: string, data: string }>} candidates
+ * @param {Object} [opts] - onProgress, onPartialResult, shapeBench* aspect/flash, silhouetteMaxCompareDim (default 256)
+ * @param {boolean} [opts.logTimings] - default true: [Silhouette bench] + [Silhouette preprocess] + [OpenCV preprocess] timing lines (aspect gate uses OpenCV crop path; scoring uses JS preprocess)
+ * @param {number} [opts.silhouetteVisualFirstN] - top N rows by bench rank (same sort as the results table) get silhouetteVisual (default 20); 0 disables
+ * @param {number} [opts.silhouetteVisualTopN] - deprecated alias for silhouetteVisualFirstN
+ */
+export async function runSilhouetteBenchmarkBatch(svgElement, pathElement, candidates, opts = {}) {
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+  const onPartialResult = typeof opts.onPartialResult === 'function' ? opts.onPartialResult : null;
+  const logTimings = opts.logTimings !== false;
+  const total = candidates.length;
+  const maxCompareDim = opts.silhouetteMaxCompareDim ?? 256;
+  const aspectOpt = opts.shapeBenchMaxAspectRatio ?? opts.shapeBenchMaxDimensionRatio;
+  let maxAspectSpan = FLOORPLAN_CUTOUT_DEFAULT_MAX_ASPECT_SPAN;
+  if (aspectOpt === false) maxAspectSpan = null;
+  else if (typeof aspectOpt === 'number' && aspectOpt > 1) {
+    maxAspectSpan = aspectOpt;
+  }
+
+  await loadOpenCV();
+
+  onProgress?.({ done: 0, total, phase: 'cutout' });
+  const pathId = pathElement?.id ?? pathElement?.getAttribute?.('id') ?? 'unknown';
+  const tCutout0 = performance.now();
+  const cutout = await extractPathCutout(svgElement, pathElement);
+  const cutoutSetupMs = performance.now() - tCutout0;
+
+  if (logTimings) {
+    console.log(
+      `%c[Silhouette bench] cutout: ${cutoutSetupMs.toFixed(1)}ms (path ${pathId}, ${cutout.width}×${cutout.height}; grid max ${maxCompareDim})`,
+      'font-weight:bold'
+    );
+  }
+
+  const rows = [];
+  let benchCacheHits = 0;
+  let benchCacheMisses = 0;
+  let candidatesHandled = 0;
+  /** @type {Array<{ name: string, reason: string, fw: number, fh: number, cw: number, ch: number, floorAspect: number, cutoutAspect: number, aspectSpan: number, maxAspectRatio: number }>} */
+  const filteredOut = [];
+  const silhouetteVisualFirstN =
+    typeof opts.silhouetteVisualFirstN === 'number'
+      ? Math.max(0, opts.silhouetteVisualFirstN)
+      : typeof opts.silhouetteVisualTopN === 'number'
+        ? Math.max(0, opts.silhouetteVisualTopN)
+        : 20;
+  const silhouetteVisualCache = new Map();
+  const chamferCols = resolveSilhouetteChamferOpts(opts);
+
+  const applyFirstNSilhouetteVisuals = async () => {
+    if (silhouetteVisualFirstN <= 0 || rows.length === 0) {
+      for (const row of rows) delete row.silhouetteVisual;
+      return;
+    }
+    for (const row of rows) delete row.silhouetteVisual;
+
+    const rankedForVisual = [...rows].sort(shapeBenchCompareRowsForRank);
+    const topForVisual = rankedForVisual.slice(
+      0,
+      Math.min(silhouetteVisualFirstN, rankedForVisual.length)
+    );
+
+    const silOpts = {
+      shapeBenchTiming: logTimings,
+      maxCompareDim,
+      includeSilhouetteVisual: true,
+      ...silhouetteChamferOptsForCompare(chamferCols),
+      ...(maxAspectSpan != null ? { skipAspectRatioCheck: true } : { maxAspectSpan: false })
+    };
+
+    for (const row of topForVisual) {
+      const cached = silhouetteVisualCache.get(row.data);
+      if (cached) {
+        row.silhouetteVisual = cached;
+        continue;
+      }
+      const sil = await compareSilhouetteOnlyToCutout(cutout, row.data, silOpts);
+      if (sil.silhouetteVisual) silhouetteVisualCache.set(row.data, sil.silhouetteVisual);
+      row.silhouetteVisual = sil.silhouetteVisual;
+    }
+  };
+
+  const emitPartial = async () => {
+    await applyFirstNSilhouetteVisuals();
+    onPartialResult?.({
+      pathId,
+      rows: [...rows],
+      rankedCarousel: shapeBenchRankedCarouselFromRows(rows),
+      benchCache: { hits: benchCacheHits, misses: benchCacheMisses },
+      candidatesHandled,
+      filteredOut: filteredOut.map((f) => ({ ...f }))
+    });
+  };
+
+  await emitPartial();
+
+  const silCutoutSessionKey = silhouetteBenchCutoutSessionKey(pathId, cutout, maxCompareDim);
+  /** @type {Map<string, string>} */
+  const floorFpByDataUrl = new Map();
+
+  for (const c of candidates) {
+    const preprocessFlashOpts =
+      opts.shapeBenchFlashPreprocessSteps && typeof opts.onPreprocessFlashStep === 'function'
+        ? {
+            captureAndFlash: true,
+            onPreprocessStep: opts.onPreprocessFlashStep,
+            stepDwellMs: opts.shapeBenchFlashPreprocessDelayMs ?? 550,
+            candidateName: c.name,
+            skipGaussianBlur: true
+          }
+        : null;
+
+    if (maxAspectSpan != null) {
+      const gate = await shapeBenchFloorplanFailsAspectGate(
+        c.data,
+        cutout,
+        maxAspectSpan,
+        preprocessFlashOpts
+          ? { ...preprocessFlashOpts }
+          : { skipGaussianBlur: true, ...(logTimings ? { logTimings: true, candidateName: c.name } : {}) }
+      );
+      if (gate) {
+        filteredOut.push({
+          name: c.name,
+          reason: gate.reason,
+          fw: gate.fw,
+          fh: gate.fh,
+          cw: gate.cw,
+          ch: gate.ch,
+          floorAspect: gate.floorAspect,
+          cutoutAspect: gate.cutoutAspect,
+          aspectSpan: gate.aspectSpan,
+          maxAspectRatio: gate.maxAspectRatio
+        });
+        if (logTimings) {
+          const arNote =
+            gate.reason === 'aspectRatio'
+              ? ` cropped AR ${gate.floorAspect.toFixed(4)} vs cutout AR ${gate.cutoutAspect.toFixed(4)} (min 0°/90° span ${gate.aspectSpan.toFixed(2)} > ${gate.maxAspectRatio})`
+              : '';
+          console.log(
+            `[Silhouette bench] ${c.name} | skipped (aspect gate): ${gate.reason} cropped ${gate.fw}×${gate.fh} vs cutout ${gate.cw}×${gate.ch}${arNote}`
+          );
+        }
+        candidatesHandled += 1;
+        onProgress?.({
+          done: candidatesHandled,
+          total,
+          name: `${c.name} (aspect filter)`,
+          phase: 'candidate'
+        });
+        await emitPartial();
+        continue;
+      }
+    } else if (preprocessFlashOpts) {
+      await getFloorplanCroppedPreprocessedImageData(c.data, preprocessFlashOpts);
+    }
+
+    let floorFp = floorFpByDataUrl.get(c.data);
+    if (floorFp === undefined) {
+      floorFp = await cheapFloorFingerprintHex(c.data);
+      floorFpByDataUrl.set(c.data, floorFp);
+    }
+    const silResultKey = `silSB7\0${floorFp}\0${silCutoutSessionKey}`;
+    const cachedSil = silhouetteBenchResultCacheGet(silResultKey);
+    if (cachedSil) {
+      benchCacheHits += 1;
+      if (logTimings) {
+        console.log(`[Silhouette bench] ${c.name} | result cache HIT — skipped IoU search`);
+      }
+      rows.push({
+        name: c.name,
+        data: c.data,
+        rankScore: cachedSil.rankScore,
+        orbProduction: 0,
+        orbMax8: cachedSil.orbMax8,
+        contour0: 0,
+        contourMax8: 0,
+        legacySilhouette: 0,
+        legacyDirect: 0,
+        legacyEdge: 0,
+        bestPoseLabel: cachedSil.bestPoseLabel,
+        silhouetteIou: cachedSil.silhouetteIou ?? cachedSil.rankScore,
+        silhouetteChamfer: cachedSil.silhouetteChamfer ?? 0,
+        ...(typeof cachedSil.silhouetteChamferMeanPx === 'number'
+          ? { silhouetteChamferMeanPx: cachedSil.silhouetteChamferMeanPx }
+          : {}),
+        ...(typeof cachedSil.silhouetteChamferStdPx === 'number'
+          ? { silhouetteChamferStdPx: cachedSil.silhouetteChamferStdPx }
+          : {}),
+        ...chamferCols
+      });
+      candidatesHandled += 1;
+      onProgress?.({
+        done: candidatesHandled,
+        total,
+        name: `${c.name} (cached)`,
+        phase: 'candidate'
+      });
+      await emitPartial();
+      continue;
+    }
+
+    benchCacheMisses += 1;
+    const sil = await compareSilhouetteOnlyToCutout(cutout, c.data, {
+      shapeBenchTiming: logTimings,
+      maxCompareDim,
+      includeSilhouetteVisual: false,
+      ...silhouetteChamferOptsForCompare(chamferCols),
+      ...(maxAspectSpan != null ? { skipAspectRatioCheck: true } : { maxAspectSpan: false })
+    });
+    const pct = sil.silhouette;
+    const iouPct = sil.silhouetteIou ?? pct;
+    const chamferPct = sil.silhouetteChamfer ?? 0;
+    const bestPoseLabel = `${sil.bestRotation}°${sil.bestFlipped ? ' (flip)' : ''}`;
+
+    silhouetteBenchResultCacheSet(silResultKey, {
+      rankScore: pct,
+      orbMax8: pct,
+      bestPoseLabel,
+      silhouetteIou: iouPct,
+      silhouetteChamfer: chamferPct,
+      ...(typeof sil.silhouetteChamferMeanPx === 'number'
+        ? { silhouetteChamferMeanPx: sil.silhouetteChamferMeanPx }
+        : {}),
+      ...(typeof sil.silhouetteChamferStdPx === 'number'
+        ? { silhouetteChamferStdPx: sil.silhouetteChamferStdPx }
+        : {})
+    });
+
+    const row = {
+      name: c.name,
+      data: c.data,
+      rankScore: pct,
+      orbProduction: 0,
+      orbMax8: pct,
+      contour0: 0,
+      contourMax8: 0,
+      legacySilhouette: 0,
+      legacyDirect: 0,
+      legacyEdge: 0,
+      bestPoseLabel,
+      silhouetteIou: iouPct,
+      silhouetteChamfer: chamferPct,
+      ...(typeof sil.silhouetteChamferMeanPx === 'number'
+        ? { silhouetteChamferMeanPx: sil.silhouetteChamferMeanPx }
+        : {}),
+      ...(typeof sil.silhouetteChamferStdPx === 'number'
+        ? { silhouetteChamferStdPx: sil.silhouetteChamferStdPx }
+        : {}),
+      ...(sil.chamferOptsResolved ?? chamferCols)
+    };
+    rows.push(row);
+
+    candidatesHandled += 1;
+    onProgress?.({ done: candidatesHandled, total, name: c.name, phase: 'candidate' });
+    await emitPartial();
+  }
+
+  const rankedCarousel = shapeBenchRankedCarouselFromRows(rows);
+
+  return {
+    pathId,
+    rows,
+    rankedCarousel,
+    benchCache: { hits: benchCacheHits, misses: benchCacheMisses },
+    filteredOut,
+    candidatesHandled
+  };
 }
