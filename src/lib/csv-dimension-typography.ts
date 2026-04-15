@@ -16,7 +16,17 @@ export function protectInchMarksInCsvLine(line: string): string {
 const APOS = '\u2019'; // ’
 
 /**
+ * Metric column: no space before the metres unit (6.67m not "6.67 m"), including each side of "  x  ".
+ */
+export function normalizeMetricTypography(s: string): string {
+	let t = String(s ?? '');
+	t = t.replace(/(\d+(?:\.\d+)?)\s+m\b/g, '$1m');
+	return t;
+}
+
+/**
  * Imperial column: use ’ for feet and ’’ for inches (two U+2019), not straight ' or ".
+ * Also tightens signage spacing: no space between ’ and inch digits, or between inch digits and ’’.
  */
 export function normalizeImperialTypography(s: string): string {
 	let t = String(s ?? '');
@@ -28,5 +38,8 @@ export function normalizeImperialTypography(s: string): string {
 	t = t.replace(/"/g, `${APOS}${APOS}`);
 	// Feet / apostrophes: straight ' → ’
 	t = t.replace(/'/g, APOS);
+	// e.g. 21’ 11’’ → 21’11’’ ; 12’ 4 ’’ → 12’4’’
+	t = t.replace(/\u2019\s+(\d+)/g, `${APOS}$1`);
+	t = t.replace(/(\d+)\s+(\u2019\u2019)/g, '$1$2');
 	return t;
 }

@@ -11,11 +11,13 @@ Column meanings:
 - "a": Room or area label. Use UPPERCASE. Combine multi-purpose spaces with " / " and spaces around slashes (example: "LIVING / DINING / KITCHEN"). Fix obvious typos ("Principle" → "PRINCIPAL"). Only one label per output row.
 
 - "b": Metric column only. Do not include imperial units here.
+  • Never put a space between the number and the unit m (write 6.67m and 3.76m, never "6.67 m" or "3.76 m").
   • If the room has TWO dimensions (width × depth): you MUST use exactly two spaces before and two spaces after the letter x, like: 7.41m  x  6.21m — this spacing is mandatory for WxD rows.
-  • If the room has only ONE dimension: a single value such as 6.21 m (space before m is acceptable).
+  • If the room has only ONE dimension: a single value such as 6.21m (no space before m).
 
 - "c": Imperial column only.
   • For TWO dimensions: same mandatory spacing as column b — exactly two spaces before and two spaces after x, e.g. 24’4’’  x  20’4’’
+  • Within each measurement, do not use spaces between the feet mark and inch digits, or between inch digits and the inch primes — e.g. 21’11’’ and 12’4’’, never "21’ 11’’" or "12’ 4’’".
   • Feet/inches typography: use the Unicode RIGHT SINGLE QUOTATION MARK ’ (U+2019) for feet — never the ASCII straight apostrophe '. Use doubled primes for inches (e.g. 4’’ for inches) consistent with signage style.
   • Single dimension: one imperial phrase with ’ for feet.
 
@@ -32,7 +34,7 @@ Input lines:
 → One row:
   "a": "LIVING / DINING / KITCHEN"
   "b": "7.41m  x  6.21m"
-  "c": "24’4’’  x  20’4’’"   (feet use ’, two spaces around x; normalize from pasted hyphens/spaces as needed)
+  "c": "24’4’’  x  20’4’’"   (no spaces inside each WxD pair: tight around ’ and ’’; two spaces only around x between the two pairs)
 
 Single-dimension rooms stay one pair in b and c without " x ".
 

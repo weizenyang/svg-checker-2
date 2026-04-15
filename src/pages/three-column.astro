@@ -354,6 +354,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 		<script>
 			import {
 				normalizeImperialTypography,
+				normalizeMetricTypography,
 				protectInchMarksInCsvLine
 			} from '../lib/csv-dimension-typography';
 
@@ -422,6 +423,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					const protectedLine = protectInchMarksInCsvLine(line);
 					const raw = parseCSVLineAll(protectedLine);
 					const cells = normalizeToThreeColumns(raw);
+					if (cells[1]) cells[1] = normalizeMetricTypography(cells[1]);
 					if (cells[2]) cells[2] = normalizeImperialTypography(cells[2]);
 					if (cells.some((c) => c.length > 0)) rows.push(cells);
 				}
@@ -900,6 +902,36 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return true;
 			}
 
+			function labelForAiAttachment(index: number, total: number, attachmentName?: string) {
+				if (total <= 1) return 'AI parsed';
+				const raw = (attachmentName ?? '').replace(/\.[^.]+$/i, '').trim();
+				if (raw) return raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
+				return `AI ${index + 1}`;
+			}
+
+			function dedupeSheetLabel(baseLabel: string) {
+				let label = baseLabel;
+				let n = 2;
+				while (sheets.some((s) => s.label === label)) {
+					label = `${baseLabel} (${n})`;
+					n++;
+				}
+				return label;
+			}
+
+			function rowsFromAiPart(part: { rows: { a?: string; b?: string; c?: string }[] }) {
+				const matrix = part.rows.map((row) => [
+					String(row.a ?? ''),
+					normalizeMetricTypography(String(row.b ?? '')),
+					normalizeImperialTypography(String(row.c ?? ''))
+				]);
+				const body = matrix
+					.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')])
+					.filter((r) => r.some((c) => c.length))
+					.slice(0, MAX_IMPORT_ROWS);
+				return body.length ? body : [['', '', '']];
+			}
+
 			function extractJsonRowsFromAssistantText(raw: string): { rows: { a?: string; b?: string; c?: string }[] } {
 				let t = String(raw ?? '').trim();
 				const fence = /```(?:json)?\s*([\s\S]*?)```/;
@@ -944,6 +976,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				pastedText: string;
 				imageDataUrls: string[];
 				reportStatus?: (msg: string) => void;
+				onImagePart?: (detail: {
+					index: number;
+					total: number;
+					part: ReturnType<typeof extractJsonRowsFromAssistantText>;
+				}) => void;
 			}) {
 				let DIMENSION_PARSE_SYSTEM_PROMPT: string;
 				let OPENROUTER_CHAT_URL: string;
@@ -955,7 +992,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					throw new Error('AI prompt module failed to load.');
 				}
 
-				const { apiKey, model, pastedText, imageDataUrls, reportStatus } = options;
+				const { apiKey, model, pastedText, imageDataUrls, reportStatus, onImagePart } = options;
 				const trimmed = pastedText?.trim() ?? '';
 				const imgs = Array.isArray(imageDataUrls) ? imageDataUrls.filter(Boolean) : [];
 				if (!trimmed && imgs.length === 0) {
@@ -1044,16 +1081,23 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					return { parts: [single] };
 				}
 
-				// One or more images: one request per image (separate payloads); caller imports each part into its own sheet.
-				const staggerMs = 400;
-				const parts: ReturnType<typeof extractJsonRowsFromAssistantText>[] = [];
-				for (let i = 0; i < imgs.length; i++) {
-					reportStatus?.(`Parsing image ${i + 1} of ${imgs.length}…`);
-					parts.push(await completeOneRequest(userPartsForSingleImage(imgs[i])));
-					if (i < imgs.length - 1) {
-						await new Promise((r) => setTimeout(r, staggerMs));
-					}
+				// One image: single request (caller imports one sheet).
+				if (imgs.length === 1) {
+					reportStatus?.('Parsing image…');
+					const single = await completeOneRequest(userPartsForSingleImage(imgs[0]));
+					return { parts: [single] };
 				}
+
+				// Multiple images: parallel requests; onImagePart runs as each completes (for progressive tab fill).
+				reportStatus?.(`Parsing ${imgs.length} images in parallel…`);
+				const parts = await Promise.all(
+					imgs.map((url, i) =>
+						completeOneRequest(userPartsForSingleImage(url)).then((part) => {
+							onImagePart?.({ index: i, total: imgs.length, part });
+							return part;
+						})
+					)
+				);
 				return { parts };
 			}
 
@@ -1089,9 +1133,14 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			tbody.addEventListener('focusout', (e) => {
 				const t = e.target;
 				if (!(t instanceof HTMLInputElement) || !t.classList.contains('cell-input')) return;
-				if (t.dataset.col !== '2') return;
-				const n = normalizeImperialTypography(t.value);
-				if (n !== t.value) {
+				const col = t.dataset.col;
+				const n =
+					col === '1'
+						? normalizeMetricTypography(t.value)
+						: col === '2'
+							? normalizeImperialTypography(t.value)
+							: null;
+				if (n !== null && n !== t.value) {
 					t.value = n;
 					t.dispatchEvent(new Event('input', { bubbles: true }));
 				}
@@ -1392,49 +1441,90 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				csvParseAiBtn.disabled = true;
 				if (aiStatus) aiStatus.textContent = 'Calling OpenRouter…';
 				try {
-					const { parts } = await parseDimensionsWithOpenRouter({
-						apiKey: key,
-						model: modelId,
-						pastedText: pasted,
-						imageDataUrls,
-						reportStatus: (msg) => {
-							if (aiStatus) aiStatus.textContent = msg;
+					const imgUrls = imageDataUrls.filter(Boolean);
+					const multiImage = imgUrls.length > 1;
+
+					if (multiImage) {
+						commitActiveSheet();
+						if (sheets.length + imgUrls.length > MAX_SHEETS) {
+							if (aiStatus) {
+								aiStatus.textContent = `Sheet limit (${MAX_SHEETS}). Close or remove sheets, then try again.`;
+							}
+							return;
 						}
-					});
-					const partCount = parts.length;
-					let importedSheets = 0;
-					let totalRows = 0;
-					for (let i = 0; i < parts.length; i++) {
-						const matrix = parts[i].rows.map((row) => [
+						const insertAt = sheets.length;
+						for (let i = 0; i < imgUrls.length; i++) {
+							const base = labelForAiAttachment(i, imgUrls.length, aiAttachments[i]?.name);
+							const label = dedupeSheetLabel(base);
+							sheets.push({ id: uid(), label, rows: [['', '', '']] });
+						}
+						activeIndex = insertAt;
+						replaceEditorRows(sheets[activeIndex].rows);
+						renderTabBar();
+						renderPreview();
+						scrollActiveTabIntoView();
+						persistState();
+
+						const { parts } = await parseDimensionsWithOpenRouter({
+							apiKey: key,
+							model: modelId,
+							pastedText: pasted,
+							imageDataUrls: imgUrls,
+							reportStatus: (msg) => {
+								if (aiStatus) aiStatus.textContent = msg;
+							},
+							onImagePart: ({ index, total, part }) => {
+								const body = rowsFromAiPart(part);
+								sheets[insertAt + index].rows = body;
+								if (activeIndex === insertAt + index) {
+									replaceEditorRows(sheets[activeIndex].rows);
+									renderPreview();
+								} else {
+									persistState();
+								}
+								if (aiStatus) {
+									const tab = sheets[insertAt + index];
+									aiStatus.textContent = `Updated ${tab.label} (image ${index + 1}/${total})`;
+								}
+							}
+						});
+
+						const totalRows = parts.reduce((acc, p) => {
+							const b = rowsFromAiPart(p);
+							return acc + b.filter((r) => r.some((c) => c.length)).length;
+						}, 0);
+						const withData = parts.filter((p) => {
+							const b = rowsFromAiPart(p);
+							return b.some((r) => r.some((c) => c.length));
+						}).length;
+
+						if (withData === 0) {
+							if (aiStatus) aiStatus.textContent = 'No rows parsed (try another model or clearer images).';
+						} else if (aiStatus) {
+							aiStatus.textContent = `Done: ${parts.length} sheet(s), ${totalRows} row(s) total.`;
+						}
+					} else {
+						const { parts } = await parseDimensionsWithOpenRouter({
+							apiKey: key,
+							model: modelId,
+							pastedText: pasted,
+							imageDataUrls,
+							reportStatus: (msg) => {
+								if (aiStatus) aiStatus.textContent = msg;
+							}
+						});
+						const matrix = parts[0].rows.map((row) => [
 							String(row.a ?? ''),
-							String(row.b ?? ''),
+							normalizeMetricTypography(String(row.b ?? '')),
 							normalizeImperialTypography(String(row.c ?? ''))
 						]);
-						const baseLabel =
-							partCount > 1
-								? (() => {
-										const raw = (aiAttachments[i]?.name ?? '')
-											.replace(/\.[^.]+$/i, '')
-											.trim();
-										if (raw) return raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
-										return `AI ${i + 1}`;
-									})()
-								: 'AI parsed';
-						const ok = importMatrixAsNewSheet(matrix, baseLabel);
-						if (ok) {
-							importedSheets++;
-							totalRows += matrix.length;
-						} else {
-							break;
+						const ok = importMatrixAsNewSheet(matrix, 'AI parsed');
+						const totalRows = matrix.filter((r) => r.some((c) => c.length)).length;
+						if (!ok) {
+							if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
+						} else if (aiStatus) {
+							aiStatus.textContent = `Imported ${totalRows} row(s).`;
 						}
-					}
-					if (importedSheets === 0) {
-						if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
-					} else if (aiStatus) {
-						aiStatus.textContent =
-							partCount > 1
-								? `Imported ${importedSheets} sheet(s), ${totalRows} row(s) total.`
-								: `Imported ${totalRows} row(s).`;
 					}
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
@@ -1464,7 +1554,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						cells
 							.map((cell, i) =>
 								escapeCsvCell(
-									i === 2 ? normalizeImperialTypography(String(cell ?? '')) : String(cell ?? '')
+									i === 1
+										? normalizeMetricTypography(String(cell ?? ''))
+										: i === 2
+											? normalizeImperialTypography(String(cell ?? ''))
+											: String(cell ?? '')
 								)
 							)
 							.join(',')
