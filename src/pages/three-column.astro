@@ -988,7 +988,9 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					'X-Title': '3-Column Dimension Parser'
 				};
 
-				async function completeOneRequest(userContent: string | UserPart[]): Promise<ReturnType<typeof extractJsonRowsFromAssistantText>> {
+				async function completeOneRequest(
+					userContent: string | UserPart[]
+				): Promise<ReturnType<typeof extractJsonRowsFromAssistantText>> {
 					const body = JSON.stringify({
 						model,
 						temperature: 0.15,
@@ -1034,30 +1036,25 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					return extractJsonRowsFromAssistantText(content);
 				}
 
-				// Text-only: single request (unchanged).
+				// Text-only: single request.
 				if (imgs.length === 0) {
-					return completeOneRequest(
+					const single = await completeOneRequest(
 						`Convert the following into JSON as specified in the system message.\n\n${trimmed}`
 					);
+					return { parts: [single] };
 				}
 
-				// One image: single request.
-				if (imgs.length === 1) {
-					return completeOneRequest(userPartsForSingleImage(imgs[0]));
-				}
-
-				// Multiple images: one scheduled request per image (avoids one huge payload/response), rows concatenated in order.
-				const merged: { a?: string; b?: string; c?: string }[] = [];
+				// One or more images: one request per image (separate payloads); caller imports each part into its own sheet.
 				const staggerMs = 400;
+				const parts: ReturnType<typeof extractJsonRowsFromAssistantText>[] = [];
 				for (let i = 0; i < imgs.length; i++) {
 					reportStatus?.(`Parsing image ${i + 1} of ${imgs.length}…`);
-					const part = await completeOneRequest(userPartsForSingleImage(imgs[i]));
-					merged.push(...part.rows);
+					parts.push(await completeOneRequest(userPartsForSingleImage(imgs[i])));
 					if (i < imgs.length - 1) {
 						await new Promise((r) => setTimeout(r, staggerMs));
 					}
 				}
-				return { rows: merged };
+				return { parts };
 			}
 
 			tbody.innerHTML = '';
@@ -1395,7 +1392,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				csvParseAiBtn.disabled = true;
 				if (aiStatus) aiStatus.textContent = 'Calling OpenRouter…';
 				try {
-					const result = await parseDimensionsWithOpenRouter({
+					const { parts } = await parseDimensionsWithOpenRouter({
 						apiKey: key,
 						model: modelId,
 						pastedText: pasted,
@@ -1404,16 +1401,40 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							if (aiStatus) aiStatus.textContent = msg;
 						}
 					});
-					const matrix = result.rows.map((row) => [
-						String(row.a ?? ''),
-						String(row.b ?? ''),
-						normalizeImperialTypography(String(row.c ?? ''))
-					]);
-					const ok = importMatrixAsNewSheet(matrix, 'AI parsed');
-					if (!ok) {
+					const partCount = parts.length;
+					let importedSheets = 0;
+					let totalRows = 0;
+					for (let i = 0; i < parts.length; i++) {
+						const matrix = parts[i].rows.map((row) => [
+							String(row.a ?? ''),
+							String(row.b ?? ''),
+							normalizeImperialTypography(String(row.c ?? ''))
+						]);
+						const baseLabel =
+							partCount > 1
+								? (() => {
+										const raw = (aiAttachments[i]?.name ?? '')
+											.replace(/\.[^.]+$/i, '')
+											.trim();
+										if (raw) return raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
+										return `AI ${i + 1}`;
+									})()
+								: 'AI parsed';
+						const ok = importMatrixAsNewSheet(matrix, baseLabel);
+						if (ok) {
+							importedSheets++;
+							totalRows += matrix.length;
+						} else {
+							break;
+						}
+					}
+					if (importedSheets === 0) {
 						if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
 					} else if (aiStatus) {
-						aiStatus.textContent = `Imported ${matrix.length} row(s).`;
+						aiStatus.textContent =
+							partCount > 1
+								? `Imported ${importedSheets} sheet(s), ${totalRows} row(s) total.`
+								: `Imported ${totalRows} row(s).`;
 					}
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
