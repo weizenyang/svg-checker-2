@@ -1,0 +1,1044 @@
+---
+import "../styles.css";
+---
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<title>DXF Viewer & Dimensioning</title>
+	</head>
+	<body class="bg-neutral-100 min-h-screen flex flex-col">
+		<input type="file" id="dxf-file-input" accept=".dxf,.dwg" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
+
+		<main class="flex-1 flex flex-col p-3 max-w-[1600px] w-full mx-auto min-h-0">
+			<div class="flex items-center justify-between mb-2">
+				<h1 class="text-lg font-semibold">DXF Viewer & Dimensioning</h1>
+				<a href="/" class="text-xs text-blue-600 hover:underline">← Home</a>
+			</div>
+
+			<!-- Project tabs (mirrors three-column.astro) -->
+			<div class="mb-2 flex items-stretch gap-2 min-w-0">
+				<div
+					id="project-tabs-scroll"
+					class="sheet-tabs-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden rounded-lg border border-neutral-200 bg-white px-1 py-1"
+					role="tablist"
+					aria-label="Open DXF projects"
+				>
+					<div id="project-tabs" class="flex flex-nowrap gap-1 w-max min-h-[2.25rem] items-center"></div>
+				</div>
+				<button type="button" id="add-project-btn" class="shrink-0 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-sm font-medium" title="New empty project">+</button>
+				<button type="button" id="import-dxf-btn" class="shrink-0 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-sm font-medium">Open DXF…</button>
+				<button type="button" id="fit-view-btn" class="shrink-0 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-sm font-medium" title="Fit to view (F)">⤢ Fit</button>
+			</div>
+
+			<div class="flex-1 flex gap-3 min-h-0">
+				<!-- Sidebar -->
+				<aside class="w-64 shrink-0 flex flex-col gap-3 overflow-y-auto">
+					<section class="rounded-lg border border-neutral-300 bg-white p-3">
+						<div class="text-xs font-semibold text-neutral-600 mb-2">TOOLS</div>
+						<div class="flex flex-col gap-1.5">
+							<button type="button" data-tool="pan" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-neutral-800 text-white text-left">Pan / Zoom</button>
+							<button type="button" data-tool="linear" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-white hover:bg-neutral-100 text-left">Linear dim</button>
+							<button type="button" data-tool="aligned" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-white hover:bg-neutral-100 text-left">Aligned dim</button>
+							<button type="button" data-tool="angular" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-white hover:bg-neutral-100 text-left">Angular dim</button>
+							<button type="button" data-tool="calibrate" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-white hover:bg-neutral-100 text-left">Calibrate scale</button>
+							<button type="button" data-tool="delete" class="tool-btn px-2 py-1.5 text-sm rounded border border-neutral-300 bg-white hover:bg-neutral-100 text-left">Delete dim</button>
+						</div>
+						<div class="mt-3 text-xs text-neutral-500" id="tool-hint">Drag to pan. Scroll to zoom.</div>
+					</section>
+
+					<section class="rounded-lg border border-neutral-300 bg-white p-3">
+						<div class="text-xs font-semibold text-neutral-600 mb-2">UNITS</div>
+						<select id="unit-select" class="w-full border border-neutral-300 rounded px-2 py-1 text-sm bg-white">
+							<option value="auto">Auto (from DXF)</option>
+							<option value="mm">Millimeters</option>
+							<option value="cm">Centimeters</option>
+							<option value="m">Meters</option>
+							<option value="in">Inches</option>
+							<option value="ft">Feet</option>
+						</select>
+						<div class="mt-2 text-xs text-neutral-500" id="scale-info">Scale: 1.0</div>
+					</section>
+
+					<section class="rounded-lg border border-neutral-300 bg-white p-3">
+						<div class="text-xs font-semibold text-neutral-600 mb-2">LAYERS</div>
+						<div id="layer-list" class="flex flex-col gap-0.5 max-h-64 overflow-y-auto text-xs">
+							<div class="text-neutral-400">No file loaded.</div>
+						</div>
+					</section>
+
+					<section class="rounded-lg border border-neutral-300 bg-white p-3">
+						<div class="text-xs font-semibold text-neutral-600 mb-2">EXPORT</div>
+						<div class="flex flex-col gap-1.5">
+							<button type="button" id="export-svg-btn" class="px-2 py-1.5 text-sm rounded bg-neutral-200 hover:bg-neutral-300">Export SVG</button>
+							<button type="button" id="clear-dims-btn" class="px-2 py-1.5 text-sm rounded bg-red-100 hover:bg-red-200 text-red-800">Clear dimensions</button>
+						</div>
+					</section>
+				</aside>
+
+				<!-- Canvas -->
+				<section id="dxf-canvas-wrap" class="flex-1 min-w-0 rounded-xl border border-neutral-300 bg-white shadow-sm overflow-hidden relative">
+					<svg id="dxf-svg" class="w-full h-full block" xmlns="http://www.w3.org/2000/svg"></svg>
+					<div id="drop-hint" class="absolute inset-0 flex flex-col items-center justify-center text-neutral-400 text-sm select-none cursor-pointer">
+						<svg class="w-12 h-12 mb-2 text-neutral-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+						<div class="text-neutral-500 font-medium">Drop a .dxf file here</div>
+						<div class="text-xs text-neutral-400 mt-1">or click to browse · .dwg must be converted first</div>
+					</div>
+					<div id="coord-readout" class="absolute bottom-2 left-2 text-[10px] font-mono text-neutral-500 bg-white/80 px-1.5 py-0.5 rounded"></div>
+				</section>
+			</div>
+		</main>
+
+		<div id="toast" class="fixed bottom-4 right-4 hidden bg-neutral-900 text-white text-sm px-3 py-2 rounded shadow-lg"></div>
+
+		<style>
+			.sheet-tabs-scroll { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+			.sheet-tabs-scroll::-webkit-scrollbar { height: 8px; }
+			.sheet-tabs-scroll::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
+			#dxf-canvas-wrap.dragover { outline: 3px dashed #3b82f6; outline-offset: -6px; background: #eff6ff; }
+			body.dragging::after { content: ''; position: fixed; inset: 0; background: rgba(59, 130, 246, 0.08); border: 4px dashed #3b82f6; pointer-events: none; z-index: 9999; }
+			#dxf-svg .dxf-entity { fill: none; vector-effect: non-scaling-stroke; }
+			#dxf-svg text.dxf-text { font-family: sans-serif; }
+			.dim-line { stroke: #dc2626; stroke-width: 1.5; fill: none; vector-effect: non-scaling-stroke; }
+			.dim-ext { stroke: #dc2626; stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; stroke-dasharray: 3 2; }
+			.dim-text { font-family: sans-serif; font-size: 12px; fill: #dc2626; font-weight: 600; paint-order: stroke; stroke: white; stroke-width: 3px; }
+			.dim-arrow { fill: #dc2626; }
+			.snap-marker { fill: none; stroke: #16a34a; stroke-width: 2; vector-effect: non-scaling-stroke; }
+			.preview-dim { stroke: #2563eb; stroke-width: 1; stroke-dasharray: 4 3; fill: none; vector-effect: non-scaling-stroke; }
+			.tool-btn.active { background: #262626; color: #fff; }
+		</style>
+
+		<script>
+			import DxfParserMod from 'dxf-parser';
+			const DxfParser = DxfParserMod?.default || DxfParserMod;
+
+			const MAX_PROJECTS = 20;
+			const STORAGE_KEY = 'dxf-viewer-projects-v1';
+			const MAX_STORED_DXF_BYTES = 2 * 1024 * 1024;
+
+			/** @typedef {{id:string,label:string,dxfText:string,parsed:any,userDimensions:any[],layerVisibility:Record<string,boolean>,viewport:{x:number,y:number,w:number,h:number}|null,calibration:number,unit:string}} Project */
+
+			/** @type {Project[]} */
+			let projects = [];
+			let activeIndex = 0;
+			let currentTool = 'pan';
+			let dimState = null; // in-progress dimension
+			let hydrating = true;
+
+			const $ = (id) => document.getElementById(id);
+			const svgEl = $('dxf-svg');
+			const tabsEl = $('project-tabs');
+			const layerListEl = $('layer-list');
+			const dropHint = $('drop-hint');
+			const coordReadout = $('coord-readout');
+			const toolHint = $('tool-hint');
+			const unitSelect = $('unit-select');
+			const scaleInfo = $('scale-info');
+
+			const SVG_NS = 'http://www.w3.org/2000/svg';
+
+			function uid() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+			function toast(msg, ms = 2500) {
+				const el = $('toast');
+				el.textContent = msg;
+				el.classList.remove('hidden');
+				clearTimeout(toast._t);
+				toast._t = setTimeout(() => el.classList.add('hidden'), ms);
+			}
+
+			// ---------- DXF → SVG rendering ----------
+
+			const ACI_COLORS = {
+				1:'#ff0000',2:'#ffff00',3:'#00ff00',4:'#00ffff',5:'#0000ff',6:'#ff00ff',7:'#111111',8:'#808080',9:'#c0c0c0'
+			};
+			function aciToHex(aci) {
+				if (aci == null) return '#111';
+				if (ACI_COLORS[aci]) return ACI_COLORS[aci];
+				return '#555';
+			}
+
+			function getBounds(dxf) {
+				const h = dxf.header || {};
+				if (h.$EXTMIN && h.$EXTMAX && isFinite(h.$EXTMIN.x) && isFinite(h.$EXTMAX.x)) {
+					return { minX: h.$EXTMIN.x, minY: h.$EXTMIN.y, maxX: h.$EXTMAX.x, maxY: h.$EXTMAX.y };
+				}
+				let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+				const grow = (x, y) => {
+					if (!isFinite(x) || !isFinite(y)) return;
+					if (x < minX) minX = x; if (y < minY) minY = y;
+					if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+				};
+				const visit = (ents, tx = 0, ty = 0) => {
+					for (const e of ents || []) {
+						if (e.vertices) for (const v of e.vertices) grow((v.x || 0) + tx, (v.y || 0) + ty);
+						if (e.position) grow((e.position.x || 0) + tx, (e.position.y || 0) + ty);
+						if (e.center) {
+							const r = e.radius || 0;
+							grow(e.center.x + tx - r, e.center.y + ty - r);
+							grow(e.center.x + tx + r, e.center.y + ty + r);
+						}
+						if (e.startPoint) grow(e.startPoint.x + tx, e.startPoint.y + ty);
+						if (e.endPoint) grow(e.endPoint.x + tx, e.endPoint.y + ty);
+					}
+				};
+				visit(dxf.entities || []);
+				if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+				return { minX, minY, maxX, maxY };
+			}
+
+			function entityStrokeColor(e, dxf) {
+				if (e.color) return aciToHex(e.color);
+				const layer = (dxf.tables && dxf.tables.layer && dxf.tables.layer.layers && dxf.tables.layer.layers[e.layer]) || null;
+				if (layer && layer.color != null) return aciToHex(layer.color);
+				return '#222';
+			}
+
+			function renderEntity(e, dxf, parent) {
+				const stroke = entityStrokeColor(e, dxf);
+				const mk = (tag) => {
+					const el = document.createElementNS(SVG_NS, tag);
+					el.setAttribute('class', 'dxf-entity');
+					el.setAttribute('stroke', stroke);
+					el.setAttribute('stroke-width', '1');
+					el.setAttribute('vector-effect', 'non-scaling-stroke');
+					return el;
+				};
+				switch (e.type) {
+					case 'LINE': {
+						if (!e.vertices || e.vertices.length < 2) return;
+						const el = mk('line');
+						el.setAttribute('x1', e.vertices[0].x);
+						el.setAttribute('y1', e.vertices[0].y);
+						el.setAttribute('x2', e.vertices[1].x);
+						el.setAttribute('y2', e.vertices[1].y);
+						parent.appendChild(el);
+						return;
+					}
+					case 'LWPOLYLINE':
+					case 'POLYLINE': {
+						if (!e.vertices || e.vertices.length < 2) return;
+						const pts = e.vertices.map(v => `${v.x},${v.y}`).join(' ');
+						const el = mk(e.shape ? 'polygon' : 'polyline');
+						el.setAttribute('points', pts);
+						parent.appendChild(el);
+						return;
+					}
+					case 'CIRCLE': {
+						if (!e.center) return;
+						const el = mk('circle');
+						el.setAttribute('cx', e.center.x);
+						el.setAttribute('cy', e.center.y);
+						el.setAttribute('r', e.radius || 0);
+						parent.appendChild(el);
+						return;
+					}
+					case 'ARC': {
+						if (!e.center || e.radius == null) return;
+						const cx = e.center.x, cy = e.center.y, r = e.radius;
+						const a0 = (e.startAngle || 0);
+						const a1 = (e.endAngle || 0);
+						const x1 = cx + r * Math.cos(a0);
+						const y1 = cy + r * Math.sin(a0);
+						const x2 = cx + r * Math.cos(a1);
+						const y2 = cy + r * Math.sin(a1);
+						let sweep = a1 - a0;
+						while (sweep < 0) sweep += Math.PI * 2;
+						const large = sweep > Math.PI ? 1 : 0;
+						const el = mk('path');
+						el.setAttribute('d', `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`);
+						parent.appendChild(el);
+						return;
+					}
+					case 'ELLIPSE': {
+						if (!e.center) return;
+						const el = mk('ellipse');
+						el.setAttribute('cx', e.center.x);
+						el.setAttribute('cy', e.center.y);
+						const rx = Math.hypot(e.majorAxisEndPoint?.x || 0, e.majorAxisEndPoint?.y || 0) || 1;
+						const ry = rx * (e.axisRatio || 1);
+						el.setAttribute('rx', rx);
+						el.setAttribute('ry', ry);
+						parent.appendChild(el);
+						return;
+					}
+					case 'SPLINE': {
+						if (!e.controlPoints || e.controlPoints.length < 2) return;
+						const pts = e.controlPoints.map(v => `${v.x},${v.y}`).join(' ');
+						const el = mk('polyline');
+						el.setAttribute('points', pts);
+						parent.appendChild(el);
+						return;
+					}
+					case 'POINT': {
+						if (!e.position) return;
+						const el = mk('circle');
+						el.setAttribute('cx', e.position.x);
+						el.setAttribute('cy', e.position.y);
+						el.setAttribute('r', 0.5);
+						parent.appendChild(el);
+						return;
+					}
+					case 'TEXT':
+					case 'MTEXT': {
+						const p = e.startPoint || e.position;
+						if (!p) return;
+						const txt = document.createElementNS(SVG_NS, 'text');
+						txt.setAttribute('class', 'dxf-text');
+						txt.setAttribute('x', p.x);
+						txt.setAttribute('y', p.y);
+						txt.setAttribute('fill', stroke);
+						txt.setAttribute('font-size', e.textHeight || e.height || 10);
+						txt.setAttribute('transform', `scale(1,-1) translate(0, ${-2 * p.y})`);
+						txt.textContent = String(e.text || '').replace(/\\[A-Za-z0-9.]+;?/g, '').replace(/[{}]/g, '');
+						parent.appendChild(txt);
+						return;
+					}
+					case 'INSERT': {
+						if (!dxf.blocks || !dxf.blocks[e.name]) return;
+						const block = dxf.blocks[e.name];
+						const g = document.createElementNS(SVG_NS, 'g');
+						const tx = (e.position?.x || 0) - (block.position?.x || 0);
+						const ty = (e.position?.y || 0) - (block.position?.y || 0);
+						const sx = e.xScale || 1, sy = e.yScale || 1;
+						const rot = (e.rotation || 0);
+						g.setAttribute('transform', `translate(${tx} ${ty}) rotate(${rot}) scale(${sx} ${sy})`);
+						for (const be of block.entities || []) renderEntity(be, dxf, g);
+						parent.appendChild(g);
+						return;
+					}
+				}
+			}
+
+			function buildDefs() {
+				const defs = document.createElementNS(SVG_NS, 'defs');
+				defs.innerHTML = `
+					<marker id="dim-arrow-start" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="strokeWidth">
+						<path d="M 10 0 L 0 5 L 10 10 z" fill="#dc2626"/>
+					</marker>
+					<marker id="dim-arrow-end" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto" markerUnits="strokeWidth">
+						<path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626"/>
+					</marker>
+				`;
+				return defs;
+			}
+
+			function renderDxf(project) {
+				svgEl.innerHTML = '';
+				svgEl.appendChild(buildDefs());
+				if (!project || !project.parsed) {
+					svgEl.setAttribute('viewBox', '0 0 100 100');
+					dropHint.style.display = '';
+					layerListEl.innerHTML = '<div class="text-neutral-400">No file loaded. Drag a .dxf file here or click "Open DXF…".</div>';
+					updateScaleInfo(project);
+					return;
+				}
+				dropHint.style.display = 'none';
+				const dxf = project.parsed;
+				const b = getBounds(dxf);
+				const pad = Math.max((b.maxX - b.minX), (b.maxY - b.minY)) * 0.03;
+				const vb = project.viewport || { x: b.minX - pad, y: b.minY - pad, w: (b.maxX - b.minX) + pad * 2, h: (b.maxY - b.minY) + pad * 2 };
+				project.viewport = vb;
+				// Flip Y: we use a transform on root group so coordinates are still world space
+				svgEl.setAttribute('viewBox', `${vb.x} ${-(vb.y + vb.h)} ${vb.w} ${vb.h}`);
+				svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+				const flipG = document.createElementNS(SVG_NS, 'g');
+				flipG.setAttribute('transform', 'scale(1,-1)');
+				flipG.setAttribute('id', 'world');
+				svgEl.appendChild(flipG);
+
+				// Group by layer
+				const layerGroups = {};
+				const ents = dxf.entities || [];
+				for (const e of ents) {
+					const layerName = e.layer || '0';
+					let g = layerGroups[layerName];
+					if (!g) {
+						g = document.createElementNS(SVG_NS, 'g');
+						g.setAttribute('data-layer', layerName);
+						if (project.layerVisibility[layerName] === false) g.setAttribute('display', 'none');
+						layerGroups[layerName] = g;
+						flipG.appendChild(g);
+					}
+					try { renderEntity(e, dxf, g); } catch (err) { console.warn('entity render fail', e.type, err); }
+				}
+
+				// User dimensions overlay (in world coords, flipped group so text needs un-flipping individually)
+				const dimsG = document.createElementNS(SVG_NS, 'g');
+				dimsG.setAttribute('id', 'user-dims');
+				flipG.appendChild(dimsG);
+				renderUserDims(project, dimsG);
+
+				// Preview group (for in-progress dim)
+				const prevG = document.createElementNS(SVG_NS, 'g');
+				prevG.setAttribute('id', 'preview-dim');
+				flipG.appendChild(prevG);
+
+				renderLayerList(project, dxf);
+				updateScaleInfo(project);
+			}
+
+			function renderLayerList(project, dxf) {
+				layerListEl.innerHTML = '';
+				const layers = (dxf.tables && dxf.tables.layer && dxf.tables.layer.layers) || {};
+				const usedLayers = new Set();
+				for (const e of dxf.entities || []) usedLayers.add(e.layer || '0');
+				const names = Array.from(new Set([...Object.keys(layers), ...usedLayers])).sort();
+				for (const name of names) {
+					if (!usedLayers.has(name)) continue;
+					const visible = project.layerVisibility[name] !== false;
+					const row = document.createElement('label');
+					row.className = 'flex items-center gap-1.5 cursor-pointer hover:bg-neutral-50 px-1 rounded';
+					const cb = document.createElement('input');
+					cb.type = 'checkbox';
+					cb.checked = visible;
+					cb.addEventListener('change', () => {
+						project.layerVisibility[name] = cb.checked;
+						const g = svgEl.querySelector(`g[data-layer="${CSS.escape(name)}"]`);
+						if (g) g.setAttribute('display', cb.checked ? 'inline' : 'none');
+						persistState();
+					});
+					const sw = document.createElement('span');
+					sw.className = 'inline-block w-3 h-3 border border-neutral-300';
+					sw.style.background = aciToHex((layers[name] && layers[name].color) || 7);
+					const lbl = document.createElement('span');
+					lbl.className = 'truncate';
+					lbl.textContent = name;
+					lbl.title = name;
+					row.append(cb, sw, lbl);
+					layerListEl.appendChild(row);
+				}
+				if (!layerListEl.children.length) layerListEl.innerHTML = '<div class="text-neutral-400">No layers.</div>';
+			}
+
+			// ---------- Units ----------
+
+			// DXF $INSUNITS → mm scale factor
+			const INSUNITS_TO_MM = { 0: 1, 1: 25.4, 2: 304.8, 3: 1609344, 4: 1, 5: 10, 6: 1000, 8: 0.0254, 9: 0.0000254 };
+
+			function unitLabel(project) {
+				const sel = unitSelect.value;
+				if (sel !== 'auto') return sel;
+				const ins = project?.parsed?.header?.$INSUNITS;
+				if (ins === 1) return 'in';
+				if (ins === 2) return 'ft';
+				if (ins === 4) return 'mm';
+				if (ins === 5) return 'cm';
+				if (ins === 6) return 'm';
+				return 'u';
+			}
+
+			function formatDistance(rawDist, project) {
+				const cal = project.calibration || 1;
+				const d = rawDist * cal;
+				const u = unitLabel(project);
+				// Heuristic: if value is huge and unit would be mm, show m
+				if (u === 'mm' && Math.abs(d) >= 1000) return (d / 1000).toFixed(2) + ' m';
+				if (u === 'm') return d.toFixed(3) + ' m';
+				if (u === 'cm') return d.toFixed(1) + ' cm';
+				if (u === 'in') return d.toFixed(2) + ' in';
+				if (u === 'ft') return d.toFixed(2) + ' ft';
+				if (u === 'mm') return d.toFixed(0) + ' mm';
+				return d.toFixed(2);
+			}
+
+			function updateScaleInfo(project) {
+				if (!project) { scaleInfo.textContent = 'Scale: —'; return; }
+				scaleInfo.textContent = `Scale: ${(project.calibration || 1).toFixed(4)} · unit: ${unitLabel(project)}`;
+			}
+
+			// ---------- User dimensions ----------
+
+			function renderUserDims(project, g) {
+				g.innerHTML = '';
+				for (const d of project.userDimensions || []) {
+					drawDimension(d, g, project);
+				}
+			}
+
+			function drawDimension(d, g, project) {
+				if (d.type === 'linear' || d.type === 'aligned') {
+					const [p1, p2, off] = d.points;
+					// Determine measurement axis (u) and perpendicular (n)
+					let ux, uy;
+					if (d.type === 'aligned') {
+						const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+						ux = (p2.x - p1.x) / len;
+						uy = (p2.y - p1.y) / len;
+					} else {
+						// linear = axis-aligned in world X or Y, whichever is bigger
+						const dx = Math.abs(p2.x - p1.x), dy = Math.abs(p2.y - p1.y);
+						if (dx >= dy) { ux = 1; uy = 0; } else { ux = 0; uy = 1; }
+					}
+					const nx = -uy, ny = ux;
+					// For linear: project p1,p2 onto axis to get measurement endpoints on the axis line
+					// dim line position = (point on axis through p1) + normal * offsetDist
+					const offDist = ((off.x - p1.x) * nx + (off.y - p1.y) * ny);
+					// Axis-projected endpoints
+					const ap1 = d.type === 'aligned' ? p1 : (ux ? { x: p1.x, y: p1.y } : { x: p1.x, y: p1.y });
+					const ap2 = d.type === 'aligned' ? p2 : (ux ? { x: p2.x, y: p1.y } : { x: p1.x, y: p2.y });
+					const d1 = { x: ap1.x + nx * offDist, y: ap1.y + ny * offDist };
+					const d2 = { x: ap2.x + nx * offDist, y: ap2.y + ny * offDist };
+					// Extension lines go from original points to dim line ends
+					const ext1 = document.createElementNS(SVG_NS, 'line');
+					ext1.setAttribute('class', 'dim-ext');
+					ext1.setAttribute('x1', p1.x); ext1.setAttribute('y1', p1.y);
+					ext1.setAttribute('x2', d1.x); ext1.setAttribute('y2', d1.y);
+					g.appendChild(ext1);
+					const ext2 = document.createElementNS(SVG_NS, 'line');
+					ext2.setAttribute('class', 'dim-ext');
+					ext2.setAttribute('x1', p2.x); ext2.setAttribute('y1', p2.y);
+					ext2.setAttribute('x2', d2.x); ext2.setAttribute('y2', d2.y);
+					g.appendChild(ext2);
+					// Main dim line with arrowheads
+					const line = document.createElementNS(SVG_NS, 'line');
+					line.setAttribute('class', 'dim-line');
+					line.setAttribute('x1', d1.x); line.setAttribute('y1', d1.y);
+					line.setAttribute('x2', d2.x); line.setAttribute('y2', d2.y);
+					line.setAttribute('marker-start', 'url(#dim-arrow-start)');
+					line.setAttribute('marker-end', 'url(#dim-arrow-end)');
+					line.dataset.dimId = d.id;
+					line.style.cursor = 'pointer';
+					g.appendChild(line);
+					// Label
+					const dist = Math.hypot(d2.x - d1.x, d2.y - d1.y);
+					const cx = (d1.x + d2.x) / 2, cy = (d1.y + d2.y) / 2;
+					// Text rotation along dim line (so aligned dims read along the line)
+					let angle = Math.atan2(d2.y - d1.y, d2.x - d1.x) * 180 / Math.PI;
+					if (angle > 90) angle -= 180;
+					if (angle < -90) angle += 180;
+					const txt = document.createElementNS(SVG_NS, 'text');
+					txt.setAttribute('class', 'dim-text');
+					txt.setAttribute('x', 0);
+					txt.setAttribute('y', 0);
+					txt.setAttribute('text-anchor', 'middle');
+					txt.setAttribute('transform', `translate(${cx} ${cy}) scale(1,-1) rotate(${-angle}) translate(0 -4)`);
+					txt.textContent = formatDistance(dist, project);
+					g.appendChild(txt);
+				} else if (d.type === 'angular') {
+					const [v, a, b] = d.points;
+					const r = Math.min(Math.hypot(a.x - v.x, a.y - v.y), Math.hypot(b.x - v.x, b.y - v.y)) * 0.5 || 10;
+					const a1 = Math.atan2(a.y - v.y, a.x - v.x);
+					const a2 = Math.atan2(b.y - v.y, b.x - v.x);
+					let sweep = a2 - a1;
+					while (sweep <= -Math.PI) sweep += 2 * Math.PI;
+					while (sweep > Math.PI) sweep -= 2 * Math.PI;
+					const end1 = { x: v.x + r * Math.cos(a1), y: v.y + r * Math.sin(a1) };
+					const end2 = { x: v.x + r * Math.cos(a1 + sweep), y: v.y + r * Math.sin(a1 + sweep) };
+					const large = Math.abs(sweep) > Math.PI ? 1 : 0;
+					const sweepFlag = sweep > 0 ? 1 : 0;
+					const path = document.createElementNS(SVG_NS, 'path');
+					path.setAttribute('class', 'dim-line');
+					path.setAttribute('d', `M ${end1.x} ${end1.y} A ${r} ${r} 0 ${large} ${sweepFlag} ${end2.x} ${end2.y}`);
+					path.dataset.dimId = d.id;
+					g.appendChild(path);
+					const mid = a1 + sweep / 2;
+					const tx = v.x + (r + r * 0.3) * Math.cos(mid);
+					const ty = v.y + (r + r * 0.3) * Math.sin(mid);
+					const txt = document.createElementNS(SVG_NS, 'text');
+					txt.setAttribute('class', 'dim-text');
+					txt.setAttribute('x', tx);
+					txt.setAttribute('y', ty);
+					txt.setAttribute('text-anchor', 'middle');
+					txt.setAttribute('transform', `scale(1,-1) translate(0, ${-2 * ty})`);
+					txt.textContent = (Math.abs(sweep) * 180 / Math.PI).toFixed(1) + '°';
+					g.appendChild(txt);
+				}
+			}
+
+			// ---------- Pan / zoom / click ----------
+
+			function clientToWorld(ev) {
+				const rect = svgEl.getBoundingClientRect();
+				const vb = svgEl.viewBox.baseVal;
+				const x = vb.x + (ev.clientX - rect.left) / rect.width * vb.width;
+				const yFlipped = vb.y + (ev.clientY - rect.top) / rect.height * vb.height;
+				return { x, y: -yFlipped };
+			}
+
+			let isPanning = false, panStart = null, panVb = null;
+			svgEl.addEventListener('mousedown', (ev) => {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) return;
+				if (currentTool === 'pan') {
+					isPanning = true;
+					panStart = { x: ev.clientX, y: ev.clientY };
+					const vb = svgEl.viewBox.baseVal;
+					panVb = { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
+				}
+			});
+			window.addEventListener('mousemove', (ev) => {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) return;
+				const w = clientToWorld(ev);
+				coordReadout.textContent = `x: ${w.x.toFixed(2)}  y: ${w.y.toFixed(2)}`;
+				if (isPanning && panStart && panVb) {
+					const rect = svgEl.getBoundingClientRect();
+					const dx = (ev.clientX - panStart.x) / rect.width * panVb.w;
+					const dy = (ev.clientY - panStart.y) / rect.height * panVb.h;
+					svgEl.setAttribute('viewBox', `${panVb.x - dx} ${panVb.y - dy} ${panVb.w} ${panVb.h}`);
+				} else {
+					updatePreview(w);
+				}
+			});
+			window.addEventListener('mouseup', () => {
+				if (isPanning) {
+					isPanning = false;
+					const vb = svgEl.viewBox.baseVal;
+					const p = projects[activeIndex];
+					if (p) { p.viewport = { x: vb.x, y: -(vb.y + vb.height), w: vb.width, h: vb.height }; persistState(); }
+				}
+			});
+			svgEl.addEventListener('wheel', (ev) => {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) return;
+				ev.preventDefault();
+				const vb = svgEl.viewBox.baseVal;
+				const rect = svgEl.getBoundingClientRect();
+				const mx = vb.x + (ev.clientX - rect.left) / rect.width * vb.width;
+				const my = vb.y + (ev.clientY - rect.top) / rect.height * vb.height;
+				const factor = ev.deltaY < 0 ? 0.85 : 1.18;
+				const nw = vb.width * factor, nh = vb.height * factor;
+				const nx = mx - (mx - vb.x) * factor;
+				const ny = my - (my - vb.y) * factor;
+				svgEl.setAttribute('viewBox', `${nx} ${ny} ${nw} ${nh}`);
+				p.viewport = { x: nx, y: -(ny + nh), w: nw, h: nh };
+			}, { passive: false });
+
+			svgEl.addEventListener('click', (ev) => {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) return;
+				if (currentTool === 'pan') return;
+				if (currentTool === 'delete') {
+					const id = ev.target?.dataset?.dimId;
+					if (id) {
+						p.userDimensions = p.userDimensions.filter(d => d.id !== id);
+						const g = svgEl.querySelector('#user-dims');
+						if (g) renderUserDims(p, g);
+						persistState();
+					}
+					return;
+				}
+				const w = clientToWorld(ev);
+				handleToolClick(w);
+			});
+
+			function handleToolClick(w) {
+				const p = projects[activeIndex];
+				if (!dimState || dimState.tool !== currentTool) {
+					dimState = { tool: currentTool, points: [w] };
+					toolHint.textContent = currentTool === 'angular' ? 'Click first ray endpoint' : 'Click second point';
+					return;
+				}
+				dimState.points.push(w);
+				if (currentTool === 'linear' || currentTool === 'aligned') {
+					if (dimState.points.length === 2) {
+						toolHint.textContent = 'Click to place offset';
+						return;
+					}
+					if (dimState.points.length === 3) {
+						p.userDimensions.push({ id: uid(), type: currentTool, points: dimState.points });
+						dimState = null;
+						toolHint.textContent = 'Click first point';
+						const g = svgEl.querySelector('#user-dims');
+						if (g) renderUserDims(p, g);
+						clearPreview();
+						persistState();
+					}
+				} else if (currentTool === 'angular') {
+					if (dimState.points.length === 2) {
+						toolHint.textContent = 'Click second ray endpoint';
+						return;
+					}
+					if (dimState.points.length === 3) {
+						p.userDimensions.push({ id: uid(), type: 'angular', points: dimState.points });
+						dimState = null;
+						toolHint.textContent = 'Click vertex';
+						const g = svgEl.querySelector('#user-dims');
+						if (g) renderUserDims(p, g);
+						clearPreview();
+						persistState();
+					}
+				} else if (currentTool === 'calibrate') {
+					if (dimState.points.length === 2) {
+						const raw = Math.hypot(dimState.points[1].x - dimState.points[0].x, dimState.points[1].y - dimState.points[0].y);
+						const input = window.prompt(`Measured: ${raw.toFixed(4)} units.\nEnter real-world length in current unit (${unitLabel(p)}):`);
+						const realVal = parseFloat(input);
+						if (isFinite(realVal) && realVal > 0 && raw > 0) {
+							// we want formatDistance(raw) to equal realVal given unit
+							p.calibration = realVal / raw;
+							toast(`Calibrated: 1 unit = ${p.calibration.toFixed(4)} ${unitLabel(p)}`);
+							updateScaleInfo(p);
+							const g = svgEl.querySelector('#user-dims');
+							if (g) renderUserDims(p, g);
+							persistState();
+						}
+						dimState = null;
+						toolHint.textContent = 'Click first calibration point';
+						clearPreview();
+					}
+				}
+			}
+
+			function updatePreview(w) {
+				const g = svgEl.querySelector('#preview-dim');
+				if (!g) return;
+				g.innerHTML = '';
+				if (!dimState || !dimState.points.length) return;
+				for (let i = 0; i < dimState.points.length - 1; i++) {
+					const a = dimState.points[i], b = dimState.points[i + 1];
+					const l = document.createElementNS(SVG_NS, 'line');
+					l.setAttribute('class', 'preview-dim');
+					l.setAttribute('x1', a.x); l.setAttribute('y1', a.y);
+					l.setAttribute('x2', b.x); l.setAttribute('y2', b.y);
+					g.appendChild(l);
+				}
+				const last = dimState.points[dimState.points.length - 1];
+				const l = document.createElementNS(SVG_NS, 'line');
+				l.setAttribute('class', 'preview-dim');
+				l.setAttribute('x1', last.x); l.setAttribute('y1', last.y);
+				l.setAttribute('x2', w.x); l.setAttribute('y2', w.y);
+				g.appendChild(l);
+			}
+			function clearPreview() {
+				const g = svgEl.querySelector('#preview-dim');
+				if (g) g.innerHTML = '';
+			}
+
+			// ---------- Tool buttons ----------
+
+			document.querySelectorAll('.tool-btn').forEach(btn => {
+				btn.addEventListener('click', () => {
+					currentTool = btn.dataset.tool;
+					document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b === btn));
+					dimState = null;
+					clearPreview();
+					const hints = {
+						pan: 'Drag to pan. Scroll to zoom.',
+						linear: 'Click first point',
+						aligned: 'Click first point',
+						angular: 'Click vertex',
+						calibrate: 'Click first calibration point',
+						delete: 'Click a dimension to delete'
+					};
+					toolHint.textContent = hints[currentTool] || '';
+				});
+			});
+
+			// ---------- Projects / tabs ----------
+
+			function newEmptyProject(label = 'Empty') {
+				return {
+					id: uid(), label,
+					dxfText: '', parsed: null,
+					userDimensions: [], layerVisibility: {},
+					viewport: null, calibration: 1, unit: 'auto'
+				};
+			}
+
+			function renderTabBar() {
+				tabsEl.innerHTML = '';
+				projects.forEach((proj, i) => {
+					const wrap = document.createElement('div');
+					wrap.className = 'inline-flex items-stretch shrink-0 rounded-md border border-neutral-200 overflow-hidden';
+					const tab = document.createElement('button');
+					tab.type = 'button';
+					tab.setAttribute('role', 'tab');
+					tab.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+					tab.className = i === activeIndex
+						? 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-800 text-white'
+						: 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-100 text-neutral-800 hover:bg-neutral-200';
+					tab.textContent = proj.label;
+					tab.title = proj.label;
+					tab.addEventListener('click', () => setActiveProject(i));
+					tab.addEventListener('dblclick', () => {
+						const n = window.prompt('Rename project', proj.label);
+						if (n && n.trim()) { proj.label = n.trim().slice(0, 120); renderTabBar(); persistState(); }
+					});
+					const close = document.createElement('button');
+					close.type = 'button';
+					close.className = 'px-1.5 text-sm leading-none border-l border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40';
+					close.textContent = '×';
+					close.disabled = projects.length <= 1;
+					close.addEventListener('click', (ev) => { ev.stopPropagation(); removeProject(i); });
+					wrap.append(tab, close);
+					tabsEl.appendChild(wrap);
+				});
+			}
+
+			function commitActiveProject() {
+				const p = projects[activeIndex];
+				if (!p) return;
+				const vb = svgEl.viewBox.baseVal;
+				if (vb && vb.width) p.viewport = { x: vb.x, y: -(vb.y + vb.height), w: vb.width, h: vb.height };
+			}
+
+			function setActiveProject(i) {
+				if (i === activeIndex) return;
+				commitActiveProject();
+				activeIndex = Math.max(0, Math.min(i, projects.length - 1));
+				dimState = null;
+				renderTabBar();
+				renderDxf(projects[activeIndex]);
+				persistState();
+			}
+
+			function addEmptyProject() {
+				commitActiveProject();
+				if (projects.length >= MAX_PROJECTS) { toast('Max projects reached'); return; }
+				projects.push(newEmptyProject(`Project ${projects.length + 1}`));
+				activeIndex = projects.length - 1;
+				renderTabBar();
+				renderDxf(projects[activeIndex]);
+				persistState();
+			}
+
+			function removeProject(i) {
+				if (projects.length <= 1) {
+					projects[0] = newEmptyProject('Empty');
+					activeIndex = 0;
+				} else {
+					projects.splice(i, 1);
+					if (activeIndex >= projects.length) activeIndex = projects.length - 1;
+					else if (i < activeIndex) activeIndex--;
+				}
+				dimState = null;
+				renderTabBar();
+				renderDxf(projects[activeIndex]);
+				persistState();
+			}
+
+			async function loadDxfFile(file, { asNewTab = true } = {}) {
+				if (/\.dwg$/i.test(file.name)) {
+					toast('DWG is binary — convert to DXF first (e.g., via AutoCAD/ODA File Converter).', 4500);
+					return;
+				}
+				const text = await file.text();
+				let parsed;
+				try {
+					parsed = new DxfParser().parseSync(text);
+				} catch (err) {
+					console.error(err);
+					toast('Failed to parse DXF: ' + err.message, 4500);
+					return;
+				}
+				const label = file.name.replace(/\.dxf$/i, '').slice(0, 80);
+				const cur = projects[activeIndex];
+				let target;
+				if (asNewTab && cur && cur.parsed) {
+					if (projects.length >= MAX_PROJECTS) { toast('Max projects reached'); return; }
+					commitActiveProject();
+					target = newEmptyProject(label);
+					projects.push(target);
+					activeIndex = projects.length - 1;
+				} else {
+					target = cur || newEmptyProject(label);
+					if (!projects[activeIndex]) projects.push(target);
+					target.label = label;
+				}
+				target.dxfText = text;
+				target.parsed = parsed;
+				target.userDimensions = [];
+				target.layerVisibility = {};
+				target.viewport = null;
+				target.calibration = 1;
+				renderTabBar();
+				renderDxf(target);
+				persistState();
+				toast(`Loaded ${label}`);
+			}
+
+			// ---------- Persistence ----------
+
+			function persistState() {
+				if (hydrating) return;
+				try {
+					const payload = {
+						v: 1,
+						activeIndex,
+						projects: projects.slice(0, MAX_PROJECTS).map(p => ({
+							id: p.id,
+							label: p.label,
+							dxfText: (p.dxfText && p.dxfText.length <= MAX_STORED_DXF_BYTES) ? p.dxfText : '',
+							userDimensions: p.userDimensions || [],
+							layerVisibility: p.layerVisibility || {},
+							viewport: p.viewport,
+							calibration: p.calibration || 1,
+							unit: p.unit || 'auto'
+						}))
+					};
+					localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+				} catch (err) {
+					console.warn('persist failed', err);
+				}
+			}
+
+			function loadState() {
+				try {
+					const raw = localStorage.getItem(STORAGE_KEY);
+					if (!raw) return null;
+					const p = JSON.parse(raw);
+					if (!p || p.v !== 1 || !Array.isArray(p.projects)) return null;
+					const loaded = p.projects.map(x => {
+						const proj = newEmptyProject(x.label || 'Project');
+						proj.id = x.id || uid();
+						proj.label = x.label || 'Project';
+						proj.dxfText = x.dxfText || '';
+						proj.userDimensions = Array.isArray(x.userDimensions) ? x.userDimensions : [];
+						proj.layerVisibility = x.layerVisibility || {};
+						proj.viewport = x.viewport || null;
+						proj.calibration = Number(x.calibration) || 1;
+						proj.unit = x.unit || 'auto';
+						if (proj.dxfText) {
+							try { proj.parsed = new DxfParser().parseSync(proj.dxfText); } catch {}
+						}
+						return proj;
+					});
+					if (!loaded.length) return null;
+					return { projects: loaded, activeIndex: Math.max(0, Math.min(p.activeIndex || 0, loaded.length - 1)) };
+				} catch { return null; }
+			}
+
+			// ---------- File input / drag-drop ----------
+
+			const fileInput = $('dxf-file-input');
+			$('import-dxf-btn').addEventListener('click', () => fileInput.click());
+			$('add-project-btn').addEventListener('click', addEmptyProject);
+			dropHint.addEventListener('click', () => fileInput.click());
+			fileInput.addEventListener('change', async () => {
+				for (const f of fileInput.files || []) await loadDxfFile(f);
+				fileInput.value = '';
+			});
+
+			const canvasWrap = $('dxf-canvas-wrap');
+			document.body.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+				document.body.classList.add('dragging');
+				canvasWrap.classList.add('dragover');
+			});
+			document.body.addEventListener('dragleave', (e) => {
+				if (e.relatedTarget == null) {
+					document.body.classList.remove('dragging');
+					canvasWrap.classList.remove('dragover');
+				}
+			});
+			document.body.addEventListener('dragend', (e) => {
+				document.body.classList.remove('dragging');
+				canvasWrap.classList.remove('dragover');
+			});
+			document.body.addEventListener('drop', async (e) => {
+				e.preventDefault();
+				document.body.classList.remove('dragging');
+				canvasWrap.classList.remove('dragover');
+				const files = Array.from(e.dataTransfer?.files || []);
+				for (const f of files) await loadDxfFile(f);
+			});
+
+			// ---------- Unit / export / clear ----------
+
+			unitSelect.addEventListener('change', () => {
+				const p = projects[activeIndex];
+				if (!p) return;
+				p.unit = unitSelect.value;
+				const g = svgEl.querySelector('#user-dims');
+				if (g) renderUserDims(p, g);
+				updateScaleInfo(p);
+				persistState();
+			});
+
+			$('export-svg-btn').addEventListener('click', () => {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) { toast('Nothing to export'); return; }
+				const clone = svgEl.cloneNode(true);
+				clone.setAttribute('xmlns', SVG_NS);
+				const blob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n', new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url; a.download = (p.label || 'dxf') + '.svg';
+				a.click();
+				URL.revokeObjectURL(url);
+			});
+
+			$('clear-dims-btn').addEventListener('click', () => {
+				const p = projects[activeIndex];
+				if (!p) return;
+				if (!confirm('Clear all user dimensions in this project?')) return;
+				p.userDimensions = [];
+				const g = svgEl.querySelector('#user-dims');
+				if (g) renderUserDims(p, g);
+				persistState();
+			});
+
+			// ---------- Fit to view ----------
+
+			function fitToView() {
+				const p = projects[activeIndex];
+				if (!p || !p.parsed) { toast('No file loaded'); return; }
+				const b = getBounds(p.parsed);
+				const pad = Math.max((b.maxX - b.minX), (b.maxY - b.minY)) * 0.05 || 1;
+				p.viewport = { x: b.minX - pad, y: b.minY - pad, w: (b.maxX - b.minX) + pad * 2, h: (b.maxY - b.minY) + pad * 2 };
+				svgEl.setAttribute('viewBox', `${p.viewport.x} ${-(p.viewport.y + p.viewport.h)} ${p.viewport.w} ${p.viewport.h}`);
+				persistState();
+			}
+
+			$('fit-view-btn').addEventListener('click', fitToView);
+
+			// ---------- Keyboard shortcuts ----------
+
+			window.addEventListener('keydown', (ev) => {
+				if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+				const p = projects[activeIndex];
+				if (ev.key === 'Escape') {
+					dimState = null;
+					clearPreview();
+					toolHint.textContent = 'Cancelled';
+					return;
+				}
+				if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z') {
+					if (p && p.userDimensions && p.userDimensions.length) {
+						p.userDimensions.pop();
+						const g = svgEl.querySelector('#user-dims');
+						if (g) renderUserDims(p, g);
+						persistState();
+						toast('Undid last dimension');
+					}
+					ev.preventDefault();
+					return;
+				}
+				if (ev.key === 'f' || ev.key === 'F') { fitToView(); return; }
+				const map = { v: 'pan', l: 'linear', a: 'aligned', g: 'angular', c: 'calibrate', d: 'delete' };
+				const tool = map[ev.key.toLowerCase()];
+				if (tool) {
+					const btn = document.querySelector(`.tool-btn[data-tool="${tool}"]`);
+					if (btn) btn.click();
+				}
+			});
+
+			// ---------- Init ----------
+
+			try {
+				const loaded = loadState();
+				if (loaded) {
+					projects = loaded.projects;
+					activeIndex = loaded.activeIndex;
+				} else {
+					projects = [newEmptyProject('Project 1')];
+					activeIndex = 0;
+				}
+				renderTabBar();
+				renderDxf(projects[activeIndex]);
+			} catch (err) {
+				console.error('Init failed', err);
+				projects = [newEmptyProject('Project 1')];
+				activeIndex = 0;
+				renderTabBar();
+				renderDxf(projects[activeIndex]);
+				toast('Init error: ' + err.message, 5000);
+			}
+			hydrating = false;
+		</script>
+	</body>
+</html>

@@ -1,5 +1,6 @@
 ---
 import "../styles.css";
+import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib/dimension-ai-prompt";
 ---
 <html lang="en">
 	<head>
@@ -13,7 +14,7 @@ import "../styles.css";
 		<input type="file" id="file-input" accept=".csv,text/csv" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
 
 		<main class="flex-1 flex flex-col p-4 md:p-6 max-w-7xl w-full mx-auto">
-			<h1 class="text-xl font-semibold mb-3">3-Column Input</h1>
+			<h1 class="text-xl font-semibold mb-3">Table Dimensions</h1>
 
 			<!-- Sheets: one tab per CSV file / paste; horizontal scroll when many -->
 			<div class="mb-4 flex items-stretch gap-2 min-w-0">
@@ -41,7 +42,7 @@ import "../styles.css";
 					<div class="h-full" id="preview-table-wrap" class="preview-table-wrap">
 						<table id="preview-table" class="preview-table w-[654px] text-left">
 							<tbody id="preview-tbody">
-								<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV anywhere, or add rows below.</td></tr>
+								<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV, use Input, or add rows in the table.</td></tr>
 							</tbody>
 						</table>
 					</div>
@@ -50,13 +51,10 @@ import "../styles.css";
 			</section>
 
 			<!-- Secondary: edit data (compact) -->
-			<section class="rounded-lg border border-neutral-300 bg-white overflow-hidden">
+			<section class="rounded-lg border border-neutral-300 bg-white overflow-visible">
 				<div class="p-3 border-b border-neutral-200 flex flex-wrap gap-2 items-center justify-between">
 					<div class="font-medium text-sm">Edit data · Multi-file CSV · Add / delete rows</div>
 					<div class="flex flex-wrap gap-2">
-						<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">
-							Import CSV file(s)
-						</button>
 						<button type="button" id="export-png" class="px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800 text-sm">
 							Export PNG (4096)
 						</button>
@@ -79,21 +77,154 @@ import "../styles.css";
 						</div>
 					</div>
 				</div>
-				<div class="px-3 pb-3 pt-3 space-y-3">
-					<div class="flex flex-wrap gap-2 items-center">
-						<textarea
-							id="csv-paste"
-							placeholder="Paste CSV → adds a new tab (3 columns: label, metric, imperial). Does not merge with other files."
-							spellcheck="false"
-							autocomplete="off"
-							autocapitalize="off"
-							autocorrect="off"
-							class="min-w-[200px] flex-1 min-h-[60px] p-2 text-sm border border-neutral-300 rounded font-mono resize-y"
-							rows="2"
-						></textarea>
-						<button type="button" id="import-paste-btn" class="px-3 py-2 rounded bg-neutral-200 hover:bg-neutral-300 text-sm shrink-0">
-							Import
-						</button>
+				<div class="px-3 pb-3 pt-3 space-y-4">
+					<div
+						id="paste-composer"
+						class="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-neutral-50 to-white shadow-sm ring-1 ring-black/[0.03] overflow-visible"
+					>
+						<div class="px-3 pt-3 pb-2 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+							<div class="flex flex-wrap items-center gap-2 min-w-0">
+								<span class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Input</span>
+								<span class="text-neutral-300">·</span>
+								<span class="text-xs text-neutral-600">CSV, messy notes, or image for AI</span>
+							</div>
+							<p
+								id="ai-status"
+								class="flex-1 min-w-0 text-xs sm:text-sm text-neutral-600 min-h-[1.25rem] text-right break-words"
+								aria-live="polite"
+							></p>
+						</div>
+
+						<div id="ai-manual-key-row" class="mx-3 mt-2 flex flex-wrap gap-3 items-end">
+							<label class="flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
+								<span>OpenRouter API key</span>
+								<input
+									type="password"
+									id="ai-api-key"
+									autocomplete="off"
+									placeholder="sk-or-…"
+									class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+								/>
+							</label>
+							<label class="flex items-center gap-2 text-xs text-neutral-600 shrink-0 pb-1">
+								<input type="checkbox" id="ai-remember-key" class="rounded border-neutral-300" />
+								Remember key
+							</label>
+						</div>
+
+						<div class="p-3">
+							<input type="file" id="ai-image-input" accept="image/*" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
+
+							<div
+								id="ai-attachment-chips"
+								class="hidden mb-2 flex flex-wrap gap-2 min-h-0"
+								aria-live="polite"
+							></div>
+
+							<textarea
+								id="csv-paste"
+								placeholder="Paste 3-column CSV, dimension notes, or paste / attach images (screenshots go to Attach automatically)."
+								spellcheck="false"
+								autocomplete="off"
+								autocapitalize="off"
+								autocorrect="off"
+								class="w-full min-h-[100px] p-3 text-sm border border-neutral-200 rounded-xl bg-white font-mono resize-y shadow-inner placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300"
+								rows="4"
+							></textarea>
+
+							<div class="mt-3 flex flex-wrap items-center gap-2">
+								<button
+									type="button"
+									id="ai-attach-btn"
+									class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+									title="Attach image for vision"
+								>
+									<svg class="w-4 h-4 text-neutral-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+										<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.636-9.318L8.288 6.048a2.25 2.25 0 0 0-3.182 0L2.25 9.293M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+									</svg>
+									Attach image
+								</button>
+								<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm font-medium">
+									Import CSV file(s)
+								</button>
+								<span class="text-[11px] text-neutral-400 hidden sm:inline">Drop images here · vision models</span>
+								<span class="flex-1 min-w-[1rem]"></span>
+								<button
+									type="button"
+									id="import-paste-btn"
+									class="px-3 py-2 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm font-medium"
+								>
+									Import CSV
+								</button>
+								<div class="relative inline-flex items-stretch rounded-lg shadow-sm">
+									<button
+										type="button"
+										id="csv-parse-ai-btn"
+										class="px-3 py-2 rounded-l-lg bg-violet-600 text-white hover:bg-violet-700 text-sm font-medium disabled:opacity-50 disabled:pointer-events-none border-r border-violet-500/50"
+									>
+										Parse with AI
+									</button>
+									<button
+										type="button"
+										id="ai-options-trigger"
+										class="px-2 py-2 rounded-r-lg bg-violet-600 text-white hover:bg-violet-700 text-sm border-l border-violet-500/40"
+										aria-expanded="false"
+										aria-haspopup="true"
+										aria-controls="ai-options-panel"
+										title="Model & system prompt"
+									>
+										<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+											<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+										</svg>
+									</button>
+									<div
+										id="ai-options-panel"
+										class="hidden fixed z-[200] w-[min(100vw-2rem,22rem)] max-w-[calc(100vw-1rem)] rounded-xl border border-neutral-200 bg-white shadow-xl ring-1 ring-black/5"
+										role="menu"
+									>
+										<div class="p-3 space-y-3 max-h-[min(70vh,28rem)] overflow-y-auto">
+											<div>
+												<label class="block text-xs font-medium text-neutral-600 mb-1">Model</label>
+												<select
+													id="ai-model-select"
+													class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm shadow-sm"
+												>
+													{DEFAULT_OPENROUTER_MODELS.map((m) => (
+														<option value={m.id}>{m.label}</option>
+													))}
+													<option value="__custom">Custom…</option>
+												</select>
+											</div>
+											<div class="hidden" id="ai-model-custom-wrap">
+												<label class="block text-xs font-medium text-neutral-600 mb-1">Custom model id</label>
+												<input
+													type="text"
+													id="ai-model-custom"
+													placeholder="openai/gpt-4o"
+													class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+												/>
+											</div>
+											<div class="border-t border-neutral-100 pt-2">
+												<div class="flex items-center justify-between gap-2 mb-1">
+													<span class="text-xs font-medium text-neutral-700">System prompt</span>
+													<button
+														type="button"
+														id="ai-copy-prompt"
+														class="px-2 py-0.5 rounded border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-[11px]"
+													>
+														Copy
+													</button>
+												</div>
+												<pre
+													id="ai-prompt-display"
+													class="max-h-36 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-neutral-700 p-2 rounded-lg bg-neutral-50 border border-neutral-200"
+												>{DIMENSION_PARSE_SYSTEM_PROMPT}</pre>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
 					</div>
 					<div class="rounded border border-neutral-200 overflow-hidden max-h-[240px] overflow-y-auto">
 						<table class="w-full text-left text-sm">
@@ -221,6 +352,11 @@ import "../styles.css";
 		</style>
 
 		<script>
+			import {
+				normalizeImperialTypography,
+				protectInchMarksInCsvLine
+			} from '../lib/csv-dimension-typography';
+
 			const MAX_IMPORT_ROWS = 200;
 			const MAX_SHEETS = 40;
 
@@ -283,8 +419,10 @@ import "../styles.css";
 				const cleaned = stripUtf8Bom(String(text ?? ''));
 				const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
 				for (const line of lines) {
-					const raw = parseCSVLineAll(line);
+					const protectedLine = protectInchMarksInCsvLine(line);
+					const raw = parseCSVLineAll(protectedLine);
 					const cells = normalizeToThreeColumns(raw);
+					if (cells[2]) cells[2] = normalizeImperialTypography(cells[2]);
 					if (cells.some((c) => c.length > 0)) rows.push(cells);
 				}
 				return rows;
@@ -315,6 +453,8 @@ import "../styles.css";
 
 			const STORAGE_KEY = 'three-column-sheets-v2';
 			const STORAGE_KEY_V1 = 'three-column-rows-v1';
+			const STORAGE_OPENROUTER_KEY = 'three-column-openrouter-key';
+			const STORAGE_OPENROUTER_MODEL = 'three-column-openrouter-model';
 
 			/** @type {Sheet[]} */
 			let sheets = [];
@@ -422,7 +562,7 @@ import "../styles.css";
 				}
 				previewTbody.innerHTML = '';
 				if (data.length === 0) {
-					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop CSV file(s) anywhere, use Import, or add rows below.</td></tr>';
+					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV, use Input, or add rows in the table.</td></tr>';
 					return;
 				}
 				data.forEach(([a, b, c]) => {
@@ -575,18 +715,57 @@ import "../styles.css";
 				sheets.forEach((sheet, i) => {
 					const wrap = document.createElement('div');
 					wrap.className = 'inline-flex items-stretch shrink-0 rounded-md border border-neutral-200 overflow-hidden';
-					const tab = document.createElement('button');
-					tab.type = 'button';
-					tab.setAttribute('role', 'tab');
-					tab.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
-					tab.dataset.sheetTab = String(i);
-					tab.className =
+					const tabMain = document.createElement('div');
+					tabMain.setAttribute('role', 'tab');
+					tabMain.tabIndex = 0;
+					tabMain.setAttribute('aria-selected', i === activeIndex ? 'true' : 'false');
+					tabMain.dataset.sheetTab = String(i);
+					tabMain.className =
 						i === activeIndex
-							? 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-800 text-white'
-							: 'px-2.5 py-1.5 max-w-[200px] truncate text-sm font-medium bg-neutral-100 text-neutral-800 hover:bg-neutral-200';
-					tab.textContent = sheet.label;
-					tab.title = sheet.label;
-					tab.addEventListener('click', () => setActiveSheet(i));
+							? 'px-2.5 py-1.5 max-w-[220px] min-w-[3rem] flex items-center text-sm font-medium bg-neutral-800 text-white cursor-default select-none'
+							: 'px-2.5 py-1.5 max-w-[220px] min-w-[3rem] flex items-center text-sm font-medium bg-neutral-100 text-neutral-800 hover:bg-neutral-200 cursor-pointer select-none';
+					const labelSpan = document.createElement('span');
+					labelSpan.className = 'truncate';
+					labelSpan.textContent = sheet.label;
+					labelSpan.title = 'Double-click to rename (used for export filename)';
+					tabMain.appendChild(labelSpan);
+					tabMain.addEventListener('click', () => setActiveSheet(i));
+					tabMain.addEventListener('keydown', (e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							setActiveSheet(i);
+						}
+					});
+					labelSpan.addEventListener('dblclick', (e) => {
+						e.stopPropagation();
+						e.preventDefault();
+						commitActiveSheet();
+						const inp = document.createElement('input');
+						inp.type = 'text';
+						inp.value = sheet.label;
+						inp.className =
+							'w-full min-w-[10rem] max-w-[200px] px-1 py-0.5 text-sm rounded border border-violet-500 bg-white text-neutral-900 shadow-sm';
+						let cancelled = false;
+						inp.addEventListener('keydown', (ev) => {
+							if (ev.key === 'Escape') {
+								ev.preventDefault();
+								cancelled = true;
+								renderTabBar();
+								scrollActiveTabIntoView();
+							}
+						});
+						inp.addEventListener('blur', () => {
+							if (cancelled) return;
+							const v = inp.value.trim().slice(0, 120) || sheet.label;
+							sheets[i].label = v;
+							persistState();
+							renderTabBar();
+							scrollActiveTabIntoView();
+						});
+						labelSpan.replaceWith(inp);
+						inp.focus();
+						inp.select();
+					});
 
 					const close = document.createElement('button');
 					close.type = 'button';
@@ -600,7 +779,7 @@ import "../styles.css";
 						removeSheet(i);
 					});
 
-					wrap.appendChild(tab);
+					wrap.appendChild(tabMain);
 					wrap.appendChild(close);
 					sheetTabsEl.appendChild(wrap);
 				});
@@ -698,6 +877,174 @@ import "../styles.css";
 				scrollActiveTabIntoView();
 			}
 
+			function importMatrixAsNewSheet(matrix: string[][], baseLabel = 'AI parsed') {
+				const body = (Array.isArray(matrix) ? matrix : [])
+					.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')])
+					.filter((r) => r.some((c) => c.length))
+					.slice(0, MAX_IMPORT_ROWS);
+				if (!body.length) return false;
+				commitActiveSheet();
+				if (sheets.length >= MAX_SHEETS) return false;
+				let label = baseLabel;
+				let n = 2;
+				while (sheets.some((s) => s.label === label)) {
+					label = `${baseLabel} (${n})`;
+					n++;
+				}
+				sheets.push({ id: uid(), label, rows: body.length ? body : [['', '', '']] });
+				activeIndex = sheets.length - 1;
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+				scrollActiveTabIntoView();
+				return true;
+			}
+
+			function extractJsonRowsFromAssistantText(raw: string): { rows: { a?: string; b?: string; c?: string }[] } {
+				let t = String(raw ?? '').trim();
+				const fence = /```(?:json)?\s*([\s\S]*?)```/;
+				const fm = t.match(fence);
+				if (fm) t = fm[1].trim();
+
+				function tryParse(s: string): unknown {
+					return JSON.parse(s);
+				}
+
+				let parsed: unknown;
+				try {
+					parsed = tryParse(t);
+				} catch {
+					const start = t.indexOf('{');
+					const end = t.lastIndexOf('}');
+					if (start < 0 || end <= start) {
+						throw new Error('Model did not return JSON with a "rows" array. Try again or pick a stronger model.');
+					}
+					parsed = tryParse(t.slice(start, end + 1));
+				}
+				if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { rows?: unknown }).rows)) {
+					throw new Error('JSON must be an object with a "rows" array.');
+				}
+				return parsed as { rows: { a?: string; b?: string; c?: string }[] };
+			}
+
+			async function parseOpenRouterResponse(res: Response): Promise<unknown> {
+				const text = await res.text();
+				if (!text) return {};
+				try {
+					return JSON.parse(text) as unknown;
+				} catch {
+					return { _raw: text };
+				}
+			}
+
+			/** 429 = rate limit; free models hit this often. One retry after Retry-After or short backoff. */
+			async function parseDimensionsWithOpenRouter(options: {
+				apiKey: string;
+				model: string;
+				pastedText: string;
+				imageDataUrls: string[];
+				reportStatus?: (msg: string) => void;
+			}) {
+				let DIMENSION_PARSE_SYSTEM_PROMPT: string;
+				let OPENROUTER_CHAT_URL: string;
+				try {
+					const mod = await import('../lib/dimension-ai-prompt.ts');
+					DIMENSION_PARSE_SYSTEM_PROMPT = mod.DIMENSION_PARSE_SYSTEM_PROMPT;
+					OPENROUTER_CHAT_URL = mod.OPENROUTER_CHAT_URL;
+				} catch {
+					throw new Error('AI prompt module failed to load.');
+				}
+
+				const { apiKey, model, pastedText, imageDataUrls, reportStatus } = options;
+				const trimmed = pastedText?.trim() ?? '';
+				const imgs = Array.isArray(imageDataUrls) ? imageDataUrls.filter(Boolean) : [];
+				if (!trimmed && imgs.length === 0) {
+					throw new Error('Add pasted text and/or an image.');
+				}
+
+				let userContent:
+					| string
+					| Array<{ type: string; text?: string; image_url?: { url: string } }>;
+
+				if (imgs.length > 0) {
+					const userParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+					if (trimmed) {
+						userParts.push({
+							type: 'text',
+							text:
+								imgs.length > 1
+									? `Convert the following into JSON as specified in the system message. Use all attached images together for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
+									: `Convert the following into JSON as specified in the system message. Also use the attached image for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
+						});
+					} else {
+						userParts.push({
+							type: 'text',
+							text:
+								imgs.length > 1
+									? 'Read all room or area labels and metric/imperial dimensions from the attached images. Output JSON as specified in the system message.'
+									: 'Read all room or area labels and metric/imperial dimensions from the attached image. Output JSON as specified in the system message.'
+						});
+					}
+					for (const url of imgs) {
+						userParts.push({ type: 'image_url', image_url: { url } });
+					}
+					userContent = userParts;
+				} else {
+					userContent = `Convert the following into JSON as specified in the system message.\n\n${trimmed}`;
+				}
+
+				const body = JSON.stringify({
+					model,
+					temperature: 0.15,
+					messages: [
+						{ role: 'system', content: DIMENSION_PARSE_SYSTEM_PROMPT },
+						{ role: 'user', content: userContent }
+					]
+				});
+
+				const headers = {
+					Authorization: `Bearer ${apiKey}`,
+					'Content-Type': 'application/json',
+					'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
+					'X-Title': '3-Column Dimension Parser'
+				};
+
+				let res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
+				let data = (await parseOpenRouterResponse(res)) as {
+					error?: { message?: string };
+					choices?: { message?: { content?: string } }[];
+				};
+
+				if (res.status === 429) {
+					const ra = res.headers.get('Retry-After');
+					const sec = Math.min(90, Math.max(4, parseInt(ra || '10', 10) || 10));
+					reportStatus?.(`Rate limited (429). Retrying in ${sec}s…`);
+					await new Promise((r) => setTimeout(r, sec * 1000));
+					res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
+					data = (await parseOpenRouterResponse(res)) as typeof data;
+				}
+
+				if (!res.ok) {
+					const apiMsg =
+						typeof data?.error?.message === 'string'
+							? data.error.message
+							: typeof (data as { error?: string })?.error === 'string'
+								? (data as { error: string }).error
+								: '';
+					if (res.status === 429) {
+						throw new Error(
+							`Rate limited (429). Free models have tight quotas on OpenRouter. Wait a few minutes, try again, add credits, or pick a non-free model. ${apiMsg || ''}`.trim()
+						);
+					}
+					throw new Error(apiMsg || `OpenRouter HTTP ${res.status}`);
+				}
+				const content = data?.choices?.[0]?.message?.content;
+				if (!content || typeof content !== 'string') {
+					throw new Error('Empty response from model.');
+				}
+				return extractJsonRowsFromAssistantText(content);
+			}
+
 			tbody.innerHTML = '';
 			const loaded = loadState();
 			sheets = loaded.sheets;
@@ -727,11 +1074,338 @@ import "../styles.css";
 
 			addRowBtn.addEventListener('click', () => addRow());
 
+			tbody.addEventListener('focusout', (e) => {
+				const t = e.target;
+				if (!(t instanceof HTMLInputElement) || !t.classList.contains('cell-input')) return;
+				if (t.dataset.col !== '2') return;
+				const n = normalizeImperialTypography(t.value);
+				if (n !== t.value) {
+					t.value = n;
+					t.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+			});
+
 			importPasteBtn.addEventListener('click', () => {
 				const text = (csvPaste.value ?? '').trim();
 				if (!text) return;
 				importPastedCsv(text);
 				csvPaste.value = '';
+			});
+
+			const OPENROUTER_KEY_FROM_ENV =
+				typeof import.meta.env.PUBLIC_OPENROUTER_API_KEY === 'string'
+					? import.meta.env.PUBLIC_OPENROUTER_API_KEY.trim()
+					: '';
+
+			const aiApiKey = document.getElementById('ai-api-key') as HTMLInputElement | null;
+			const aiRememberKey = document.getElementById('ai-remember-key') as HTMLInputElement | null;
+			const aiModelSelect = document.getElementById('ai-model-select') as HTMLSelectElement | null;
+			const aiModelCustomWrap = document.getElementById('ai-model-custom-wrap') as HTMLDivElement | null;
+			const aiModelCustom = document.getElementById('ai-model-custom') as HTMLInputElement | null;
+			const aiImageInput = document.getElementById('ai-image-input') as HTMLInputElement | null;
+			const aiAttachBtn = document.getElementById('ai-attach-btn') as HTMLButtonElement | null;
+			const aiAttachmentChips = document.getElementById('ai-attachment-chips') as HTMLDivElement | null;
+			const pasteComposer = document.getElementById('paste-composer') as HTMLDivElement | null;
+			const csvParseAiBtn = document.getElementById('csv-parse-ai-btn') as HTMLButtonElement | null;
+			const aiStatus = document.getElementById('ai-status') as HTMLSpanElement | null;
+			const aiCopyPrompt = document.getElementById('ai-copy-prompt') as HTMLButtonElement | null;
+			const aiOptionsTrigger = document.getElementById('ai-options-trigger') as HTMLButtonElement | null;
+			const aiOptionsPanel = document.getElementById('ai-options-panel') as HTMLDivElement | null;
+			const manualKeyRow = document.getElementById('ai-manual-key-row') as HTMLDivElement | null;
+
+			function getEffectiveApiKey(): string {
+				if (OPENROUTER_KEY_FROM_ENV) return OPENROUTER_KEY_FROM_ENV;
+				return (aiApiKey?.value ?? '').trim();
+			}
+
+			if (OPENROUTER_KEY_FROM_ENV) manualKeyRow?.classList.add('hidden');
+			else manualKeyRow?.classList.remove('hidden');
+
+			function positionAiOptionsPanel() {
+				const trigger = aiOptionsTrigger;
+				const panel = aiOptionsPanel;
+				if (!trigger || !panel || panel.classList.contains('hidden')) return;
+				const r = trigger.getBoundingClientRect();
+				const maxW = Math.min(352, window.innerWidth - 16);
+				const left = Math.max(8, Math.min(r.right - maxW, window.innerWidth - maxW - 8));
+				panel.style.setProperty('left', `${left}px`);
+				panel.style.setProperty('width', `${maxW}px`);
+				panel.style.setProperty('top', `${r.bottom + 6}px`);
+				requestAnimationFrame(() => {
+					const ph = panel.getBoundingClientRect().height;
+					let top = r.bottom + 6;
+					if (top + ph > window.innerHeight - 8) {
+						top = Math.max(8, r.top - ph - 6);
+					}
+					panel.style.setProperty('top', `${top}px`);
+				});
+			}
+
+			function setAiOptionsOpen(open: boolean) {
+				if (!aiOptionsPanel || !aiOptionsTrigger) return;
+				aiOptionsPanel.classList.toggle('hidden', !open);
+				aiOptionsTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+				if (open) {
+					requestAnimationFrame(() => {
+						positionAiOptionsPanel();
+					});
+				}
+			}
+
+			aiOptionsTrigger?.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const panelClosed = aiOptionsPanel?.classList.contains('hidden') ?? true;
+				setAiOptionsOpen(panelClosed);
+			});
+
+			window.addEventListener('resize', () => {
+				if (aiOptionsPanel && !aiOptionsPanel.classList.contains('hidden')) positionAiOptionsPanel();
+			});
+			window.addEventListener(
+				'scroll',
+				() => {
+					if (aiOptionsPanel && !aiOptionsPanel.classList.contains('hidden')) positionAiOptionsPanel();
+				},
+				true
+			);
+
+			document.addEventListener('mousedown', (e) => {
+				const t = e.target as Node;
+				if (aiOptionsPanel?.classList.contains('hidden')) return;
+				if (aiOptionsTrigger?.contains(t) || aiOptionsPanel?.contains(t)) return;
+				setAiOptionsOpen(false);
+			});
+
+			try {
+				const savedKey = localStorage.getItem(STORAGE_OPENROUTER_KEY);
+				if (savedKey && aiApiKey && !OPENROUTER_KEY_FROM_ENV) aiApiKey.value = savedKey;
+				const savedModel = localStorage.getItem(STORAGE_OPENROUTER_MODEL);
+				if (savedModel && aiModelSelect) {
+					const opt = Array.from(aiModelSelect.options).find((o) => o.value === savedModel);
+					if (opt) aiModelSelect.value = savedModel;
+					else if (aiModelCustom && aiModelCustomWrap) {
+						aiModelSelect.value = '__custom';
+						aiModelCustom.value = savedModel;
+						aiModelCustomWrap.classList.remove('hidden');
+					}
+				}
+			} catch {
+				// ignore
+			}
+
+			aiModelSelect?.addEventListener('change', () => {
+				const v = aiModelSelect?.value;
+				if (v === '__custom') aiModelCustomWrap?.classList.remove('hidden');
+				else aiModelCustomWrap?.classList.add('hidden');
+			});
+
+			aiCopyPrompt?.addEventListener('click', async () => {
+				try {
+					const { DIMENSION_PARSE_SYSTEM_PROMPT } = await import('../lib/dimension-ai-prompt.ts');
+					await navigator.clipboard.writeText(DIMENSION_PARSE_SYSTEM_PROMPT);
+					aiCopyPrompt.textContent = 'Copied';
+					setTimeout(() => {
+						aiCopyPrompt.textContent = 'Copy prompt';
+					}, 1500);
+				} catch {
+					aiCopyPrompt.textContent = 'Copy failed';
+				}
+			});
+
+			function readFileAsDataUrl(file: File): Promise<string> {
+				return new Promise((resolve, reject) => {
+					const r = new FileReader();
+					r.onload = () => resolve(String(r.result));
+					r.onerror = () => reject(r.error ?? new Error('read failed'));
+					r.readAsDataURL(file);
+				});
+			}
+
+			/** @type {{ id: string; name: string; dataUrl: string }[]} */
+			let aiAttachments = [];
+
+			function renderAiAttachmentChips() {
+				const wrap = aiAttachmentChips;
+				if (!wrap) return;
+				wrap.innerHTML = '';
+				if (aiAttachments.length === 0) {
+					wrap.classList.add('hidden');
+					return;
+				}
+				wrap.classList.remove('hidden');
+				for (const att of aiAttachments) {
+					const chip = document.createElement('div');
+					chip.className =
+						'inline-flex items-center gap-2 pl-1.5 pr-1 py-1 rounded-full bg-violet-100 border border-violet-200/90 text-xs text-violet-950 shadow-sm max-w-full';
+					chip.dataset.attachmentId = att.id;
+					const thumb = document.createElement('img');
+					thumb.src = att.dataUrl;
+					thumb.alt = '';
+					thumb.className = 'w-8 h-8 rounded-md object-cover shrink-0 border border-white shadow-sm';
+					const nameEl = document.createElement('span');
+					nameEl.className = 'truncate max-w-[min(100%,200px)] font-medium';
+					nameEl.textContent = att.name;
+					const rm = document.createElement('button');
+					rm.type = 'button';
+					rm.className =
+						'shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-violet-700 hover:bg-violet-200/90 text-base leading-none';
+					rm.setAttribute('aria-label', `Remove ${att.name}`);
+					rm.textContent = '×';
+					rm.addEventListener('click', () => {
+						aiAttachments = aiAttachments.filter((x) => x.id !== att.id);
+						renderAiAttachmentChips();
+					});
+					chip.appendChild(thumb);
+					chip.appendChild(nameEl);
+					chip.appendChild(rm);
+					wrap.appendChild(chip);
+				}
+			}
+
+			async function addAiImagesFromFileList(files: FileList | File[] | null | undefined) {
+				if (!files?.length) return;
+				const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
+				for (const f of list) {
+					try {
+						aiAttachments.push({
+							id: uid(),
+							name: f.name,
+							dataUrl: await readFileAsDataUrl(f)
+						});
+					} catch {
+						if (aiStatus) aiStatus.textContent = 'Could not read an image.';
+					}
+				}
+				renderAiAttachmentChips();
+			}
+
+			aiAttachBtn?.addEventListener('click', () => aiImageInput?.click());
+
+			aiImageInput?.addEventListener('change', async () => {
+				await addAiImagesFromFileList(aiImageInput.files);
+				aiImageInput.value = '';
+			});
+
+			function wireImageDropZone(el: HTMLElement | null) {
+				if (!el) return;
+				el.addEventListener('dragover', (e) => {
+					if ([...(e.dataTransfer?.types ?? [])].includes('Files')) {
+						e.preventDefault();
+						e.dataTransfer!.dropEffect = 'copy';
+					}
+				});
+				el.addEventListener('drop', (e) => {
+					const fl = e.dataTransfer?.files;
+					if (!fl?.length) return;
+					const imgs = Array.from(fl).filter((f) => f.type.startsWith('image/'));
+					if (!imgs.length) return;
+					e.preventDefault();
+					e.stopPropagation();
+					void addAiImagesFromFileList(imgs);
+				});
+			}
+
+			function clipboardImageFilesFromPaste(e: ClipboardEvent): File[] {
+				const cd = e.clipboardData;
+				if (!cd) return [];
+				const out: File[] = [];
+				const items = cd.items;
+				if (items) {
+					for (let i = 0; i < items.length; i++) {
+						const it = items[i];
+						if (it.kind === 'file' && it.type.startsWith('image/')) {
+							const f = it.getAsFile();
+							if (f) out.push(f);
+						}
+					}
+				}
+				if (out.length === 0 && cd.files?.length) {
+					for (const f of Array.from(cd.files)) {
+						if (f.type.startsWith('image/')) out.push(f);
+					}
+				}
+				return out;
+			}
+
+			csvPaste?.addEventListener('paste', (e) => {
+				const imgs = clipboardImageFilesFromPaste(e);
+				if (!imgs.length) return;
+				e.preventDefault();
+				const text = e.clipboardData?.getData('text/plain') ?? '';
+				if (text && csvPaste) {
+					const start = csvPaste.selectionStart ?? 0;
+					const end = csvPaste.selectionEnd ?? 0;
+					const v = csvPaste.value;
+					csvPaste.value = v.slice(0, start) + text + v.slice(end);
+					const pos = start + text.length;
+					csvPaste.setSelectionRange(pos, pos);
+				}
+				void addAiImagesFromFileList(imgs);
+			});
+
+			wireImageDropZone(pasteComposer);
+			wireImageDropZone(csvPaste);
+
+			csvParseAiBtn?.addEventListener('click', async () => {
+				const key = getEffectiveApiKey();
+				if (!key) {
+					if (aiStatus) {
+						aiStatus.textContent = 'Set your API key in .env (build) or in the field above.';
+					}
+					return;
+				}
+				let modelId = aiModelSelect?.value ?? '';
+				if (modelId === '__custom') {
+					modelId = (aiModelCustom?.value ?? '').trim();
+					if (!modelId) {
+						if (aiStatus) aiStatus.textContent = 'Enter a custom model id.';
+						return;
+					}
+				}
+				const pasted = csvPaste?.value ?? '';
+				const imageDataUrls = aiAttachments.map((a) => a.dataUrl);
+				if (!pasted.trim() && imageDataUrls.length === 0) {
+					if (aiStatus) aiStatus.textContent = 'Paste text and/or attach one or more images.';
+					return;
+				}
+				setAiOptionsOpen(false);
+				if (aiRememberKey?.checked) {
+					try {
+						if (!OPENROUTER_KEY_FROM_ENV) localStorage.setItem(STORAGE_OPENROUTER_KEY, key);
+						localStorage.setItem(STORAGE_OPENROUTER_MODEL, modelId);
+					} catch {
+						// ignore
+					}
+				}
+				csvParseAiBtn.disabled = true;
+				if (aiStatus) aiStatus.textContent = 'Calling OpenRouter…';
+				try {
+					const result = await parseDimensionsWithOpenRouter({
+						apiKey: key,
+						model: modelId,
+						pastedText: pasted,
+						imageDataUrls,
+						reportStatus: (msg) => {
+							if (aiStatus) aiStatus.textContent = msg;
+						}
+					});
+					const matrix = result.rows.map((row) => [
+						String(row.a ?? ''),
+						String(row.b ?? ''),
+						normalizeImperialTypography(String(row.c ?? ''))
+					]);
+					const ok = importMatrixAsNewSheet(matrix, 'AI parsed');
+					if (!ok) {
+						if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
+					} else if (aiStatus) {
+						aiStatus.textContent = `Imported ${matrix.length} row(s).`;
+					}
+				} catch (e) {
+					const msg = e instanceof Error ? e.message : String(e);
+					if (aiStatus) aiStatus.textContent = msg.length > 120 ? msg.slice(0, 120) + '…' : msg;
+				} finally {
+					csvParseAiBtn.disabled = false;
+				}
 			});
 
 			importCsvBtn?.addEventListener('click', () => {
@@ -749,7 +1423,17 @@ import "../styles.css";
 			}
 
 			function sheetRowsToCsv(rows: string[][]) {
-				return rows.map((cells) => cells.map(escapeCsvCell).join(',')).join('\n');
+				return rows
+					.map((cells) =>
+						cells
+							.map((cell, i) =>
+								escapeCsvCell(
+									i === 2 ? normalizeImperialTypography(String(cell ?? '')) : String(cell ?? '')
+								)
+							)
+							.join(',')
+					)
+					.join('\n');
 			}
 
 			function delayMs(ms: number) {
