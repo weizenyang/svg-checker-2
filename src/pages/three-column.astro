@@ -962,45 +962,24 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					throw new Error('Add pasted text and/or an image.');
 				}
 
-				let userContent:
-					| string
-					| Array<{ type: string; text?: string; image_url?: { url: string } }>;
+				type UserPart = { type: string; text?: string; image_url?: { url: string } };
 
-				if (imgs.length > 0) {
-					const userParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+				function userPartsForSingleImage(imageUrl: string): UserPart[] {
+					const userParts: UserPart[] = [];
 					if (trimmed) {
 						userParts.push({
 							type: 'text',
-							text:
-								imgs.length > 1
-									? `Convert the following into JSON as specified in the system message. Use all attached images together for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
-									: `Convert the following into JSON as specified in the system message. Also use the attached image for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
+							text: `Convert the following into JSON as specified in the system message. Also use the attached image for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
 						});
 					} else {
 						userParts.push({
 							type: 'text',
-							text:
-								imgs.length > 1
-									? 'Read all room or area labels and metric/imperial dimensions from the attached images. Output JSON as specified in the system message.'
-									: 'Read all room or area labels and metric/imperial dimensions from the attached image. Output JSON as specified in the system message.'
+							text: 'Read all room or area labels and metric/imperial dimensions from the attached image. Output JSON as specified in the system message.'
 						});
 					}
-					for (const url of imgs) {
-						userParts.push({ type: 'image_url', image_url: { url } });
-					}
-					userContent = userParts;
-				} else {
-					userContent = `Convert the following into JSON as specified in the system message.\n\n${trimmed}`;
+					userParts.push({ type: 'image_url', image_url: { url: imageUrl } });
+					return userParts;
 				}
-
-				const body = JSON.stringify({
-					model,
-					temperature: 0.15,
-					messages: [
-						{ role: 'system', content: DIMENSION_PARSE_SYSTEM_PROMPT },
-						{ role: 'user', content: userContent }
-					]
-				});
 
 				const headers = {
 					Authorization: `Bearer ${apiKey}`,
@@ -1009,40 +988,76 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					'X-Title': '3-Column Dimension Parser'
 				};
 
-				let res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
-				let data = (await parseOpenRouterResponse(res)) as {
-					error?: { message?: string };
-					choices?: { message?: { content?: string } }[];
-				};
+				async function completeOneRequest(userContent: string | UserPart[]): Promise<ReturnType<typeof extractJsonRowsFromAssistantText>> {
+					const body = JSON.stringify({
+						model,
+						temperature: 0.15,
+						messages: [
+							{ role: 'system', content: DIMENSION_PARSE_SYSTEM_PROMPT },
+							{ role: 'user', content: userContent }
+						]
+					});
 
-				if (res.status === 429) {
-					const ra = res.headers.get('Retry-After');
-					const sec = Math.min(90, Math.max(4, parseInt(ra || '10', 10) || 10));
-					reportStatus?.(`Rate limited (429). Retrying in ${sec}s…`);
-					await new Promise((r) => setTimeout(r, sec * 1000));
-					res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
-					data = (await parseOpenRouterResponse(res)) as typeof data;
-				}
+					let res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
+					let data = (await parseOpenRouterResponse(res)) as {
+						error?: { message?: string };
+						choices?: { message?: { content?: string } }[];
+					};
 
-				if (!res.ok) {
-					const apiMsg =
-						typeof data?.error?.message === 'string'
-							? data.error.message
-							: typeof (data as { error?: string })?.error === 'string'
-								? (data as { error: string }).error
-								: '';
 					if (res.status === 429) {
-						throw new Error(
-							`Rate limited (429). Free models have tight quotas on OpenRouter. Wait a few minutes, try again, add credits, or pick a non-free model. ${apiMsg || ''}`.trim()
-						);
+						const ra = res.headers.get('Retry-After');
+						const sec = Math.min(90, Math.max(4, parseInt(ra || '10', 10) || 10));
+						reportStatus?.(`Rate limited (429). Retrying in ${sec}s…`);
+						await new Promise((r) => setTimeout(r, sec * 1000));
+						res = await fetch(OPENROUTER_CHAT_URL, { method: 'POST', headers, body });
+						data = (await parseOpenRouterResponse(res)) as typeof data;
 					}
-					throw new Error(apiMsg || `OpenRouter HTTP ${res.status}`);
+
+					if (!res.ok) {
+						const apiMsg =
+							typeof data?.error?.message === 'string'
+								? data.error.message
+								: typeof (data as { error?: string })?.error === 'string'
+									? (data as { error: string }).error
+									: '';
+						if (res.status === 429) {
+							throw new Error(
+								`Rate limited (429). Free models have tight quotas on OpenRouter. Wait a few minutes, try again, add credits, or pick a non-free model. ${apiMsg || ''}`.trim()
+							);
+						}
+						throw new Error(apiMsg || `OpenRouter HTTP ${res.status}`);
+					}
+					const content = data?.choices?.[0]?.message?.content;
+					if (!content || typeof content !== 'string') {
+						throw new Error('Empty response from model.');
+					}
+					return extractJsonRowsFromAssistantText(content);
 				}
-				const content = data?.choices?.[0]?.message?.content;
-				if (!content || typeof content !== 'string') {
-					throw new Error('Empty response from model.');
+
+				// Text-only: single request (unchanged).
+				if (imgs.length === 0) {
+					return completeOneRequest(
+						`Convert the following into JSON as specified in the system message.\n\n${trimmed}`
+					);
 				}
-				return extractJsonRowsFromAssistantText(content);
+
+				// One image: single request.
+				if (imgs.length === 1) {
+					return completeOneRequest(userPartsForSingleImage(imgs[0]));
+				}
+
+				// Multiple images: one scheduled request per image (avoids one huge payload/response), rows concatenated in order.
+				const merged: { a?: string; b?: string; c?: string }[] = [];
+				const staggerMs = 400;
+				for (let i = 0; i < imgs.length; i++) {
+					reportStatus?.(`Parsing image ${i + 1} of ${imgs.length}…`);
+					const part = await completeOneRequest(userPartsForSingleImage(imgs[i]));
+					merged.push(...part.rows);
+					if (i < imgs.length - 1) {
+						await new Promise((r) => setTimeout(r, staggerMs));
+					}
+				}
+				return { rows: merged };
 			}
 
 			tbody.innerHTML = '';
