@@ -13,308 +13,341 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 		<!-- Hidden: full-page CSV drop + file input (no visible drop zone) -->
 		<input type="file" id="file-input" accept=".csv,text/csv" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
 
-		<main class="flex-1 flex flex-col p-4 md:p-6 max-w-7xl w-full mx-auto">
-			<h1 class="text-xl font-semibold mb-3">Table Dimensions</h1>
-
-			<!-- Sheets: one tab per CSV file / paste; horizontal scroll when many -->
-			<div class="mb-4 flex items-stretch gap-2 min-w-0">
-				<div
-					id="sheet-tabs-scroll"
-					class="sheet-tabs-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden rounded-lg border border-neutral-200 bg-white px-1 py-1"
-					role="tablist"
-					aria-label="Imported CSV sheets"
-				>
-					<div id="sheet-tabs" class="flex flex-nowrap gap-1 w-max min-h-[2.25rem] items-center"></div>
+		<main class="flex-1 flex flex-col gap-4 p-4 md:p-6 max-w-7xl w-full mx-auto">
+			<!-- 1. Top band: title + tab bar + add -->
+			<header class="flex flex-col gap-2">
+				<div class="flex items-baseline justify-between gap-3 flex-wrap">
+					<h1 class="text-xl font-semibold tracking-tight">Table Dimensions</h1>
+					<span class="text-[11px] uppercase tracking-wider text-neutral-400 hidden sm:inline">3-column · metric + imperial · PNG 4096</span>
 				</div>
-				<button
-					type="button"
-					id="add-sheet-btn"
-					class="shrink-0 px-3 py-1.5 rounded-lg border border-neutral-300 bg-neutral-50 hover:bg-neutral-100 text-sm font-medium"
-					title="New empty sheet"
-				>
-					+
-				</button>
-			</div>
-
-			<!-- Main: large preview (styled table from input data) -->
-			<section class="flex-1 min-h-0 mb-6 rounded-xl border border-neutral-300 bg-white shadow-sm overflow-auto">
-				<div class="p-4 h-full min-h-[360px]">
-					<div class="h-full" id="preview-table-wrap" class="preview-table-wrap">
-						<table id="preview-table" class="preview-table w-[654px] text-left">
-							<tbody id="preview-tbody">
-								<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV, use Input, or add rows in the table.</td></tr>
-							</tbody>
-						</table>
+				<div class="flex items-stretch gap-2 min-w-0">
+					<div
+						id="sheet-tabs-scroll"
+						class="sheet-tabs-scroll flex-1 min-w-0 overflow-x-auto overflow-y-hidden rounded-xl border border-neutral-200 bg-white px-1 py-1"
+						role="tablist"
+						aria-label="Imported CSV sheets"
+					>
+						<div id="sheet-tabs" class="flex flex-nowrap gap-1 w-max min-h-[2.25rem] items-center"></div>
 					</div>
-					
+					<button
+						type="button"
+						id="add-sheet-btn"
+						class="shrink-0 px-3 py-1.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-sm font-medium"
+						title="New empty sheet"
+					>
+						+
+					</button>
 				</div>
-			</section>
+			</header>
 
-			<!-- Secondary: edit data (compact) -->
-			<section class="rounded-lg border border-neutral-300 bg-white overflow-visible">
-				<div class="p-3 border-b border-neutral-200 flex flex-wrap gap-2 items-center justify-between">
-					<div class="font-medium text-sm">Edit data · Multi-file CSV · Add / delete rows</div>
-					<div class="flex flex-wrap gap-2">
-						<button type="button" id="export-png" class="px-3 py-1.5 rounded bg-neutral-900 text-white hover:bg-neutral-800 text-sm">
-							Export PNG (4096)
-						</button>
-						<button type="button" id="export-csv" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">Export CSV</button>
-						<div id="batch-export-group" class="hidden flex flex-wrap gap-2 items-center">
+			<!-- 2. Preview card: preview table + docked typography controls + export actions -->
+			<section class="flex-1 min-h-0 rounded-xl border border-neutral-200 bg-white overflow-hidden flex flex-col">
+				<div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100">
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Preview</span>
+						<span class="text-neutral-300">·</span>
+						<span class="text-xs text-neutral-600 truncate" id="preview-subtitle">Exports current view at 4096×4096</span>
+					</div>
+					<div class="flex flex-wrap gap-2 items-center">
+						<div class="inline-flex items-stretch rounded-lg shadow-sm">
 							<button
 								type="button"
-								id="batch-export-csv"
-								class="px-3 py-1.5 rounded border border-neutral-400 bg-white hover:bg-neutral-50 text-sm"
+								id="export-png"
+								class="px-3 py-1.5 rounded-l-lg bg-neutral-900 text-white hover:bg-neutral-800 text-sm font-medium border-r border-neutral-700/60"
+								title="Export current sheet as 4096×4096 PNG"
 							>
-								Export all CSV
+								Export PNG (4096)
 							</button>
 							<button
 								type="button"
 								id="batch-export-png"
-								class="px-3 py-1.5 rounded border border-neutral-400 bg-neutral-800 text-white hover:bg-neutral-700 text-sm"
+								class="px-2.5 py-1.5 rounded-r-lg bg-neutral-900 text-white hover:bg-neutral-800 text-sm inline-flex items-center gap-1 border-l border-neutral-700/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								title="Export all sheets as PNG (4096)"
 							>
-								Export all PNG (4096)
+								<span>All</span>
+								<span id="batch-export-png-count" class="text-[11px] text-white"></span>
+							</button>
+						</div>
+						<div class="inline-flex items-stretch rounded-lg shadow-sm">
+							<button
+								type="button"
+								id="export-csv"
+								class="px-3 py-1.5 rounded-l-lg bg-neutral-200 text-neutral-900 hover:bg-neutral-300 text-sm font-medium border-r border-neutral-300"
+								title="Export current sheet as CSV"
+							>
+								Export CSV
+							</button>
+							<button
+								type="button"
+								id="batch-export-csv"
+								class="px-2.5 py-1.5 rounded-r-lg bg-neutral-200 text-neutral-900 hover:bg-neutral-300 text-sm inline-flex items-center gap-1 border-l border-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed"
+								title="Export all sheets as CSV"
+							>
+								<span>All</span>
+								<span id="batch-export-csv-count" class="text-[11px] text-neutral-900"></span>
 							</button>
 						</div>
 					</div>
 				</div>
-				<div class="px-3 pb-3 pt-3 space-y-4">
+				<div class="flex-1 min-h-[280px] p-4 overflow-auto flex justify-center">
+					<div id="preview-table-wrap" class="preview-table-wrap">
+						<table id="preview-table" class="preview-table w-[654px] text-left">
+							<tbody id="preview-tbody">
+								<tr><td colspan="3" class="text-neutral-400 text-center py-10">No data yet — drop a CSV, use the Input panel below, or add rows.</td></tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				<!-- Typography controls strip (docked to preview since they change the preview) -->
+				<div class="px-4 py-2.5 border-t border-neutral-100 bg-neutral-50/70">
+					<div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-neutral-600">
+						<span class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Typography</span>
+						<label class="flex items-center gap-1.5">
+							<span class="font-medium text-neutral-700 w-4">A</span>
+							<select id="weight-col-0" class="border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white">
+								<option value="regular">Regular</option>
+								<option value="bold" selected>Bold</option>
+							</select>
+							<span class="text-neutral-400">track</span>
+							<input id="tracking-col-0" type="number" step="0.1" value="-0.6" class="w-14 border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white" />
+						</label>
+						<label class="flex items-center gap-1.5">
+							<span class="font-medium text-neutral-700 w-4">B</span>
+							<select id="weight-col-1" class="border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white">
+								<option value="regular" selected>Regular</option>
+								<option value="bold">Bold</option>
+							</select>
+							<span class="text-neutral-400">track</span>
+							<input id="tracking-col-1" type="number" step="0.1" value="-0.6" class="w-14 border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white" />
+						</label>
+						<label class="flex items-center gap-1.5">
+							<span class="font-medium text-neutral-700 w-4">C</span>
+							<select id="weight-col-2" class="border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white">
+								<option value="regular" selected>Regular</option>
+								<option value="bold">Bold</option>
+							</select>
+							<span class="text-neutral-400">track</span>
+							<input id="tracking-col-2" type="number" step="0.1" value="-2" class="w-14 border border-neutral-200 rounded-md px-1.5 py-0.5 bg-white" />
+						</label>
+					</div>
+				</div>
+			</section>
+
+			<!-- 3. Input card: paste / attach / AI parse -->
+			<section
+				id="paste-composer"
+				class="rounded-xl border border-neutral-200 bg-white overflow-visible"
+			>
+				<div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100">
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Input</span>
+						<span class="text-neutral-300">·</span>
+						<span class="text-xs text-neutral-600">CSV, messy notes, or image for AI</span>
+					</div>
+					<p
+						id="ai-status"
+						class="flex-1 min-w-0 text-xs sm:text-sm text-neutral-600 min-h-[1.25rem] text-right break-words"
+						aria-live="polite"
+					></p>
+				</div>
+
+				<div id="ai-manual-key-row" class="mx-4 mt-3 flex flex-wrap gap-3 items-end">
+					<label class="flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
+						<span>OpenRouter API key</span>
+						<input
+							type="password"
+							id="ai-api-key"
+							autocomplete="off"
+							placeholder="sk-or-…"
+							class="w-full px-2.5 py-1.5 rounded-md border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+						/>
+					</label>
+					<label class="flex items-center gap-2 text-xs text-neutral-600 shrink-0 pb-1">
+						<input type="checkbox" id="ai-remember-key" class="rounded border-neutral-300" />
+						Remember key
+					</label>
+				</div>
+
+				<div class="p-4 space-y-3">
+					<input type="file" id="ai-image-input" accept="image/*" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
+
 					<div
-						id="paste-composer"
-						class="rounded-2xl border border-neutral-200/90 bg-gradient-to-b from-neutral-50 to-white shadow-sm ring-1 ring-black/[0.03] overflow-visible"
-					>
-						<div class="px-3 pt-3 pb-2 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-							<div class="flex flex-wrap items-center gap-2 min-w-0">
-								<span class="text-xs font-semibold uppercase tracking-wide text-neutral-500">Input</span>
-								<span class="text-neutral-300">·</span>
-								<span class="text-xs text-neutral-600">CSV, messy notes, or image for AI</span>
-							</div>
-							<p
-								id="ai-status"
-								class="flex-1 min-w-0 text-xs sm:text-sm text-neutral-600 min-h-[1.25rem] text-right break-words"
-								aria-live="polite"
-							></p>
-						</div>
+						id="ai-attachment-chips"
+						class="hidden flex flex-wrap gap-2 min-h-0"
+						aria-live="polite"
+					></div>
 
-						<div id="ai-manual-key-row" class="mx-3 mt-2 flex flex-wrap gap-3 items-end">
-							<label class="flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
-								<span>OpenRouter API key</span>
-								<input
-									type="password"
-									id="ai-api-key"
-									autocomplete="off"
-									placeholder="sk-or-…"
-									class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm font-mono shadow-sm"
-								/>
-							</label>
-							<label class="flex items-center gap-2 text-xs text-neutral-600 shrink-0 pb-1">
-								<input type="checkbox" id="ai-remember-key" class="rounded border-neutral-300" />
-								Remember key
-							</label>
-						</div>
+					<textarea
+						id="csv-paste"
+						placeholder="Paste 3-column CSV, dimension notes, or paste / attach images (screenshots go to Attach automatically)."
+						spellcheck="false"
+						autocomplete="off"
+						autocapitalize="off"
+						autocorrect="off"
+						class="w-full min-h-[100px] p-3 text-sm border border-neutral-200 rounded-lg bg-neutral-50/50 font-mono resize-y placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 focus:bg-white"
+						rows="4"
+					></textarea>
 
-						<div class="p-3">
-							<input type="file" id="ai-image-input" accept="image/*" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
-
+					<div class="flex flex-wrap items-center gap-2">
+						<button
+							type="button"
+							id="ai-attach-btn"
+							class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
+							title="Attach image for vision"
+						>
+							<svg class="w-4 h-4 text-neutral-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+								<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.636-9.318L8.288 6.048a2.25 2.25 0 0 0-3.182 0L2.25 9.293M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+							</svg>
+							Attach image
+						</button>
+						<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 text-sm font-medium text-neutral-700 transition-colors">
+							Import CSV file(s)
+						</button>
+						<span class="text-[11px] text-neutral-400 hidden sm:inline">Drop images here · vision models</span>
+						<span class="flex-1 min-w-[1rem]"></span>
+						<button
+							type="button"
+							id="import-paste-btn"
+							class="px-3 py-2 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm font-medium"
+						>
+							Import CSV
+						</button>
+						<div class="relative inline-flex items-stretch rounded-lg shadow-sm">
+							<button
+								type="button"
+								id="csv-parse-ai-btn"
+								class="px-3 py-2 rounded-l-lg bg-violet-600 text-white hover:bg-violet-700 text-sm font-medium disabled:opacity-50 disabled:pointer-events-none border-r border-violet-500/50"
+							>
+								Parse with AI
+							</button>
+							<button
+								type="button"
+								id="ai-options-trigger"
+								class="px-2 py-2 rounded-r-lg bg-violet-600 text-white hover:bg-violet-700 text-sm border-l border-violet-500/40"
+								aria-expanded="false"
+								aria-haspopup="true"
+								aria-controls="ai-options-panel"
+								title="Model & system prompt"
+							>
+								<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+									<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+								</svg>
+							</button>
 							<div
-								id="ai-attachment-chips"
-								class="hidden mb-2 flex flex-wrap gap-2 min-h-0"
-								aria-live="polite"
-							></div>
-
-							<textarea
-								id="csv-paste"
-								placeholder="Paste 3-column CSV, dimension notes, or paste / attach images (screenshots go to Attach automatically)."
-								spellcheck="false"
-								autocomplete="off"
-								autocapitalize="off"
-								autocorrect="off"
-								class="w-full min-h-[100px] p-3 text-sm border border-neutral-200 rounded-xl bg-white font-mono resize-y shadow-inner placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300"
-								rows="4"
-							></textarea>
-
-							<div class="mt-3 flex flex-wrap items-center gap-2">
-								<button
-									type="button"
-									id="ai-attach-btn"
-									class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 transition-colors"
-									title="Attach image for vision"
-								>
-									<svg class="w-4 h-4 text-neutral-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-										<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.636-9.318L8.288 6.048a2.25 2.25 0 0 0-3.182 0L2.25 9.293M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-									</svg>
-									Attach image
-								</button>
-								<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm font-medium">
-									Import CSV file(s)
-								</button>
-								<span class="text-[11px] text-neutral-400 hidden sm:inline">Drop images here · vision models</span>
-								<span class="flex-1 min-w-[1rem]"></span>
-								<button
-									type="button"
-									id="import-paste-btn"
-									class="px-3 py-2 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-sm font-medium"
-								>
-									Import CSV
-								</button>
-								<div class="relative inline-flex items-stretch rounded-lg shadow-sm">
-									<button
-										type="button"
-										id="csv-parse-ai-btn"
-										class="px-3 py-2 rounded-l-lg bg-violet-600 text-white hover:bg-violet-700 text-sm font-medium disabled:opacity-50 disabled:pointer-events-none border-r border-violet-500/50"
-									>
-										Parse with AI
-									</button>
-									<button
-										type="button"
-										id="ai-options-trigger"
-										class="px-2 py-2 rounded-r-lg bg-violet-600 text-white hover:bg-violet-700 text-sm border-l border-violet-500/40"
-										aria-expanded="false"
-										aria-haspopup="true"
-										aria-controls="ai-options-panel"
-										title="Model & system prompt"
-									>
-										<svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
-											<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-										</svg>
-									</button>
-									<div
-										id="ai-options-panel"
-										class="hidden fixed z-[200] w-[min(100vw-2rem,22rem)] max-w-[calc(100vw-1rem)] rounded-xl border border-neutral-200 bg-white shadow-xl ring-1 ring-black/5"
-										role="menu"
-									>
-										<div class="p-3 space-y-3 max-h-[min(70vh,28rem)] overflow-y-auto">
-											<div>
-												<label class="block text-xs font-medium text-neutral-600 mb-1">Model</label>
-												<select
-													id="ai-model-select"
-													class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm shadow-sm"
-												>
-													{DEFAULT_OPENROUTER_MODELS.map((m) => (
-														<option value={m.id}>{m.label}</option>
-													))}
-													<option value="__custom">Custom…</option>
-												</select>
-											</div>
-											<div class="hidden" id="ai-model-custom-wrap">
-												<label class="block text-xs font-medium text-neutral-600 mb-1">Custom model id</label>
-												<input
-													type="text"
-													id="ai-model-custom"
-													placeholder="openai/gpt-4o"
-													class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm font-mono shadow-sm"
-												/>
-											</div>
-											<div class="border-t border-neutral-100 pt-2">
-												<div class="flex items-center justify-between gap-2 mb-1">
-													<span class="text-xs font-medium text-neutral-700">System prompt</span>
-													<button
-														type="button"
-														id="ai-copy-prompt"
-														class="px-2 py-0.5 rounded border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-[11px]"
-													>
-														Copy
-													</button>
-												</div>
-												<pre
-													id="ai-prompt-display"
-													class="max-h-36 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-neutral-700 p-2 rounded-lg bg-neutral-50 border border-neutral-200"
-												>{DIMENSION_PARSE_SYSTEM_PROMPT}</pre>
-											</div>
+								id="ai-options-panel"
+								class="hidden fixed z-[200] w-[min(100vw-2rem,22rem)] max-w-[calc(100vw-1rem)] rounded-xl border border-neutral-200 bg-white shadow-xl ring-1 ring-black/5"
+								role="menu"
+							>
+								<div class="p-3 space-y-3 max-h-[min(70vh,28rem)] overflow-y-auto">
+									<div>
+										<label class="block text-xs font-medium text-neutral-600 mb-1">Model</label>
+										<select
+											id="ai-model-select"
+											class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm shadow-sm"
+										>
+											{DEFAULT_OPENROUTER_MODELS.map((m) => (
+												<option value={m.id}>{m.label}</option>
+											))}
+											<option value="__custom">Custom…</option>
+										</select>
+									</div>
+									<div class="hidden" id="ai-model-custom-wrap">
+										<label class="block text-xs font-medium text-neutral-600 mb-1">Custom model id</label>
+										<input
+											type="text"
+											id="ai-model-custom"
+											placeholder="openai/gpt-4o"
+											class="w-full px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+										/>
+									</div>
+									<div class="border-t border-neutral-100 pt-2">
+										<div class="flex items-center justify-between gap-2 mb-1">
+											<span class="text-xs font-medium text-neutral-700">System prompt</span>
+											<button
+												type="button"
+												id="ai-copy-prompt"
+												class="px-2 py-0.5 rounded border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-[11px]"
+											>
+												Copy
+											</button>
 										</div>
+										<pre
+											id="ai-prompt-display"
+											class="max-h-36 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-relaxed text-neutral-700 p-2 rounded-lg bg-neutral-50 border border-neutral-200"
+										>{DIMENSION_PARSE_SYSTEM_PROMPT}</pre>
 									</div>
 								</div>
 							</div>
 						</div>
 					</div>
-					<div class="rounded border border-neutral-200 overflow-hidden max-h-[240px] overflow-y-auto">
-						<table class="w-full text-left text-sm">
-							<thead class="bg-neutral-100 sticky top-0">
-								<tr>
-									<th class="p-1.5 font-medium w-1/3 align-top">
-										<div class="flex flex-col gap-1">
-											<div class="leading-none">A</div>
-											<div class="flex flex-wrap gap-1 items-center">
-												<select id="weight-col-0" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
-													<option value="regular">Regular</option>
-													<option value="bold" selected>Bold</option>
-												</select>
-												<label class="text-xs text-neutral-600 flex items-center gap-1">
-													<span>Tracking</span>
-													<input id="tracking-col-0" type="number" step="0.1" value="-0.6" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
-												</label>
-											</div>
-										</div>
-									</th>
-									<th class="p-1.5 font-medium w-1/3 align-top">
-										<div class="flex flex-col gap-1">
-											<div class="leading-none">B</div>
-											<div class="flex flex-wrap gap-1 items-center">
-												<select id="weight-col-1" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
-													<option value="regular" selected>Regular</option>
-													<option value="bold">Bold</option>
-												</select>
-												<label class="text-xs text-neutral-600 flex items-center gap-1">
-													<span>Tracking</span>
-													<input id="tracking-col-1" type="number" step="0.1" value="-0.6" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
-												</label>
-											</div>
-										</div>
-									</th>
-									<th class="p-1.5 font-medium w-1/3 align-top">
-										<div class="flex flex-col gap-1">
-											<div class="leading-none">C</div>
-											<div class="flex flex-wrap gap-1 items-center">
-												<select id="weight-col-2" class="border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white">
-													<option value="regular" selected>Regular</option>
-													<option value="bold">Bold</option>
-												</select>
-												<label class="text-xs text-neutral-600 flex items-center gap-1">
-													<span>Tracking</span>
-													<input id="tracking-col-2" type="number" step="0.1" value="-2" class="w-16 border border-neutral-300 rounded px-1 py-0.5 text-xs bg-white" />
-												</label>
-											</div>
-										</div>
-									</th>
-									<th class="p-1.5 w-16"></th>
-								</tr>
-							</thead>
-							<tbody id="rows">
-								<tr class="border-t border-neutral-200">
-									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="0" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="1" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-									<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-									<td class="p-1"><button type="button" class="delete-row px-2 py-1 text-xs rounded bg-red-100 text-red-800 hover:bg-red-200">Del</button></td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-					<div
-						id="token-palette"
-						class="p-2 rounded-lg border border-neutral-200 bg-white/90 backdrop-blur shadow-sm z-[1000]"
-						style="display:none; position: fixed;"
-					>
-						<div class="flex flex-wrap items-center justify-between gap-2">
-							<div class="text-xs text-neutral-600">
-								Token palette (click to insert into the focused cell)
-							</div>
-						</div>
-						<div class="mt-2 flex flex-wrap gap-2">
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="’" aria-pressed="false">’</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="'" aria-pressed="false">'</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="/" aria-pressed="false">/</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="LIVING" aria-pressed="false">LIVING</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="DINING" aria-pressed="false">DINING</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="KITCHEN" aria-pressed="false">KITCHEN</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BEDROOM" aria-pressed="false">BEDROOM</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="POWDER" aria-pressed="false">POWDER</button>
-							<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BALCONY" aria-pressed="false">BALCONY</button>
-						</div>
-					</div>
-					<div class="flex gap-2">
-						<button type="button" id="add-row" class="px-3 py-1.5 rounded bg-neutral-200 hover:bg-neutral-300 text-sm">Add row</button>
-					</div>
 				</div>
 			</section>
+
+			<!-- 4. Rows card: direct cell editor -->
+			<section class="rounded-xl border border-neutral-200 bg-white overflow-hidden">
+				<div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100">
+					<div class="flex items-center gap-2 min-w-0">
+						<span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Rows</span>
+						<span class="text-neutral-300">·</span>
+						<span class="text-xs text-neutral-600">Edit A / B / C directly</span>
+					</div>
+					<span class="text-[11px] text-neutral-400 hidden sm:inline">Focus a cell to see the token palette</span>
+				</div>
+				<div class="max-h-[320px] overflow-y-auto">
+					<table class="w-full text-left text-sm">
+						<thead class="bg-neutral-50/80 sticky top-0 z-[1]">
+							<tr>
+								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">A</th>
+								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">B</th>
+								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">C</th>
+								<th class="px-2 py-2 w-16"></th>
+							</tr>
+						</thead>
+						<tbody id="rows">
+							<tr class="border-t border-neutral-100">
+								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="0" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="1" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+								<td class="p-1.5 text-right"><button type="button" class="delete-row px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 hover:bg-red-100">Del</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="px-4 py-2.5 border-t border-neutral-100 flex justify-end">
+					<button
+						type="button"
+						id="add-row"
+						class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 text-sm font-medium text-neutral-700 transition-colors"
+					>
+						<span class="text-neutral-400">+</span>
+						<span>Add row</span>
+					</button>
+				</div>
+			</section>
+
+			<!-- Floating token palette (positioned via JS) -->
+			<div
+				id="token-palette"
+				class="p-2 rounded-lg border border-neutral-200 bg-white/95 backdrop-blur shadow-lg z-[1000]"
+				style="display:none; position: fixed;"
+			>
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<div class="text-xs text-neutral-600">
+						Token palette (click to insert into the focused cell)
+					</div>
+				</div>
+				<div class="mt-2 flex flex-wrap gap-2">
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="’" aria-pressed="false">’</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="'" aria-pressed="false">'</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="/" aria-pressed="false">/</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="LIVING" aria-pressed="false">LIVING</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="DINING" aria-pressed="false">DINING</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="KITCHEN" aria-pressed="false">KITCHEN</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BEDROOM" aria-pressed="false">BEDROOM</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="POWDER" aria-pressed="false">POWDER</button>
+					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BALCONY" aria-pressed="false">BALCONY</button>
+				</div>
+			</div>
 		</main>
 
 		<style>
@@ -437,11 +470,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			const importPasteBtn = document.getElementById('import-paste-btn');
 			const importCsvBtn = document.getElementById('import-csv-btn');
 			const addRowBtn = document.getElementById('add-row');
-			const exportCsvBtn = document.getElementById('export-csv');
-			const exportPngBtn = document.getElementById('export-png');
-			const batchExportGroup = document.getElementById('batch-export-group');
-			const batchExportCsvBtn = document.getElementById('batch-export-csv');
-			const batchExportPngBtn = document.getElementById('batch-export-png');
+			const exportCsvBtn = document.getElementById('export-csv') as HTMLButtonElement | null;
+			const exportPngBtn = document.getElementById('export-png') as HTMLButtonElement | null;
+			const batchExportCsvBtn = document.getElementById('batch-export-csv') as HTMLButtonElement | null;
+			const batchExportPngBtn = document.getElementById('batch-export-png') as HTMLButtonElement | null;
+			const batchExportPngCount = document.getElementById('batch-export-png-count') as HTMLSpanElement | null;
+			const batchExportCsvCount = document.getElementById('batch-export-csv-count') as HTMLSpanElement | null;
 			const trackingInputs = [
 				document.getElementById('tracking-col-0') as HTMLInputElement,
 				document.getElementById('tracking-col-1') as HTMLInputElement,
@@ -775,7 +809,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					close.className =
 						'px-1.5 text-sm leading-none border-l border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-40 disabled:hover:bg-neutral-50 disabled:hover:text-neutral-600';
 					close.textContent = '×';
-					close.disabled = sheets.length <= 1;
+					close.title = sheets.length <= 1 ? 'Close sheet (resets to a new empty sheet)' : 'Close sheet';
 					close.addEventListener('click', (ev) => {
 						ev.stopPropagation();
 						removeSheet(i);
@@ -789,9 +823,18 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			}
 
 			function updateBatchExportVisibility() {
-				if (!batchExportGroup) return;
-				if (sheets.length > 1) batchExportGroup.classList.remove('hidden');
-				else batchExportGroup.classList.add('hidden');
+				const multi = sheets.length > 1;
+				const count = multi ? `${sheets.length}` : '';
+				if (batchExportPngBtn) {
+					batchExportPngBtn.disabled = !multi;
+					batchExportPngBtn.title = multi ? '' : 'Add another sheet to export all.';
+				}
+				if (batchExportCsvBtn) {
+					batchExportCsvBtn.disabled = !multi;
+					batchExportCsvBtn.title = multi ? '' : 'Add another sheet to export all.';
+				}
+				if (batchExportPngCount) batchExportPngCount.textContent = count;
+				if (batchExportCsvCount) batchExportCsvCount.textContent = count;
 			}
 
 			function setActiveSheet(i) {
@@ -806,20 +849,19 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 
 			function removeSheet(index) {
 				commitActiveSheet();
-				if (sheets.length <= 1) {
-					sheets[0].rows = [['', '', '']];
-					replaceEditorRows(sheets[0].rows);
-					renderTabBar();
-					renderPreview();
-					return;
-				}
 				sheets.splice(index, 1);
-				if (activeIndex >= sheets.length) activeIndex = sheets.length - 1;
-				else if (index < activeIndex) activeIndex--;
+				if (sheets.length === 0) {
+					sheets.push({ id: uid(), label: 'Sheet 1', rows: [['', '', '']] });
+					activeIndex = 0;
+				} else {
+					if (activeIndex >= sheets.length) activeIndex = sheets.length - 1;
+					else if (index < activeIndex) activeIndex--;
+				}
 				replaceEditorRows(sheets[activeIndex].rows);
 				renderTabBar();
 				renderPreview();
 				scrollActiveTabIntoView();
+				persistState();
 			}
 
 			function addEmptySheet() {
@@ -1323,21 +1365,79 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				}
 			}
 
+			// OpenRouter vision models reliably accept these; HEIC/AVIF/BMP/TIFF/SVG are frequently rejected.
+			const ACCEPTED_IMAGE_MIME_TYPES = new Set([
+				'image/png',
+				'image/jpeg',
+				'image/jpg',
+				'image/webp',
+				'image/gif'
+			]);
+			const ACCEPTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+
+			function describeFileFormat(f: File): string {
+				const ext = (f.name.split('.').pop() ?? '').toLowerCase();
+				if (f.type) return f.type + (ext ? ` (.${ext})` : '');
+				return ext ? `.${ext}` : 'unknown';
+			}
+
+			function isAcceptedImage(f: File): boolean {
+				const mime = (f.type || '').toLowerCase();
+				if (ACCEPTED_IMAGE_MIME_TYPES.has(mime)) return true;
+				if (!mime && f.name) {
+					const ext = (f.name.split('.').pop() ?? '').toLowerCase();
+					return ACCEPTED_IMAGE_EXTENSIONS.includes(ext);
+				}
+				return false;
+			}
+
+			function reportImageFormatIssue(rejected: File[], nonImages: File[]) {
+				if (!aiStatus) return;
+				if (!rejected.length && !nonImages.length) return;
+				const parts: string[] = [];
+				if (rejected.length) {
+					const list = rejected.map((f) => `${f.name} [${describeFileFormat(f)}]`).join(', ');
+					parts.push(
+						`Unsupported image format — vision models here accept PNG, JPEG, WebP, GIF. Rejected: ${list}`
+					);
+				}
+				if (nonImages.length) {
+					const list = nonImages.map((f) => `${f.name} [${describeFileFormat(f)}]`).join(', ');
+					parts.push(`Not an image file: ${list}`);
+				}
+				const msg = parts.join(' · ');
+				aiStatus.textContent = msg;
+				// Dev: full details (raw MIME/extension) for debugging which formats slipped through.
+				console.warn('[three-column] Image format check failed', {
+					rejected: rejected.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+					nonImages: nonImages.map((f) => ({ name: f.name, type: f.type, size: f.size }))
+				});
+			}
+
 			async function addAiImagesFromFileList(files: FileList | File[] | null | undefined) {
 				if (!files?.length) return;
-				const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
-				for (const f of list) {
+				const all = Array.from(files);
+				const nonImages = all.filter((f) => !f.type.startsWith('image/') && !isAcceptedImage(f));
+				const imageLike = all.filter((f) => f.type.startsWith('image/') || isAcceptedImage(f));
+				const accepted = imageLike.filter(isAcceptedImage);
+				const rejected = imageLike.filter((f) => !isAcceptedImage(f));
+
+				for (const f of accepted) {
 					try {
 						aiAttachments.push({
 							id: uid(),
 							name: f.name,
 							dataUrl: await readFileAsDataUrl(f)
 						});
-					} catch {
-						if (aiStatus) aiStatus.textContent = 'Could not read an image.';
+					} catch (e) {
+						if (aiStatus) {
+							aiStatus.textContent = `Could not read ${f.name}. See console for details.`;
+						}
+						console.error('[three-column] Failed to read image', f.name, e);
 					}
 				}
 				renderAiAttachmentChips();
+				if (rejected.length || nonImages.length) reportImageFormatIssue(rejected, nonImages);
 			}
 
 			aiAttachBtn?.addEventListener('click', () => aiImageInput?.click());
@@ -1358,11 +1458,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				el.addEventListener('drop', (e) => {
 					const fl = e.dataTransfer?.files;
 					if (!fl?.length) return;
-					const imgs = Array.from(fl).filter((f) => f.type.startsWith('image/'));
-					if (!imgs.length) return;
+					const all = Array.from(fl);
+					const hasCsv = all.some((f) => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv');
+					if (hasCsv) return; // let CSV drop handler take this
 					e.preventDefault();
 					e.stopPropagation();
-					void addAiImagesFromFileList(imgs);
+					void addAiImagesFromFileList(all);
 				});
 			}
 
@@ -1543,8 +1644,27 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						}
 					}
 				} catch (e) {
-					const msg = e instanceof Error ? e.message : String(e);
-					if (aiStatus) aiStatus.textContent = msg.length > 120 ? msg.slice(0, 120) + '…' : msg;
+					const raw = e instanceof Error ? e.message : String(e);
+					const lower = raw.toLowerCase();
+					const looksImageFormat =
+						/invalid image|unsupported image|image (format|type|mime|media)|could not (read|fetch|decode) image|failed to (fetch|decode|load) image|image.*not supported|image.*corrupt|unable to process image|image must be|you must provide a valid image/.test(
+							lower
+						);
+					let friendly: string;
+					if (looksImageFormat && imageDataUrls.length > 0) {
+						friendly =
+							`The model couldn't read one of the images (likely an unsupported format). ` +
+							`Vision models here accept PNG, JPEG, WebP, and GIF. ` +
+							`Convert HEIC/AVIF/BMP/TIFF/SVG first, or try a smaller image. — ${raw}`;
+					} else {
+						friendly = raw;
+					}
+					if (aiStatus) {
+						aiStatus.textContent =
+							friendly.length > 240 ? friendly.slice(0, 240) + '…' : friendly;
+					}
+					// Dev: always log the raw error for debugging.
+					console.error('[three-column] Parse with AI failed', e);
 				} finally {
 					csvParseAiBtn.disabled = false;
 				}
@@ -1586,7 +1706,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return new Promise((r) => setTimeout(r, ms));
 			}
 
-			exportCsvBtn.addEventListener('click', () => {
+			exportCsvBtn?.addEventListener('click', () => {
 				commitActiveSheet();
 				const csv = sheetRowsToCsv(getTableData());
 				const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
