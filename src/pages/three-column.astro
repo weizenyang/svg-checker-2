@@ -1452,12 +1452,15 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							}
 							return;
 						}
-						const insertAt = sheets.length;
+						const batchSheetIds: string[] = [];
 						for (let i = 0; i < imgUrls.length; i++) {
 							const base = labelForAiAttachment(i, imgUrls.length, aiAttachments[i]?.name);
 							const label = dedupeSheetLabel(base);
-							sheets.push({ id: uid(), label, rows: [['', '', '']] });
+							const sid = uid();
+							batchSheetIds.push(sid);
+							sheets.push({ id: sid, label, rows: [['', '', '']] });
 						}
+						const insertAt = sheets.length - imgUrls.length;
 						activeIndex = insertAt;
 						replaceEditorRows(sheets[activeIndex].rows);
 						renderTabBar();
@@ -1475,16 +1478,25 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							},
 							onImagePart: ({ index, total, part }) => {
 								const body = rowsFromAiPart(part);
-								sheets[insertAt + index].rows = body;
-								if (activeIndex === insertAt + index) {
+								const ii = Number(index);
+								const id = batchSheetIds[ii];
+								const sheet = id ? sheets.find((s) => s.id === id) : undefined;
+								if (!sheet) {
+									if (aiStatus) {
+										aiStatus.textContent = `Image ${ii + 1}/${total}: tab missing (sheet may have been removed).`;
+									}
+									return;
+								}
+								sheet.rows = body;
+								const sheetIndex = sheets.indexOf(sheet);
+								if (sheetIndex >= 0 && activeIndex === sheetIndex) {
 									replaceEditorRows(sheets[activeIndex].rows);
 									renderPreview();
 								} else {
 									persistState();
 								}
 								if (aiStatus) {
-									const tab = sheets[insertAt + index];
-									aiStatus.textContent = `Updated ${tab.label} (image ${index + 1}/${total})`;
+									aiStatus.textContent = `Updated ${sheet.label} (image ${ii + 1}/${total})`;
 								}
 							}
 						});
@@ -1513,7 +1525,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 								if (aiStatus) aiStatus.textContent = msg;
 							}
 						});
-						const matrix = parts[0].rows.map((row) => [
+						const first = parts[0];
+						if (!first?.rows) {
+							throw new Error('Empty response from model.');
+						}
+						const matrix = first.rows.map((row) => [
 							String(row.a ?? ''),
 							normalizeMetricTypography(String(row.b ?? '')),
 							normalizeImperialTypography(String(row.c ?? ''))
