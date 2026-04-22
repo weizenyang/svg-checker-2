@@ -297,6 +297,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					<table class="w-full text-left text-sm">
 						<thead class="bg-neutral-50/80 sticky top-0 z-[1]">
 							<tr>
+								<th class="px-1 py-2 w-7"></th>
 								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">A</th>
 								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">B</th>
 								<th class="px-3 py-2 w-1/3 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">C</th>
@@ -305,6 +306,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						</thead>
 						<tbody id="rows">
 							<tr class="border-t border-neutral-100">
+								<td class="px-1 py-1.5 text-center align-middle"><span class="row-drag-handle inline-flex items-center justify-center w-5 h-6 text-neutral-300 hover:text-neutral-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder" aria-label="Drag to reorder"><svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="7" cy="4" r="1.2"/><circle cx="7" cy="10" r="1.2"/><circle cx="7" cy="16" r="1.2"/><circle cx="13" cy="4" r="1.2"/><circle cx="13" cy="10" r="1.2"/><circle cx="13" cy="16" r="1.2"/></svg></span></td>
 								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="0" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
 								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="1" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
 								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
@@ -381,6 +383,15 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			}
 			.preview-table tbody tr:hover {
 				background: #f9fafb;
+			}
+			#rows tr.drop-above > td {
+				box-shadow: inset 0 2px 0 0 #8b5cf6;
+			}
+			#rows tr.drop-below > td {
+				box-shadow: inset 0 -2px 0 0 #8b5cf6;
+			}
+			#rows tr[draggable="true"] {
+				cursor: grabbing;
 			}
 		</style>
 
@@ -702,16 +713,19 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			function addRow(cells: string[] = ['', '', ''], options?: { silent?: boolean }) {
 				const silent = options?.silent === true;
 				const tr = document.createElement('tr');
-				tr.className = 'border-t border-neutral-200';
+				tr.className = 'border-t border-neutral-100 transition-colors';
 				tr.innerHTML = `
-					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="0" value="${escapeHtml(cells[0] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="1" value="${escapeHtml(cells[1] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-					<td class="p-1"><input type="text" class="cell-input w-full p-1.5 border border-neutral-200 rounded text-sm" data-col="2" value="${escapeHtml(cells[2] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-					<td class="p-1"><button type="button" class="delete-row px-2 py-1 text-xs rounded bg-red-100 text-red-800 hover:bg-red-200">Del</button></td>
+					<td class="px-1 py-1.5 text-center align-middle"><span class="row-drag-handle inline-flex items-center justify-center w-5 h-6 text-neutral-300 hover:text-neutral-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder" aria-label="Drag to reorder"><svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="7" cy="4" r="1.2"/><circle cx="7" cy="10" r="1.2"/><circle cx="7" cy="16" r="1.2"/><circle cx="13" cy="4" r="1.2"/><circle cx="13" cy="10" r="1.2"/><circle cx="13" cy="16" r="1.2"/></svg></span></td>
+					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="0" value="${escapeHtml(cells[0] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="1" value="${escapeHtml(cells[1] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="2" value="${escapeHtml(cells[2] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					<td class="p-1.5 text-right"><button type="button" class="delete-row px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 hover:bg-red-100">Del</button></td>
 				`;
 				tr.querySelector('.delete-row')!.addEventListener('click', () => {
 					tr.remove();
 					renderPreview();
+					commitActiveSheet();
+					persistState();
 				});
 				tbody.appendChild(tr);
 				tr.querySelectorAll('.cell-input').forEach((el) => {
@@ -719,6 +733,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						renderPreview();
 					});
 				});
+				bindRowDrag(tr);
 				if (!silent) renderPreview();
 			}
 
@@ -1171,6 +1186,87 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			});
 
 			addRowBtn.addEventListener('click', () => addRow());
+
+			// Row drag-and-drop reordering
+			let draggedTr: HTMLTableRowElement | null = null;
+
+			function clearRowDropIndicators() {
+				tbody.querySelectorAll('tr.drop-above, tr.drop-below').forEach((el) => {
+					el.classList.remove('drop-above', 'drop-below');
+				});
+			}
+
+			function bindRowDrag(tr: HTMLTableRowElement) {
+				const handle = tr.querySelector('.row-drag-handle') as HTMLElement | null;
+				if (!handle) return;
+				// Only enable draggable=true while user is pressing the handle, so clicks inside
+				// inputs don't accidentally initiate a row drag.
+				const armDrag = () => {
+					tr.setAttribute('draggable', 'true');
+				};
+				const disarmDrag = () => {
+					tr.removeAttribute('draggable');
+				};
+				handle.addEventListener('mousedown', armDrag);
+				handle.addEventListener('touchstart', armDrag, { passive: true });
+				handle.addEventListener('mouseup', disarmDrag);
+				handle.addEventListener('mouseleave', disarmDrag);
+
+				tr.addEventListener('dragstart', (e) => {
+					if (!tr.hasAttribute('draggable')) {
+						e.preventDefault();
+						return;
+					}
+					draggedTr = tr;
+					if (e.dataTransfer) {
+						e.dataTransfer.effectAllowed = 'move';
+						// Required for Firefox to initiate drag.
+						try { e.dataTransfer.setData('text/plain', 'row'); } catch {}
+					}
+					requestAnimationFrame(() => tr.classList.add('opacity-40'));
+				});
+				tr.addEventListener('dragend', () => {
+					tr.removeAttribute('draggable');
+					tr.classList.remove('opacity-40');
+					clearRowDropIndicators();
+					draggedTr = null;
+				});
+			}
+
+			tbody.addEventListener('dragover', (e) => {
+				if (!draggedTr) return;
+				e.preventDefault();
+				if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+				const target = e.target as HTMLElement;
+				const overTr = target.closest('tr') as HTMLTableRowElement | null;
+				clearRowDropIndicators();
+				if (!overTr || overTr === draggedTr || overTr.parentElement !== tbody) return;
+				const rect = overTr.getBoundingClientRect();
+				const mid = rect.top + rect.height / 2;
+				overTr.classList.add(e.clientY < mid ? 'drop-above' : 'drop-below');
+			});
+
+			tbody.addEventListener('dragleave', (e) => {
+				const to = e.relatedTarget as Node | null;
+				if (to && tbody.contains(to)) return;
+				clearRowDropIndicators();
+			});
+
+			tbody.addEventListener('drop', (e) => {
+				if (!draggedTr) return;
+				e.preventDefault();
+				const target = e.target as HTMLElement;
+				const overTr = target.closest('tr') as HTMLTableRowElement | null;
+				clearRowDropIndicators();
+				if (!overTr || overTr === draggedTr || overTr.parentElement !== tbody) return;
+				const rect = overTr.getBoundingClientRect();
+				const mid = rect.top + rect.height / 2;
+				if (e.clientY < mid) tbody.insertBefore(draggedTr, overTr);
+				else tbody.insertBefore(draggedTr, overTr.nextSibling);
+				renderPreview();
+				commitActiveSheet();
+				persistState();
+			});
 
 			tbody.addEventListener('focusout', (e) => {
 				const t = e.target;
