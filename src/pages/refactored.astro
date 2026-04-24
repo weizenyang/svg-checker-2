@@ -8569,5 +8569,173 @@ import "../styles.css";
 
 		// Initialize context menu on page load
 		createSVGContextMenu();
+
+		// =========================================================
+		// Floorplan Generator bridge (CSV roundtrip)
+		// =========================================================
+		// When this page is opened with `?bridge=<url>` from the desktop
+		// Floorplan Generator, the local Python HTTP bridge serves:
+		//   GET <bridge>/manifest.json  -> session metadata
+		//   GET <bridge>/floorplan.png  -> the unit's PNG floorplan
+		//   GET <bridge>/csv            -> 3-col `label,x,y` CSV (already
+		//                                  pre-transformed for this unit)
+		//   PUT <bridge>/csv            -> save edits back; the bridge
+		//                                  inverse-transforms and rewrites
+		//                                  the per-type template CSV.
+		// The bridge expects `label,x,y` in both directions, so we force
+		// `flipYX = false` while bridge mode is active to match the
+		// existing 3-col ingest path (see handleFileChange CSV branch).
+		(function setupFloorplanBridge() {
+			const params = new URL(window.location.href).searchParams;
+			const bridgeUrl = params.get("bridge");
+			if (!bridgeUrl) return;
+
+			console.log("[ FG Bridge ] active:", bridgeUrl);
+
+			try {
+				flipYX = false;
+				const yxToggle = document.getElementById("yx-flip") as HTMLInputElement | null;
+				if (yxToggle) {
+					yxToggle.checked = false;
+				}
+			} catch (e) {
+				console.warn("[ FG Bridge ] could not flip flipYX toggle:", e);
+			}
+
+			function showBridgeBanner(text, color) {
+				let banner = document.getElementById("fg-bridge-banner");
+				if (!banner) {
+					banner = document.createElement("div");
+					banner.id = "fg-bridge-banner";
+					banner.style.position = "fixed";
+					banner.style.top = "8px";
+					banner.style.left = "50%";
+					banner.style.transform = "translateX(-50%)";
+					banner.style.padding = "6px 14px";
+					banner.style.borderRadius = "6px";
+					banner.style.zIndex = "9999";
+					banner.style.fontFamily = "system-ui, sans-serif";
+					banner.style.fontSize = "13px";
+					banner.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
+					document.body.appendChild(banner);
+				}
+				banner.style.background = color || "#333";
+				banner.style.color = "#fff";
+				banner.textContent = text;
+				banner.style.display = "block";
+				clearTimeout((banner as any)._fgTimer);
+				(banner as any)._fgTimer = setTimeout(() => {
+					banner.style.display = "none";
+				}, 4500);
+			}
+
+			async function loadFromBridge() {
+				let manifest: any = null;
+				try {
+					const r = await fetch(bridgeUrl + "/manifest.json", { cache: "no-store" });
+					if (r.ok) manifest = await r.json();
+				} catch (e) {
+					console.warn("[ FG Bridge ] manifest fetch failed:", e);
+				}
+
+				try {
+					const fpResp = await fetch(bridgeUrl + "/floorplan.png", { cache: "no-store" });
+					if (!fpResp.ok) throw new Error("floorplan.png HTTP " + fpResp.status);
+					const fpBlob = await fpResp.blob();
+					const fpFile = new File([fpBlob], "floorplan.png", {
+						type: fpBlob.type || "image/png",
+					});
+					handleFileChange([fpFile]);
+				} catch (e) {
+					console.error("[ FG Bridge ] floorplan load failed:", e);
+					showBridgeBanner("Could not load floorplan from Floorplan Generator", "#a23");
+					return;
+				}
+
+				try {
+					const csvResp = await fetch(bridgeUrl + "/csv", { cache: "no-store" });
+					if (!csvResp.ok) throw new Error("csv HTTP " + csvResp.status);
+					const csvText = await csvResp.text();
+					const baseName = manifest && manifest.unit_name
+						? `csv_floorplan_${manifest.unit_name}.csv`
+						: "unit.csv";
+					const csvFile = new File([csvText], baseName, { type: "text/csv" });
+					setTimeout(() => handleFileChange([csvFile]), 250);
+				} catch (e) {
+					console.error("[ FG Bridge ] csv load failed:", e);
+					showBridgeBanner("Could not load CSV from Floorplan Generator", "#a23");
+					return;
+				}
+
+				const label = manifest && manifest.unit_name
+					? `Bridged from Floorplan Generator: ${manifest.unit_name}`
+					: "Bridged from Floorplan Generator";
+				showBridgeBanner(label, "#2a6");
+			}
+
+			function injectSaveBackButton() {
+				if (document.getElementById("fg-save-back-btn")) return;
+				const exportBtn = document.getElementById("export-csv-layer");
+				if (!exportBtn || !exportBtn.parentElement) return;
+
+				const btn = document.createElement("button");
+				btn.id = "fg-save-back-btn";
+				btn.type = "button";
+				btn.className = exportBtn.className || "button-style";
+				btn.style.marginBottom = "10px";
+				btn.style.marginLeft = "8px";
+				btn.style.background = "#2a6";
+				btn.style.color = "#fff";
+				btn.textContent = "Save to Floorplan Generator";
+				btn.title = "Save edited points back to the per-type template CSV";
+
+				btn.addEventListener("click", async () => {
+					btn.disabled = true;
+					try {
+						const svg = document.querySelector("#svg-container svg");
+						if (!svg) {
+							showBridgeBanner("No SVG to save", "#a23");
+							return;
+						}
+						const circles = Array.from(svg.querySelectorAll("g circle"));
+						const rows: string[] = [];
+						for (const c of circles) {
+							const id = c.getAttribute("data-name") || c.getAttribute("id") || "";
+							const cx = c.getAttribute("cx");
+							const cy = c.getAttribute("cy");
+							if (!id || cx == null || cy == null) continue;
+							rows.push(`${id},${cx},${cy}`);
+						}
+						if (rows.length === 0) {
+							showBridgeBanner("No points to save", "#a23");
+							return;
+						}
+						const body = rows.join("\n");
+						const resp = await fetch(bridgeUrl + "/csv", {
+							method: "PUT",
+							headers: { "Content-Type": "text/csv" },
+							body,
+						});
+						if (!resp.ok) {
+							const txt = await resp.text();
+							throw new Error("HTTP " + resp.status + ": " + txt);
+						}
+						const out = await resp.json().catch(() => ({}));
+						const where = out && out.written ? ` (${out.written})` : "";
+						showBridgeBanner("Saved. Floorplan Generator template updated." + where, "#2a6");
+					} catch (e) {
+						console.error("[ FG Bridge ] save failed:", e);
+						showBridgeBanner("Save failed: " + (e as any).message, "#a23");
+					} finally {
+						btn.disabled = false;
+					}
+				});
+
+				exportBtn.parentElement.appendChild(btn);
+			}
+
+			injectSaveBackButton();
+			loadFromBridge();
+		})();
 	</script>
 </html>
