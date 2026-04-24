@@ -8576,7 +8576,8 @@ import "../styles.css";
 		// When this page is opened with `?bridge=<url>` from the desktop
 		// Floorplan Generator, the local Python HTTP bridge serves:
 		//   GET <bridge>/manifest.json  -> session metadata
-		//   GET <bridge>/floorplan.png  -> the unit's PNG floorplan
+		//   GET <bridge>/floorplan.png  -> type backplate (same file used for s1 & s2 names in UI)
+		//   GET <bridge>/floorplan_s2.png -> still available (same bytes; optional)
 		//   GET <bridge>/csv            -> 3-col `label,x,y` CSV (already
 		//                                  pre-transformed for this unit)
 		//   PUT <bridge>/csv            -> save edits back; the bridge
@@ -8638,18 +8639,43 @@ import "../styles.css";
 					console.warn("[ FG Bridge ] manifest fetch failed:", e);
 				}
 
+				const s1Base =
+					(manifest && manifest.floorplan_s1_basename) ||
+					"backplate_image_floorplan.png";
+				const backplateFiles: File[] = [];
+
 				try {
 					const fpResp = await fetch(bridgeUrl + "/floorplan.png", { cache: "no-store" });
 					if (!fpResp.ok) throw new Error("floorplan.png HTTP " + fpResp.status);
 					const fpBlob = await fpResp.blob();
-					const fpFile = new File([fpBlob], "floorplan.png", {
+					const fpFile = new File([fpBlob], s1Base, {
 						type: fpBlob.type || "image/png",
 					});
+					backplateFiles.push(fpFile);
+					// s1/s2 type backplates are the same asset; duplicate the blob for the
+					// s2 filename so "Check Floorplans" lists both without a second request.
+					if (manifest && manifest.floorplan_s2_basename) {
+						const f2 = new File([fpBlob], manifest.floorplan_s2_basename, {
+							type: fpBlob.type || "image/png",
+						});
+						backplateFiles.push(f2);
+					}
 					handleFileChange([fpFile]);
 				} catch (e) {
 					console.error("[ FG Bridge ] floorplan load failed:", e);
 					showBridgeBanner("Could not load floorplan from Floorplan Generator", "#a23");
 					return;
+				}
+
+				// "Check Floorplans" overlay: both type backplates with real backplate_ filenames
+				if (backplateFiles.length > 0 && typeof loadFloorplanFilesToImageList === "function") {
+					setTimeout(() => {
+						try {
+							loadFloorplanFilesToImageList(backplateFiles);
+						} catch (e) {
+							console.warn("[ FG Bridge ] loadFloorplanFilesToImageList:", e);
+						}
+					}, 500);
 				}
 
 				try {
@@ -8667,9 +8693,13 @@ import "../styles.css";
 					return;
 				}
 
-				const label = manifest && manifest.unit_name
-					? `Bridged from Floorplan Generator: ${manifest.unit_name}`
-					: "Bridged from Floorplan Generator";
+				const tlabel = manifest && manifest.type_name ? manifest.type_name : "";
+				const ulabel = manifest && manifest.unit_name ? manifest.unit_name : "";
+				const label = tlabel
+					? `Floorplan Generator — type: ${tlabel}` + (ulabel ? ` (${ulabel})` : "")
+					: ulabel
+						? `Bridged from Floorplan Generator: ${ulabel}`
+						: "Bridged from Floorplan Generator";
 				showBridgeBanner(label, "#2a6");
 			}
 
@@ -8721,8 +8751,21 @@ import "../styles.css";
 							throw new Error("HTTP " + resp.status + ": " + txt);
 						}
 						const out = await resp.json().catch(() => ({}));
-						const where = out && out.written ? ` (${out.written})` : "";
-						showBridgeBanner("Saved. Floorplan Generator template updated." + where, "#2a6");
+						const w1 = out && out.written ? out.written : "";
+						const w2 = out && out.written_s2 ? out.written_s2 : "";
+						let msg = "Saved. Floorplan Generator template(s) updated.";
+						if (w1) msg += " s1: " + w1;
+						if (w2) msg += " s2: " + w2;
+						showBridgeBanner(msg, "#2a6");
+						// Optional: re-fetch transformed CSV from bridge (matches disk after round-trip)
+						try {
+							const verify = await fetch(bridgeUrl + "/csv", { cache: "no-store" });
+							if (verify.ok) {
+								console.log("[ FG Bridge ] GET /csv after save: OK, bytes=", (await verify.text()).length);
+							}
+						} catch (e) {
+							console.warn("[ FG Bridge ] post-save csv verify fetch:", e);
+						}
 					} catch (e) {
 						console.error("[ FG Bridge ] save failed:", e);
 						showBridgeBanner("Save failed: " + (e as any).message, "#a23");
