@@ -2789,8 +2789,8 @@ import "../styles.css";
 		// }
 
 		async function fetchDataFromServer() {
+			let imageFile = null;
 			try {
-				// Fetch the image data
 				const imageResponse = await fetch(
 					"http://localhost:9234/image",
 				);
@@ -2798,39 +2798,39 @@ import "../styles.css";
 				const { image, imageName } = await imageResponse.json();
 				console.log({ image, imageName });
 
-				// Convert the image buffer to a Blob
 				const imageBlob = new Blob([new Uint8Array(image.data)], {
 					type: "image/webp",
-				}); // Update type if necessary
-				const imageFile = new File([imageBlob], imageName, {
+				});
+				imageFile = new File([imageBlob], imageName, {
 					type: "image/webp",
 				});
-
-				// Pass the image File object to handleFileChange
-				handleFileChange(imageFile);
 			} catch (error) {
 				console.error("Error fetching image data from server:", error);
 			}
 
+			let csvFile = null;
 			try {
-				// Fetch the CSV data
 				const csvResponse = await fetch("http://localhost:9234/csv");
 				if (!csvResponse.ok) throw new Error("Failed to fetch CSV");
 				const { csv, csvName } = await csvResponse.json();
 				console.log({ csv, csvName });
 
-				// Convert the CSV buffer to a Blob
 				const csvBlob = new Blob([new Uint8Array(csv.data)], {
 					type: "text/csv",
 				});
-				const csvFile = new File([csvBlob], csvName, {
+				csvFile = new File([csvBlob], csvName, {
 					type: "text/csv",
 				});
-
-				// Pass the CSV File object to handleFileChange
-				handleFileChange(csvFile);
 			} catch (error) {
 				console.error("Error fetching CSV data from server:", error);
+			}
+
+			if (imageFile && csvFile) {
+				handleFileChange([imageFile], { pendingCsv: csvFile });
+			} else if (imageFile) {
+				handleFileChange(imageFile);
+			} else if (csvFile) {
+				handleFileChange(csvFile);
 			}
 		}
 
@@ -3179,6 +3179,8 @@ import "../styles.css";
 					
 					console.log(isVideo ? "Video name:" : "Image name:", mediaFile.name, "-> last 2 segments:", mediaLastTwoSegments)
 					console.log(importedSVGs)
+
+					const applyToMatchedSvgs = (rasterW, rasterH) => {
 					// Loop through the imported SVG objects to find a matching name
 					importedSVGs.forEach((svgObj) => {
 						console.log("SVGOBJ")
@@ -3249,7 +3251,15 @@ import "../styles.css";
 								console.log("Adding new background video to SVG");
 								svgElement.insertBefore(foreignObject, svgElement.firstChild);
 							} else {
-								// Create an <image> element for the SVG
+								const nw =
+									rasterW != null
+										? rasterW
+										: Number(viewBox[2]) || 4096;
+								const nh =
+									rasterH != null
+										? rasterH
+										: Number(viewBox[3]) || 4096;
+								svgElement.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
 								const svgImage = document.createElementNS(
 									"http://www.w3.org/2000/svg",
 									"image",
@@ -3257,23 +3267,75 @@ import "../styles.css";
 								svgImage.setAttributeNS(null, "href", contents);
 								svgImage.setAttributeNS(null, "x", "0");
 								svgImage.setAttributeNS(null, "y", "0");
-								svgImage.setAttributeNS(null, "width", viewBox[2]);
-								svgImage.setAttributeNS(null, "height", viewBox[3]);
+								svgImage.setAttributeNS(null, "width", String(nw));
+								svgImage.setAttributeNS(null, "height", String(nh));
+								svgImage.setAttributeNS(
+									null,
+									"preserveAspectRatio",
+									"none",
+								);
 								svgImage.setAttributeNS(null, "data-original-filename", mediaFile.name || "");
-								// Insert the image as the first child (or adjust position as needed)
 								console.log("Adding new background image to SVG");
 								svgElement.insertBefore(svgImage, svgElement.firstChild);
 							}
 						}
 					});
+					};
+
+					if (isVideo) {
+						applyToMatchedSvgs(null, null);
+					} else {
+						const probe = new Image();
+						probe.onload = () => {
+							applyToMatchedSvgs(
+								probe.naturalWidth || undefined,
+								probe.naturalHeight || undefined,
+							);
+						};
+						probe.onerror = () => applyToMatchedSvgs(null, null);
+						probe.src = contents;
+					}
 				};
 				reader.readAsDataURL(mediaFile);
 			});
 		}
 
-		function handleFileChange(files) {
-			console.log(files);
-			const file = files[0];
+		function handleFileChange(files, opts) {
+			let fileArr;
+			if (!files) {
+				fileArr = [];
+			} else if (Array.isArray(files)) {
+				fileArr = files;
+			} else if (files instanceof FileList) {
+				fileArr = Array.from(files);
+			} else {
+				fileArr = [files];
+			}
+			const pendingCsvFollowUp =
+				opts && opts.pendingCsv ? opts.pendingCsv : null;
+
+			// One drop with raster + CSV: decode background first, then CSV (parity with bridge + manual two-step load)
+			if (!pendingCsvFollowUp && fileArr.length >= 2) {
+				const csvFile = fileArr.find(
+					(f) =>
+						f.type === "text/csv" ||
+						(f.name && String(f.name).toLowerCase().endsWith(".csv")),
+				);
+				const rasterFile = fileArr.find(
+					(f) =>
+						f.type === "image/jpeg" ||
+						f.type === "image/png" ||
+						f.type === "image/webp" ||
+						(f.type && f.type.startsWith("video/")),
+				);
+				if (csvFile && rasterFile) {
+					handleFileChange([rasterFile], { pendingCsv: csvFile });
+					return;
+				}
+			}
+
+			console.log(fileArr);
+			const file = fileArr[0];
 			// Determine if this is a raster image or video import (jpeg/png/webp/mp4/webm)
 			const isRasterMedia =
 				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp" || file.type.startsWith("video/"));
@@ -3298,7 +3360,7 @@ import "../styles.css";
 			// 	globalSvgContainer.innerHTML = "";
 			// }
 			// importedSVGs = []; // Reset the array
-			let filesToProcess = Array.from(files).filter(
+			let filesToProcess = fileArr.filter(
 				(file) => file.type === "image/svg+xml",
 			);
 
@@ -3324,8 +3386,8 @@ import "../styles.css";
 					document.getElementById("showLabelsDiv").remove();
 				}
 			}
-			console.log(files.length)
-			if(files.length > 1){
+			console.log(fileArr.length)
+			if(fileArr.length > 1){
 				
 				if (file.type === "image/svg+xml") {
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
@@ -3357,7 +3419,7 @@ import "../styles.css";
 								if (existingNav) existingNav.remove();
 							}
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
-							loadFloorplanFilesToImageList(files);
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3368,7 +3430,7 @@ import "../styles.css";
 				file.type === "image/webp" ||
 				file.type.startsWith("video/")
 			) {
-				handleDraggedImages(files)
+				handleDraggedImages(fileArr)
 			} else if (file.type === "text/csv") {
 			}
 			} else {
@@ -3406,7 +3468,7 @@ import "../styles.css";
 								if (existingNav) existingNav.remove();
 							}
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
-							loadFloorplanFilesToImageList(files);
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3491,18 +3553,56 @@ import "../styles.css";
 						console.log("Adding new background video");
 						internalSVG.insertBefore(foreignObject, internalSVG.firstChild);
 					} else {
-						const svgImage = document.createElementNS(
-							"http://www.w3.org/2000/svg",
-							"image",
-						);
-						svgImage.setAttributeNS(null, "href", contents);
-						svgImage.setAttributeNS(null, "x", "0");
-						svgImage.setAttributeNS(null, "y", "0");
-						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
-						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
-						svgImage.setAttributeNS(null, "data-original-filename", file.name || "");
-						console.log("Adding new background image");
-						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+						// Default <image> preserveAspectRatio is xMidYMid meet, which letterboxes
+						// inside width×height while CSV coords use the full viewBox — markers look
+						// shifted (often upward). Match viewBox + image rect to bitmap pixels.
+						const runPendingCsv = () => {
+							if (pendingCsvFollowUp) {
+								const pc = pendingCsvFollowUp;
+								queueMicrotask(() => handleFileChange([pc]));
+							}
+						};
+						const fallbackW = Number(svgViewbox[2]) || 4096;
+						const fallbackH = Number(svgViewbox[3]) || 4096;
+						const placeBg = (nw, nh) => {
+							internalSVG.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+							const svgImage = document.createElementNS(
+								"http://www.w3.org/2000/svg",
+								"image",
+							);
+							svgImage.setAttributeNS(null, "href", contents);
+							svgImage.setAttributeNS(null, "x", "0");
+							svgImage.setAttributeNS(null, "y", "0");
+							svgImage.setAttributeNS(null, "width", String(nw));
+							svgImage.setAttributeNS(null, "height", String(nh));
+							svgImage.setAttributeNS(
+								null,
+								"preserveAspectRatio",
+								"none",
+							);
+							svgImage.setAttributeNS(
+								null,
+								"data-original-filename",
+								file.name || "",
+							);
+							console.log("Adding new background image");
+							internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+							runPendingCsv();
+						};
+						const probe = new Image();
+						probe.onload = () => {
+							const nw = probe.naturalWidth || fallbackW;
+							const nh = probe.naturalHeight || fallbackH;
+							placeBg(nw, nh);
+						};
+						probe.onerror = () => {
+							placeBg(fallbackW, fallbackH);
+						};
+						probe.src = contents;
+					}
+					if (pendingCsvFollowUp && isVideo) {
+						const pc = pendingCsvFollowUp;
+						queueMicrotask(() => handleFileChange([pc]));
 					}
 				};
 				reader.readAsDataURL(file);
@@ -8538,6 +8638,8 @@ import "../styles.css";
 		// The bridge expects `label,x,y` in both directions, so we force
 		// `flipYX = false` while bridge mode is active to match the
 		// existing 3-col ingest path (see handleFileChange CSV branch).
+		// Floorplan PNG and CSV are loaded via handleFileChange(..., { pendingCsv })
+		// so CSV runs only after the raster FileReader onload inserts the backplate.
 		(function setupFloorplanBridge() {
 			const params = new URL(window.location.href).searchParams;
 			const bridgeUrl = params.get("bridge");
@@ -8596,11 +8698,22 @@ import "../styles.css";
 					"backplate_image_floorplan.png";
 				const backplateFiles: File[] = [];
 
+				const baseName =
+					manifest && manifest.unit_name
+						? `csv_floorplan_${manifest.unit_name}.csv`
+						: "unit.csv";
+				let fpFile: File;
+				let csvFile: File;
 				try {
-					const fpResp = await fetch(bridgeUrl + "/floorplan.png", { cache: "no-store" });
+					const [fpResp, csvResp] = await Promise.all([
+						fetch(bridgeUrl + "/floorplan.png", { cache: "no-store" }),
+						fetch(bridgeUrl + "/csv", { cache: "no-store" }),
+					]);
 					if (!fpResp.ok) throw new Error("floorplan.png HTTP " + fpResp.status);
+					if (!csvResp.ok) throw new Error("csv HTTP " + csvResp.status);
 					const fpBlob = await fpResp.blob();
-					const fpFile = new File([fpBlob], s1Base, {
+					const csvText = await csvResp.text();
+					fpFile = new File([fpBlob], s1Base, {
 						type: fpBlob.type || "image/png",
 					});
 					backplateFiles.push(fpFile);
@@ -8612,10 +8725,12 @@ import "../styles.css";
 						});
 						backplateFiles.push(f2);
 					}
-					handleFileChange([fpFile]);
+					csvFile = new File([csvText], baseName, { type: "text/csv" });
+					// Chain CSV after the floorplan data URL is applied (no fixed delay)
+					handleFileChange([fpFile], { pendingCsv: csvFile });
 				} catch (e) {
-					console.error("[ FG Bridge ] floorplan load failed:", e);
-					showBridgeBanner("Could not load floorplan from Floorplan Generator", "#a23");
+					console.error("[ FG Bridge ] floorplan/csv load failed:", e);
+					showBridgeBanner("Could not load floorplan or CSV from Floorplan Generator", "#a23");
 					return;
 				}
 
@@ -8628,21 +8743,6 @@ import "../styles.css";
 							console.warn("[ FG Bridge ] loadFloorplanFilesToImageList:", e);
 						}
 					}, 500);
-				}
-
-				try {
-					const csvResp = await fetch(bridgeUrl + "/csv", { cache: "no-store" });
-					if (!csvResp.ok) throw new Error("csv HTTP " + csvResp.status);
-					const csvText = await csvResp.text();
-					const baseName = manifest && manifest.unit_name
-						? `csv_floorplan_${manifest.unit_name}.csv`
-						: "unit.csv";
-					const csvFile = new File([csvText], baseName, { type: "text/csv" });
-					setTimeout(() => handleFileChange([csvFile]), 250);
-				} catch (e) {
-					console.error("[ FG Bridge ] csv load failed:", e);
-					showBridgeBanner("Could not load CSV from Floorplan Generator", "#a23");
-					return;
 				}
 
 				const tlabel = manifest && manifest.type_name ? manifest.type_name : "";
