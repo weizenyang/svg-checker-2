@@ -216,7 +216,7 @@ import "../styles.css";
 				<section class="container" id="brush-toolbar">
 					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Draw rectangle</h3>
 					<p style="font-size: 10px; color: #666; margin: 0 0 8px 0;">
-						With nothing selected, click and drag on the SVG canvas to add a rect.
+						Click and drag on empty canvas area to add a rect (not on existing rects).
 					</p>
 					<div style="display: flex; flex-direction: column; gap: 6px;">
 						<label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
@@ -271,7 +271,7 @@ import "../styles.css";
 						<p>• Ctrl+C/V to copy/paste rects</p>
 						<p>• Alt+drag to duplicate rects</p>
 						<p>
-							<strong>• Draw rect:</strong> nothing selected → drag on canvas.
+							<strong>• Draw rect:</strong> drag on empty canvas (avoid clicking rects/handles).
 							Manual = drag box; Auto = tight box from RGB in drag area (padding below brush).
 						</p>
 					</div>
@@ -581,6 +581,10 @@ import "../styles.css";
 			const ry = Math.min(rubberBandStart.y, cur.y);
 			const rw = Math.abs(cur.x - rubberBandStart.x);
 			const rh = Math.abs(cur.y - rubberBandStart.y);
+			const minDragClear = 3;
+			if (selectedRect && Math.max(rw, rh) >= minDragClear) {
+				deselectRect();
+			}
 			rubberBandPreview.setAttribute("x", rx.toString());
 			rubberBandPreview.setAttribute("y", ry.toString());
 			rubberBandPreview.setAttribute("width", Math.max(1, rw).toString());
@@ -942,7 +946,6 @@ import "../styles.css";
 				(e) => {
 					if (e.button !== 0) return;
 					if (e.target !== svgElement) return;
-					if (selectedRect) return;
 					if (isAddRectMode) return;
 					if (isDragging || isResizing || isDuplicating) return;
 					if (isRubberBandDrawing) return;
