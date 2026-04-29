@@ -355,7 +355,7 @@ import ObjectList from "../components/object-list.tsx";
                 class="flex transition-all duration-75 drop-shadow-sm bg-zinc-600 text-lime-100 p-2 mt-3 rounded-md hover:drop-shadow-xl hover:bg-zinc-500 hover:text-lime-400"
                 style="margin-bottom: 10px"
             >
-                Export All To GLB
+                Export All To GLB (Draco, static mesh)
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="16"
@@ -623,6 +623,7 @@ import ObjectList from "../components/object-list.tsx";
     import { FBXLoader } from "../scripts/three/examples/jsm/loaders/FBXLoader";
     import { GLTFExporter } from "../scripts/three/examples/jsm/exporters/GLTFExporter.js";
     import { DRACOLoader } from "../scripts/three/examples/jsm/loaders/DRACOLoader.js";
+    import * as SkeletonUtils from "../scripts/three/examples/jsm/utils/SkeletonUtils.js";
     import JSZip from "jszip";
     import gsap from "gsap";
 
@@ -4688,66 +4689,229 @@ async function renderOverlayCanvas(cone) {
         });
     }
 
-    // Function to export a Three.js object to a GLB file
+    /** Strip morph targets / shape keys (base mesh only), like Blender shape keys off. */
+    function stripShapeKeysFromMesh(mesh) {
+        const g = mesh.geometry;
+        if (!g) return;
+        if (!g.morphAttributes || Object.keys(g.morphAttributes).length === 0) return;
+        g.morphAttributes = {};
+        delete mesh.morphTargetDictionary;
+        delete mesh.morphTargetInfluences;
+    }
+
+    /** Bake skinned mesh to static Mesh (current pose), like Blender "apply" without skin. */
+    function bakeSkinnedMeshToMesh(skinnedMesh) {
+        const geometry = skinnedMesh.geometry.clone();
+        skinnedMesh.skeleton.update();
+        skinnedMesh.updateMatrixWorld(true);
+
+        const pos = geometry.attributes.position;
+        const skinIndex = geometry.attributes.skinIndex;
+        const skinWeight = geometry.attributes.skinWeight;
+        if (!skinIndex || !skinWeight) {
+            return new THREE.Mesh(geometry, skinnedMesh.material);
+        }
+
+        const bones = skinnedMesh.skeleton.bones;
+        const boneInverses = skinnedMesh.skeleton.boneInverses;
+        const bindMatrix = skinnedMesh.bindMatrix;
+        const bindMatrixInverse = skinnedMesh.bindMatrixInverse;
+
+        const v = new THREE.Vector3();
+        const skinVertex = new THREE.Vector4();
+        const skinned = new THREE.Vector4();
+        const temp = new THREE.Vector4();
+        const boneMatrix = new THREE.Matrix4();
+
+        for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i);
+            skinVertex.set(v.x, v.y, v.z, 1).applyMatrix4(bindMatrix);
+            skinned.set(0, 0, 0, 0);
+            for (let j = 0; j < 4; j++) {
+                const boneIdx =
+                    j === 0
+                        ? skinIndex.getX(i)
+                        : j === 1
+                          ? skinIndex.getY(i)
+                          : j === 2
+                            ? skinIndex.getZ(i)
+                            : skinIndex.getW(i);
+                const weight =
+                    j === 0
+                        ? skinWeight.getX(i)
+                        : j === 1
+                          ? skinWeight.getY(i)
+                          : j === 2
+                            ? skinWeight.getZ(i)
+                            : skinWeight.getW(i);
+                if (!weight || boneIdx < 0 || boneIdx >= bones.length) continue;
+                boneMatrix.multiplyMatrices(bones[boneIdx].matrixWorld, boneInverses[boneIdx]);
+                temp.copy(skinVertex).applyMatrix4(boneMatrix).multiplyScalar(weight);
+                skinned.add(temp);
+            }
+            skinned.applyMatrix4(bindMatrixInverse);
+            pos.setXYZ(i, skinned.x, skinned.y, skinned.z);
+        }
+
+        geometry.deleteAttribute("skinIndex");
+        geometry.deleteAttribute("skinWeight");
+        if (geometry.attributes.normal) geometry.deleteAttribute("normal");
+        geometry.computeVertexNormals();
+
+        const mesh = new THREE.Mesh(geometry, skinnedMesh.material);
+        mesh.name = skinnedMesh.name;
+        mesh.position.copy(skinnedMesh.position);
+        mesh.quaternion.copy(skinnedMesh.quaternion);
+        mesh.scale.copy(skinnedMesh.scale);
+        mesh.matrix.copy(skinnedMesh.matrix);
+        mesh.matrixWorld.copy(skinnedMesh.matrixWorld);
+        mesh.matrixAutoUpdate = skinnedMesh.matrixAutoUpdate;
+        return mesh;
+    }
+
+    /** Replace skinned meshes with baked meshes; strip morph targets everywhere. */
+    function prepareStaticDracoExport(root) {
+        const skinned = [];
+        root.traverse((c) => {
+            if (c.isSkinnedMesh) skinned.push(c);
+            else if (c.isMesh) stripShapeKeysFromMesh(c);
+        });
+        for (const sm of skinned) {
+            stripShapeKeysFromMesh(sm);
+            const mesh = bakeSkinnedMeshToMesh(sm);
+            const p = sm.parent;
+            if (p) {
+                p.add(mesh);
+                mesh.position.copy(sm.position);
+                mesh.quaternion.copy(sm.quaternion);
+                mesh.scale.copy(sm.scale);
+                mesh.matrix.copy(sm.matrix);
+                mesh.matrixWorld.copy(sm.matrixWorld);
+                mesh.name = sm.name;
+                p.remove(sm);
+            }
+        }
+    }
+
+    function disposeExportObject3D(root) {
+        root.traverse((c) => {
+            if (c.isMesh) {
+                c.geometry?.dispose?.();
+                const mats = Array.isArray(c.material) ? c.material : [c.material];
+                for (const m of mats) m?.dispose?.();
+            }
+        });
+    }
+
+    async function compressGlbWithDraco(arrayBuffer) {
+        const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+        const encUrl = `${base}draco-gltf/draco_encoder.wasm`;
+        const decUrl = `${base}draco-gltf/draco_decoder_gltf.wasm`;
+        const [wasmEnc, wasmDec] = await Promise.all([
+            fetch(encUrl).then((r) => r.arrayBuffer()),
+            fetch(decUrl).then((r) => r.arrayBuffer()),
+        ]);
+        const draco3d = await import("draco3dgltf");
+        const createEnc = draco3d.createEncoderModule || draco3d.default?.createEncoderModule;
+        const createDec = draco3d.createDecoderModule || draco3d.default?.createDecoderModule;
+        const encoderModule = await createEnc({ wasmBinary: wasmEnc });
+        const decoderModule = await createDec({ wasmBinary: wasmDec });
+
+        const [{ WebIO }, { KHRDracoMeshCompression }, { draco }] = await Promise.all([
+            import("@gltf-transform/core"),
+            import("@gltf-transform/extensions"),
+            import("@gltf-transform/functions"),
+        ]);
+
+        const io = new WebIO()
+            .registerExtensions([KHRDracoMeshCompression])
+            .registerDependencies({
+                "draco3d.encoder": encoderModule,
+                "draco3d.decoder": decoderModule,
+            });
+
+        const doc = await io.readBinary(new Uint8Array(arrayBuffer));
+        await doc.transform(
+            draco({
+                method: "edgebreaker",
+                encodeSpeed: 5,
+                decodeSpeed: 5,
+            }),
+        );
+        const out = await io.writeBinary(doc);
+        return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+    }
+
+    // Export GLB: static geometry (no skin / shape keys), Draco-compressed (KHR_draco_mesh_compression)
     function exportToGLB(object, filename) {
-        // Store original scale
-        const originalScale = object.scale.clone();
-        
-        // Store original wireframe states and temporarily disable wireframe
+        let exportRoot;
+        try {
+            exportRoot = SkeletonUtils.clone(object);
+        } catch (e) {
+            console.warn("SkeletonUtils.clone failed, using deep clone:", e);
+            exportRoot = object.clone(true);
+        }
+
+        // clone() shares materials with the scene; clone them so wireframe/white export tweaks
+        // do not affect the viewport.
+        exportRoot.traverse((c) => {
+            if (c.isMesh && c.material) {
+                c.material = Array.isArray(c.material)
+                    ? c.material.map((m) => m.clone())
+                    : c.material.clone();
+            }
+        });
+
+        prepareStaticDracoExport(exportRoot);
+
+        const originalScale = exportRoot.scale.clone();
         const wireframeStates = [];
-        // Store original material colors and set to white
         const materialStates = [];
-        
-        object.traverse((child) => {
+
+        exportRoot.traverse((child) => {
             if (child.isMesh && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach((mat) => {
                     wireframeStates.push({ material: mat, wireframe: mat.wireframe });
                     mat.wireframe = false;
-                    
-                    // Store original material color and set to white
+
                     if (mat.color) {
-                        materialStates.push({ 
-                            material: mat, 
+                        materialStates.push({
+                            material: mat,
                             originalColor: mat.color.clone(),
-                            originalEmissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000)
+                            originalEmissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0x000000),
                         });
                         mat.color.setHex(0xffffff);
                         if (mat.emissive) {
                             mat.emissive.setHex(0x000000);
                         }
                     }
-                    
+
                     mat.needsUpdate = true;
                 });
             }
         });
-        
-        // Temporarily reset scale to 1:1 but preserve flips (negative scale)
-        // If scale is 100, set to 1; if scale is -100, set to -1 (preserve the flip)
+
         const normalizedScale = new THREE.Vector3(
             originalScale.x >= 0 ? 1 : -1,
             originalScale.y >= 0 ? 1 : -1,
-            originalScale.z >= 0 ? 1 : -1
+            originalScale.z >= 0 ? 1 : -1,
         );
-        object.scale.copy(normalizedScale);
-        object.updateMatrixWorld(true);
-        
+        exportRoot.scale.copy(normalizedScale);
+        exportRoot.updateMatrixWorld(true);
+
         const exporter = new GLTFExporter();
         exporter.parse(
-            object,
-            (result) => {
-                // Restore original scale after export
-                object.scale.copy(originalScale);
-                object.updateMatrixWorld(true);
-                
-                // Restore original wireframe states
+            exportRoot,
+            async (result) => {
+                exportRoot.scale.copy(originalScale);
+                exportRoot.updateMatrixWorld(true);
+
                 wireframeStates.forEach(({ material, wireframe }) => {
                     material.wireframe = wireframe;
                     material.needsUpdate = true;
                 });
-                
-                // Restore original material colors
+
                 materialStates.forEach(({ material, originalColor, originalEmissive }) => {
                     material.color.copy(originalColor);
                     if (material.emissive) {
@@ -4755,16 +4919,23 @@ async function renderOverlayCanvas(cone) {
                     }
                     material.needsUpdate = true;
                 });
-                
-                let blob;
+
+                disposeExportObject3D(exportRoot);
+
+                let outBuffer = result;
                 if (result instanceof ArrayBuffer) {
-                    blob = new Blob([result], {
-                        type: "application/octet-stream",
-                    });
+                    try {
+                        outBuffer = await compressGlbWithDraco(result);
+                    } catch (dracoErr) {
+                        console.warn("Draco GLB compression failed; saving uncompressed GLB:", dracoErr);
+                    }
+                }
+
+                let blob;
+                if (outBuffer instanceof ArrayBuffer) {
+                    blob = new Blob([outBuffer], { type: "model/gltf-binary" });
                 } else if (typeof result === "object") {
-                    blob = new Blob([JSON.stringify(result)], {
-                        type: "application/json",
-                    });
+                    blob = new Blob([JSON.stringify(result)], { type: "application/json" });
                 } else {
                     console.error("Unexpected result type:", result);
                     return;
@@ -4773,27 +4944,10 @@ async function renderOverlayCanvas(cone) {
                 saveBlob(blob, filename);
             },
             (error) => {
-                // Restore original scale and wireframe states even if export fails
-                object.scale.copy(originalScale);
-                object.updateMatrixWorld(true);
-                
-                wireframeStates.forEach(({ material, wireframe }) => {
-                    material.wireframe = wireframe;
-                    material.needsUpdate = true;
-                });
-                
-                // Restore original material colors
-                materialStates.forEach(({ material, originalColor, originalEmissive }) => {
-                    material.color.copy(originalColor);
-                    if (material.emissive) {
-                        material.emissive.copy(originalEmissive);
-                    }
-                    material.needsUpdate = true;
-                });
-                
+                disposeExportObject3D(exportRoot);
                 console.error("An error occurred during the GLB export", error);
             },
-            { binary: true }, // Options object with binary set to true
+            { binary: true, animations: [] },
         );
     }
 

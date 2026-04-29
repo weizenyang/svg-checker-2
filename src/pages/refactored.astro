@@ -8630,11 +8630,10 @@ import "../styles.css";
 		//   GET <bridge>/manifest.json  -> session metadata
 		//   GET <bridge>/floorplan.png  -> type backplate (same file used for s1 & s2 names in UI)
 		//   GET <bridge>/floorplan_s2.png -> still available (same bytes; optional)
-		//   GET <bridge>/csv            -> 3-col `label,x,y` CSV (already
-		//                                  pre-transformed for this unit)
-		//   PUT <bridge>/csv            -> save edits back; the bridge
-		//                                  inverse-transforms and rewrites
-		//                                  the per-type template CSV.
+		//   GET <bridge>/csv            -> 3-col `label,x,y` type-template CSV
+		//                                  (template canvas space; column order vs disk only)
+		//   PUT <bridge>/csv            -> save edits back; bridge swaps to disk
+		//                                  `label,y,x` and rewrites the per-type templates
 		// The bridge expects `label,x,y` in both directions, so we force
 		// `flipYX = false` while bridge mode is active to match the
 		// existing 3-col ingest path (see handleFileChange CSV branch).
