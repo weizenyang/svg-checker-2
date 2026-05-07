@@ -81,26 +81,12 @@ import "../styles.css";
 			<div class="toolset-section">
 				<a
 					href="/"
-					class="flex w-fit border-2 pl-2 pr-2 p-1 mb-2 text-center rounded-md content-center hover:bg-neutral-100"
+					class="flex w-fit items-center gap-1.5 px-2.5 py-1.5 mb-1 text-sm font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors"
 				>
-					<div class="align-center content-center">
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="1.5"
-							stroke="currentColor"
-							class="size-5"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-							></path>
-						</svg>
-					</div>
-
-					<p class="ml-2">Home</p>
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
+						<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"></path>
+					</svg>
+					Home
 				</a>
 				<!-- <section class="container">
 					<input
@@ -158,8 +144,7 @@ import "../styles.css";
 				</section> -->
 
 				<section class="container">
-					<!-- <h3>2. Then, Import Files here</h3> -->
-					<!-- <button class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300" class="button-style">Import </button> -->
+					<p class="section-label">Files</p>
 					<label for="myFile" class="button-style"
 						>Import 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -193,7 +178,7 @@ import "../styles.css";
 					/>
 					<label
 						for="updateValues"
-						class="flex bg-[#ffffff] hover:bg-[#dddddd] items-center justify-center border border-neutral-700 rounded-[4px] p-0.5 mt-1.5 text-sm text-[#333333] align-center cursor-pointer"
+						class="flex items-center justify-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-700 cursor-pointer transition-colors"
 						>Update Names
 						<svg
 							class="ml-1"
@@ -230,232 +215,132 @@ import "../styles.css";
 				</section>
 
 				<section class="container">
-					<div
-						class="sub-item"
-						style="display: flex; flex-direction: column; margin-bottom: 10px;"
-					>
-						<p class="w-full text-xs m-0 p-0">Labels</p>
-						<div
-							class="grid grid-cols-2 button-gap gap-1 flex-start"
-							id="edit-options"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="flip-x"
-							>
-								Flip X</button
-							>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="flip-y"
-							>
-								Flip Y</button
-							>
-						</div>
-						<p class="w-full text-xs m-0 mt-2 p-0">Canvas</p>
-						<div
-							class="grid grid-cols-2 button-gap gap-1 flex-start"
-							id="canvas-edit-options"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="canvas-flip-x"
-							>
-								Canvas Flip X</button
-							>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="canvas-flip-y"
-							>
-								Canvas Flip Y</button
-							>
-							<button
-								id="reset-flip"
-								class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden"
-								>Reset Flip</button
-							>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="canvas-rotate-left"
-							>
-								Rotate Left</button
-							>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="canvas-rotate-right"
-							>
-								Rotate Right</button
-							>
-							<button
-								id="reset-rotation"
-								class="w-full flex mb-0.5 text-xs p-1 cursor-pointer rounded bg-gray-100 hover:bg-gray-300 opacity-50 col-span-2 hidden"
-								>Reset Rotation</button
-							>
-						</div>
+					<div class="sub-item hidden" id="show-floors">
+						<p class="section-label">Floors</p>
 					</div>
+					<div id="edit-options" class="flex flex-col gap-1 empty:hidden"></div>
 
-					<div
-						class="sub-item hidden"
-						id="show-floors"
-						style="display: flex; flex-direction: column; margin-bottom: 10px;"
-					>
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">
-							Floors:
-						</p>
-					</div>
-
-					<div
-						class="sub-item"
-						style="display: flex; flex-direction: column; margin-bottom: 10px;"
-					>
+					<div class="sub-item">
+						<p class="section-label">Naming</p>
 						<input
 							id="group"
 							type="text"
 							placeholder="Group"
-							style="margin-bottom: 10px;"
 							class="input-style"
 						/>
-
 						<input
 							id="unit"
 							type="text"
 							placeholder="Unit"
 							class="input-style"
 						/>
-						<div
-							class="button-gap gap-1"
-							style="display: flex; margin-top: 10px;"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="set-name">Set</button
-							>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="set-unit">Apply Units</button
-							>
+						<div class="button-gap flex gap-1">
+							<button class="w-full p-1.5" id="set-name">Set</button>
+							<button class="w-full p-1.5" id="set-unit">Apply Units</button>
 						</div>
 					</div>
 
-					<div
-						class="sub-item"
-						style="display: flex; flex-direction: column;"
-					>
-						<p style="padding: 0 0px 10px 0em; margin: 0px;">
-							Label Properties:
-						</p>
+					<div class="sub-item">
+						<p class="section-label">Label Properties</p>
 						<input
 							id="item-id"
 							type="text"
 							placeholder="ID"
-							style="margin-top: 10px;"
 							class="input-style"
 						/>
-						<div class="flex flex-row gap-2">
-							<div
-							class="button-gap w-full"
-							style="display: flex; margin-top: 5px;"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="set-id">Set</button
-							>
+						<div class="flex gap-1.5">
+							<button class="w-full p-1.5 button-gap" id="set-id">Set</button>
+							<button class="w-full p-1.5 button-gap" id="add-point">+ Point</button>
 						</div>
-						<div
-							class="button-gap w-full"
-							style="display: flex; margin-top: 5px;"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded bg-white hover:bg-gray-300"
-								id="add-point">+ Add Point</button
-							>
-						</div>
-						</div>
-						<div
-							class="button-gap"
-							style="display: flex; margin-top: 5px;"
-						>
-							<button
-								class="w-full flex m-0 text-xs p-1 cursor-pointer rounded text-white hover:opacity-90"
-								style="background-color: #b91c1c;"
-								id="delete-point">Delete</button
-							>
-						</div>
+						<button
+							class="w-full flex items-center justify-center text-xs p-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white font-medium transition-colors"
+							id="delete-point">Delete</button>
 					</div>
 				</section>
 
 				<section class="container">
-					<input
-						type="text"
-						placeholder="File Name"
-						class="input-style"
-						id="export-file-name"
-						style="margin-bottom: 10px"
-					/>
-
-					<button
-						id="export"
-						class="button-style"
-						style="margin-bottom: 10px"
-					>
-						Export SVG
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+					<div class="relative" id="export-menu-wrap">
+						<button
+							id="export-menu-trigger"
+							class="button-style w-full"
+							type="button"
+							aria-expanded="false"
+							aria-haspopup="true"
 						>
-							<path
-								d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-								stroke-width="2"></path>
-							<polyline points="7 10 12 15 17 10" stroke-width="2"
-							></polyline>
-							<line
-								x1="12"
-								x2="12"
-								y1="15"
-								y2="3"
-								stroke-width="2"></line>
-						</svg></button
-					>
-					<div class="hidden">
-						<input
-							type="checkbox"
-							id="yx-flip"
-							name="yx-flip"
-							value="true"
-							checked
-						/>
-						<label for="yx-flip"> Y/X Flip</label>
+							<span>Export</span>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="20"
+								height="20"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								class="ml-2"
+							>
+								<path
+									d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+									stroke-width="2"></path>
+								<polyline points="7 10 12 15 17 10" stroke-width="2"
+								></polyline>
+								<line
+									x1="12"
+									x2="12"
+									y1="15"
+									y2="3"
+									stroke-width="2"></line>
+							</svg>
+							<span class="ml-2 text-xs opacity-80" aria-hidden="true">▾</span>
+						</button>
+						<div
+							id="export-menu"
+							class="hidden flex-col gap-2 mt-2"
+							role="menu"
+						>
+							<input
+								type="text"
+								placeholder="File Name"
+								class="input-style"
+								id="export-file-name"
+							/>
+							<button
+								id="export"
+								class="flex w-full items-center justify-center text-sm p-2 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+							>
+								Export SVG
+							</button>
+							<button
+								id="export-csv-layer"
+								class="flex w-full items-center justify-center text-sm p-2 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+							>
+								Export CSV
+								<span style="margin-left: 8px" class="boxed">4096px</span>
+							</button>
+							<div class="hidden">
+								<input
+									type="checkbox"
+									id="yx-flip"
+									name="yx-flip"
+									value="true"
+									checked
+								/>
+								<label for="yx-flip"> Y/X Flip</label>
+							</div>
+						</div>
 					</div>
-
-					<button
-						id="export-csv-layer"
-						class="button-style"
-						style="margin-bottom: 10px"
-						>Export CSV <span style="margin-left: 8px" class="boxed"
-							>4096px</span
-						>
-					</button>
 				</section>
 
 				<Tutorial x="some data" id="tutorial" />
 
 				<div class="container" id="id-container">
 					<div class="id-list-title-container">
-						<p
-							class="id-list-title"
-							style="padding: 0em 0em; font-weight: bold;"
-						>
-							CTRL + F to look for items
-						</p>
+						<p class="id-list-title text-xs font-semibold text-neutral-600">Elements</p>
 						<p class="hide-toggle" id="hide-toggle">^</p>
 					</div>
-					<ul style="padding-left: 1em;" class="id-list" id="id-list">
+					<ul class="id-list text-sm" id="id-list">
 					</ul>
 				</div>
 			</div>
@@ -677,7 +562,7 @@ import "../styles.css";
 				id="editor-button-container"
 				style="display: flex; flex-direction: row; justify-content: space-between; align-items: center;"
 			>
-				<h3>Viewer</h3>
+				<span class="text-xs font-semibold text-neutral-500 tracking-wide uppercase">Viewer</span>
 				<div class="relative" id="download-canvas-zip-wrap">
 					<button
 						id="download-canvas-zip-trigger"
@@ -713,20 +598,56 @@ import "../styles.css";
 					</div>
 				</div>
 			</div>
-			<div
-				class="aspect-square max-h-[91vh] max-w-[91vh]"
-				id="scalable-canvas"
-			>
-				<div class="output" id="svg-container">
-					<p
-						style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
-					>
-						Import SVG file
-					</p>
+			<!-- Canvas stage wrapper for floating pill -->
+			<div class="relative aspect-square max-h-[91vh] max-w-[91vh]">
+				<div
+					class="w-full h-full"
+					id="scalable-canvas"
+				>
+					<div class="output" id="svg-container">
+						<div id="svg-empty-state" class="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none select-none">
+							<img src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http://www.w3.org/2000/svg%27%20width%3D%2740%27%20height%3D%2740%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23d4d4d8%27%20stroke-width%3D%271.2%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M21%2015v4a2%202%200%200%201-2%202H5a2%202%200%200%201-2-2v-4%27/%3E%3Cpolyline%20points%3D%2717%208%2012%203%207%208%27/%3E%3Cline%20x1%3D%2712%27%20y1%3D%273%27%20x2%3D%2712%27%20y2%3D%2715%27/%3E%3C/svg%3E" width="40" height="40" alt="" aria-hidden="true" />
+							<p style="font-size:0.82rem;color:#a1a1aa;font-weight:500;margin:0;">Drop an SVG or click Import</p>
+						</div>
+					</div>
+				</div>
+
+				<!-- Floating transform pill -->
+				<div
+					id="canvas-transform-toolbar"
+					class="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 px-2 py-1.5 rounded-full border border-white/10"
+					style="background:rgba(20,20,24,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 32px rgba(0,0,0,.45),0 1.5px 4px rgba(0,0,0,.3);"
+				>
+					<button id="canvas-flip-x" type="button" title="Canvas Flip X" aria-label="Canvas Flip X"
+						class="flex items-center justify-center h-8 w-8 rounded-full text-neutral-200 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150">
+						<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/></svg>
+					</button>
+					<button id="canvas-flip-y" type="button" title="Canvas Flip Y" aria-label="Canvas Flip Y"
+						class="flex items-center justify-center h-8 w-8 rounded-full text-neutral-200 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150">
+						<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M8 8l4-4 4 4"/><path d="M8 16l4 4 4-4"/></svg>
+					</button>
+					<span class="inline-block w-px h-4 mx-1" style="background:rgba(255,255,255,0.18);" aria-hidden="true"></span>
+					<button id="canvas-rotate-left" type="button" title="Rotate Left" aria-label="Rotate Left"
+						class="flex items-center justify-center h-8 w-8 rounded-full text-neutral-200 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150">
+						<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+					</button>
+					<button id="canvas-rotate-right" type="button" title="Rotate Right" aria-label="Rotate Right"
+						class="flex items-center justify-center h-8 w-8 rounded-full text-neutral-200 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150">
+						<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+					</button>
+					<span class="inline-block w-px h-4 mx-1" style="background:rgba(255,255,255,0.18);" aria-hidden="true"></span>
+					<button id="flip-x" type="button" title="Flip Label Positions X" aria-label="Flip Label Positions X"
+						class="flex items-center justify-center h-8 px-2.5 rounded-full text-neutral-300 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150 text-[11px] font-medium tracking-wide">L⇔</button>
+					<button id="flip-y" type="button" title="Flip Label Positions Y" aria-label="Flip Label Positions Y"
+						class="flex items-center justify-center h-8 px-2.5 rounded-full text-neutral-300 hover:bg-white/15 hover:text-white active:bg-white/25 transition-colors duration-150 text-[11px] font-medium tracking-wide">L⇕</button>
+					<button id="reset-flip" type="button" title="Reset Flip" aria-label="Reset Flip"
+						class="hidden items-center justify-center h-8 px-3 rounded-full bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-neutral-900 text-[11px] font-semibold transition-colors duration-150">Reset Flip</button>
+					<button id="reset-rotation" type="button" title="Reset Rotation" aria-label="Reset Rotation"
+						class="hidden items-center justify-center h-8 px-3 rounded-full bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-neutral-900 text-[11px] font-semibold transition-colors duration-150">Reset Rot</button>
 				</div>
 			</div>
 
-			<div class="space-y-4" id="tag">
+			<div class="space-y-4" id="tag" style="display:none">
 				<h3 id="label">-</h3>
 			</div>
 			<svg id="svg" height="0px"></svg>
@@ -2868,8 +2789,8 @@ import "../styles.css";
 		// }
 
 		async function fetchDataFromServer() {
+			let imageFile = null;
 			try {
-				// Fetch the image data
 				const imageResponse = await fetch(
 					"http://localhost:9234/image",
 				);
@@ -2877,39 +2798,39 @@ import "../styles.css";
 				const { image, imageName } = await imageResponse.json();
 				console.log({ image, imageName });
 
-				// Convert the image buffer to a Blob
 				const imageBlob = new Blob([new Uint8Array(image.data)], {
 					type: "image/webp",
-				}); // Update type if necessary
-				const imageFile = new File([imageBlob], imageName, {
+				});
+				imageFile = new File([imageBlob], imageName, {
 					type: "image/webp",
 				});
-
-				// Pass the image File object to handleFileChange
-				handleFileChange(imageFile);
 			} catch (error) {
 				console.error("Error fetching image data from server:", error);
 			}
 
+			let csvFile = null;
 			try {
-				// Fetch the CSV data
 				const csvResponse = await fetch("http://localhost:9234/csv");
 				if (!csvResponse.ok) throw new Error("Failed to fetch CSV");
 				const { csv, csvName } = await csvResponse.json();
 				console.log({ csv, csvName });
 
-				// Convert the CSV buffer to a Blob
 				const csvBlob = new Blob([new Uint8Array(csv.data)], {
 					type: "text/csv",
 				});
-				const csvFile = new File([csvBlob], csvName, {
+				csvFile = new File([csvBlob], csvName, {
 					type: "text/csv",
 				});
-
-				// Pass the CSV File object to handleFileChange
-				handleFileChange(csvFile);
 			} catch (error) {
 				console.error("Error fetching CSV data from server:", error);
+			}
+
+			if (imageFile && csvFile) {
+				handleFileChange([imageFile], { pendingCsv: csvFile });
+			} else if (imageFile) {
+				handleFileChange(imageFile);
+			} else if (csvFile) {
+				handleFileChange(csvFile);
 			}
 		}
 
@@ -3258,6 +3179,8 @@ import "../styles.css";
 					
 					console.log(isVideo ? "Video name:" : "Image name:", mediaFile.name, "-> last 2 segments:", mediaLastTwoSegments)
 					console.log(importedSVGs)
+
+					const applyToMatchedSvgs = (rasterW, rasterH) => {
 					// Loop through the imported SVG objects to find a matching name
 					importedSVGs.forEach((svgObj) => {
 						console.log("SVGOBJ")
@@ -3328,7 +3251,15 @@ import "../styles.css";
 								console.log("Adding new background video to SVG");
 								svgElement.insertBefore(foreignObject, svgElement.firstChild);
 							} else {
-								// Create an <image> element for the SVG
+								const nw =
+									rasterW != null
+										? rasterW
+										: Number(viewBox[2]) || 4096;
+								const nh =
+									rasterH != null
+										? rasterH
+										: Number(viewBox[3]) || 4096;
+								svgElement.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
 								const svgImage = document.createElementNS(
 									"http://www.w3.org/2000/svg",
 									"image",
@@ -3336,23 +3267,75 @@ import "../styles.css";
 								svgImage.setAttributeNS(null, "href", contents);
 								svgImage.setAttributeNS(null, "x", "0");
 								svgImage.setAttributeNS(null, "y", "0");
-								svgImage.setAttributeNS(null, "width", viewBox[2]);
-								svgImage.setAttributeNS(null, "height", viewBox[3]);
+								svgImage.setAttributeNS(null, "width", String(nw));
+								svgImage.setAttributeNS(null, "height", String(nh));
+								svgImage.setAttributeNS(
+									null,
+									"preserveAspectRatio",
+									"none",
+								);
 								svgImage.setAttributeNS(null, "data-original-filename", mediaFile.name || "");
-								// Insert the image as the first child (or adjust position as needed)
 								console.log("Adding new background image to SVG");
 								svgElement.insertBefore(svgImage, svgElement.firstChild);
 							}
 						}
 					});
+					};
+
+					if (isVideo) {
+						applyToMatchedSvgs(null, null);
+					} else {
+						const probe = new Image();
+						probe.onload = () => {
+							applyToMatchedSvgs(
+								probe.naturalWidth || undefined,
+								probe.naturalHeight || undefined,
+							);
+						};
+						probe.onerror = () => applyToMatchedSvgs(null, null);
+						probe.src = contents;
+					}
 				};
 				reader.readAsDataURL(mediaFile);
 			});
 		}
 
-		function handleFileChange(files) {
-			console.log(files);
-			const file = files[0];
+		function handleFileChange(files, opts) {
+			let fileArr;
+			if (!files) {
+				fileArr = [];
+			} else if (Array.isArray(files)) {
+				fileArr = files;
+			} else if (files instanceof FileList) {
+				fileArr = Array.from(files);
+			} else {
+				fileArr = [files];
+			}
+			const pendingCsvFollowUp =
+				opts && opts.pendingCsv ? opts.pendingCsv : null;
+
+			// One drop with raster + CSV: decode background first, then CSV (parity with bridge + manual two-step load)
+			if (!pendingCsvFollowUp && fileArr.length >= 2) {
+				const csvFile = fileArr.find(
+					(f) =>
+						f.type === "text/csv" ||
+						(f.name && String(f.name).toLowerCase().endsWith(".csv")),
+				);
+				const rasterFile = fileArr.find(
+					(f) =>
+						f.type === "image/jpeg" ||
+						f.type === "image/png" ||
+						f.type === "image/webp" ||
+						(f.type && f.type.startsWith("video/")),
+				);
+				if (csvFile && rasterFile) {
+					handleFileChange([rasterFile], { pendingCsv: csvFile });
+					return;
+				}
+			}
+
+			console.log(fileArr);
+			const file = fileArr[0];
 			// Determine if this is a raster image or video import (jpeg/png/webp/mp4/webm)
 			const isRasterMedia =
 				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp" || file.type.startsWith("video/"));
@@ -3377,7 +3360,7 @@ import "../styles.css";
 			// 	globalSvgContainer.innerHTML = "";
 			// }
 			// importedSVGs = []; // Reset the array
-			let filesToProcess = Array.from(files).filter(
+			let filesToProcess = fileArr.filter(
 				(file) => file.type === "image/svg+xml",
 			);
 
@@ -3403,8 +3386,8 @@ import "../styles.css";
 					document.getElementById("showLabelsDiv").remove();
 				}
 			}
-			console.log(files.length)
-			if(files.length > 1){
+			console.log(fileArr.length)
+			if(fileArr.length > 1){
 				
 				if (file.type === "image/svg+xml") {
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
@@ -3436,7 +3419,7 @@ import "../styles.css";
 								if (existingNav) existingNav.remove();
 							}
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
-							loadFloorplanFilesToImageList(files);
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3447,7 +3430,7 @@ import "../styles.css";
 				file.type === "image/webp" ||
 				file.type.startsWith("video/")
 			) {
-				handleDraggedImages(files)
+				handleDraggedImages(fileArr)
 			} else if (file.type === "text/csv") {
 			}
 			} else {
@@ -3485,7 +3468,7 @@ import "../styles.css";
 								if (existingNav) existingNav.remove();
 							}
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
-							loadFloorplanFilesToImageList(files);
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3570,18 +3553,56 @@ import "../styles.css";
 						console.log("Adding new background video");
 						internalSVG.insertBefore(foreignObject, internalSVG.firstChild);
 					} else {
-						const svgImage = document.createElementNS(
-							"http://www.w3.org/2000/svg",
-							"image",
-						);
-						svgImage.setAttributeNS(null, "href", contents);
-						svgImage.setAttributeNS(null, "x", "0");
-						svgImage.setAttributeNS(null, "y", "0");
-						svgImage.setAttributeNS(null, "width", svgViewbox[2]);
-						svgImage.setAttributeNS(null, "height", svgViewbox[3]);
-						svgImage.setAttributeNS(null, "data-original-filename", file.name || "");
-						console.log("Adding new background image");
-						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+						// Default <image> preserveAspectRatio is xMidYMid meet, which letterboxes
+						// inside width×height while CSV coords use the full viewBox — markers look
+						// shifted (often upward). Match viewBox + image rect to bitmap pixels.
+						const runPendingCsv = () => {
+							if (pendingCsvFollowUp) {
+								const pc = pendingCsvFollowUp;
+								queueMicrotask(() => handleFileChange([pc]));
+							}
+						};
+						const fallbackW = Number(svgViewbox[2]) || 4096;
+						const fallbackH = Number(svgViewbox[3]) || 4096;
+						const placeBg = (nw, nh) => {
+							internalSVG.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+							const svgImage = document.createElementNS(
+								"http://www.w3.org/2000/svg",
+								"image",
+							);
+							svgImage.setAttributeNS(null, "href", contents);
+							svgImage.setAttributeNS(null, "x", "0");
+							svgImage.setAttributeNS(null, "y", "0");
+							svgImage.setAttributeNS(null, "width", String(nw));
+							svgImage.setAttributeNS(null, "height", String(nh));
+							svgImage.setAttributeNS(
+								null,
+								"preserveAspectRatio",
+								"none",
+							);
+							svgImage.setAttributeNS(
+								null,
+								"data-original-filename",
+								file.name || "",
+							);
+							console.log("Adding new background image");
+							internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+							runPendingCsv();
+						};
+						const probe = new Image();
+						probe.onload = () => {
+							const nw = probe.naturalWidth || fallbackW;
+							const nh = probe.naturalHeight || fallbackH;
+							placeBg(nw, nh);
+						};
+						probe.onerror = () => {
+							placeBg(fallbackW, fallbackH);
+						};
+						probe.src = contents;
+					}
+					if (pendingCsvFollowUp && isVideo) {
+						const pc = pendingCsvFollowUp;
+						queueMicrotask(() => handleFileChange([pc]));
 					}
 				};
 				reader.readAsDataURL(file);
@@ -3656,8 +3677,8 @@ import "../styles.css";
 						newSVG.appendChild(gInstance);
 						svgContainer.appendChild(newSVG);
 
-						if (svgContainer.querySelector("img")) {
-							const tempImage = svgContainer.querySelector("img");
+						const tempImage = svgContainer.querySelector("img:not(#svg-empty-state img)");
+						if (tempImage) {
 							const svgimg = document.createElementNS(
 								"http://www.w3.org/2000/svg",
 								"image",
@@ -5437,6 +5458,37 @@ import "../styles.css";
 					closeMenu();
 					await runDownloadCanvasZip(scope);
 				});
+			});
+			document.addEventListener("click", closeMenu);
+		})();
+
+		(() => {
+			const wrap = document.getElementById("export-menu-wrap");
+			const trigger = document.getElementById("export-menu-trigger");
+			const menu = document.getElementById("export-menu");
+			if (!wrap || !trigger || !menu) return;
+
+			function closeMenu() {
+				menu.classList.remove("flex");
+				menu.classList.add("hidden");
+				trigger.setAttribute("aria-expanded", "false");
+			}
+			function openMenu() {
+				menu.classList.remove("hidden");
+				menu.classList.add("flex");
+				trigger.setAttribute("aria-expanded", "true");
+			}
+			function toggleMenu() {
+				if (menu.classList.contains("hidden")) openMenu();
+				else closeMenu();
+			}
+
+			trigger.addEventListener("click", (e) => {
+				e.stopPropagation();
+				toggleMenu();
+			});
+			menu.addEventListener("click", (e) => {
+				e.stopPropagation();
 			});
 			document.addEventListener("click", closeMenu);
 		})();
@@ -8569,5 +8621,215 @@ import "../styles.css";
 
 		// Initialize context menu on page load
 		createSVGContextMenu();
+
+		// =========================================================
+		// Floorplan Generator bridge (CSV roundtrip)
+		// =========================================================
+		// When this page is opened with `?bridge=<url>` from the desktop
+		// Floorplan Generator, the local Python HTTP bridge serves:
+		//   GET <bridge>/manifest.json  -> session metadata
+		//   GET <bridge>/floorplan.png  -> type backplate (same file used for s1 & s2 names in UI)
+		//   GET <bridge>/floorplan_s2.png -> still available (same bytes; optional)
+		//   GET <bridge>/csv            -> 3-col `label,x,y` type-template CSV
+		//                                  (template canvas space; column order vs disk only)
+		//   PUT <bridge>/csv            -> save edits back; bridge swaps to disk
+		//                                  `label,y,x` and rewrites the per-type templates
+		// The bridge expects `label,x,y` in both directions, so we force
+		// `flipYX = false` while bridge mode is active to match the
+		// existing 3-col ingest path (see handleFileChange CSV branch).
+		// Floorplan PNG and CSV are loaded via handleFileChange(..., { pendingCsv })
+		// so CSV runs only after the raster FileReader onload inserts the backplate.
+		(function setupFloorplanBridge() {
+			const params = new URL(window.location.href).searchParams;
+			const bridgeUrl = params.get("bridge");
+			if (!bridgeUrl) return;
+
+			console.log("[ FG Bridge ] active:", bridgeUrl);
+
+			try {
+				flipYX = false;
+				const yxToggle = document.getElementById("yx-flip") as HTMLInputElement | null;
+				if (yxToggle) {
+					yxToggle.checked = false;
+				}
+			} catch (e) {
+				console.warn("[ FG Bridge ] could not flip flipYX toggle:", e);
+			}
+
+			function showBridgeBanner(text, color) {
+				let banner = document.getElementById("fg-bridge-banner");
+				if (!banner) {
+					banner = document.createElement("div");
+					banner.id = "fg-bridge-banner";
+					banner.style.position = "fixed";
+					banner.style.top = "8px";
+					banner.style.left = "50%";
+					banner.style.transform = "translateX(-50%)";
+					banner.style.padding = "6px 14px";
+					banner.style.borderRadius = "6px";
+					banner.style.zIndex = "9999";
+					banner.style.fontFamily = "system-ui, sans-serif";
+					banner.style.fontSize = "13px";
+					banner.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
+					document.body.appendChild(banner);
+				}
+				banner.style.background = color || "#333";
+				banner.style.color = "#fff";
+				banner.textContent = text;
+				banner.style.display = "block";
+				clearTimeout((banner as any)._fgTimer);
+				(banner as any)._fgTimer = setTimeout(() => {
+					banner.style.display = "none";
+				}, 4500);
+			}
+
+			async function loadFromBridge() {
+				let manifest: any = null;
+				try {
+					const r = await fetch(bridgeUrl + "/manifest.json", { cache: "no-store" });
+					if (r.ok) manifest = await r.json();
+				} catch (e) {
+					console.warn("[ FG Bridge ] manifest fetch failed:", e);
+				}
+
+				const s1Base =
+					(manifest && manifest.floorplan_s1_basename) ||
+					"backplate_image_floorplan.png";
+				const backplateFiles: File[] = [];
+
+				const baseName =
+					manifest && manifest.unit_name
+						? `csv_floorplan_${manifest.unit_name}.csv`
+						: "unit.csv";
+				let fpFile: File;
+				let csvFile: File;
+				try {
+					const [fpResp, csvResp] = await Promise.all([
+						fetch(bridgeUrl + "/floorplan.png", { cache: "no-store" }),
+						fetch(bridgeUrl + "/csv", { cache: "no-store" }),
+					]);
+					if (!fpResp.ok) throw new Error("floorplan.png HTTP " + fpResp.status);
+					if (!csvResp.ok) throw new Error("csv HTTP " + csvResp.status);
+					const fpBlob = await fpResp.blob();
+					const csvText = await csvResp.text();
+					fpFile = new File([fpBlob], s1Base, {
+						type: fpBlob.type || "image/png",
+					});
+					backplateFiles.push(fpFile);
+					// s1/s2 type backplates are the same asset; duplicate the blob for the
+					// s2 filename so "Check Floorplans" lists both without a second request.
+					if (manifest && manifest.floorplan_s2_basename) {
+						const f2 = new File([fpBlob], manifest.floorplan_s2_basename, {
+							type: fpBlob.type || "image/png",
+						});
+						backplateFiles.push(f2);
+					}
+					csvFile = new File([csvText], baseName, { type: "text/csv" });
+					// Chain CSV after the floorplan data URL is applied (no fixed delay)
+					handleFileChange([fpFile], { pendingCsv: csvFile });
+				} catch (e) {
+					console.error("[ FG Bridge ] floorplan/csv load failed:", e);
+					showBridgeBanner("Could not load floorplan or CSV from Floorplan Generator", "#a23");
+					return;
+				}
+
+				// "Check Floorplans" overlay: both type backplates with real backplate_ filenames
+				if (backplateFiles.length > 0 && typeof loadFloorplanFilesToImageList === "function") {
+					setTimeout(() => {
+						try {
+							loadFloorplanFilesToImageList(backplateFiles);
+						} catch (e) {
+							console.warn("[ FG Bridge ] loadFloorplanFilesToImageList:", e);
+						}
+					}, 500);
+				}
+
+				const tlabel = manifest && manifest.type_name ? manifest.type_name : "";
+				const ulabel = manifest && manifest.unit_name ? manifest.unit_name : "";
+				const label = tlabel
+					? `Floorplan Generator — type: ${tlabel}` + (ulabel ? ` (${ulabel})` : "")
+					: ulabel
+						? `Bridged from Floorplan Generator: ${ulabel}`
+						: "Bridged from Floorplan Generator";
+				showBridgeBanner(label, "#2a6");
+			}
+
+			function injectSaveBackButton() {
+				if (document.getElementById("fg-save-back-btn")) return;
+				const exportBtn = document.getElementById("export-csv-layer");
+				if (!exportBtn || !exportBtn.parentElement) return;
+
+				const btn = document.createElement("button");
+				btn.id = "fg-save-back-btn";
+				btn.type = "button";
+				btn.className = exportBtn.className || "button-style";
+				btn.style.marginBottom = "10px";
+				btn.style.marginLeft = "8px";
+				btn.style.background = "#2a6";
+				btn.style.color = "#fff";
+				btn.textContent = "Save to Floorplan Generator";
+				btn.title = "Save edited points back to the per-type template CSV";
+
+				btn.addEventListener("click", async () => {
+					btn.disabled = true;
+					try {
+						const svg = document.querySelector("#svg-container svg");
+						if (!svg) {
+							showBridgeBanner("No SVG to save", "#a23");
+							return;
+						}
+						const circles = Array.from(svg.querySelectorAll("g circle"));
+						const rows: string[] = [];
+						for (const c of circles) {
+							const id = c.getAttribute("data-name") || c.getAttribute("id") || "";
+							const cx = c.getAttribute("cx");
+							const cy = c.getAttribute("cy");
+							if (!id || cx == null || cy == null) continue;
+							rows.push(`${id},${cx},${cy}`);
+						}
+						if (rows.length === 0) {
+							showBridgeBanner("No points to save", "#a23");
+							return;
+						}
+						const body = rows.join("\n");
+						const resp = await fetch(bridgeUrl + "/csv", {
+							method: "PUT",
+							headers: { "Content-Type": "text/csv" },
+							body,
+						});
+						if (!resp.ok) {
+							const txt = await resp.text();
+							throw new Error("HTTP " + resp.status + ": " + txt);
+						}
+						const out = await resp.json().catch(() => ({}));
+						const w1 = out && out.written ? out.written : "";
+						const w2 = out && out.written_s2 ? out.written_s2 : "";
+						let msg = "Saved. Floorplan Generator template(s) updated.";
+						if (w1) msg += " s1: " + w1;
+						if (w2) msg += " s2: " + w2;
+						showBridgeBanner(msg, "#2a6");
+						// Optional: re-fetch transformed CSV from bridge (matches disk after round-trip)
+						try {
+							const verify = await fetch(bridgeUrl + "/csv", { cache: "no-store" });
+							if (verify.ok) {
+								console.log("[ FG Bridge ] GET /csv after save: OK, bytes=", (await verify.text()).length);
+							}
+						} catch (e) {
+							console.warn("[ FG Bridge ] post-save csv verify fetch:", e);
+						}
+					} catch (e) {
+						console.error("[ FG Bridge ] save failed:", e);
+						showBridgeBanner("Save failed: " + (e as any).message, "#a23");
+					} finally {
+						btn.disabled = false;
+					}
+				});
+
+				exportBtn.parentElement.appendChild(btn);
+			}
+
+			injectSaveBackButton();
+			loadFromBridge();
+		})();
 	</script>
 </html>

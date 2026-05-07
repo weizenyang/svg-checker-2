@@ -7,123 +7,283 @@
     font-family: gabarito, sans-serif;
 }
 
-/* button{
-all: unset;
-
-width: 100%;
-display: flex;
-margin: 0px;
-font-size: 12px;
-padding: 0.3em;
-cursor: pointer;
-border-radius: 4px;
-background-color: #FFF;
-}
-
-button:hover{
-background-color: #ccc;
-} */
-
 body {
     box-sizing: border-box;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-
     grid-template-rows: repeat(6, 1fr);
     gap: 10px;
-
     min-height: 100vh;
-    margin: 0%;
+    margin: 0;
     padding: 10px;
+    background-color: #f1f1f3;
 }
 
-.boxed {
-    font-size: 12px;
-    padding: 0.2em;
-    color: #333;
-    background-color: #ccc;
-    border-radius: 3px;
+/* ── Layout ─────────────────────────────────────────── */
+
+.toolsets {
+    width: 100%;
+    grid-column: 1 / 1;
+    grid-row: 1/7;
+    position: sticky;
+    top: 10px;
+    align-self: start;
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d8 transparent;
 }
+
+.editor {
+    grid-column: 2/7;
+    grid-row: 1/7;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+}
+
+.toolset-section {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* ── Cards / sections ───────────────────────────────── */
+
+.container {
+    box-sizing: border-box;
+    border: 1px solid #e4e4e7;
+    background: #ffffff;
+    padding: 0.65em 0.75em;
+    width: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Remove old margin-top in favour of parent gap */
+.toolset-section .container {
+    margin-top: 0;
+}
+.toolset-section .container:first-child {
+    margin-top: 0;
+}
+
+/* ── Sub-items (Naming / Properties groups) ─────────── */
+
+.sub-item {
+    padding: 0;
+    margin-bottom: 0;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* ── Typography ─────────────────────────────────────── */
+
+h3 {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #18181b;
+    letter-spacing: -0.01em;
+}
+
+.section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #a1a1aa;
+    margin: 0;
+}
+
+/* ── Primary action button ──────────────────────────── */
 
 .button-style {
     display: flex;
     cursor: pointer;
     box-sizing: border-box;
-    padding: 0.7em;
+    padding: 0.48em 0.85em;
     width: 100%;
     align-items: center;
     justify-content: center;
-    font-size: large;
-    color: #eee;
-    transition: 0.2s;
-    background-color: #333333;
-    border-radius: 4px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #f4f4f5;
+    background-color: #18181b;
+    border-radius: 7px;
+    transition: background-color 0.13s ease;
+    letter-spacing: 0.01em;
 }
 .button-style:hover {
-    display: flex;
-    cursor: pointer;
-    padding: 0.7em;
-    align-items: center;
-    justify-content: center;
-    font-size: large;
-    color: #eee;
-
-    background-color: #555555;
+    background-color: #27272a;
 }
 .button-style svg {
     padding-left: 5px;
 }
 
-.row {
-    display: flex;
-    flex-direction: row;
-    padding: 0.5em;
-}
-
-.row :first-child {
-    width: 210px;
-    align-items: flex-end;
-}
-
-.row p {
-    margin: 0%;
-}
-
-.hollow {
-    display: flex;
-    cursor: pointer;
-    box-sizing: border-box;
-    padding: 0.7em;
-    width: 100%;
-    color: #333333;
-    background-color: #33333300;
-    border: solid 1px #333333;
-}
-
-.button-gap :first-child {
-    text-align: center;
-    align-items: center;
-    justify-content: center;
-}
-
-.button-gap :last-child {
-    text-align: center;
-    align-items: center;
-    justify-content: center;
-}
+/* ── Generic small buttons (inside button-gap) ──────── */
 
 .button-gap button {
-    border: 1px solid #00000022;
-    background-color: #333333;
-    color: #eee;
+    background-color: #f4f4f5;
+    color: #27272a;
+    border: 1px solid #e4e4e7;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
     text-align: center;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.button-gap button:hover {
+    background-color: #e4e4e7;
+    border-color: #d4d4d8;
 }
 
-.button-gap button:hover {
-    background-color: #888888;
+.button-gap :first-child { text-align: center; align-items: center; justify-content: center; }
+.button-gap :last-child  { text-align: center; align-items: center; justify-content: center; }
+
+/* ── Inputs ─────────────────────────────────────────── */
+
+.input-style {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    background-color: #f4f4f5;
+    border: 1px solid #e4e4e7;
+    border-radius: 6px;
+    padding: 0.38em 0.6em;
+    font-size: 0.8rem;
+    color: #18181b;
+    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
 }
+.input-style:focus {
+    background-color: #ffffff;
+    border-color: #a1a1aa;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.07);
+}
+.input-style::placeholder {
+    color: #a1a1aa;
+}
+
+/* ── ID list panel ──────────────────────────────────── */
+
+#id-container {
+    background-color: #fafafa;
+    max-height: 300px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.id-list-title-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.45em 0.75em;
+    background-color: transparent;
+    border-bottom: 1px solid #e4e4e7;
+}
+
+.id-list {
+    margin: 0;
+    padding: 4px 0;
+    overflow-y: auto;
+    min-height: 40px;
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d8 transparent;
+}
+
+.hide-toggle:hover {
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* ── Canvas / viewer ────────────────────────────────── */
+
+#svg-container {
+    border: 1px solid #e4e4e7;
+    border-radius: 10px;
+    position: relative;
+    /* Fill the scalable-canvas parent; outer wrapper caps size via max-h/max-w */
+    width: 100%;
+    height: 100%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    overflow: hidden;
+}
+
+/* Hide the empty-state prompt as soon as an SVG is loaded into the container */
+#svg-container:has(svg) #svg-empty-state {
+    display: none;
+}
+
+.output {
+    pointer-events: fill;
+}
+
+/* ── Hover / selection colours on SVG paths ─────────── */
+
+.svg-tool-selected {
+    fill: #93c5fd; /* blue-300 — slightly softer */
+}
+.hovered {
+    fill: #bfdbfe66; /* blue-200/40 */
+}
+
+/* ── Tag tooltip overlay ────────────────────────────── */
+
+#tag,
+#tag * {
+    display: flex;
+    position: fixed;
+    background-color: rgba(24,24,27,0.88);
+    color: #f4f4f5;
+    padding: 0.2em 0.8em;
+    text-align: left;
+    line-height: 1.4em;
+    font-family: monospace;
+    font-weight: 400;
+    font-size: 0.78rem;
+    justify-content: center;
+    min-width: max-content;
+    pointer-events: none;
+    height: fit-content;
+    border-radius: 6px;
+}
+#label {
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    margin: 0;
+    height: 100%;
+    font-family: sans-serif;
+}
+
+/* ── Boxed badge (e.g. "4096px") ────────────────────── */
+
+.boxed {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.15em 0.45em;
+    color: #52525b;
+    background-color: #e4e4e7;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+/* ── Drag-and-drop overlay ──────────────────────────── */
 
 .drag-drop-prompt {
     position: fixed;
@@ -133,12 +293,11 @@ body {
     height: calc(100% - 25px);
     margin-right: 1em;
     margin-bottom: 1em;
-    background-color: #00000055;
+    background-color: rgba(0,0,0,0.55);
     z-index: 10000000;
-    color: #eee;
-    transition: opacity 0.2;
+    color: #f4f4f5;
+    transition: opacity 0.2s;
 }
-
 .drag-drop-prompt.appear {
     display: flex;
     opacity: 1;
@@ -148,48 +307,17 @@ body {
     position: relative;
     width: 100%;
     height: 100%;
-    background-image: repeating-linear-gradient(
-            0deg,
-            #333333,
-            #333333 10px,
-            transparent 10px,
-            transparent 20px,
-            #333333 20px
-        ),
-        repeating-linear-gradient(
-            90deg,
-            #333333,
-            #333333 10px,
-            transparent 10px,
-            transparent 20px,
-            #333333 20px
-        ),
-        repeating-linear-gradient(
-            180deg,
-            #333333,
-            #333333 10px,
-            transparent 10px,
-            transparent 20px,
-            #333333 20px
-        ),
-        repeating-linear-gradient(
-            270deg,
-            #333333,
-            #333333 10px,
-            transparent 10px,
-            transparent 20px,
-            #333333 20px
-        );
+    background-image:
+        repeating-linear-gradient(0deg,   #e4e4e7, #e4e4e7 10px, transparent 10px, transparent 20px, #e4e4e7 20px),
+        repeating-linear-gradient(90deg,  #e4e4e7, #e4e4e7 10px, transparent 10px, transparent 20px, #e4e4e7 20px),
+        repeating-linear-gradient(180deg, #e4e4e7, #e4e4e7 10px, transparent 10px, transparent 20px, #e4e4e7 20px),
+        repeating-linear-gradient(270deg, #e4e4e7, #e4e4e7 10px, transparent 10px, transparent 20px, #e4e4e7 20px);
     background-size:
         3px calc(100% + 20px),
         calc(100% + 20px) 3px,
         3px calc(100% + 20px),
         calc(100% + 20px) 3px;
-    background-position:
-        0 0,
-        0 0,
-        100% 0,
-        0 100%;
+    background-position: 0 0, 0 0, 100% 0, 0 100%;
     background-repeat: no-repeat;
     animation: borderAnimation 1s infinite linear;
     display: flex;
@@ -199,36 +327,19 @@ body {
 }
 
 @keyframes borderAnimation {
-    from {
-        background-position:
-            0 0,
-            -20px 0,
-            100% -20px,
-            0 100%;
-    }
-    to {
-        background-position:
-            0 -20px,
-            0 0,
-            100% 0,
-            -20px 100%;
-    }
+    from { background-position: 0 0, -20px 0, 100% -20px, 0 100%; }
+    to   { background-position: 0 -20px, 0 0, 100% 0, -20px 100%; }
 }
+
+/* ── Collapsible dropdown toggles ───────────────────── */
 
 .dropdown ~ .toggle {
     display: none;
 }
-
 .dropdown:checked ~ .toggle {
     display: flex;
     flex-direction: column;
 }
-
-.dropdown:checked ~ .toggle {
-    display: flex;
-    flex-direction: column;
-}
-
 .dropdown ~ label {
     display: flex;
     cursor: pointer;
@@ -238,159 +349,43 @@ body {
 .dropdown ~ label .arrow {
     display: flex;
     cursor: pointer;
-    font-size: 2em;
-    text-align: center;
-
+    font-size: 1.2em;
     justify-content: center;
 }
-
 .dropdown:checked ~ label .arrow {
     transform: rotate(180deg);
 }
 
-h3 {
-    margin-top: 0.2em;
-}
-
-.toolsets {
-    width: 100%;
-    grid-column: 1 / 1;
-    grid-row: 1/7;
-}
-
-.editor {
-    grid-column: 2/7;
-    grid-row: 1/7;
-    height: 100vh;
-    position: sticky;
-}
-
-.container {
-    box-sizing: border-box;
-    /* background-color: #0000000c; */
-    border: 0.3px solid #00000022;
-    padding: 0.5em;
-    width: auto;
-    display: flex;
-    flex-direction: column;
-    border-radius: 5px;
-    -webkit-user-select: none; /* Safari */
-    -ms-user-select: none; /* IE 10 and IE 11 */
-    user-select: none; /* Standard syntax */
-}
-
-.input-style {
-    all: unset;
-    border: 0px solid;
-    border-radius: 3px;
-    /* background-color: #00000011; */
-    transition: box-shadow 0.2s;
-    border: solid 0.5px #ddd;
-    padding: 0.3em;
-}
-
-.input-style:focus {
-    box-shadow: inset 0px 0px 100px #fff;
-    border: solid 1px;
-}
-
-.toolset-section {
-    width: 100%;
-
-    /* padding: 0.5em; */
-}
-
-.toolset-section .container {
-    margin-top: 10px;
-}
-
-.toolset-section .container:first-child {
-    margin-top: 0px;
-}
+/* ── Misc ───────────────────────────────────────────── */
 
 .hidden {
     display: none !important;
-}
-
-#tag,
-#tag * {
-    display: flex;
-    position: fixed;
-    background-color: #cccccccc;
-    padding: 0em 1em;
-    text-align: left;
-    line-height: 0.5em;
-    font-family: monospace;
-    font-weight: 100;
-    justify-content: center;
-    min-width: max-content;
-    pointer-events: none;
-    /* transform: translate(-50%); */
-    /* min-height: 50px; */
-    height: fit-content;
-    border-radius: 6px;
-    /* font-family: sans-serif; */
-}
-#label {
-    display: flex;
-    text-align: center;
-    justify-content: center;
-    margin: 0%;
-    height: 100%;
-    font-family: sans-serif;
-}
-
-.output {
-    pointer-events: fill;
-}
-
-#id-container {
-    /* margin-top: 0.5em; */
-    background-color: #eee;
-    max-height: 390px;
-    border-radius: 5px;
-    /* position: fixed; */
-    right: 0%;
-    top: 0%;
-    display: flex;
-    overflow-y: none;
-    list-style: none;
-    flex-direction: column;
-    /* margin-left: 0.5em; */
-}
-
-#svg-container {
-    border: solid 1px #00000055;
-    border-radius: 3px;
-    position: relative;
-    max-height: 91vh;
-    max-width: 91vh;
 }
 
 .hide {
     display: none;
 }
 
-.svg-tool-selected {
-    fill: #87CEEB;
-}
-
-.hovered {
-    fill: #87CEEB66;
-}
-
-.sub-item {
-    padding: 0.5em;
-    margin-bottom: 0.1em;
-    /* background-color: #00000011; */
-    border: 1px solid #00000022;
-    border-radius: 3px;
+.row {
     display: flex;
-    /* flex-direction: column; */
+    flex-direction: row;
+    padding: 0.5em;
 }
+.row :first-child {
+    width: 210px;
+    align-items: flex-end;
+}
+.row p { margin: 0; }
 
-.sub-item [type="radio"] {
-    margin-left: 0%;
+.hollow {
+    display: flex;
+    cursor: pointer;
+    box-sizing: border-box;
+    padding: 0.7em;
+    width: 100%;
+    color: #27272a;
+    background-color: transparent;
+    border: 1px solid #27272a;
 }
 
 .toggle {
@@ -402,47 +397,60 @@ h3 {
     transform: rotate(180deg);
 }
 
-.hide-toggle:hover {
-    cursor: pointer;
-    text-decoration: underline;
+/* ── Paths without matching floorplan images ─────────── */
+path.no-matching-floorplan {
+    fill: #ef4444 !important;
+    fill-opacity: 0.6;
 }
 
-.id-list {
-    margin: 0%;
-    overflow-y: scroll;
-    min-height: 50px;
+/* ── Floor toggle drag styles ───────────────────────── */
+[data-project-floor] {
+    transition: background-color 0.15s ease !important;
+}
+[data-project-floor]:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+[data-project-floor].dragging {
+    background-color: rgba(0, 150, 255, 0.3) !important;
 }
 
-.id-list-title-container {
-    display: flex;
-    justify-content: space-between;
-    padding: 0em 1em;
-    background-color: #00000011;
+/* ── Toast notifications ────────────────────────────── */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    background-color: #18181b;
+    color: #f4f4f5;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    max-width: 380px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    z-index: 1000;
 }
-
-.id-list-title span:hover {
-    cursor: pointer;
-    text-decoration: underline;
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
 }
+.toast.success { background-color: #16a34a; }
+.toast.error   { background-color: #dc2626; }
+.toast.warning { background-color: #d97706; color: #fff; }
 
 @font-face {
     font-family: 'monospace821';
     font-weight: 700;
     src: url(/fonts/table-creator/MONOSPACE821BOLDBT.TTF);
 }
-
 @font-face {
     font-family: 'monospace821';
     font-weight: 400;
     src: url(/fonts/table-creator/MONOSPACE821BT.TTF);
 }
-
-.monospace821-bold {
-    font-family: 'monospace821';
-    font-weight: 700;
-}
-
-.monospace821-regular {
-    font-family: 'monospace821';
-    font-weight: 400;
-}
+.monospace821-bold    { font-family: 'monospace821'; font-weight: 700; }
+.monospace821-regular { font-family: 'monospace821'; font-weight: 400; }

@@ -212,6 +212,35 @@ import "../styles.css";
 					</button>
 				</section>
 
+				<!-- Brush toolbar: Manual vs Auto rectangle drawing -->
+				<section class="container" id="brush-toolbar">
+					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Draw rectangle</h3>
+					<p style="font-size: 10px; color: #666; margin: 0 0 8px 0;">
+						Click and drag on empty canvas area to add a rect (not on existing rects).
+					</p>
+					<div style="display: flex; flex-direction: column; gap: 6px;">
+						<label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
+							<input type="radio" name="brush-mode" id="brush-manual" value="manual" checked />
+							Manual
+						</label>
+						<label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
+							<input type="radio" name="brush-mode" id="brush-auto" value="auto" />
+							Auto <span style="color: #888;">(RGB bbox on image)</span>
+						</label>
+					</div>
+					<div id="auto-padding-row" style="display: none; margin-top: 8px;">
+						<label for="auto-padding" style="font-size: 11px; display: block; margin-bottom: 4px;">Padding (SVG units)</label>
+						<input
+							type="number"
+							id="auto-padding"
+							min="0"
+							step="1"
+							value="0"
+							style="width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;"
+						/>
+					</div>
+				</section>
+
 				<!-- Export Section -->
 				<section class="container">
 					<h3 style="margin: 0 0 10px 0; font-size: 14px; font-weight: bold;">Export</h3>
@@ -241,6 +270,10 @@ import "../styles.css";
 						<p>• Press Delete/Backspace to delete</p>
 						<p>• Ctrl+C/V to copy/paste rects</p>
 						<p>• Alt+drag to duplicate rects</p>
+						<p>
+							<strong>• Draw rect:</strong> drag on empty canvas (avoid clicking rects/handles).
+							Manual = drag box; Auto = tight box from RGB in drag area (padding below brush).
+						</p>
 					</div>
 				</section>
 			</div>
@@ -289,6 +322,336 @@ import "../styles.css";
 		var isDuplicating = false; // Duplication drag mode
 		var originalRect = null; // Original rect being duplicated
 		var duplicatedRect = null; // The duplicated rect
+
+		var isRubberBandDrawing = false;
+		var rubberBandPreview = null;
+		var rubberBandSvg = null;
+		var rubberBandStart = { x: 0, y: 0 };
+		var suppressBackgroundClickDeselect = false;
+
+		function getBrushMode() {
+			const auto = document.getElementById("brush-auto") as HTMLInputElement | null;
+			return auto?.checked ? "auto" : "manual";
+		}
+
+		function getAutoPaddingSvg() {
+			const el = document.getElementById("auto-padding") as HTMLInputElement | null;
+			const v = parseFloat(el?.value ?? "0");
+			return Number.isFinite(v) ? Math.max(0, v) : 0;
+		}
+
+		function updateBrushPaddingVisibility() {
+			const row = document.getElementById("auto-padding-row");
+			const auto = document.getElementById("brush-auto") as HTMLInputElement | null;
+			if (row && auto) row.style.display = auto.checked ? "block" : "none";
+		}
+
+		function clientPointToSvgCoords(svg: SVGSVGElement, clientX: number, clientY: number) {
+			const pt = svg.createSVGPoint();
+			pt.x = clientX;
+			pt.y = clientY;
+			const m = svg.getScreenCTM();
+			if (!m) return null;
+			const p = pt.matrixTransform(m.inverse());
+			return { x: p.x, y: p.y };
+		}
+
+		function svgPointToClient(svg: SVGSVGElement, vx: number, vy: number) {
+			const pt = svg.createSVGPoint();
+			pt.x = vx;
+			pt.y = vy;
+			const m = svg.getScreenCTM();
+			if (!m) return null;
+			const p = pt.matrixTransform(m);
+			return { x: p.x, y: p.y };
+		}
+
+		function svgRectToClientRect(svg: SVGSVGElement, x: number, y: number, w: number, h: number) {
+			const c1 = svgPointToClient(svg, x, y);
+			const c2 = svgPointToClient(svg, x + w, y);
+			const c3 = svgPointToClient(svg, x, y + h);
+			const c4 = svgPointToClient(svg, x + w, y + h);
+			if (!c1 || !c2 || !c3 || !c4) {
+				return { left: 0, top: 0, width: 0, height: 0 };
+			}
+			const xs = [c1.x, c2.x, c3.x, c4.x];
+			const ys = [c1.y, c2.y, c3.y, c4.y];
+			const left = Math.min(...xs);
+			const right = Math.max(...xs);
+			const top = Math.min(...ys);
+			const bottom = Math.max(...ys);
+			return { left, top, width: right - left, height: bottom - top };
+		}
+
+		function intersectClientRects(
+			a: { left: number; top: number; width: number; height: number },
+			b: DOMRect | { left: number; top: number; width: number; height: number },
+		) {
+			const ax2 = a.left + a.width;
+			const ay2 = a.top + a.height;
+			const bx2 = b.left + b.width;
+			const by2 = b.top + b.height;
+			const left = Math.max(a.left, b.left);
+			const top = Math.max(a.top, b.top);
+			const right = Math.min(ax2, bx2);
+			const bottom = Math.min(ay2, by2);
+			const width = right - left;
+			const height = bottom - top;
+			if (width <= 0 || height <= 0) return null;
+			return { left, top, width, height };
+		}
+
+		function imagePixelToClient(img: HTMLImageElement, px: number, py: number) {
+			const r = img.getBoundingClientRect();
+			const nw = img.naturalWidth || r.width;
+			const nh = img.naturalHeight || r.height;
+			return {
+				x: r.left + (px / nw) * r.width,
+				y: r.top + (py / nh) * r.height,
+			};
+		}
+
+		function imageBBoxToSvgRect(
+			svg: SVGSVGElement,
+			img: HTMLImageElement,
+			px0: number,
+			py0: number,
+			px1: number,
+			py1: number,
+		) {
+			const corners = [
+				imagePixelToClient(img, px0, py0),
+				imagePixelToClient(img, px1, py0),
+				imagePixelToClient(img, px0, py1),
+				imagePixelToClient(img, px1, py1),
+			];
+			let minSx = Infinity,
+				minSy = Infinity,
+				maxSx = -Infinity,
+				maxSy = -Infinity;
+			for (const c of corners) {
+				const p = clientPointToSvgCoords(svg, c.x, c.y);
+				if (!p) continue;
+				minSx = Math.min(minSx, p.x);
+				minSy = Math.min(minSy, p.y);
+				maxSx = Math.max(maxSx, p.x);
+				maxSy = Math.max(maxSy, p.y);
+			}
+			if (!Number.isFinite(minSx)) return null;
+			return { x: minSx, y: minSy, width: maxSx - minSx, height: maxSy - minSy };
+		}
+
+		/** RGB-only activity; alpha ignored per mask-editor Auto mode. */
+		function findRgbContentBBox(imageData: ImageData) {
+			const d = imageData.data;
+			const w = imageData.width;
+			const h = imageData.height;
+			const thr = 12;
+			let minX = w,
+				minY = h,
+				maxX = -1,
+				maxY = -1;
+			for (let y = 0; y < h; y++) {
+				for (let x = 0; x < w; x++) {
+					const i = (y * w + x) * 4;
+					const r = d[i];
+					const g = d[i + 1];
+					const b = d[i + 2];
+					if (r > thr || g > thr || b > thr) {
+						if (x < minX) minX = x;
+						if (y < minY) minY = y;
+						if (x > maxX) maxX = x;
+						if (y > maxY) maxY = y;
+					}
+				}
+			}
+			if (maxX < minX) return null;
+			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+		}
+
+		function finalizeRubberBandRect(
+			svg: SVGSVGElement,
+			x: number,
+			y: number,
+			width: number,
+			height: number,
+		) {
+			const pad = getBrushMode() === "auto" ? getAutoPaddingSvg() : 0;
+			let fx = x,
+				fy = y,
+				fw = width,
+				fh = height;
+
+			if (getBrushMode() === "auto") {
+				const img = globalSvgContainer.querySelector(
+					"#background-image-container img",
+				) as HTMLImageElement | null;
+				const rubberClient = svgRectToClientRect(svg, x, y, width, height);
+				if (img && img.complete && (img.naturalWidth || 0) > 0 && (img.naturalHeight || 0) > 0) {
+					const imgRect = img.getBoundingClientRect();
+					const inter = intersectClientRects(rubberClient, imgRect);
+					if (inter && inter.width >= 1 && inter.height >= 1) {
+						const nw = img.naturalWidth;
+						const nh = img.naturalHeight;
+						const sx0 = Math.floor(((inter.left - imgRect.left) / imgRect.width) * nw);
+						const sy0 = Math.floor(((inter.top - imgRect.top) / imgRect.height) * nh);
+						const sx1 = Math.ceil(((inter.left + inter.width - imgRect.left) / imgRect.width) * nw);
+						const sy1 = Math.ceil(((inter.top + inter.height - imgRect.top) / imgRect.height) * nh);
+						const ix0 = Math.max(0, sx0);
+						const iy0 = Math.max(0, sy0);
+						const ix1 = Math.min(nw, sx1);
+						const iy1 = Math.min(nh, sy1);
+						const iw = ix1 - ix0;
+						const ih = iy1 - iy0;
+						if (iw >= 1 && ih >= 1) {
+							const canvas = document.createElement("canvas");
+							canvas.width = nw;
+							canvas.height = nh;
+							const ctx = canvas.getContext("2d");
+							if (ctx) {
+								ctx.drawImage(img, 0, 0);
+								let imageData: ImageData | null = null;
+								try {
+									imageData = ctx.getImageData(ix0, iy0, iw, ih);
+								} catch {
+									imageData = null;
+								}
+								if (imageData && imageData.width > 0 && imageData.height > 0) {
+									const bbox = findRgbContentBBox(imageData);
+									if (bbox) {
+										const apx0 = ix0 + bbox.minX;
+										const apy0 = iy0 + bbox.minY;
+										const apx1 = ix0 + bbox.maxX;
+										const apy1 = iy0 + bbox.maxY;
+										const mapped = imageBBoxToSvgRect(svg, img, apx0, apy0, apx1, apy1);
+										if (mapped && mapped.width > 1 && mapped.height > 1) {
+											fx = mapped.x;
+											fy = mapped.y;
+											fw = mapped.width;
+											fh = mapped.height;
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			if (pad > 0) {
+				fx -= pad;
+				fy -= pad;
+				fw += pad * 2;
+				fh += pad * 2;
+			}
+
+			const minDim = 4;
+			if (fw < minDim || fh < minDim) return;
+
+			const newRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			newRect.setAttribute("x", fx.toString());
+			newRect.setAttribute("y", fy.toString());
+			newRect.setAttribute("width", fw.toString());
+			newRect.setAttribute("height", fh.toString());
+			newRect.setAttribute("fill", "rgba(0, 123, 255, 0.3)");
+			newRect.setAttribute("stroke", "#007bff");
+			newRect.setAttribute("stroke-width", "2");
+			svg.appendChild(newRect);
+			addRectEventListeners(newRect);
+			selectRect(newRect);
+		}
+
+		function cancelRubberBandDraw() {
+			if (rubberBandPreview && rubberBandPreview.parentNode) {
+				rubberBandPreview.parentNode.removeChild(rubberBandPreview);
+			}
+			rubberBandPreview = null;
+			rubberBandSvg = null;
+			isRubberBandDrawing = false;
+			document.removeEventListener("mousemove", onRubberBandMouseMove);
+			document.removeEventListener("mouseup", onRubberBandMouseUp);
+			document.body.style.cursor = "";
+		}
+
+		function onRubberBandMouseMove(e: MouseEvent) {
+			if (!isRubberBandDrawing || !rubberBandSvg || !rubberBandPreview) return;
+			const cur = clientPointToSvgCoords(rubberBandSvg, e.clientX, e.clientY);
+			if (!cur) return;
+			const rx = Math.min(rubberBandStart.x, cur.x);
+			const ry = Math.min(rubberBandStart.y, cur.y);
+			const rw = Math.abs(cur.x - rubberBandStart.x);
+			const rh = Math.abs(cur.y - rubberBandStart.y);
+			const minDragClear = 3;
+			if (selectedRect && Math.max(rw, rh) >= minDragClear) {
+				deselectRect();
+			}
+			rubberBandPreview.setAttribute("x", rx.toString());
+			rubberBandPreview.setAttribute("y", ry.toString());
+			rubberBandPreview.setAttribute("width", Math.max(1, rw).toString());
+			rubberBandPreview.setAttribute("height", Math.max(1, rh).toString());
+		}
+
+		function onRubberBandMouseUp(e: MouseEvent) {
+			if (!isRubberBandDrawing || !rubberBandSvg || !rubberBandPreview) {
+				cancelRubberBandDraw();
+				return;
+			}
+			const svg = rubberBandSvg;
+			const cur = clientPointToSvgCoords(svg, e.clientX, e.clientY);
+			const rx0 = rubberBandStart.x;
+			const ry0 = rubberBandStart.y;
+			const rx1 = cur ? cur.x : rx0;
+			const ry1 = cur ? cur.y : ry0;
+			let x = Math.min(rx0, rx1);
+			let y = Math.min(ry0, ry1);
+			let w = Math.abs(rx1 - rx0);
+			let h = Math.abs(ry1 - ry0);
+
+			if (rubberBandPreview.parentNode) {
+				rubberBandPreview.parentNode.removeChild(rubberBandPreview);
+			}
+			rubberBandPreview = null;
+			rubberBandSvg = null;
+			isRubberBandDrawing = false;
+			document.removeEventListener("mousemove", onRubberBandMouseMove);
+			document.removeEventListener("mouseup", onRubberBandMouseUp);
+			document.body.style.cursor = "";
+
+			const minDrag = 3;
+			if (w < minDrag || h < minDrag) return;
+
+			suppressBackgroundClickDeselect = true;
+			finalizeRubberBandRect(svg, x, y, w, h);
+			setTimeout(() => {
+				suppressBackgroundClickDeselect = false;
+			}, 0);
+		}
+
+		function startRubberBandDraw(e: MouseEvent, svg: SVGSVGElement) {
+			const coords = clientPointToSvgCoords(svg, e.clientX, e.clientY);
+			if (!coords) return;
+			isRubberBandDrawing = true;
+			rubberBandSvg = svg;
+			rubberBandStart.x = coords.x;
+			rubberBandStart.y = coords.y;
+
+			rubberBandPreview = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+			rubberBandPreview.setAttribute("x", coords.x.toString());
+			rubberBandPreview.setAttribute("y", coords.y.toString());
+			rubberBandPreview.setAttribute("width", "1");
+			rubberBandPreview.setAttribute("height", "1");
+			rubberBandPreview.setAttribute("fill", "rgba(0, 200, 255, 0.15)");
+			rubberBandPreview.setAttribute("stroke", "#00bcd4");
+			rubberBandPreview.setAttribute("stroke-width", "1");
+			rubberBandPreview.setAttribute("stroke-dasharray", "4 3");
+			rubberBandPreview.setAttribute("pointer-events", "none");
+			rubberBandPreview.classList.add("rubber-band-preview");
+			svg.appendChild(rubberBandPreview);
+
+			document.body.style.cursor = "crosshair";
+			document.addEventListener("mousemove", onRubberBandMouseMove);
+			document.addEventListener("mouseup", onRubberBandMouseUp);
+		}
 
 		// Create new SVG element
 		var createNewSVG = () => {
@@ -361,8 +724,8 @@ import "../styles.css";
 				}
 			}
 			
-			// Don't start panning if already dragging/resizing/duplicating
-			if (isDragging || isResizing || isDuplicating) {
+			// Don't start panning if already dragging/resizing/duplicating/rubber-band draw
+			if (isDragging || isResizing || isDuplicating || isRubberBandDrawing) {
 				return;
 			}
 			
@@ -374,7 +737,7 @@ import "../styles.css";
 		}, false); // Use bubble phase so rect handlers (in capture) can stop it first
 
 		scalableCanvas.addEventListener("mousemove", (e) => {
-			if (!isPanning || isDragging || isResizing || isDuplicating) return;
+			if (!isPanning || isDragging || isResizing || isDuplicating || isRubberBandDrawing) return;
 			translateX = e.clientX - startX;
 			translateY = e.clientY - startY;
 			svgContainer.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
@@ -433,6 +796,8 @@ import "../styles.css";
 		function handleImageFile(file) {
 			const reader = new FileReader();
 			reader.onload = (event) => {
+				globalSvgContainer.querySelector("p")?.remove();
+
 				// Create background image container
 				let backgroundContainer = document.getElementById('background-image-container');
 				if (!backgroundContainer) {
@@ -459,13 +824,20 @@ import "../styles.css";
 				
 				// Create and add the new background image
 				const img = document.createElement("img");
-				img.src = event.target?.result as string;
 				img.style.maxWidth = "100%";
 				img.style.maxHeight = "100%";
 				img.style.objectFit = "contain";
 				img.style.opacity = "0.7"; // Make it slightly transparent so SVG is more visible
-				
+
+				const finishRasterLoad = () => {
+					ensureSvgOverlayForRaster(img, file);
+				};
+				img.onload = finishRasterLoad;
 				backgroundContainer.appendChild(img);
+				img.src = event.target?.result as string;
+				if (img.complete) {
+					finishRasterLoad();
+				}
 				
 				console.log('Background image added underneath SVG');
 			};
@@ -500,6 +872,121 @@ import "../styles.css";
 			reader.readAsText(file);
 		}
 
+		function wireSvgInteractions(svgElement: SVGSVGElement) {
+			// Prevent all drag behavior on the SVG and its children - COMPREHENSIVE APPROACH
+			svgElement.setAttribute('draggable', 'false');
+			svgElement.style.userSelect = 'none';
+			svgElement.style.webkitUserSelect = 'none';
+			svgElement.style.webkitUserDrag = 'none';
+			svgElement.style.webkitTouchCallout = 'none';
+			svgElement.style.webkitTapHighlightColor = 'transparent';
+
+			// Prevent context menu which can trigger drag
+			svgElement.addEventListener('contextmenu', (e) => {
+				e.preventDefault();
+				return false;
+			});
+
+			// Add comprehensive drag prevention to SVG - capture phase
+			svgElement.addEventListener('dragstart', (e) => {
+				console.log('SVG dragstart prevented');
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+
+			svgElement.addEventListener('drag', (e) => {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return false;
+			}, true);
+
+			svgElement.addEventListener('dragover', (e) => {
+				e.stopPropagation();
+			});
+
+			// Prevent mousedown from starting drag - but don't interfere with rect clicks
+			svgElement.addEventListener('mousedown', (e) => {
+				// Don't prevent if clicking on a rect - let rect handlers deal with it
+				if (e.target && e.target.tagName === 'rect') {
+					return; // Let rect handler process it
+				}
+				// Only prevent if it's on SVG elements, not our custom interactions
+				if (e.target !== svgElement) {
+					e.preventDefault();
+				}
+			}, true);
+
+			// Add event listeners to all rect elements
+			const rects = svgElement.querySelectorAll('rect');
+			console.log(`Found ${rects.length} rect elements`);
+
+			rects.forEach((rect, index) => {
+				// Log rect coordinates for debugging
+				const x = rect.getAttribute('x');
+				const y = rect.getAttribute('y');
+				const width = rect.getAttribute('width');
+				const height = rect.getAttribute('height');
+				console.log(`Rect ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
+
+				// Ensure rect has stroke for selection visibility
+				if (!rect.getAttribute('stroke')) {
+					rect.setAttribute('stroke', '#007bff');
+				}
+				if (!rect.getAttribute('stroke-width')) {
+					rect.setAttribute('stroke-width', '2');
+				}
+
+				// Add event listeners using the reusable function
+				addRectEventListeners(rect);
+			});
+
+			svgElement.addEventListener(
+				"mousedown",
+				(e) => {
+					if (e.button !== 0) return;
+					if (e.target !== svgElement) return;
+					if (isAddRectMode) return;
+					if (isDragging || isResizing || isDuplicating) return;
+					if (isRubberBandDrawing) return;
+					e.preventDefault();
+					e.stopPropagation();
+					startRubberBandDraw(e, svgElement);
+				},
+				false,
+			);
+
+			// Deselect when clicking on SVG background or handle Add Rectangle mode
+			svgElement.addEventListener('click', (e) => {
+				if (e.target === svgElement) {
+					if (suppressBackgroundClickDeselect) return;
+					if (isAddRectMode && !isDrawingRect) {
+						// Add new rectangle at click position
+						addRectangleAtPosition(e, svgElement);
+					} else {
+						deselectRect();
+					}
+				}
+			});
+		}
+
+		function ensureSvgOverlayForRaster(img: HTMLImageElement, sourceFile?: File) {
+			let svg = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
+			if (svg) return;
+
+			const nw = img.naturalWidth || 4096;
+			const nh = img.naturalHeight || 4096;
+			const newSvg = createNewSVG();
+			newSvg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+			globalSvgContainer.appendChild(newSvg);
+			wireSvgInteractions(newSvg);
+
+			if (sourceFile && importedSVGs.length === 0) {
+				const base = sourceFile.name.replace(/\.[^.]+$/, "");
+				updateCurrentFileName(base.length ? base : "mask");
+			}
+		}
+
 		function displaySVG(svgElement) {
 			// Preserve background image if it exists
 			const backgroundContainer = document.getElementById('background-image-container');
@@ -532,86 +1019,7 @@ import "../styles.css";
 			}
 			
 			globalSvgContainer.appendChild(svgElement);
-			
-			// Prevent all drag behavior on the SVG and its children - COMPREHENSIVE APPROACH
-			svgElement.setAttribute('draggable', 'false');
-			svgElement.style.userSelect = 'none';
-			svgElement.style.webkitUserSelect = 'none';
-			svgElement.style.webkitUserDrag = 'none';
-			svgElement.style.webkitTouchCallout = 'none';
-			svgElement.style.webkitTapHighlightColor = 'transparent';
-			
-			// Prevent context menu which can trigger drag
-			svgElement.addEventListener('contextmenu', (e) => {
-				e.preventDefault();
-				return false;
-			});
-			
-			// Add comprehensive drag prevention to SVG - capture phase
-			svgElement.addEventListener('dragstart', (e) => {
-				console.log('SVG dragstart prevented');
-				e.preventDefault();
-				e.stopImmediatePropagation();
-				return false;
-			}, true);
-			
-			svgElement.addEventListener('drag', (e) => {
-				e.preventDefault();
-				e.stopImmediatePropagation();
-				return false;
-			}, true);
-			
-			svgElement.addEventListener('dragover', (e) => {
-				e.stopPropagation();
-			});
-			
-			// Prevent mousedown from starting drag - but don't interfere with rect clicks
-			svgElement.addEventListener('mousedown', (e) => {
-				// Don't prevent if clicking on a rect - let rect handlers deal with it
-				if (e.target && e.target.tagName === 'rect') {
-					return; // Let rect handler process it
-				}
-				// Only prevent if it's on SVG elements, not our custom interactions
-				if (e.target !== svgElement) {
-					e.preventDefault();
-				}
-			}, true);
-			
-			// Add event listeners to all rect elements
-			const rects = svgElement.querySelectorAll('rect');
-			console.log(`Found ${rects.length} rect elements`);
-			
-			rects.forEach((rect, index) => {
-				// Log rect coordinates for debugging
-				const x = rect.getAttribute('x');
-				const y = rect.getAttribute('y');
-				const width = rect.getAttribute('width');
-				const height = rect.getAttribute('height');
-				console.log(`Rect ${index}: x=${x}, y=${y}, width=${width}, height=${height}`);
-				
-				// Ensure rect has stroke for selection visibility
-				if (!rect.getAttribute('stroke')) {
-					rect.setAttribute('stroke', '#007bff');
-				}
-				if (!rect.getAttribute('stroke-width')) {
-					rect.setAttribute('stroke-width', '2');
-				}
-				
-				// Add event listeners using the reusable function
-				addRectEventListeners(rect);
-			});
-			
-			// Deselect when clicking on SVG background or handle Add Rectangle mode
-			svgElement.addEventListener('click', (e) => {
-				if (e.target === svgElement) {
-					if (isAddRectMode && !isDrawingRect) {
-						// Add new rectangle at click position
-						addRectangleAtPosition(e, svgElement);
-					} else {
-						deselectRect();
-						}
-					}
-				});
+			wireSvgInteractions(svgElement as SVGSVGElement);
 		}
 
 		function createSVGNavigation() {
@@ -1269,6 +1677,10 @@ import "../styles.css";
 			toggleAddRectMode();
 		});
 
+		document.getElementById("brush-manual")?.addEventListener("change", updateBrushPaddingVisibility);
+		document.getElementById("brush-auto")?.addEventListener("change", updateBrushPaddingVisibility);
+		updateBrushPaddingVisibility();
+
 		// Keyboard event listener for various shortcuts
 		document.addEventListener("keydown", (e) => {
 			// Debug logging for Delete/Backspace
@@ -1317,8 +1729,13 @@ import "../styles.css";
 				toggleAddRectMode();
 			}
 			
-			// Escape - exit Add Rectangle mode
+			// Escape - cancel rubber-band draw or exit Add Rectangle mode
 			if (e.key === "Escape") {
+				if (isRubberBandDrawing) {
+					e.preventDefault();
+					cancelRubberBandDraw();
+					return;
+				}
 				if (isAddRectMode) {
 					e.preventDefault();
 					exitAddRectMode();
@@ -1340,6 +1757,9 @@ import "../styles.css";
 			const transformGroups = svgClone.querySelectorAll('.transform-group');
 			transformGroups.forEach(group => group.remove());
 			
+			// Remove rubber-band previews if present
+			svgClone.querySelectorAll(".rubber-band-preview").forEach((el) => el.remove());
+
 			// Remove selection classes from rects
 			const rects = svgClone.querySelectorAll('rect');
 			rects.forEach(rect => {
