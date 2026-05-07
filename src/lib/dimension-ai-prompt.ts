@@ -38,6 +38,14 @@ Input lines:
 
 Single-dimension rooms stay one pair in b and c without " x ".
 
+Cross-validation between b and c (mandatory — verify before emitting each row):
+- The imperial values in column c MUST be the conversion of the metric values in column b on the SAME row, in the SAME order.
+- Conversion factor: 1m ≈ 3.281ft. So for each pair, |metric_m × 3.281 − imperial_ft_decimal| must be < ~5%.
+  Worked example — if "b" is "5.05m  x  5.49m" then "c" MUST be "16’7’’  x  18’0’’" (because 5.05×3.281≈16.57ft and 5.49×3.281≈18.01ft). It is NOT "16’7’’  x  11’2’’" (11’2’’ is ~3.41m, which belongs to a different room).
+- Never reorder, split, or borrow imperial values across rows. Each row's imperial belongs ONLY to that row's metric.
+- If you cannot confidently match an imperial pair to a metric pair on the same row, leave column c empty for that row rather than guessing.
+- Before output, mentally re-read each row: does b convert to c? If not, fix the row or empty c.
+
 Rules:
 - One JSON object only. Non-empty a, b, c for each row when possible.
 - Preserve top-to-bottom order of rooms after merging.

@@ -989,6 +989,190 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return body.length ? body : [['', '', '']];
 			}
 
+			// --- Cross-row consistency check for AI-parsed dimensions ----------------
+			// Catches the common AI failure where row N's imperial pair contains values
+			// that actually belong to row N+1 (i.e. the model reordered imperial values
+			// across rows, so e.g. "5.05m × 5.49m" gets paired with "16'7'' × 11'2''"
+			// instead of "16'7'' × 18'0''").
+
+			const FT_PER_M = 3.28084;
+			// Per-dimension tolerance: bigger of 0.5ft (~6 inches) or 5% relative.
+			const DIM_ABS_TOL_FEET = 0.5;
+			const DIM_REL_TOL = 0.05;
+
+			function parseMetricMeters(s: string): number[] {
+				if (!s) return [];
+				const out: number[] = [];
+				const re = /(\d+(?:\.\d+)?)\s*m\b/gi;
+				let m: RegExpExecArray | null;
+				while ((m = re.exec(s)) !== null) {
+					const v = parseFloat(m[1]);
+					if (Number.isFinite(v) && v > 0) out.push(v);
+				}
+				return out;
+			}
+
+			function parseImperialFeet(s: string): number[] {
+				if (!s) return [];
+				// Normalize fancy primes to ASCII for matching: ’’ → " ; '' → " ; ’ → ' ; ″ → "
+				const t = s
+					.replace(/’’/g, '"')
+					.replace(/''/g, '"')
+					.replace(/″/g, '"')
+					.replace(/[’]/g, "'");
+				const out: number[] = [];
+				// Match feet'inch" or feet' (inch optional, trailing inch mark optional)
+				const re = /(\d+)\s*'\s*(\d+)?\s*"?/g;
+				let m: RegExpExecArray | null;
+				while ((m = re.exec(t)) !== null) {
+					const ft = parseInt(m[1], 10);
+					const inch = m[2] ? parseInt(m[2], 10) : 0;
+					if (Number.isFinite(ft) && ft >= 0) out.push(ft + inch / 12);
+				}
+				return out;
+			}
+
+			/** Split a "A  x  B" pair on the multiplication separator; returns trimmed parts. */
+			function splitDimPair(s: string): string[] {
+				if (!s) return [];
+				return s.split(/\s*[x×]\s*/i).map((p) => p.trim()).filter(Boolean);
+			}
+
+			function joinDimPair(parts: string[]): string {
+				// Match the prompt's "  x  " spacing rule.
+				return parts.join('  x  ');
+			}
+
+			function dimensionsAreConsistent(metric: number[], imperial: number[]): boolean {
+				if (metric.length === 0 || imperial.length === 0) return true; // can't validate
+				if (metric.length !== imperial.length) return false;
+				for (let i = 0; i < metric.length; i++) {
+					const expectedFt = metric[i] * FT_PER_M;
+					const actualFt = imperial[i];
+					const diff = Math.abs(expectedFt - actualFt);
+					const rel = expectedFt > 0 ? diff / expectedFt : 0;
+					if (diff > DIM_ABS_TOL_FEET && rel > DIM_REL_TOL) return false;
+				}
+				return true;
+			}
+
+			/**
+			 * Validate metric ⇄ imperial pairing for each row, and try cheap auto-fixes
+			 * when consecutive rows look mis-paired (the most common AI failure pattern).
+			 *
+			 * Returns a NEW matrix (input is not mutated) plus user-facing warnings and
+			 * a count of rows that were auto-corrected.
+			 */
+			function verifyAndFixCrossPairing(matrix: string[][]): {
+				matrix: string[][];
+				warnings: string[];
+				fixedCount: number;
+				flaggedCount: number;
+			} {
+				type RowState = {
+					row: string[];
+					metric: number[];
+					imperial: number[];
+					impParts: string[];
+				};
+				const states: RowState[] = matrix.map((r) => ({
+					row: [r[0] ?? '', r[1] ?? '', r[2] ?? ''],
+					metric: parseMetricMeters(r[1] ?? ''),
+					imperial: parseImperialFeet(r[2] ?? ''),
+					impParts: splitDimPair(r[2] ?? '')
+				}));
+
+				const warnings: string[] = [];
+				let fixedCount = 0;
+
+				const matches = (st: RowState) => dimensionsAreConsistent(st.metric, st.imperial);
+
+				const recomputeImperial = (st: RowState, newParts: string[]) => {
+					st.impParts = newParts;
+					const joined = newParts.length === 1 ? newParts[0] : joinDimPair(newParts);
+					st.row[2] = joined;
+					st.imperial = parseImperialFeet(joined);
+				};
+
+				// Pass 1: try swapping the second imperial of row i with the first imperial
+				// of row i+1 (the user-reported pattern). Only apply if BOTH rows then match.
+				for (let i = 0; i < states.length - 1; i++) {
+					const a = states[i];
+					const b = states[i + 1];
+					if (matches(a) && matches(b)) continue;
+					if (
+						a.metric.length === 2 &&
+						b.metric.length === 2 &&
+						a.impParts.length === 2 &&
+						b.impParts.length === 2
+					) {
+						const aTry = [a.impParts[0], b.impParts[0]];
+						const bTry = [a.impParts[1], b.impParts[1]];
+						const aFeetTry = parseImperialFeet(joinDimPair(aTry));
+						const bFeetTry = parseImperialFeet(joinDimPair(bTry));
+						if (
+							dimensionsAreConsistent(a.metric, aFeetTry) &&
+							dimensionsAreConsistent(b.metric, bFeetTry)
+						) {
+							recomputeImperial(a, aTry);
+							recomputeImperial(b, bTry);
+							fixedCount += 2;
+							warnings.push(
+								`Auto-fixed mis-paired imperial values between rows ${i + 1} (${a.row[0] || 'unlabelled'}) and ${i + 2} (${b.row[0] || 'unlabelled'}).`
+							);
+						}
+					}
+				}
+
+				// Pass 2: try a full swap of imperial pairs between adjacent rows.
+				for (let i = 0; i < states.length - 1; i++) {
+					const a = states[i];
+					const b = states[i + 1];
+					if (matches(a) && matches(b)) continue;
+					if (
+						a.impParts.length >= 1 &&
+						b.impParts.length >= 1 &&
+						a.impParts.length === b.impParts.length
+					) {
+						const aTry = b.impParts.slice();
+						const bTry = a.impParts.slice();
+						const aFeetTry = parseImperialFeet(joinDimPair(aTry));
+						const bFeetTry = parseImperialFeet(joinDimPair(bTry));
+						if (
+							dimensionsAreConsistent(a.metric, aFeetTry) &&
+							dimensionsAreConsistent(b.metric, bFeetTry)
+						) {
+							recomputeImperial(a, aTry);
+							recomputeImperial(b, bTry);
+							fixedCount += 2;
+							warnings.push(
+								`Auto-fixed swapped imperial rows ${i + 1} ↔ ${i + 2} (${a.row[0] || '?'} / ${b.row[0] || '?'}).`
+							);
+						}
+					}
+				}
+
+				// Final pass: flag remaining mismatches for the user. Don't mutate, just warn.
+				let flaggedCount = 0;
+				for (let i = 0; i < states.length; i++) {
+					const st = states[i];
+					if (!matches(st)) {
+						flaggedCount++;
+						const label = st.row[0] || `row ${i + 1}`;
+						warnings.push(
+							`⚠️ ${label}: metric ${st.row[1] || '—'} doesn't match imperial ${st.row[2] || '—'} (please double-check).`
+						);
+					}
+				}
+
+				return {
+					matrix: states.map((s) => s.row),
+					warnings,
+					fixedCount,
+					flaggedCount
+				};
+			}
+
 			function extractJsonRowsFromAssistantText(raw: string): { rows: { a?: string; b?: string; c?: string }[] } {
 				let t = String(raw ?? '').trim();
 				const fence = /```(?:json)?\s*([\s\S]*?)```/;
@@ -1674,7 +1858,15 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 								if (aiStatus) aiStatus.textContent = msg;
 							},
 							onImagePart: ({ index, total, part }) => {
-								const body = rowsFromAiPart(part);
+								const rawBody = rowsFromAiPart(part);
+								const verified = verifyAndFixCrossPairing(rawBody);
+								const body = verified.matrix;
+								if (verified.warnings.length) {
+									console.warn(
+										`[three-column] Image ${Number(index) + 1}/${total} consistency warnings`,
+										verified.warnings
+									);
+								}
 								const ii = Number(index);
 								const id = batchSheetIds[ii];
 								const sheet = id ? sheets.find((s) => s.id === id) : undefined;
@@ -1693,7 +1885,13 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 									persistState();
 								}
 								if (aiStatus) {
-									aiStatus.textContent = `Updated ${sheet.label} (image ${ii + 1}/${total})`;
+									const note =
+										verified.flaggedCount > 0
+											? ` · ⚠ ${verified.flaggedCount} row(s) flagged`
+											: verified.fixedCount > 0
+												? ` · auto-fixed ${verified.fixedCount} mis-paired row(s)`
+												: '';
+									aiStatus.textContent = `Updated ${sheet.label} (image ${ii + 1}/${total})${note}`;
 								}
 							}
 						});
@@ -1726,17 +1924,31 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						if (!first?.rows) {
 							throw new Error('Empty response from model.');
 						}
-						const matrix = first.rows.map((row) => [
+						const rawMatrix = first.rows.map((row) => [
 							String(row.a ?? ''),
 							normalizeMetricTypography(String(row.b ?? '')),
 							normalizeImperialTypography(String(row.c ?? ''))
 						]);
+						const verified = verifyAndFixCrossPairing(rawMatrix);
+						const matrix = verified.matrix;
+						if (verified.warnings.length) {
+							console.warn('[three-column] AI parse consistency warnings', verified.warnings);
+						}
 						const ok = importMatrixAsNewSheet(matrix, 'AI parsed');
 						const totalRows = matrix.filter((r) => r.some((c) => c.length)).length;
 						if (!ok) {
 							if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
 						} else if (aiStatus) {
-							aiStatus.textContent = `Imported ${totalRows} row(s).`;
+							const statusParts: string[] = [`Imported ${totalRows} row(s).`];
+							if (verified.fixedCount > 0) {
+								statusParts.push(`Auto-fixed ${verified.fixedCount} mis-paired imperial value(s).`);
+							}
+							if (verified.flaggedCount > 0) {
+								statusParts.push(
+									`⚠ ${verified.flaggedCount} row(s) still don't match — see console for details.`
+								);
+							}
+							aiStatus.textContent = statusParts.join(' ');
 						}
 					}
 				} catch (e) {
