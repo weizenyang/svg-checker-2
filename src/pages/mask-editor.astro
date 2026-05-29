@@ -113,6 +113,25 @@ import "../styles.css";
 			background-color: #808080; /* Grey background */
 		}
 
+		#svg-container > svg {
+			position: relative;
+			z-index: 1;
+		}
+
+		#interaction-plane {
+			fill: transparent;
+			stroke: none;
+			pointer-events: all;
+		}
+
+		#mask-rects rect {
+			fill: rgba(0, 123, 255, 0.35) !important;
+			stroke: #007bff !important;
+			stroke-width: 2px !important;
+			pointer-events: all !important;
+			cursor: pointer;
+		}
+
 		/* Embedded floorplan raster inside combined bundle SVGs */
 		#floorplan-raster {
 			pointer-events: none;
@@ -272,10 +291,26 @@ import "../styles.css";
 					/>
 					<button
 						id="export-svg-btn"
-						style="width: 100%; padding: 6px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;"
+						style="width: 100%; padding: 6px 8px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; margin-bottom: 6px;"
 					>
-						Export SVG
+						Export SVG overlay
 					</button>
+					<label
+						id="export-bundle-from-backplate-wrap"
+						style="display: none; align-items: flex-start; gap: 6px; font-size: 11px; margin-bottom: 8px; cursor: pointer; line-height: 1.35;"
+					>
+						<input type="checkbox" id="export-bundle-from-backplate" style="margin-top: 2px;" />
+						<span>Soluis bundle from PNG backplate (dims_background + patch crops)</span>
+					</label>
+					<button
+						id="export-bundle-svg-btn"
+						style="width: 100%; padding: 6px 8px; background: #0a7a4b; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; display: none;"
+					>
+						Export bundle SVG
+					</button>
+					<p id="export-bundle-hint" style="display: none; font-size: 10px; color: #666; margin: 6px 0 0; line-height: 1.35;">
+						Bundle export: <code>dims_background</code> + <code>patch_*</code> groups each with <code>&lt;image&gt;</code> and a bezier <code>&lt;path&gt;</code> sibling (required by the floorplan generator).
+					</p>
 				</section>
 
 				<!-- Instructions -->
@@ -297,7 +332,7 @@ import "../styles.css";
 							<strong>Dimension SVG loaded.</strong> White lines are reference only — draw blue mask rectangles on top.
 						</p>
 						<p id="combined-bundle-hint" style="display: none; color: #0a5; margin-top: 8px;">
-							<strong>Combined floorplan loaded.</strong> Floorplan image and dimension lines are in one file — draw blue mask rectangles on top.
+							<strong>Combined floorplan imported.</strong> Floorplan and all patches are baked into one canonical PNG underlay. Blue rectangles are crop guides only — move them, then export to crop new <code>patch_*</code> images from that bake.
 						</p>
 					</div>
 				</section>
@@ -319,7 +354,7 @@ import "../styles.css";
 					<p
 						style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
 					>
-						Import combined floorplan SVG, or image + SVG
+						Import combined floorplan SVG, or PNG/JPEG + SVG overlay
 					</p>
 				</div>
 			</div>
@@ -354,11 +389,38 @@ import "../styles.css";
 		var rubberBandStart = { x: 0, y: 0 };
 		var suppressBackgroundClickDeselect = false;
 
+		type PatchBox = { x: number; y: number; w: number; h: number };
+
+		type PatchTileMeta = {
+			patchId: string;
+			box: PatchBox;
+			href: string;
+			pathD: string | null;
+		};
+
+		/** Set when a combined bundle was flattened to PNG + overlay for editing. */
+		type BundleSourceMeta = {
+			viewBox: string;
+			sourceViewBox: string;
+			preserveAspectRatio: string;
+			/** Load-time bake: floorplan + all patches composited once; never mutated while editing. */
+			canonicalMergedDataUrl: string;
+			floorplanRasterDataUrl: string;
+			/** Original patch tiles at import (dimension segments live in these images). */
+			initialPatchTiles: PatchTileMeta[];
+			mergedPixelWidth: number;
+			mergedPixelHeight: number;
+			originalFileName: string;
+			exportFormat: "soluis-root" | "generic";
+			svgWidth: string;
+			svgHeight: string;
+		};
+		var bundleSourceMeta: BundleSourceMeta | null = null;
+		/** PNG/JPEG dropped as HTML backplate under the SVG overlay. */
+		var backplateRasterDataUrl: string | null = null;
+
 		const SVG_NS = "http://www.w3.org/2000/svg";
 		const XLINK_NS = "http://www.w3.org/1999/xlink";
-		/** Decoded raster for auto-brush when the floorplan is an embedded SVG image. */
-		const bundleRasterImages = new WeakMap<SVGSVGElement, HTMLImageElement>();
-
 		function getImageHref(imageEl: Element): string | null {
 			return (
 				imageEl.getAttribute("href") ||
@@ -405,21 +467,670 @@ import "../styles.css";
 			if (svg.querySelector("#dims-reference") && svg.querySelector("#floorplan-raster")) {
 				return true;
 			}
+			if (
+				svg.querySelector("#dims_background") ||
+				svg.querySelector('g[id^="patch_"]')
+			) {
+				return true;
+			}
 			return isDimsReferenceSvg(svg, fileName);
 		}
 
-		function preloadBundleRaster(svg: SVGSVGElement) {
-			const svgImg =
-				(svg.querySelector("#floorplan-raster image") as SVGImageElement | null) ||
-				getEmbeddedRasterImages(svg)[0];
-			if (!svgImg) return;
-			const href = getImageHref(svgImg);
-			if (!href) return;
-			const img = new Image();
-			img.onload = () => {
-				bundleRasterImages.set(svg, img);
+		function parseImageBox(img: SVGImageElement) {
+			return {
+				x: parseFloat(img.getAttribute("x") || "0"),
+				y: parseFloat(img.getAttribute("y") || "0"),
+				w: parseFloat(img.getAttribute("width") || "0"),
+				h: parseFloat(img.getAttribute("height") || "0"),
 			};
-			img.src = href;
+		}
+
+		function isPatchMaskImage(
+			img: SVGImageElement,
+			vb: { w: number; h: number },
+		) {
+			if (img.id === "dims_background") return false;
+			const { w, h } = parseImageBox(img);
+			if (w <= 0 || h <= 0) return false;
+			if (w >= vb.w * 0.9 && h >= vb.h * 0.9) return false;
+			const parentId = img.closest("g")?.id || "";
+			if (/^patch_/i.test(parentId)) return true;
+			return w < vb.w * 0.25 && h < vb.h * 0.25;
+		}
+
+		function isSoluisPatchBundleSvg(svg: SVGSVGElement) {
+			return !!(
+				svg.querySelector("#dims_background") ||
+				svg.querySelector('g[id^="patch_"]')
+			);
+		}
+
+		function sortImagesForMerge(
+			images: SVGImageElement[],
+			_vb: { w: number; h: number },
+		) {
+			const area = (img: SVGImageElement) => {
+				const { w, h } = parseImageBox(img);
+				return w * h;
+			};
+			return [...images].sort((a, b) => {
+				if (a.id === "dims_background") return -1;
+				if (b.id === "dims_background") return 1;
+				return area(b) - area(a);
+			});
+		}
+
+		function unmapRectAttrsFromOverlay(
+			rect: SVGRectElement,
+			overlayVb: { x: number; y: number; w: number; h: number },
+			sourceVb: { x: number; y: number; w: number; h: number },
+		) {
+			const sx = overlayVb.w > 0 ? sourceVb.w / overlayVb.w : 1;
+			const sy = overlayVb.h > 0 ? sourceVb.h / overlayVb.h : 1;
+			const x = parseFloat(rect.getAttribute("x") || "0");
+			const y = parseFloat(rect.getAttribute("y") || "0");
+			const w = parseFloat(rect.getAttribute("width") || "0");
+			const h = parseFloat(rect.getAttribute("height") || "0");
+			return {
+				x: x * sx + sourceVb.x,
+				y: y * sy + sourceVb.y,
+				w: w * sx,
+				h: h * sy,
+			};
+		}
+
+		/** Floorplan underlay only — excludes OCR label patches in &lt;g id="patch_*"&gt;. */
+		function getFloorplanRasterImages(svg: SVGSVGElement): SVGImageElement[] {
+			const bg = svg.querySelector("#dims_background");
+			if (bg && bg.tagName === "image") {
+				return [bg as SVGImageElement];
+			}
+			const vb = parseViewBoxAttr(svg);
+			return getEmbeddedRasterImages(svg).filter(
+				(img) => !isPatchMaskImage(img, vb),
+			);
+		}
+
+		/** Convert &lt;g id="patch_*"&gt;&lt;image&gt;… masks into editable rects. */
+		function formatPatchCoord(n: number) {
+			return Number.isFinite(n) ? n.toFixed(1) : "0.0";
+		}
+
+		/** Closed cubic-bezier outline; required by tools-floorplan_generator `_is_text_path`. */
+		function buildPatchOutlinePathD(box: PatchBox) {
+			const x = box.x;
+			const y = box.y;
+			const x2 = box.x + box.w;
+			const y2 = box.y + box.h;
+			const fx = formatPatchCoord;
+			return (
+				`M ${fx(x)} ${fx(y)}` +
+				` C ${fx(x2)} ${fx(y)} ${fx(x2)} ${fx(y)} ${fx(x2)} ${fx(y)}` +
+				` C ${fx(x2)} ${fx(y)} ${fx(x2)} ${fx(y2)} ${fx(x2)} ${fx(y2)}` +
+				` C ${fx(x2)} ${fx(y2)} ${fx(x)} ${fx(y2)} ${fx(x)} ${fx(y2)}` +
+				` C ${fx(x)} ${fx(y2)} ${fx(x)} ${fx(y)} ${fx(x)} ${fx(y)} Z`
+			);
+		}
+
+		function appendPatchPathElement(patchG: SVGGElement, box: PatchBox) {
+			const path = document.createElementNS(SVG_NS, "path");
+			path.setAttribute("d", buildPatchOutlinePathD(box));
+			path.setAttribute("fill", "none");
+			path.setAttribute("stroke", "none");
+			path.setAttribute("opacity", "0");
+			path.setAttribute(
+				"data-migrated-bbox",
+				`${box.x.toFixed(2)},${box.y.toFixed(2)},${box.w.toFixed(2)},${box.h.toFixed(2)}`,
+			);
+			patchG.appendChild(path);
+		}
+
+		function extractPatchTilesFromSource(svg: SVGSVGElement): PatchTileMeta[] {
+			const vb = parseViewBoxAttr(svg);
+			const tiles: PatchTileMeta[] = [];
+			let fallbackIndex = 0;
+			for (const img of svg.querySelectorAll("image")) {
+				const imageEl = img as SVGImageElement;
+				if (!isPatchMaskImage(imageEl, vb)) continue;
+				const href = getImageHref(imageEl);
+				if (!href) continue;
+				const patchG = imageEl.closest("g");
+				const patchId =
+					patchG?.id && /^patch_/i.test(patchG.id)
+						? patchG.id
+						: `patch_${++fallbackIndex}`;
+				const pathEl = patchG?.querySelector("path");
+				tiles.push({
+					patchId,
+					box: parseImageBox(imageEl),
+					href,
+					pathD: pathEl?.getAttribute("d") || null,
+				});
+			}
+			return tiles;
+		}
+
+		function extractPatchBoxesFromSource(svg: SVGSVGElement): PatchBox[] {
+			return extractPatchTilesFromSource(svg).map((t) => t.box);
+		}
+
+		function extractMaskRectsFromPatchImages(svg: SVGSVGElement): SVGRectElement[] {
+			const boxes = extractPatchBoxesFromSource(svg);
+			return boxes.map((box, index) => {
+				const rect = document.createElementNS(SVG_NS, "rect");
+				rect.setAttribute("x", String(box.x));
+				rect.setAttribute("y", String(box.y));
+				rect.setAttribute("width", String(box.w));
+				rect.setAttribute("height", String(box.h));
+				rect.setAttribute("data-patch-id", `patch_${index + 1}`);
+				return rect;
+			});
+		}
+
+		function extractAllMaskRectsFromSource(svg: SVGSVGElement): SVGRectElement[] {
+			return [
+				...extractMaskRectsFromSource(svg),
+				...extractMaskRectsFromPatchImages(svg),
+			];
+		}
+
+		function parseViewBoxAttr(svg: SVGSVGElement) {
+			const vb = svg.viewBox?.baseVal;
+			if (vb && vb.width > 0 && vb.height > 0) {
+				return { x: vb.x, y: vb.y, w: vb.width, h: vb.height };
+			}
+			const raw = svg.getAttribute("viewBox");
+			if (raw) {
+				const parts = raw.trim().split(/[\s,]+/).map(Number);
+				if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+					return { x: parts[0], y: parts[1], w: parts[2], h: parts[3] };
+				}
+			}
+			return { x: 0, y: 0, w: 4096, h: 4096 };
+		}
+
+		function loadHtmlImage(src: string): Promise<HTMLImageElement> {
+			return new Promise((resolve, reject) => {
+				const img = new Image();
+				img.onload = () => resolve(img);
+				img.onerror = () => reject(new Error("Failed to load image"));
+				img.src = src;
+			});
+		}
+
+		async function mergeRasterImagesToPng(
+			images: SVGImageElement[],
+			vb: { x: number; y: number; w: number; h: number },
+			pixelWidth: number,
+			pixelHeight: number,
+			options?: { opaqueBackground?: boolean },
+		): Promise<string> {
+			const canvas = document.createElement("canvas");
+			canvas.width = pixelWidth;
+			canvas.height = pixelHeight;
+			const ctx = canvas.getContext("2d", { alpha: true });
+			if (!ctx) throw new Error("Canvas not available");
+
+			if (options?.opaqueBackground) {
+				ctx.fillStyle = "#000000";
+				ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+			} else {
+				ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+			}
+
+			const sx = pixelWidth / vb.w;
+			const sy = pixelHeight / vb.h;
+
+			for (const imageEl of images) {
+				const href = getImageHref(imageEl);
+				if (!href) continue;
+				const { x, y, w, h } = parseImageBox(imageEl);
+				if (w <= 0 || h <= 0) continue;
+				const htmlImg = await loadHtmlImage(href);
+				ctx.drawImage(
+					htmlImg,
+					(x - vb.x) * sx,
+					(y - vb.y) * sy,
+					w * sx,
+					h * sy,
+				);
+			}
+
+			return canvas.toDataURL("image/png");
+		}
+
+		async function cropRegionFromRasterDataUrl(
+			dataUrl: string,
+			box: { x: number; y: number; w: number; h: number },
+			sourceVb: { x: number; y: number; w: number; h: number },
+		): Promise<string> {
+			const mergedImg = await loadHtmlImage(dataUrl);
+			const imgW = mergedImg.naturalWidth;
+			const imgH = mergedImg.naturalHeight;
+			if (imgW <= 0 || imgH <= 0) {
+				throw new Error("Merged raster has zero size");
+			}
+
+			const sx = imgW / sourceVb.w;
+			const sy = imgH / sourceVb.h;
+			let sx0 = Math.floor((box.x - sourceVb.x) * sx);
+			let sy0 = Math.floor((box.y - sourceVb.y) * sy);
+			let sw = Math.max(1, Math.ceil(box.w * sx));
+			let sh = Math.max(1, Math.ceil(box.h * sy));
+
+			sx0 = Math.max(0, Math.min(sx0, imgW - 1));
+			sy0 = Math.max(0, Math.min(sy0, imgH - 1));
+			sw = Math.min(sw, imgW - sx0);
+			sh = Math.min(sh, imgH - sy0);
+
+			const canvas = document.createElement("canvas");
+			canvas.width = sw;
+			canvas.height = sh;
+			const ctx = canvas.getContext("2d", { alpha: true });
+			if (!ctx) throw new Error("Canvas not available");
+			ctx.clearRect(0, 0, sw, sh);
+			ctx.drawImage(mergedImg, sx0, sy0, sw, sh, 0, 0, sw, sh);
+			return canvas.toDataURL("image/png");
+		}
+
+		/**
+		 * Soluis dims_background: floorplan + every original patch tile at its import
+		 * position (keeps dimension lines connected). New labels export as patch_* only.
+		 */
+		async function buildDimsBackgroundForExport(
+			meta: BundleSourceMeta,
+			sourceVb: { x: number; y: number; w: number; h: number },
+		): Promise<string> {
+			const { mergedPixelWidth: pw, mergedPixelHeight: ph } = meta;
+			const canvas = document.createElement("canvas");
+			canvas.width = pw;
+			canvas.height = ph;
+			const ctx = canvas.getContext("2d", { alpha: true });
+			if (!ctx) throw new Error("Canvas not available");
+			ctx.clearRect(0, 0, pw, ph);
+
+			const sx = pw / sourceVb.w;
+			const sy = ph / sourceVb.h;
+
+			const floor = await loadHtmlImage(meta.floorplanRasterDataUrl);
+			ctx.drawImage(floor, 0, 0, pw, ph);
+
+			for (const tile of meta.initialPatchTiles) {
+				const patchImg = await loadHtmlImage(tile.href);
+				const dx = (tile.box.x - sourceVb.x) * sx;
+				const dy = (tile.box.y - sourceVb.y) * sy;
+				const dw = tile.box.w * sx;
+				const dh = tile.box.h * sy;
+				ctx.drawImage(
+					patchImg,
+					0,
+					0,
+					patchImg.naturalWidth,
+					patchImg.naturalHeight,
+					dx,
+					dy,
+					dw,
+					dh,
+				);
+			}
+
+			return canvas.toDataURL("image/png");
+		}
+
+		async function mergeBundleRasters(source: SVGSVGElement) {
+			const vb = parseViewBoxAttr(source);
+			const maxDim = 4096;
+			const scale = Math.min(1, maxDim / Math.max(vb.w, vb.h));
+			const pixelWidth = Math.max(1, Math.round(vb.w * scale));
+			const pixelHeight = Math.max(1, Math.round(vb.h * scale));
+
+			const isSoluis = isSoluisPatchBundleSvg(source);
+			const allImages = isSoluis
+				? sortImagesForMerge(getEmbeddedRasterImages(source), vb)
+				: getFloorplanRasterImages(source);
+			const floorplanImages = getFloorplanRasterImages(source);
+
+			const mergedRasterDataUrl = await mergeRasterImagesToPng(
+				allImages,
+				vb,
+				pixelWidth,
+				pixelHeight,
+				{ opaqueBackground: false },
+			);
+			console.log(
+				`Merged ${allImages.length} raster layer(s) into ${pixelWidth}×${pixelHeight} PNG (transparent background)`,
+			);
+			const floorplanRasterDataUrl =
+				isSoluis && floorplanImages.length > 0
+					? await mergeRasterImagesToPng(
+							floorplanImages,
+							vb,
+							pixelWidth,
+							pixelHeight,
+							{ opaqueBackground: false },
+						)
+					: mergedRasterDataUrl;
+
+			return {
+				canonicalMergedDataUrl: mergedRasterDataUrl,
+				floorplanRasterDataUrl,
+				viewBox: `${vb.x} ${vb.y} ${vb.w} ${vb.h}`,
+				pixelWidth,
+				pixelHeight,
+			};
+		}
+
+		function ensureBackgroundImageContainer() {
+			let backgroundContainer = document.getElementById(
+				"background-image-container",
+			);
+			if (!backgroundContainer) {
+				backgroundContainer = document.createElement("div");
+				backgroundContainer.id = "background-image-container";
+				backgroundContainer.style.position = "absolute";
+				backgroundContainer.style.top = "0";
+				backgroundContainer.style.left = "0";
+				backgroundContainer.style.width = "100%";
+				backgroundContainer.style.height = "100%";
+				backgroundContainer.style.display = "flex";
+				backgroundContainer.style.alignItems = "center";
+				backgroundContainer.style.justifyContent = "center";
+				backgroundContainer.style.zIndex = "-1";
+				backgroundContainer.style.pointerEvents = "none";
+				globalSvgContainer.style.position = "relative";
+				globalSvgContainer.appendChild(backgroundContainer);
+			}
+			return backgroundContainer;
+		}
+
+		function setBackgroundFromDataUrl(dataUrl: string, opacity = 1) {
+			backplateRasterDataUrl = dataUrl;
+			globalSvgContainer.querySelector("p")?.remove();
+			const backgroundContainer = ensureBackgroundImageContainer();
+			backgroundContainer.innerHTML = "";
+			const img = document.createElement("img");
+			img.style.maxWidth = "100%";
+			img.style.maxHeight = "100%";
+			img.style.objectFit = "contain";
+			img.style.opacity = String(opacity);
+			img.src = dataUrl;
+			backgroundContainer.appendChild(img);
+			updateExportButtonsVisibility();
+		}
+
+		function getBackplateRasterDataUrl(): string | null {
+			if (backplateRasterDataUrl) return backplateRasterDataUrl;
+			const img = globalSvgContainer.querySelector(
+				"#background-image-container img",
+			) as HTMLImageElement | null;
+			const src = img?.src;
+			return src && src.startsWith("data:") ? src : null;
+		}
+
+		function isBackplateBundleExportEnabled(): boolean {
+			const cb = document.getElementById(
+				"export-bundle-from-backplate",
+			) as HTMLInputElement | null;
+			return !!cb?.checked;
+		}
+
+		function canExportBundleSvg(): boolean {
+			if (bundleSourceMeta) return true;
+			if (!isBackplateBundleExportEnabled()) return false;
+			if (!getBackplateRasterDataUrl()) return false;
+			return !!globalSvgContainer.querySelector("svg");
+		}
+
+		function updateExportButtonsVisibility() {
+			const bundleBtn = document.getElementById("export-bundle-svg-btn");
+			const bundleHint = document.getElementById("export-bundle-hint");
+			const backplateWrap = document.getElementById(
+				"export-bundle-from-backplate-wrap",
+			);
+			const showBundle = canExportBundleSvg();
+			const hasImportedBundle = bundleSourceMeta !== null;
+			const hasBackplate = !!getBackplateRasterDataUrl();
+			const hasOverlay = !!globalSvgContainer.querySelector("svg");
+
+			if (bundleBtn) bundleBtn.style.display = showBundle ? "block" : "none";
+			if (bundleHint) bundleHint.style.display = showBundle ? "block" : "none";
+			if (backplateWrap) {
+				backplateWrap.style.display =
+					!hasImportedBundle && hasBackplate && hasOverlay ? "flex" : "none";
+			}
+		}
+
+		async function bakeRasterToViewBoxPixels(
+			dataUrl: string,
+			vb: { x: number; y: number; w: number; h: number },
+		): Promise<{ dataUrl: string; pixelWidth: number; pixelHeight: number }> {
+			const maxDim = 4096;
+			const scale = Math.min(1, maxDim / Math.max(vb.w, vb.h));
+			const pixelWidth = Math.max(1, Math.round(vb.w * scale));
+			const pixelHeight = Math.max(1, Math.round(vb.h * scale));
+			const img = await loadHtmlImage(dataUrl);
+			const canvas = document.createElement("canvas");
+			canvas.width = pixelWidth;
+			canvas.height = pixelHeight;
+			const ctx = canvas.getContext("2d", { alpha: true });
+			if (!ctx) throw new Error("Canvas not available");
+			ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+			ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+			return {
+				dataUrl: canvas.toDataURL("image/png"),
+				pixelWidth,
+				pixelHeight,
+			};
+		}
+
+		async function composeCanonicalFromBackplateAndOverlay(
+			floorplanDataUrl: string,
+			overlay: SVGSVGElement,
+			vb: { x: number; y: number; w: number; h: number },
+			pixelWidth: number,
+			pixelHeight: number,
+		): Promise<string> {
+			const dims = overlay.querySelector("#dims-reference");
+			if (
+				!dims ||
+				!dims.querySelector("line, path, text, polyline, polygon")
+			) {
+				return floorplanDataUrl;
+			}
+
+			const fragSvg = document.createElementNS(SVG_NS, "svg");
+			fragSvg.setAttribute("xmlns", SVG_NS);
+			fragSvg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+			fragSvg.setAttribute("width", String(pixelWidth));
+			fragSvg.setAttribute("height", String(pixelHeight));
+			fragSvg.appendChild(dims.cloneNode(true));
+
+			const blob = new Blob(
+				[new XMLSerializer().serializeToString(fragSvg)],
+				{ type: "image/svg+xml;charset=utf-8" },
+			);
+			const objectUrl = URL.createObjectURL(blob);
+			try {
+				const canvas = document.createElement("canvas");
+				canvas.width = pixelWidth;
+				canvas.height = pixelHeight;
+				const ctx = canvas.getContext("2d", { alpha: true });
+				if (!ctx) throw new Error("Canvas not available");
+				ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+				const floor = await loadHtmlImage(floorplanDataUrl);
+				ctx.drawImage(floor, 0, 0, pixelWidth, pixelHeight);
+				const dimsImg = await loadHtmlImage(objectUrl);
+				ctx.drawImage(dimsImg, 0, 0, pixelWidth, pixelHeight);
+				return canvas.toDataURL("image/png");
+			} finally {
+				URL.revokeObjectURL(objectUrl);
+			}
+		}
+
+		async function buildBundleMetaFromBackplate(
+			overlay: SVGSVGElement,
+		): Promise<BundleSourceMeta> {
+			const backplate = getBackplateRasterDataUrl();
+			if (!backplate) {
+				throw new Error(
+					"No PNG backplate found. Drop an image under the SVG overlay first.",
+				);
+			}
+
+			const vb = parseViewBoxAttr(overlay);
+			const sourceViewBox = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
+			const preserveAspectRatio =
+				overlay.getAttribute("preserveAspectRatio") || "xMidYMid meet";
+			const { dataUrl: floorplanRasterDataUrl, pixelWidth, pixelHeight } =
+				await bakeRasterToViewBoxPixels(backplate, vb);
+			const canonicalMergedDataUrl =
+				await composeCanonicalFromBackplateAndOverlay(
+					floorplanRasterDataUrl,
+					overlay,
+					vb,
+					pixelWidth,
+					pixelHeight,
+				);
+
+			return {
+				viewBox: sourceViewBox,
+				sourceViewBox,
+				preserveAspectRatio,
+				canonicalMergedDataUrl,
+				floorplanRasterDataUrl,
+				initialPatchTiles: [],
+				mergedPixelWidth: pixelWidth,
+				mergedPixelHeight: pixelHeight,
+				originalFileName: currentFileName || "exported-svg",
+				exportFormat: "soluis-root",
+				svgWidth: overlay.getAttribute("width") || String(vb.w),
+				svgHeight: overlay.getAttribute("height") || String(vb.h),
+			};
+		}
+
+		async function resolveBundleExportMeta(
+			overlay: SVGSVGElement,
+		): Promise<BundleSourceMeta> {
+			if (bundleSourceMeta) return bundleSourceMeta;
+			return buildBundleMetaFromBackplate(overlay);
+		}
+
+		function setActiveBundleMeta(meta: BundleSourceMeta | null | undefined) {
+			bundleSourceMeta = meta ?? null;
+			if (bundleSourceMeta) {
+				const cb = document.getElementById(
+					"export-bundle-from-backplate",
+				) as HTMLInputElement | null;
+				if (cb) cb.checked = false;
+			}
+			updateExportButtonsVisibility();
+			const bundleHint = document.getElementById("combined-bundle-hint");
+			if (bundleHint) {
+				bundleHint.style.display = bundleSourceMeta ? "block" : "none";
+			}
+		}
+
+		async function convertBundleToEditMode(
+			sourceSvg: SVGSVGElement,
+			fileName: string,
+		): Promise<{ overlay: SVGSVGElement; meta: BundleSourceMeta }> {
+			const isSoluis = isSoluisPatchBundleSvg(sourceSvg);
+			const initialPatchTiles = isSoluis
+				? extractPatchTilesFromSource(sourceSvg)
+				: [];
+			const patchCountAtImport = initialPatchTiles.length;
+			const existingMaskRects = extractAllMaskRectsFromSource(sourceSvg);
+			const sourceVb = parseViewBoxAttr(sourceSvg);
+			const sourceViewBox = `${sourceVb.x} ${sourceVb.y} ${sourceVb.w} ${sourceVb.h}`;
+
+			const preserveAspectRatio =
+				sourceSvg.getAttribute("preserveAspectRatio") || "xMidYMid meet";
+
+			const {
+				canonicalMergedDataUrl,
+				floorplanRasterDataUrl,
+				pixelWidth,
+				pixelHeight,
+			} = await mergeBundleRasters(sourceSvg);
+
+			if (isSoluis) {
+				console.log(
+					`Baked canonical image ${pixelWidth}×${pixelHeight} from floorplan + ${patchCountAtImport} patch(es)`,
+				);
+			}
+
+			prepareImportedSvg(sourceSvg, fileName);
+
+			const dimsRef = sourceSvg.querySelector("#dims-reference");
+			const dimsClone = dimsRef
+				? (dimsRef.cloneNode(true) as SVGGElement)
+				: null;
+			const dimsHasVectors =
+				!!dimsClone?.querySelector("line, path, text, polyline, polygon");
+
+			const meta: BundleSourceMeta = {
+				viewBox: sourceViewBox,
+				sourceViewBox,
+				preserveAspectRatio,
+				canonicalMergedDataUrl,
+				floorplanRasterDataUrl,
+				initialPatchTiles,
+				mergedPixelWidth: pixelWidth,
+				mergedPixelHeight: pixelHeight,
+				originalFileName: fileName,
+				exportFormat: isSoluis ? "soluis-root" : "generic",
+				svgWidth: sourceSvg.getAttribute("width") || String(sourceVb.w),
+				svgHeight: sourceSvg.getAttribute("height") || String(sourceVb.h),
+			};
+
+			const overlay = createNewSVG();
+			overlay.setAttribute("viewBox", sourceViewBox);
+			overlay.setAttribute("preserveAspectRatio", preserveAspectRatio);
+			overlay.setAttribute("data-converted-from-bundle", "true");
+			overlay.setAttribute(
+				"data-dims-reference",
+				dimsClone && dimsHasVectors && !isSoluis ? "true" : "false",
+			);
+			overlay.setAttribute("data-mask-editor-prepared", "true");
+
+			if (dimsClone && dimsHasVectors && !isSoluis) {
+				dimsClone.setAttribute("id", "dims-reference");
+				dimsClone.setAttribute("pointer-events", "none");
+				dimsClone.setAttribute(
+					"transform",
+					dimsLayerTransform(sourceVb, pixelWidth, pixelHeight),
+				);
+				dimsClone
+					.querySelectorAll("rect[data-dims-bg]")
+					.forEach((bg) => bg.remove());
+				dimsClone
+					.querySelectorAll('g[id^="patch_"]')
+					.forEach((patch) => patch.remove());
+				overlay.appendChild(dimsClone);
+			}
+
+			const maskGroup = getMaskRectsGroup(overlay);
+			for (const rect of existingMaskRects) {
+				normalizeMaskRect(rect);
+				maskGroup.appendChild(rect);
+			}
+
+			ensureInteractionPlane(overlay);
+			ensureOverlayLayerOrder(overlay);
+
+			return { overlay, meta };
+		}
+
+		function triggerDownload(blob: Blob, filename: string) {
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = filename;
+			link.style.display = "none";
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
 		}
 
 		type RasterBrushTarget = {
@@ -429,52 +1140,18 @@ import "../styles.css";
 			) => { ix0: number; iy0: number; ix1: number; iy1: number } | null;
 		};
 
-		function buildRasterBrushTarget(svg: SVGSVGElement): RasterBrushTarget | null {
+		function buildRasterBrushTarget(_svg: SVGSVGElement): RasterBrushTarget | null {
 			const htmlImg = globalSvgContainer.querySelector(
 				"#background-image-container img",
 			) as HTMLImageElement | null;
-			if (htmlImg && (htmlImg.naturalWidth || 0) > 0) {
-				return {
-					image: htmlImg,
-					samplePixelsFromClientRect(inter) {
-						const imgRect = htmlImg.getBoundingClientRect();
-						const nw = htmlImg.naturalWidth;
-						const nh = htmlImg.naturalHeight;
-						const sx0 = Math.floor(
-							((inter.left - imgRect.left) / imgRect.width) * nw,
-						);
-						const sy0 = Math.floor(
-							((inter.top - imgRect.top) / imgRect.height) * nh,
-						);
-						const sx1 = Math.ceil(
-							((inter.left + inter.width - imgRect.left) / imgRect.width) * nw,
-						);
-						const sy1 = Math.ceil(
-							((inter.top + inter.height - imgRect.top) / imgRect.height) * nh,
-						);
-						return {
-							ix0: Math.max(0, sx0),
-							iy0: Math.max(0, sy0),
-							ix1: Math.min(nw, sx1),
-							iy1: Math.min(nh, sy1),
-						};
-					},
-				};
-			}
-
-			const decoded = bundleRasterImages.get(svg);
-			const svgImg = svg.querySelector(
-				"#floorplan-raster image",
-			) as SVGImageElement | null;
-			if (!decoded || !svgImg || (decoded.naturalWidth || 0) === 0) return null;
+			if (!htmlImg || (htmlImg.naturalWidth || 0) === 0) return null;
 
 			return {
-				image: decoded,
+				image: htmlImg,
 				samplePixelsFromClientRect(inter) {
-					const imgRect = svgImg.getBoundingClientRect();
-					if (imgRect.width < 1 || imgRect.height < 1) return null;
-					const nw = decoded.naturalWidth;
-					const nh = decoded.naturalHeight;
+					const imgRect = htmlImg.getBoundingClientRect();
+					const nw = htmlImg.naturalWidth;
+					const nh = htmlImg.naturalHeight;
 					const sx0 = Math.floor(
 						((inter.left - imgRect.left) / imgRect.width) * nw,
 					);
@@ -507,7 +1184,68 @@ import "../styles.css";
 			return group;
 		}
 
+		function normalizeMaskRect(rect: SVGRectElement) {
+			rect.setAttribute("fill", "rgba(0, 123, 255, 0.35)");
+			rect.setAttribute("stroke", "#007bff");
+			rect.setAttribute("stroke-width", "2");
+			rect.setAttribute("pointer-events", "all");
+		}
+
+		function mapRectToPixelViewBox(
+			rect: SVGRectElement,
+			fromVb: { x: number; y: number; w: number; h: number },
+			pixelW: number,
+			pixelH: number,
+		) {
+			const sx = pixelW / fromVb.w;
+			const sy = pixelH / fromVb.h;
+			const x = parseFloat(rect.getAttribute("x") || "0");
+			const y = parseFloat(rect.getAttribute("y") || "0");
+			const w = parseFloat(rect.getAttribute("width") || "0");
+			const h = parseFloat(rect.getAttribute("height") || "0");
+			rect.setAttribute("x", String((x - fromVb.x) * sx));
+			rect.setAttribute("y", String((y - fromVb.y) * sy));
+			rect.setAttribute("width", String(w * sx));
+			rect.setAttribute("height", String(h * sy));
+		}
+
+		function dimsLayerTransform(
+			fromVb: { x: number; y: number; w: number; h: number },
+			pixelW: number,
+			pixelH: number,
+		) {
+			const sx = pixelW / fromVb.w;
+			const sy = pixelH / fromVb.h;
+			const tx = -fromVb.x * sx;
+			const ty = -fromVb.y * sy;
+			return `matrix(${sx},0,0,${sy},${tx},${ty})`;
+		}
+
+		function isMaskOverlaySvg(svg: SVGSVGElement, fileName?: string) {
+			if (fileName && /_mask\.svg$/i.test(fileName)) return true;
+			if (isCombinedBundleSvg(svg, fileName)) return false;
+			return (
+				extractAllMaskRectsFromSource(svg).length > 0 &&
+				!isDimsReferenceSvg(svg, fileName)
+			);
+		}
+
+		function importMaskRectsOntoOverlay(
+			overlay: SVGSVGElement,
+			maskSvg: SVGSVGElement,
+		) {
+			const overlayVb = parseViewBoxAttr(overlay);
+			const maskVb = parseViewBoxAttr(maskSvg);
+			const group = getMaskRectsGroup(overlay);
+			for (const rect of extractAllMaskRectsFromSource(maskSvg)) {
+				mapRectToPixelViewBox(rect, maskVb, overlayVb.w, overlayVb.h);
+				normalizeMaskRect(rect);
+				group.appendChild(rect);
+			}
+		}
+
 		function appendMaskRect(svg: SVGSVGElement, rect: SVGRectElement) {
+			normalizeMaskRect(rect);
 			getMaskRectsGroup(svg).appendChild(rect);
 		}
 
@@ -515,8 +1253,60 @@ import "../styles.css";
 			const maskGroup = svg.querySelector("#mask-rects");
 			const root = maskGroup || svg;
 			return root.querySelectorAll(
-				"rect:not(.transform-handle):not([data-dims-bg])",
+				"rect:not(.transform-handle):not([data-dims-bg]):not(#interaction-plane)",
 			);
+		}
+
+		function extractMaskRectsFromSource(svg: SVGSVGElement) {
+			return Array.from(svg.querySelectorAll("rect"))
+				.filter((r) => {
+					if (r.getAttribute("data-dims-bg") === "true") return false;
+					if (r.id === "interaction-plane") return false;
+					if (r.classList.contains("transform-handle")) return false;
+					if (r.closest("#floorplan-raster")) return false;
+					return true;
+				})
+				.map((r) => r.cloneNode(true) as SVGRectElement);
+		}
+
+		function ensureInteractionPlane(svg: SVGSVGElement) {
+			if (svg.querySelector("#interaction-plane")) return;
+
+			const vb = parseViewBoxAttr(svg);
+			const plane = document.createElementNS(SVG_NS, "rect");
+			plane.setAttribute("id", "interaction-plane");
+			plane.setAttribute("x", String(vb.x));
+			plane.setAttribute("y", String(vb.y));
+			plane.setAttribute("width", String(vb.w));
+			plane.setAttribute("height", String(vb.h));
+			plane.setAttribute("fill", "transparent");
+			plane.setAttribute("stroke", "none");
+			plane.setAttribute("pointer-events", "all");
+
+			const maskGroup = svg.querySelector("#mask-rects");
+			if (maskGroup) {
+				svg.insertBefore(plane, maskGroup);
+			} else {
+				svg.appendChild(plane);
+			}
+			ensureOverlayLayerOrder(svg);
+		}
+
+		/** Dims on bottom, hit plane in the middle, editable mask rects on top. */
+		function ensureOverlayLayerOrder(svg: SVGSVGElement) {
+			const dims = svg.querySelector("#dims-reference");
+			const plane = svg.querySelector("#interaction-plane");
+			const maskGroup = svg.querySelector("#mask-rects");
+			if (dims) svg.appendChild(dims);
+			if (plane) svg.appendChild(plane);
+			if (maskGroup) svg.appendChild(maskGroup);
+		}
+
+		function isSvgBackgroundHit(target: EventTarget | null, svg: SVGSVGElement) {
+			if (!target || !(target instanceof Element)) return false;
+			if (target === svg) return true;
+			if (target.id === "interaction-plane") return true;
+			return false;
 		}
 
 		function getDefaultRectSize(svg: SVGSVGElement) {
@@ -579,10 +1369,19 @@ import "../styles.css";
 
 			if (embeddedRasters.length > 0) {
 				const rasterGroup = ensureFloorplanRasterGroup(svg);
-				for (const img of embeddedRasters) {
+				for (const img of getFloorplanRasterImages(svg)) {
 					if (img.parentElement !== rasterGroup) {
 						rasterGroup.appendChild(img);
 					}
+				}
+			}
+
+			const patchRects = extractMaskRectsFromPatchImages(svg);
+			if (patchRects.length > 0) {
+				const maskGroup = getMaskRectsGroup(svg);
+				for (const rect of patchRects) {
+					normalizeMaskRect(rect);
+					maskGroup.appendChild(rect);
 				}
 			}
 
@@ -591,6 +1390,8 @@ import "../styles.css";
 				refGroup.setAttribute("id", "dims-reference");
 				refGroup.setAttribute("pointer-events", "none");
 
+				const toDims: Element[] = [];
+				const toMask: SVGRectElement[] = [];
 				const children = Array.from(svg.childNodes);
 				for (const node of children) {
 					if (node.nodeType !== Node.ELEMENT_NODE) continue;
@@ -598,11 +1399,31 @@ import "../styles.css";
 					if (el.tagName === "defs" || el.tagName === "style") continue;
 					if (isStructuralLayer(el)) continue;
 					if (el.tagName === "image") continue;
-					refGroup.appendChild(el);
+					if (el.tagName === "rect") {
+						if (el.getAttribute("data-dims-bg") === "true") {
+							toDims.push(el);
+						} else {
+							toMask.push(el as SVGRectElement);
+						}
+						continue;
+					}
+					toDims.push(el);
+				}
+				for (const el of toDims) refGroup.appendChild(el);
+				const maskGroup = getMaskRectsGroup(svg);
+				for (const rect of toMask) {
+					normalizeMaskRect(rect);
+					maskGroup.appendChild(rect);
 				}
 
+				const maskRectCount = maskGroup.querySelectorAll("rect").length;
 				const vb = svg.viewBox.baseVal;
-				if (!isCombined && vb.width > 0 && vb.height > 0) {
+				if (
+					!isCombined &&
+					maskRectCount === 0 &&
+					vb.width > 0 &&
+					vb.height > 0
+				) {
 					const bg = document.createElementNS(SVG_NS, "rect");
 					bg.setAttribute("data-dims-bg", "true");
 					bg.setAttribute("x", String(vb.x));
@@ -623,26 +1444,29 @@ import "../styles.css";
 			);
 
 			const dimsHint = document.getElementById("dims-reference-hint");
-			const bundleHint = document.getElementById("combined-bundle-hint");
 			if (dimsHint) {
 				dimsHint.style.display = isDims && !isCombined ? "block" : "none";
 			}
-			if (bundleHint) {
-				bundleHint.style.display = isCombined ? "block" : "none";
+
+			const maskRectCount =
+				svg.querySelector("#mask-rects")?.querySelectorAll("rect").length ?? 0;
+			if (maskRectCount > 0) {
+				svg.querySelectorAll("style").forEach((styleEl) => {
+					if (/rect\s*\{[^}]*fill\s*:\s*black/i.test(styleEl.textContent || "")) {
+						styleEl.remove();
+					}
+				});
 			}
 
-			if (isCombined) {
-				preloadBundleRaster(svg);
-			}
+			ensureInteractionPlane(svg);
+			ensureOverlayLayerOrder(svg);
 
 			svg.setAttribute("data-mask-editor-prepared", "true");
 		}
 
 		function resetDimsReferenceHint() {
 			const dimsHint = document.getElementById("dims-reference-hint");
-			const bundleHint = document.getElementById("combined-bundle-hint");
 			if (dimsHint) dimsHint.style.display = "none";
-			if (bundleHint) bundleHint.style.display = "none";
 		}
 
 		function getBrushMode() {
@@ -815,12 +1639,7 @@ import "../styles.css";
 			if (getBrushMode() === "auto") {
 				const raster = buildRasterBrushTarget(svg);
 				const rubberClient = svgRectToClientRect(svg, x, y, width, height);
-				const svgImg = svg.querySelector(
-					"#floorplan-raster image",
-				) as SVGImageElement | null;
-				const screenRect = svgImg
-					? svgImg.getBoundingClientRect()
-					: raster?.image.getBoundingClientRect();
+				const screenRect = raster.image.getBoundingClientRect();
 				if (
 					raster &&
 					screenRect &&
@@ -871,7 +1690,6 @@ import "../styles.css";
 												apy0,
 												apx1,
 												apy1,
-												svgImg,
 											);
 											if (
 												mapped &&
@@ -1109,146 +1927,170 @@ import "../styles.css";
 			isPanning = false;
 		});
 
+		function readFileAsText(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = () => reject(reader.error);
+				reader.readAsText(file);
+			});
+		}
+
+		function parseSvgFile(text: string): SVGSVGElement {
+			const parser = new DOMParser();
+			const svgDoc = parser.parseFromString(text, "image/svg+xml");
+			if (svgDoc.querySelector("parsererror")) {
+				throw new Error("Could not parse SVG file. Check that it is valid XML.");
+			}
+			return svgDoc.documentElement as unknown as SVGSVGElement;
+		}
+
+		function displayImportedOverlay(
+			element: SVGSVGElement,
+			fileName: string,
+			bundleMeta?: BundleSourceMeta,
+		) {
+			if (!importedSVGs.some((e) => e.element === element)) {
+				importedSVGs.push({ name: fileName, element, bundleMeta });
+			}
+			setActiveBundleMeta(bundleMeta ?? null);
+			if (bundleMeta) {
+				setBackgroundFromDataUrl(bundleMeta.canonicalMergedDataUrl);
+			}
+			displaySVG(element);
+			wireSvgInteractions(element);
+			updateExportButtonsVisibility();
+			const rectCount = getContentRects(element).length;
+			console.log(`Imported "${fileName}" with ${rectCount} mask rectangle(s).`);
+			if (rectCount === 0 && bundleMeta) {
+				console.warn(
+					`No mask rectangles found. Drop the companion *_mask.svg together with the combined floorplan SVG.`,
+				);
+			}
+			updateCurrentFileName(fileName);
+			if (importedSVGs.length > 1) createSVGNavigation();
+		}
+
 		// File handling functionality
-		function handleFileChange(files) {
+		async function handleFileChange(files) {
 			if (!files || files.length === 0) return;
-			
-			// Separate SVG files and image files
-			const svgFiles = [];
-			const imageFiles = [];
-			
-			Array.from(files).forEach(file => {
+
+			const svgFiles: File[] = [];
+			const imageFiles: File[] = [];
+
+			Array.from(files).forEach((file) => {
 				if (file instanceof File && file.type === "image/svg+xml") {
 					svgFiles.push(file);
 				} else if (file instanceof File && file.type.startsWith("image/")) {
 					imageFiles.push(file);
 				}
 			});
-			
-			// If we have SVG files, handle them first
+
 			if (svgFiles.length > 0) {
-				// Clear previous SVG content
 				globalSvgContainer.innerHTML = "";
+				backplateRasterDataUrl = null;
 				importedSVGs = [];
 				currentSVGIndex = 0;
 				resetDimsReferenceHint();
+				setActiveBundleMeta(null);
+				document.getElementById("svg-nav")?.remove();
 
-				// Remove existing navigation
-				const existingNav = document.getElementById("svg-nav");
-				if (existingNav) existingNav.remove();
+				const placeholder = document.createElement("p");
+				placeholder.textContent = "Loading floorplan…";
+				placeholder.style.padding = "2em";
+				globalSvgContainer.appendChild(placeholder);
 
-				svgFiles.forEach((file, index) => {
-					handleSVGFile(file, index);
-				});
+				try {
+					let bundleOverlay: SVGSVGElement | null = null;
+					let bundleMeta: BundleSourceMeta | null = null;
+					let bundleFileName = "";
+					const maskSvgs: SVGSVGElement[] = [];
+					const standardSvgs: { file: File; svg: SVGSVGElement }[] = [];
+
+					for (const file of svgFiles) {
+						const svgElement = parseSvgFile(await readFileAsText(file));
+						if (isCombinedBundleSvg(svgElement, file.name)) {
+							const converted = await convertBundleToEditMode(svgElement, file.name);
+							bundleOverlay = converted.overlay;
+							bundleMeta = converted.meta;
+							bundleFileName = file.name;
+						} else if (isMaskOverlaySvg(svgElement, file.name)) {
+							maskSvgs.push(svgElement);
+						} else {
+							standardSvgs.push({ file, svg: svgElement });
+						}
+					}
+
+					if (bundleOverlay && bundleMeta) {
+						for (const maskSvg of maskSvgs) {
+							importMaskRectsOntoOverlay(bundleOverlay, maskSvg);
+						}
+						displayImportedOverlay(bundleOverlay, bundleFileName, bundleMeta);
+					} else if (maskSvgs.length > 0) {
+						const maskSvg = maskSvgs[0];
+						const maskFile =
+							svgFiles.find((f) => /_mask\.svg$/i.test(f.name)) || svgFiles[0];
+						prepareImportedSvg(maskSvg, maskFile.name);
+						for (let i = 1; i < maskSvgs.length; i++) {
+							importMaskRectsOntoOverlay(maskSvg, maskSvgs[i]);
+						}
+						ensureOverlayLayerOrder(maskSvg);
+						displayImportedOverlay(maskSvg, maskFile.name);
+					} else if (standardSvgs.length > 0) {
+						for (let i = 0; i < standardSvgs.length; i++) {
+							const { file, svg } = standardSvgs[i];
+							prepareImportedSvg(svg, file.name);
+							ensureInteractionPlane(svg);
+							if (i === 0) displayImportedOverlay(svg, file.name);
+							else importedSVGs.push({ name: file.name, element: svg });
+						}
+						if (standardSvgs.length > 1) createSVGNavigation();
+					}
+				} catch (err) {
+					console.error(err);
+					alert(
+						`Failed to import file.\n\n${err instanceof Error ? err.message : String(err)}`,
+					);
+				}
 			}
-			
-			// Handle image files as background (use the first one if multiple)
-			if (imageFiles.length > 0) {
-				handleImageFile(imageFiles[0]); // Use first image as background
+
+			if (imageFiles.length > 0 && !bundleSourceMeta) {
+				handleImageFile(imageFiles[0]);
 				if (imageFiles.length > 1) {
-					console.log(`Multiple images detected. Using "${imageFiles[0].name}" as background. Other images ignored.`);
+					console.log(
+						`Multiple images detected. Using "${imageFiles[0].name}" as background.`,
+					);
 				}
 			}
 		}
 
 		function handleImageFile(file) {
-			const bundleSvg = globalSvgContainer.querySelector(
-				'svg[data-mask-editor-bundle="true"]',
-			);
-			if (bundleSvg) {
+			if (bundleSourceMeta) {
 				console.log(
-					`Combined SVG already includes floorplan raster; ignoring separate image "${file.name}".`,
+					`Merged floorplan already loaded from bundle; ignoring separate image "${file.name}".`,
 				);
 				return;
 			}
 
 			const reader = new FileReader();
 			reader.onload = (event) => {
-				globalSvgContainer.querySelector("p")?.remove();
+				setActiveBundleMeta(null);
+				setBackgroundFromDataUrl(event.target?.result as string, 0.7);
 
-				// Create background image container
-				let backgroundContainer = document.getElementById('background-image-container');
-				if (!backgroundContainer) {
-					backgroundContainer = document.createElement('div');
-					backgroundContainer.id = 'background-image-container';
-					backgroundContainer.style.position = 'absolute';
-					backgroundContainer.style.top = '0';
-					backgroundContainer.style.left = '0';
-					backgroundContainer.style.width = '100%';
-					backgroundContainer.style.height = '100%';
-					backgroundContainer.style.display = 'flex';
-					backgroundContainer.style.alignItems = 'center';
-					backgroundContainer.style.justifyContent = 'center';
-					backgroundContainer.style.zIndex = '-1'; // Behind SVG
-					backgroundContainer.style.pointerEvents = 'none'; // Don't interfere with SVG interactions
-					
-					// Make svg-container relative positioned to contain the absolute background
-					globalSvgContainer.style.position = 'relative';
-					globalSvgContainer.appendChild(backgroundContainer);
+				const img = globalSvgContainer.querySelector(
+					"#background-image-container img",
+				) as HTMLImageElement | null;
+				if (img) {
+					const finishRasterLoad = () => {
+						ensureSvgOverlayForRaster(img, file);
+					};
+					if (img.complete) finishRasterLoad();
+					else img.onload = finishRasterLoad;
 				}
-				
-				// Clear any existing background image
-				backgroundContainer.innerHTML = '';
-				
-				// Create and add the new background image
-				const img = document.createElement("img");
-				img.style.maxWidth = "100%";
-				img.style.maxHeight = "100%";
-				img.style.objectFit = "contain";
-				img.style.opacity = "0.7"; // Make it slightly transparent so SVG is more visible
 
-				const finishRasterLoad = () => {
-					ensureSvgOverlayForRaster(img, file);
-				};
-				img.onload = finishRasterLoad;
-				backgroundContainer.appendChild(img);
-				img.src = event.target?.result as string;
-				if (img.complete) {
-					finishRasterLoad();
-				}
-				
-				console.log('Background image added underneath SVG');
+				console.log("Background image added underneath SVG");
 			};
 			reader.readAsDataURL(file);
-		}
-
-		function handleSVGFile(file, index) {
-			const reader = new FileReader();
-			reader.onload = (event) => {
-				const parser = new DOMParser();
-				const svgDoc = parser.parseFromString(event.target?.result as string, "image/svg+xml");
-				const svgElement = svgDoc.documentElement as unknown as SVGSVGElement;
-
-				if (svgDoc.querySelector("parsererror")) {
-					alert("Could not parse SVG file. Check that it is valid XML.");
-					return;
-				}
-
-				prepareImportedSvg(svgElement, file.name);
-
-				if (svgElement.getAttribute("data-mask-editor-bundle") === "true") {
-					document.getElementById("background-image-container")?.remove();
-				}
-				
-				// Store SVG for navigation if multiple files
-				importedSVGs.push({
-					name: file.name,
-					element: svgElement
-				});
-
-				// Display first SVG or current SVG
-				if (index === 0 || importedSVGs.length === 1) {
-					displaySVG(svgElement);
-					// Update current filename for export
-					updateCurrentFileName(file.name);
-				}
-				
-				// Add navigation if multiple SVGs
-				if (importedSVGs.length > 1) {
-					createSVGNavigation();
-				}
-			};
-			reader.readAsText(file);
 		}
 
 		function wireSvgInteractions(svgElement: SVGSVGElement) {
@@ -1286,12 +2128,10 @@ import "../styles.css";
 
 			// Prevent mousedown from starting drag - but don't interfere with rect clicks
 			svgElement.addEventListener('mousedown', (e) => {
-				// Don't prevent if clicking on a mask rect - let rect handlers deal with it
 				const t = e.target as Element;
-				if (t && t.tagName === "rect" && !t.closest("#dims-reference")) {
-					return; // Let rect handler process it
-				}
-				// Only prevent if it's on SVG elements, not our custom interactions
+				if (t.closest("#mask-rects")) return;
+				if (t.id === "interaction-plane") return;
+				if (t.tagName === "rect" && !t.closest("#dims-reference")) return;
 				if (e.target !== svgElement) {
 					e.preventDefault();
 				}
@@ -1325,7 +2165,7 @@ import "../styles.css";
 				"mousedown",
 				(e) => {
 					if (e.button !== 0) return;
-					if (e.target !== svgElement) return;
+					if (!isSvgBackgroundHit(e.target, svgElement)) return;
 					if (isAddRectMode) return;
 					if (isDragging || isResizing || isDuplicating) return;
 					if (isRubberBandDrawing) return;
@@ -1338,14 +2178,12 @@ import "../styles.css";
 
 			// Deselect when clicking on SVG background or handle Add Rectangle mode
 			svgElement.addEventListener('click', (e) => {
-				if (e.target === svgElement) {
-					if (suppressBackgroundClickDeselect) return;
-					if (isAddRectMode && !isDrawingRect) {
-						// Add new rectangle at click position
-						addRectangleAtPosition(e, svgElement);
-					} else {
-						deselectRect();
-					}
+				if (!isSvgBackgroundHit(e.target, svgElement)) return;
+				if (suppressBackgroundClickDeselect) return;
+				if (isAddRectMode && !isDrawingRect) {
+					addRectangleAtPosition(e, svgElement);
+				} else {
+					deselectRect();
 				}
 			});
 		}
@@ -1358,8 +2196,10 @@ import "../styles.css";
 			const nh = img.naturalHeight || 4096;
 			const newSvg = createNewSVG();
 			newSvg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+			ensureInteractionPlane(newSvg);
 			globalSvgContainer.appendChild(newSvg);
 			wireSvgInteractions(newSvg);
+			updateExportButtonsVisibility();
 
 			if (sourceFile && importedSVGs.length === 0) {
 				const base = sourceFile.name.replace(/\.[^.]+$/, "");
@@ -1368,26 +2208,28 @@ import "../styles.css";
 		}
 
 		function displaySVG(svgElement) {
-			prepareImportedSvg(svgElement as SVGSVGElement);
+			const svg = svgElement as SVGSVGElement;
+			if (svg.getAttribute("data-mask-editor-prepared") !== "true") {
+				prepareImportedSvg(svg);
+			}
 
-			const isBundle =
-				(svgElement as SVGSVGElement).getAttribute("data-mask-editor-bundle") ===
-				"true";
-
-			// Preserve separate PNG underlay only when not using a combined bundle SVG
+			const isConverted =
+				svg.getAttribute("data-converted-from-bundle") === "true";
 			const backgroundContainer = document.getElementById(
 				"background-image-container",
 			);
 			let backgroundHTML = "";
-			if (backgroundContainer && !isBundle) {
+			if (backgroundContainer) {
 				backgroundHTML = backgroundContainer.outerHTML;
 			}
-			
+
 			globalSvgContainer.innerHTML = "";
-			
+
 			if (backgroundHTML) {
 				globalSvgContainer.innerHTML = backgroundHTML;
 				globalSvgContainer.style.position = "relative";
+			} else if (isConverted && bundleSourceMeta) {
+				setBackgroundFromDataUrl(bundleSourceMeta.canonicalMergedDataUrl);
 			}
 			
 			svgElement.style.width = "100%";
@@ -1405,8 +2247,9 @@ import "../styles.css";
 				console.log('Preserving original viewBox:', originalViewBox);
 			}
 			
+			ensureInteractionPlane(svg);
+			ensureOverlayLayerOrder(svg);
 			globalSvgContainer.appendChild(svgElement);
-			wireSvgInteractions(svgElement as SVGSVGElement);
 		}
 
 		function createSVGNavigation() {
@@ -1425,8 +2268,14 @@ import "../styles.css";
 				leftArrow.addEventListener("click", () => {
 					if (currentSVGIndex > 0) {
 						currentSVGIndex--;
-						displaySVG(importedSVGs[currentSVGIndex].element);
-						updateCurrentFileName(importedSVGs[currentSVGIndex].name);
+						const entry = importedSVGs[currentSVGIndex];
+						setActiveBundleMeta(entry.bundleMeta);
+						if (entry.bundleMeta) {
+							setBackgroundFromDataUrl(entry.bundleMeta.canonicalMergedDataUrl);
+						}
+						displaySVG(entry.element);
+						wireSvgInteractions(entry.element);
+						updateCurrentFileName(entry.name);
 						updateCounter();
 					}
 				});
@@ -1437,8 +2286,14 @@ import "../styles.css";
 				rightArrow.addEventListener("click", () => {
 					if (currentSVGIndex < importedSVGs.length - 1) {
 						currentSVGIndex++;
-						displaySVG(importedSVGs[currentSVGIndex].element);
-						updateCurrentFileName(importedSVGs[currentSVGIndex].name);
+						const entry = importedSVGs[currentSVGIndex];
+						setActiveBundleMeta(entry.bundleMeta);
+						if (entry.bundleMeta) {
+							setBackgroundFromDataUrl(entry.bundleMeta.canonicalMergedDataUrl);
+						}
+						displaySVG(entry.element);
+						wireSvgInteractions(entry.element);
+						updateCurrentFileName(entry.name);
 						updateCounter();
 					}
 				});
@@ -2059,6 +2914,27 @@ import "../styles.css";
 			exportCleanSVG();
 		});
 
+		document
+			.getElementById("export-bundle-from-backplate")
+			?.addEventListener("change", updateExportButtonsVisibility);
+
+		document.getElementById("export-bundle-svg-btn")?.addEventListener("click", async () => {
+			const btn = document.getElementById(
+				"export-bundle-svg-btn",
+			) as HTMLButtonElement | null;
+			if (btn) btn.disabled = true;
+			try {
+				await exportBundleSvg();
+			} catch (err) {
+				console.error(err);
+				alert(
+					`Bundle export failed.\n\n${err instanceof Error ? err.message : String(err)}`,
+				);
+			} finally {
+				if (btn) btn.disabled = false;
+			}
+		});
+
 		// Add Rectangle button functionality
 		document.getElementById("add-rect-btn").addEventListener("click", () => {
 			toggleAddRectMode();
@@ -2130,59 +3006,223 @@ import "../styles.css";
 				}
 			});
 
+		function cleanSvgForExport(svgClone: SVGElement) {
+			svgClone.querySelectorAll(".transform-group").forEach((g) => g.remove());
+			svgClone.querySelectorAll(".rubber-band-preview").forEach((el) => el.remove());
+			svgClone.querySelector("#interaction-plane")?.remove();
+
+			const rects = getContentRects(svgClone as unknown as SVGSVGElement);
+			rects.forEach((rect) => {
+				rect.classList.remove("rect-selected");
+				rect.removeAttribute("style");
+			});
+
+			svgClone.querySelectorAll("*").forEach((element) => {
+				element.removeAttribute("draggable");
+				element.classList.remove("hovered");
+			});
+
+			svgClone.removeAttribute("data-converted-from-bundle");
+			svgClone.removeAttribute("data-mask-editor-prepared");
+			svgClone.removeAttribute("data-mask-editor-bundle");
+		}
+
 		function exportCleanSVG() {
-			const currentSvg = globalSvgContainer.querySelector('svg');
+			const currentSvg = globalSvgContainer.querySelector("svg");
 			if (!currentSvg) {
-				alert('No SVG loaded to export');
+				alert("No SVG loaded to export");
 				return;
 			}
 
-			// Clone the SVG to avoid modifying the original
 			const svgClone = currentSvg.cloneNode(true) as SVGElement;
-			
-			// Remove all transform handles and selection styling
-			const transformGroups = svgClone.querySelectorAll('.transform-group');
-			transformGroups.forEach(group => group.remove());
-			
-			// Remove rubber-band previews if present
-			svgClone.querySelectorAll(".rubber-band-preview").forEach((el) => el.remove());
+			cleanSvgForExport(svgClone);
 
-			// Remove selection classes from mask rects only
-			const rects = getContentRects(svgClone as unknown as SVGSVGElement);
-			rects.forEach(rect => {
-				rect.classList.remove('rect-selected');
-				// Remove any inline styles that might have been added for selection
-				rect.removeAttribute('style');
+			const filename =
+				(document.getElementById("export-filename") as HTMLInputElement).value ||
+				currentFileName ||
+				"exported-svg";
+			const outName = filename.endsWith(".svg") ? filename : filename + ".svg";
+
+			const svgString = new XMLSerializer().serializeToString(svgClone);
+			triggerDownload(new Blob([svgString], { type: "image/svg+xml" }), outName);
+			console.log("SVG overlay exported successfully");
+		}
+
+		async function exportSoluisPatchBundleSvg(
+			overlay: SVGSVGElement,
+			meta: BundleSourceMeta,
+		) {
+			const sourceVb = parseViewBoxAttr(
+				(() => {
+					const tmp = document.createElementNS(SVG_NS, "svg");
+					tmp.setAttribute("viewBox", meta.sourceViewBox);
+					return tmp;
+				})(),
+			);
+			const overlayVb = parseViewBoxAttr(overlay);
+
+			const dimsBackgroundHref = await buildDimsBackgroundForExport(
+				meta,
+				sourceVb,
+			);
+
+			const out = document.createElementNS(SVG_NS, "svg");
+			out.setAttribute("xmlns", SVG_NS);
+			out.setAttribute("xmlns:xlink", XLINK_NS);
+			out.setAttribute("viewBox", meta.sourceViewBox);
+			out.setAttribute("width", meta.svgWidth);
+			out.setAttribute("height", meta.svgHeight);
+			out.setAttribute("preserveAspectRatio", meta.preserveAspectRatio);
+
+			const root = document.createElementNS(SVG_NS, "g");
+			root.setAttribute("id", "root");
+
+			const bg = document.createElementNS(SVG_NS, "image");
+			bg.setAttribute("id", "dims_background");
+			bg.setAttribute("x", String(sourceVb.x));
+			bg.setAttribute("y", String(sourceVb.y));
+			bg.setAttribute("width", String(sourceVb.w));
+			bg.setAttribute("height", String(sourceVb.h));
+			bg.setAttribute("preserveAspectRatio", "none");
+			bg.setAttribute("href", dimsBackgroundHref);
+			bg.setAttributeNS(XLINK_NS, "href", dimsBackgroundHref);
+			root.appendChild(bg);
+
+			let patchNum = 1;
+			let patchCount = 0;
+			for (const rect of getContentRects(overlay)) {
+				const box = unmapRectAttrsFromOverlay(rect, overlayVb, sourceVb);
+				if (box.w <= 0 || box.h <= 0) continue;
+
+				const patchHref = await cropRegionFromRasterDataUrl(
+					meta.canonicalMergedDataUrl,
+					box,
+					sourceVb,
+				);
+
+				let patchId = rect.getAttribute("data-patch-id") || "";
+				if (!patchId || !/^patch_\d+$/i.test(patchId)) {
+					patchId = `patch_${patchNum++}`;
+				}
+
+				const patchG = document.createElementNS(SVG_NS, "g");
+				patchG.setAttribute("id", patchId);
+				const img = document.createElementNS(SVG_NS, "image");
+				img.setAttribute("x", String(box.x));
+				img.setAttribute("y", String(box.y));
+				img.setAttribute("width", String(box.w));
+				img.setAttribute("height", String(box.h));
+				img.setAttribute("preserveAspectRatio", "none");
+				img.setAttribute("href", patchHref);
+				img.setAttributeNS(XLINK_NS, "href", patchHref);
+				patchG.appendChild(img);
+				appendPatchPathElement(patchG, box);
+				root.appendChild(patchG);
+				patchCount++;
+			}
+
+			out.appendChild(root);
+			console.log(
+				`Exported full canonical dims_background + ${patchCount} patch crop(s) at current mask positions`,
+			);
+			return out;
+		}
+
+		async function exportBundleSvg() {
+			const overlay = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
+			if (!overlay) {
+				alert("No SVG loaded to export");
+				return;
+			}
+
+			if (!canExportBundleSvg()) {
+				alert(
+					"Bundle export needs a combined floorplan import, or enable “Soluis bundle from PNG backplate” with an image + SVG overlay loaded.",
+				);
+				return;
+			}
+
+			const exportMeta = await resolveBundleExportMeta(overlay);
+			const patchCount = getContentRects(overlay).length;
+			if (exportMeta.exportFormat === "soluis-root" && patchCount === 0) {
+				alert(
+					"Add at least one mask rectangle before exporting a Soluis patch bundle.",
+				);
+				return;
+			}
+
+			const filename =
+				(document.getElementById("export-filename") as HTMLInputElement).value ||
+				currentFileName ||
+				"exported-svg";
+			const outName = filename.endsWith(".svg") ? filename : filename + ".svg";
+
+			if (exportMeta.exportFormat === "soluis-root") {
+				const out = await exportSoluisPatchBundleSvg(overlay, exportMeta);
+				const svgString = new XMLSerializer().serializeToString(out);
+				triggerDownload(new Blob([svgString], { type: "image/svg+xml" }), outName);
+				console.log("Soluis patch bundle SVG exported successfully");
+				return;
+			}
+
+			const {
+				viewBox,
+				preserveAspectRatio,
+				canonicalMergedDataUrl,
+				floorplanRasterDataUrl,
+			} = exportMeta;
+			const vb = parseViewBoxAttr(
+				(() => {
+					const tmp = document.createElementNS(SVG_NS, "svg");
+					tmp.setAttribute("viewBox", viewBox);
+					return tmp;
+				})(),
+			);
+
+			const out = document.createElementNS(SVG_NS, "svg");
+			out.setAttribute("xmlns", SVG_NS);
+			out.setAttribute("xmlns:xlink", XLINK_NS);
+			out.setAttribute("viewBox", viewBox);
+			out.setAttribute("preserveAspectRatio", preserveAspectRatio);
+			out.setAttribute("data-mask-editor-bundle", "true");
+
+			const style = overlay.querySelector("style");
+			if (style) out.appendChild(style.cloneNode(true));
+
+			const rasterGroup = document.createElementNS(SVG_NS, "g");
+			rasterGroup.setAttribute("id", "floorplan-raster");
+			rasterGroup.setAttribute("pointer-events", "none");
+
+			const embedded = document.createElementNS(SVG_NS, "image");
+			const rasterUrl = floorplanRasterDataUrl || canonicalMergedDataUrl;
+			embedded.setAttribute("href", rasterUrl);
+			embedded.setAttributeNS(XLINK_NS, "href", rasterUrl);
+			embedded.setAttribute("x", String(vb.x));
+			embedded.setAttribute("y", String(vb.y));
+			embedded.setAttribute("width", String(vb.w));
+			embedded.setAttribute("height", String(vb.h));
+			embedded.setAttribute("preserveAspectRatio", "none");
+			rasterGroup.appendChild(embedded);
+			out.appendChild(rasterGroup);
+
+			const dims = overlay.querySelector("#dims-reference");
+			if (dims) {
+				out.appendChild(dims.cloneNode(true));
+			}
+
+			const maskGroup = document.createElementNS(SVG_NS, "g");
+			maskGroup.setAttribute("id", "mask-rects");
+			getContentRects(overlay).forEach((rect) => {
+				const clone = rect.cloneNode(true) as SVGRectElement;
+				clone.classList.remove("rect-selected");
+				clone.removeAttribute("style");
+				maskGroup.appendChild(clone);
 			});
-			
-			// Clean up any other unwanted attributes or classes
-			const allElements = svgClone.querySelectorAll('*');
-			allElements.forEach(element => {
-				// Remove draggable attributes we added
-				element.removeAttribute('draggable');
-				// Remove any selection-related classes
-				element.classList.remove('hovered');
-			});
-			
-			// Get filename from input, fallback to current filename, then default
-			const filename = (document.getElementById('export-filename') as HTMLInputElement).value || currentFileName || 'exported-svg';
-			
-			// Serialize the cleaned SVG
-			const serializer = new XMLSerializer();
-			const svgString = serializer.serializeToString(svgClone);
-			
-			// Create and download the file
-			const blob = new Blob([svgString], { type: 'image/svg+xml' });
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-				link.href = url;
-			link.download = filename.endsWith('.svg') ? filename : filename + '.svg';
-				document.body.appendChild(link);
-				link.click();
-				document.body.removeChild(link);
-			URL.revokeObjectURL(url);
-			
-			console.log('SVG exported successfully');
+			out.appendChild(maskGroup);
+
+			const svgString = new XMLSerializer().serializeToString(out);
+			triggerDownload(new Blob([svgString], { type: "image/svg+xml" }), outName);
+			console.log("Bundle SVG exported successfully");
 		}
 
 		// Move keyboard event listener to end of script
@@ -2379,8 +3419,7 @@ import "../styles.css";
 				duplicatedRect.setAttribute(attr.name, attr.value);
 			}
 			
-			// Add to SVG
-			currentSvg.appendChild(duplicatedRect);
+			appendMaskRect(currentSvg as SVGSVGElement, duplicatedRect);
 			
 			// Add event listeners
 			addRectEventListeners(duplicatedRect);
@@ -2793,12 +3832,12 @@ import "../styles.css";
 			const attributes = {};
 			for (let i = 0; i < rect.attributes.length; i++) {
 				const attr = rect.attributes[i];
-				if (parseFloat(attr.value) != NaN) {
-					attributes[attr.name] = parseFloat(attr.value).toFixed(2);
+				const num = parseFloat(attr.value);
+				if (!Number.isNaN(num)) {
+					attributes[attr.name] = num.toFixed(2);
 				} else {
 					attributes[attr.name] = attr.value;
 				}
-				
 			}
 			
 			// Create properties HTML
