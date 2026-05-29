@@ -113,6 +113,11 @@ import "../styles.css";
 			background-color: #808080; /* Grey background */
 		}
 
+		/* Embedded floorplan raster inside combined bundle SVGs */
+		#floorplan-raster {
+			pointer-events: none;
+		}
+
 		/* Floorplan dimension reference layer (dims-only SVG imports) */
 		#dims-reference {
 			pointer-events: none;
@@ -142,7 +147,7 @@ import "../styles.css";
 	<body class="">
 		<div class="drag-drop-prompt">
 			<div class="animated-border">
-				<h1>Drag and Drop Images or SVG Files Here</h1>
+				<h1>Drag and Drop Floorplan SVG or Image Here</h1>
 			</div>
 		</div>
 		
@@ -291,6 +296,9 @@ import "../styles.css";
 						<p id="dims-reference-hint" style="display: none; color: #0a5; margin-top: 8px;">
 							<strong>Dimension SVG loaded.</strong> White lines are reference only — draw blue mask rectangles on top.
 						</p>
+						<p id="combined-bundle-hint" style="display: none; color: #0a5; margin-top: 8px;">
+							<strong>Combined floorplan loaded.</strong> Floorplan image and dimension lines are in one file — draw blue mask rectangles on top.
+						</p>
 					</div>
 				</section>
 			</div>
@@ -311,7 +319,7 @@ import "../styles.css";
 					<p
 						style="padding: 2em; background-color: #00000022; border-radius: 3px; margin: 0px;"
 					>
-						Import image or SVG file
+						Import combined floorplan SVG, or image + SVG
 					</p>
 				</div>
 			</div>
@@ -347,10 +355,36 @@ import "../styles.css";
 		var suppressBackgroundClickDeselect = false;
 
 		const SVG_NS = "http://www.w3.org/2000/svg";
+		const XLINK_NS = "http://www.w3.org/1999/xlink";
+		/** Decoded raster for auto-brush when the floorplan is an embedded SVG image. */
+		const bundleRasterImages = new WeakMap<SVGSVGElement, HTMLImageElement>();
+
+		function getImageHref(imageEl: Element): string | null {
+			return (
+				imageEl.getAttribute("href") ||
+				imageEl.getAttributeNS(XLINK_NS, "href") ||
+				null
+			);
+		}
+
+		function isRasterImageHref(href: string | null): boolean {
+			if (!href) return false;
+			return (
+				/^data:image\/(png|jpe?g|webp)/i.test(href) ||
+				/\.(png|jpe?g|webp)(\?|#|$)/i.test(href)
+			);
+		}
+
+		function getEmbeddedRasterImages(svg: SVGSVGElement): SVGImageElement[] {
+			return Array.from(svg.querySelectorAll("image")).filter((el) =>
+				isRasterImageHref(getImageHref(el)),
+			) as SVGImageElement[];
+		}
 
 		function isDimsReferenceSvg(svg: SVGSVGElement, fileName?: string) {
 			if (fileName && /\bdims[_-]/i.test(fileName)) return true;
 			if (fileName && /_dims\.svg$/i.test(fileName)) return true;
+			if (svg.querySelector("#dims-reference")) return true;
 			if (svg.querySelector(".dim-line, .dim-ext, .dim-text")) return true;
 			const lines = svg.querySelectorAll("line");
 			const texts = svg.querySelectorAll("text");
@@ -362,6 +396,105 @@ import "../styles.css";
 				if (meterLabels >= 3) return true;
 			}
 			return false;
+		}
+
+		function isCombinedBundleSvg(svg: SVGSVGElement, fileName?: string) {
+			if (svg.getAttribute("data-mask-editor-bundle") === "true") return true;
+			const rasters = getEmbeddedRasterImages(svg);
+			if (rasters.length === 0) return false;
+			if (svg.querySelector("#dims-reference") && svg.querySelector("#floorplan-raster")) {
+				return true;
+			}
+			return isDimsReferenceSvg(svg, fileName);
+		}
+
+		function preloadBundleRaster(svg: SVGSVGElement) {
+			const svgImg =
+				(svg.querySelector("#floorplan-raster image") as SVGImageElement | null) ||
+				getEmbeddedRasterImages(svg)[0];
+			if (!svgImg) return;
+			const href = getImageHref(svgImg);
+			if (!href) return;
+			const img = new Image();
+			img.onload = () => {
+				bundleRasterImages.set(svg, img);
+			};
+			img.src = href;
+		}
+
+		type RasterBrushTarget = {
+			image: HTMLImageElement;
+			samplePixelsFromClientRect: (
+				inter: { left: number; top: number; width: number; height: number },
+			) => { ix0: number; iy0: number; ix1: number; iy1: number } | null;
+		};
+
+		function buildRasterBrushTarget(svg: SVGSVGElement): RasterBrushTarget | null {
+			const htmlImg = globalSvgContainer.querySelector(
+				"#background-image-container img",
+			) as HTMLImageElement | null;
+			if (htmlImg && (htmlImg.naturalWidth || 0) > 0) {
+				return {
+					image: htmlImg,
+					samplePixelsFromClientRect(inter) {
+						const imgRect = htmlImg.getBoundingClientRect();
+						const nw = htmlImg.naturalWidth;
+						const nh = htmlImg.naturalHeight;
+						const sx0 = Math.floor(
+							((inter.left - imgRect.left) / imgRect.width) * nw,
+						);
+						const sy0 = Math.floor(
+							((inter.top - imgRect.top) / imgRect.height) * nh,
+						);
+						const sx1 = Math.ceil(
+							((inter.left + inter.width - imgRect.left) / imgRect.width) * nw,
+						);
+						const sy1 = Math.ceil(
+							((inter.top + inter.height - imgRect.top) / imgRect.height) * nh,
+						);
+						return {
+							ix0: Math.max(0, sx0),
+							iy0: Math.max(0, sy0),
+							ix1: Math.min(nw, sx1),
+							iy1: Math.min(nh, sy1),
+						};
+					},
+				};
+			}
+
+			const decoded = bundleRasterImages.get(svg);
+			const svgImg = svg.querySelector(
+				"#floorplan-raster image",
+			) as SVGImageElement | null;
+			if (!decoded || !svgImg || (decoded.naturalWidth || 0) === 0) return null;
+
+			return {
+				image: decoded,
+				samplePixelsFromClientRect(inter) {
+					const imgRect = svgImg.getBoundingClientRect();
+					if (imgRect.width < 1 || imgRect.height < 1) return null;
+					const nw = decoded.naturalWidth;
+					const nh = decoded.naturalHeight;
+					const sx0 = Math.floor(
+						((inter.left - imgRect.left) / imgRect.width) * nw,
+					);
+					const sy0 = Math.floor(
+						((inter.top - imgRect.top) / imgRect.height) * nh,
+					);
+					const sx1 = Math.ceil(
+						((inter.left + inter.width - imgRect.left) / imgRect.width) * nw,
+					);
+					const sy1 = Math.ceil(
+						((inter.top + inter.height - imgRect.top) / imgRect.height) * nh,
+					);
+					return {
+						ix0: Math.max(0, sx0),
+						iy0: Math.max(0, sy0),
+						ix1: Math.min(nw, sx1),
+						iy1: Math.min(nh, sy1),
+					};
+				},
+			};
 		}
 
 		function getMaskRectsGroup(svg: SVGSVGElement): SVGGElement {
@@ -397,10 +530,42 @@ import "../styles.css";
 			return { width: 100, height: 100 };
 		}
 
+		function isStructuralLayer(el: Element) {
+			const id = el.id;
+			return (
+				id === "mask-rects" ||
+				id === "dims-reference" ||
+				id === "floorplan-raster"
+			);
+		}
+
+		function ensureFloorplanRasterGroup(svg: SVGSVGElement) {
+			let rasterGroup = svg.querySelector(
+				"#floorplan-raster",
+			) as SVGGElement | null;
+			if (!rasterGroup) {
+				rasterGroup = document.createElementNS(SVG_NS, "g");
+				rasterGroup.setAttribute("id", "floorplan-raster");
+				rasterGroup.setAttribute("pointer-events", "none");
+				const insertBefore =
+					svg.querySelector("#dims-reference") ||
+					svg.querySelector("#mask-rects");
+				if (insertBefore) {
+					svg.insertBefore(rasterGroup, insertBefore);
+				} else {
+					svg.appendChild(rasterGroup);
+				}
+			}
+			return rasterGroup;
+		}
+
 		function prepareImportedSvg(svg: SVGSVGElement, fileName?: string) {
 			if (svg.getAttribute("data-mask-editor-prepared") === "true") return;
 
-			const isDims = isDimsReferenceSvg(svg, fileName);
+			const embeddedRasters = getEmbeddedRasterImages(svg);
+			const isCombined = isCombinedBundleSvg(svg, fileName);
+			const isDims =
+				isDimsReferenceSvg(svg, fileName) || (isCombined && embeddedRasters.length > 0);
 
 			if (!svg.getAttribute("preserveAspectRatio")) {
 				svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
@@ -410,6 +575,15 @@ import "../styles.css";
 				const maskGroup = document.createElementNS(SVG_NS, "g");
 				maskGroup.setAttribute("id", "mask-rects");
 				svg.appendChild(maskGroup);
+			}
+
+			if (embeddedRasters.length > 0) {
+				const rasterGroup = ensureFloorplanRasterGroup(svg);
+				for (const img of embeddedRasters) {
+					if (img.parentElement !== rasterGroup) {
+						rasterGroup.appendChild(img);
+					}
+				}
 			}
 
 			if (isDims && !svg.querySelector("#dims-reference")) {
@@ -422,12 +596,13 @@ import "../styles.css";
 					if (node.nodeType !== Node.ELEMENT_NODE) continue;
 					const el = node as Element;
 					if (el.tagName === "defs" || el.tagName === "style") continue;
-					if (el.id === "mask-rects" || el.id === "dims-reference") continue;
+					if (isStructuralLayer(el)) continue;
+					if (el.tagName === "image") continue;
 					refGroup.appendChild(el);
 				}
 
 				const vb = svg.viewBox.baseVal;
-				if (vb.width > 0 && vb.height > 0) {
+				if (!isCombined && vb.width > 0 && vb.height > 0) {
 					const bg = document.createElementNS(SVG_NS, "rect");
 					bg.setAttribute("data-dims-bg", "true");
 					bg.setAttribute("x", String(vb.x));
@@ -442,15 +617,32 @@ import "../styles.css";
 			}
 
 			svg.setAttribute("data-dims-reference", isDims ? "true" : "false");
-			const hint = document.getElementById("dims-reference-hint");
-			if (hint) hint.style.display = isDims ? "block" : "none";
+			svg.setAttribute(
+				"data-mask-editor-bundle",
+				isCombined ? "true" : "false",
+			);
+
+			const dimsHint = document.getElementById("dims-reference-hint");
+			const bundleHint = document.getElementById("combined-bundle-hint");
+			if (dimsHint) {
+				dimsHint.style.display = isDims && !isCombined ? "block" : "none";
+			}
+			if (bundleHint) {
+				bundleHint.style.display = isCombined ? "block" : "none";
+			}
+
+			if (isCombined) {
+				preloadBundleRaster(svg);
+			}
 
 			svg.setAttribute("data-mask-editor-prepared", "true");
 		}
 
 		function resetDimsReferenceHint() {
-			const hint = document.getElementById("dims-reference-hint");
-			if (hint) hint.style.display = "none";
+			const dimsHint = document.getElementById("dims-reference-hint");
+			const bundleHint = document.getElementById("combined-bundle-hint");
+			if (dimsHint) dimsHint.style.display = "none";
+			if (bundleHint) bundleHint.style.display = "none";
 		}
 
 		function getBrushMode() {
@@ -525,14 +717,24 @@ import "../styles.css";
 			return { left, top, width, height };
 		}
 
-		function imagePixelToClient(img: HTMLImageElement, px: number, py: number) {
-			const r = img.getBoundingClientRect();
-			const nw = img.naturalWidth || r.width;
-			const nh = img.naturalHeight || r.height;
+		function rasterPixelToClient(
+			screenEl: Element,
+			nw: number,
+			nh: number,
+			px: number,
+			py: number,
+		) {
+			const r = screenEl.getBoundingClientRect();
 			return {
 				x: r.left + (px / nw) * r.width,
 				y: r.top + (py / nh) * r.height,
 			};
+		}
+
+		function imagePixelToClient(img: HTMLImageElement, px: number, py: number) {
+			const nw = img.naturalWidth || img.width;
+			const nh = img.naturalHeight || img.height;
+			return rasterPixelToClient(img, nw, nh, px, py);
 		}
 
 		function imageBBoxToSvgRect(
@@ -542,12 +744,16 @@ import "../styles.css";
 			py0: number,
 			px1: number,
 			py1: number,
+			screenEl?: Element | null,
 		) {
+			const nw = img.naturalWidth || img.width;
+			const nh = img.naturalHeight || img.height;
+			const mapEl = screenEl || img;
 			const corners = [
-				imagePixelToClient(img, px0, py0),
-				imagePixelToClient(img, px1, py0),
-				imagePixelToClient(img, px0, py1),
-				imagePixelToClient(img, px1, py1),
+				rasterPixelToClient(mapEl, nw, nh, px0, py0),
+				rasterPixelToClient(mapEl, nw, nh, px1, py0),
+				rasterPixelToClient(mapEl, nw, nh, px0, py1),
+				rasterPixelToClient(mapEl, nw, nh, px1, py1),
 			];
 			let minSx = Infinity,
 				minSy = Infinity,
@@ -607,52 +813,76 @@ import "../styles.css";
 				fh = height;
 
 			if (getBrushMode() === "auto") {
-				const img = globalSvgContainer.querySelector(
-					"#background-image-container img",
-				) as HTMLImageElement | null;
+				const raster = buildRasterBrushTarget(svg);
 				const rubberClient = svgRectToClientRect(svg, x, y, width, height);
-				if (img && img.complete && (img.naturalWidth || 0) > 0 && (img.naturalHeight || 0) > 0) {
-					const imgRect = img.getBoundingClientRect();
-					const inter = intersectClientRects(rubberClient, imgRect);
+				const svgImg = svg.querySelector(
+					"#floorplan-raster image",
+				) as SVGImageElement | null;
+				const screenRect = svgImg
+					? svgImg.getBoundingClientRect()
+					: raster?.image.getBoundingClientRect();
+				if (
+					raster &&
+					screenRect &&
+					screenRect.width >= 1 &&
+					screenRect.height >= 1 &&
+					raster.image.complete &&
+					(raster.image.naturalWidth || 0) > 0 &&
+					(raster.image.naturalHeight || 0) > 0
+				) {
+					const img = raster.image;
+					const inter = intersectClientRects(rubberClient, screenRect);
 					if (inter && inter.width >= 1 && inter.height >= 1) {
-						const nw = img.naturalWidth;
-						const nh = img.naturalHeight;
-						const sx0 = Math.floor(((inter.left - imgRect.left) / imgRect.width) * nw);
-						const sy0 = Math.floor(((inter.top - imgRect.top) / imgRect.height) * nh);
-						const sx1 = Math.ceil(((inter.left + inter.width - imgRect.left) / imgRect.width) * nw);
-						const sy1 = Math.ceil(((inter.top + inter.height - imgRect.top) / imgRect.height) * nh);
-						const ix0 = Math.max(0, sx0);
-						const iy0 = Math.max(0, sy0);
-						const ix1 = Math.min(nw, sx1);
-						const iy1 = Math.min(nh, sy1);
-						const iw = ix1 - ix0;
-						const ih = iy1 - iy0;
-						if (iw >= 1 && ih >= 1) {
-							const canvas = document.createElement("canvas");
-							canvas.width = nw;
-							canvas.height = nh;
-							const ctx = canvas.getContext("2d");
-							if (ctx) {
-								ctx.drawImage(img, 0, 0);
-								let imageData: ImageData | null = null;
-								try {
-									imageData = ctx.getImageData(ix0, iy0, iw, ih);
-								} catch {
-									imageData = null;
-								}
-								if (imageData && imageData.width > 0 && imageData.height > 0) {
-									const bbox = findRgbContentBBox(imageData);
-									if (bbox) {
-										const apx0 = ix0 + bbox.minX;
-										const apy0 = iy0 + bbox.minY;
-										const apx1 = ix0 + bbox.maxX;
-										const apy1 = iy0 + bbox.maxY;
-										const mapped = imageBBoxToSvgRect(svg, img, apx0, apy0, apx1, apy1);
-										if (mapped && mapped.width > 1 && mapped.height > 1) {
-											fx = mapped.x;
-											fy = mapped.y;
-											fw = mapped.width;
-											fh = mapped.height;
+						const pixels = raster.samplePixelsFromClientRect(inter);
+						if (pixels) {
+							const { ix0, iy0, ix1, iy1 } = pixels;
+							const iw = ix1 - ix0;
+							const ih = iy1 - iy0;
+							if (iw >= 1 && ih >= 1) {
+								const nw = img.naturalWidth;
+								const nh = img.naturalHeight;
+								const canvas = document.createElement("canvas");
+								canvas.width = nw;
+								canvas.height = nh;
+								const ctx = canvas.getContext("2d");
+								if (ctx) {
+									ctx.drawImage(img, 0, 0);
+									let imageData: ImageData | null = null;
+									try {
+										imageData = ctx.getImageData(ix0, iy0, iw, ih);
+									} catch {
+										imageData = null;
+									}
+									if (
+										imageData &&
+										imageData.width > 0 &&
+										imageData.height > 0
+									) {
+										const bbox = findRgbContentBBox(imageData);
+										if (bbox) {
+											const apx0 = ix0 + bbox.minX;
+											const apy0 = iy0 + bbox.minY;
+											const apx1 = ix0 + bbox.maxX;
+											const apy1 = iy0 + bbox.maxY;
+											const mapped = imageBBoxToSvgRect(
+												svg,
+												img,
+												apx0,
+												apy0,
+												apx1,
+												apy1,
+												svgImg,
+											);
+											if (
+												mapped &&
+												mapped.width > 1 &&
+												mapped.height > 1
+											) {
+												fx = mapped.x;
+												fy = mapped.y;
+												fw = mapped.width;
+												fh = mapped.height;
+											}
 										}
 									}
 								}
@@ -922,6 +1152,16 @@ import "../styles.css";
 		}
 
 		function handleImageFile(file) {
+			const bundleSvg = globalSvgContainer.querySelector(
+				'svg[data-mask-editor-bundle="true"]',
+			);
+			if (bundleSvg) {
+				console.log(
+					`Combined SVG already includes floorplan raster; ignoring separate image "${file.name}".`,
+				);
+				return;
+			}
+
 			const reader = new FileReader();
 			reader.onload = (event) => {
 				globalSvgContainer.querySelector("p")?.remove();
@@ -985,6 +1225,10 @@ import "../styles.css";
 				}
 
 				prepareImportedSvg(svgElement, file.name);
+
+				if (svgElement.getAttribute("data-mask-editor-bundle") === "true") {
+					document.getElementById("background-image-container")?.remove();
+				}
 				
 				// Store SVG for navigation if multiple files
 				importedSVGs.push({
@@ -1126,19 +1370,24 @@ import "../styles.css";
 		function displaySVG(svgElement) {
 			prepareImportedSvg(svgElement as SVGSVGElement);
 
-			// Preserve background image if it exists
-			const backgroundContainer = document.getElementById('background-image-container');
-			let backgroundHTML = '';
-			if (backgroundContainer) {
+			const isBundle =
+				(svgElement as SVGSVGElement).getAttribute("data-mask-editor-bundle") ===
+				"true";
+
+			// Preserve separate PNG underlay only when not using a combined bundle SVG
+			const backgroundContainer = document.getElementById(
+				"background-image-container",
+			);
+			let backgroundHTML = "";
+			if (backgroundContainer && !isBundle) {
 				backgroundHTML = backgroundContainer.outerHTML;
 			}
 			
 			globalSvgContainer.innerHTML = "";
 			
-			// Restore background image
 			if (backgroundHTML) {
 				globalSvgContainer.innerHTML = backgroundHTML;
-				globalSvgContainer.style.position = 'relative';
+				globalSvgContainer.style.position = "relative";
 			}
 			
 			svgElement.style.width = "100%";
