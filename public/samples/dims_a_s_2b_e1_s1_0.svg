@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-5000 -18000 30000 16000" preserveAspectRatio="xMidYMid meet">
+<style>
+.dim-line{stroke:#dc2626;stroke-width:15;fill:none;stroke-linecap:round}
+.dim-ext{stroke:#dc2626;stroke-width:15;fill:none;stroke-linecap:round}
+.dim-text{font:bold 260px sans-serif;fill:#dc2626;text-anchor:middle}
+</style>
+<g transform="scale(1,-1)">
+<g class="dims">
+<!-- Top: 8.2m + 12.1m = 20.3m -->
+<line class="dim-ext" x1="0" y1="11800" x2="0" y2="12400"/>
+<line class="dim-ext" x1="8200" y1="11800" x2="8200" y2="12400"/>
+<line class="dim-line" x1="0" y1="12100" x2="8200" y2="12100"/>
+<text class="dim-text" x="4100" y="12450" transform="scale(1,-1) translate(0,-24900)">8.20 m</text>
+<line class="dim-ext" x1="8200" y1="11800" x2="8200" y2="12400"/>
+<line class="dim-ext" x1="20300" y1="11800" x2="20300" y2="12400"/>
+<line class="dim-line" x1="8200" y1="12100" x2="20300" y2="12100"/>
+<text class="dim-text" x="14250" y="12450" transform="scale(1,-1) translate(0,-24900)">12.10 m</text>
+<line class="dim-ext" x1="0" y1="12800" x2="0" y2="13400"/>
+<line class="dim-ext" x1="20300" y1="12800" x2="20300" y2="13400"/>
+<line class="dim-line" x1="0" y1="13100" x2="20300" y2="13100"/>
+<text class="dim-text" x="10150" y="13550" transform="scale(1,-1) translate(0,-27100)">20.30 m</text>
+<!-- Left: 8.8m + 3.4m -->
+<line class="dim-ext" x1="-300" y1="0" x2="300" y2="0"/>
+<line class="dim-ext" x1="-300" y1="8800" x2="300" y2="8800"/>
+<line class="dim-line" x1="0" y1="0" x2="0" y2="8800"/>
+<text class="dim-text" x="0" y="0" transform="translate(-350,4400) scale(1,-1) rotate(-90)" text-anchor="middle">8.80 m</text>
+<line class="dim-ext" x1="-300" y1="8800" x2="300" y2="8800"/>
+<line class="dim-ext" x1="-300" y1="12200" x2="300" y2="12200"/>
+<line class="dim-line" x1="0" y1="8800" x2="0" y2="12200"/>
+<text class="dim-text" x="0" y="0" transform="translate(-350,10500) scale(1,-1) rotate(-90)" text-anchor="middle">3.40 m</text>
+<!-- Right: 10.2m + 2.0m -->
+<line class="dim-line" x1="20300" y1="0" x2="20300" y2="10200"/>
+<text class="dim-text" x="0" y="0" transform="translate(20750,5100) scale(1,-1) rotate(90)" text-anchor="middle">10.20 m</text>
+<line class="dim-line" x1="20300" y1="10200" x2="20300" y2="12200"/>
+<text class="dim-text" x="0" y="0" transform="translate(20750,11200) scale(1,-1) rotate(90)" text-anchor="middle">2.00 m</text>
+</g>
+</g>
+</svg>

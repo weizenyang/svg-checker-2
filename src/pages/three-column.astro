@@ -307,9 +307,9 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						<tbody id="rows">
 							<tr class="border-t border-neutral-100">
 								<td class="px-1 py-1.5 text-center align-middle"><span class="row-drag-handle inline-flex items-center justify-center w-5 h-6 text-neutral-300 hover:text-neutral-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder" aria-label="Drag to reorder"><svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="7" cy="4" r="1.2"/><circle cx="7" cy="10" r="1.2"/><circle cx="7" cy="16" r="1.2"/><circle cx="13" cy="4" r="1.2"/><circle cx="13" cy="10" r="1.2"/><circle cx="13" cy="16" r="1.2"/></svg></span></td>
-								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="0" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="1" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-								<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="2" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+								<td class="p-1.5"><div class="cell-wrap relative"><div class="chip-cell" data-col="0"></div><input type="hidden" class="cell-input" data-col="0" /><span class="cell-drag-handle" draggable="true" title="Drag to swap cells" aria-label="Drag to swap cells"><svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="3" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="6" cy="13" r="1"/><circle cx="10" cy="3" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="10" cy="13" r="1"/></svg></span></div></td>
+								<td class="p-1.5"><div class="cell-wrap relative"><div class="chip-cell" data-col="1"></div><input type="hidden" class="cell-input" data-col="1" /><span class="cell-drag-handle" draggable="true" title="Drag to swap cells" aria-label="Drag to swap cells"><svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="3" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="6" cy="13" r="1"/><circle cx="10" cy="3" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="10" cy="13" r="1"/></svg></span></div></td>
+								<td class="p-1.5"><div class="cell-wrap relative"><div class="chip-cell" data-col="2"></div><input type="hidden" class="cell-input" data-col="2" /><span class="cell-drag-handle" draggable="true" title="Drag to swap cells" aria-label="Drag to swap cells"><svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="3" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="6" cy="13" r="1"/><circle cx="10" cy="3" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="10" cy="13" r="1"/></svg></span></div></td>
 								<td class="p-1.5 text-right"><button type="button" class="delete-row px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 hover:bg-red-100">Del</button></td>
 							</tr>
 						</tbody>
@@ -392,6 +392,143 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			}
 			#rows tr[draggable="true"] {
 				cursor: grabbing;
+			}
+		</style>
+
+		<style is:global>
+			/* Per-cell drag tab (swap individual cells). Global so it also applies to
+			   tbody rows generated dynamically by addRow(), which don't carry Astro's
+			   scoped class. */
+			#rows .cell-wrap {
+				position: relative;
+			}
+			/* Chip-cell: looks like a single input field. Contains pill-shaped
+			   <span> chips and a trailing <input> the user keeps typing into. */
+			#rows .chip-cell {
+				display: flex;
+				align-items: center;
+				gap: 4px;
+				flex-wrap: nowrap;
+				overflow-x: auto;
+				min-height: 34px;
+				padding: 3px 28px 3px 5px;
+				border: 1px solid rgb(229 229 229);
+				border-radius: 6px;
+				background: white;
+				scrollbar-width: thin;
+				cursor: text;
+			}
+			#rows .chip-cell:focus-within {
+				border-color: rgb(163 163 163);
+				box-shadow: 0 0 0 2px rgb(212 212 212 / 0.5);
+			}
+			#rows .chip-cell::-webkit-scrollbar {
+				height: 4px;
+			}
+			#rows .chip-cell::-webkit-scrollbar-thumb {
+				background: rgb(212 212 212);
+				border-radius: 2px;
+			}
+			/* Frozen-value chip rendered as a pill <span>. */
+			#rows .chip {
+				display: inline-flex;
+				align-items: center;
+				gap: 2px;
+				background: rgb(243 244 246);
+				border: 1px solid rgb(229 231 235);
+				border-radius: 9999px;
+				padding: 1px 2px 1px 9px;
+				font-size: 13px;
+				line-height: 1.3;
+				color: rgb(23 23 23);
+				white-space: nowrap;
+				flex: 0 0 auto;
+				user-select: none;
+				cursor: default;
+			}
+			#rows .chip-text {
+				display: inline-block;
+			}
+			#rows .chip-remove {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 16px;
+				height: 16px;
+				border-radius: 9999px;
+				background: transparent;
+				color: rgb(115 115 115);
+				border: none;
+				cursor: pointer;
+				font-size: 14px;
+				line-height: 1;
+				padding: 0;
+			}
+			#rows .chip-remove:hover {
+				background: rgb(212 212 212);
+				color: rgb(23 23 23);
+			}
+			/* Trailing input: the always-typable area. Borderless, transparent. */
+			#rows .chip-trailing-input {
+				border: none;
+				outline: none;
+				background: transparent;
+				flex: 1 1 auto;
+				min-width: 40px;
+				padding: 2px 4px;
+				font-size: 13px;
+				font-family: inherit;
+				color: rgb(23 23 23);
+			}
+			/* Column A trailing input is the only field for the room name → bolder + grow. */
+			#rows .chip-cell[data-col="0"] .chip-trailing-input {
+				font-weight: 500;
+			}
+			#rows .chip-x {
+				color: rgb(163 163 163);
+				font-size: 12px;
+				user-select: none;
+				flex: 0 0 auto;
+				padding: 0 1px;
+			}
+			#rows .cell-wrap .cell-drag-handle {
+				position: absolute;
+				right: 3px;
+				top: 50%;
+				transform: translateY(-50%);
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 18px;
+				height: 22px;
+				color: rgb(163 163 163);
+				cursor: grab;
+				border-radius: 4px;
+				opacity: 0.45;
+				transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
+				z-index: 2;
+				background: transparent;
+			}
+			#rows .cell-wrap:hover .cell-drag-handle,
+			#rows .cell-wrap:focus-within .cell-drag-handle {
+				opacity: 1;
+			}
+			#rows .cell-wrap .cell-drag-handle:hover {
+				color: rgb(64 64 64);
+				background: rgb(245 245 245);
+			}
+			#rows .cell-wrap .cell-drag-handle:active {
+				cursor: grabbing;
+				background: rgb(229 229 229);
+			}
+			#rows .cell-wrap.cell-source-dragging > .chip-cell {
+				opacity: 0.4;
+			}
+			#rows .cell-wrap.cell-drop-target > .chip-cell {
+				outline: 2px solid #8b5cf6;
+				outline-offset: -1px;
+				border-radius: 6px;
+				background-color: #f5f3ff;
 			}
 		</style>
 
@@ -710,15 +847,332 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return div.innerHTML;
 			}
 
+			// --- Chip-cell helpers ---------------------------------------------------
+			// The chip-cell looks like a single input field. Internally it holds zero or
+			// more frozen "chip" <span>s, plus a trailing <input> where the user types.
+			// As the user types a complete value, that value freezes into a chip.
+			// Backspace at start of empty trailing input "unfreezes" the last chip back
+			// into typable text. Each chip has an × button that removes it entirely.
+			const FANCY_APOS = '’'; // ’
+			const MAX_CHIPS_PER_CELL = 2;
+
+			function buildChipSpan(value: string): HTMLSpanElement {
+				const span = document.createElement('span');
+				span.className = 'chip';
+				span.dataset.value = value;
+				span.tabIndex = -1;
+
+				const text = document.createElement('span');
+				text.className = 'chip-text';
+				text.textContent = value;
+				span.appendChild(text);
+
+				const close = document.createElement('button');
+				close.type = 'button';
+				close.className = 'chip-remove';
+				close.tabIndex = -1;
+				close.setAttribute('aria-label', 'Remove');
+				close.textContent = '×';
+				span.appendChild(close);
+
+				return span;
+			}
+
+			function buildChipSeparator(): HTMLSpanElement {
+				const s = document.createElement('span');
+				s.className = 'chip-x';
+				s.textContent = '×';
+				return s;
+			}
+
+			function buildTrailingInput(value: string): HTMLInputElement {
+				const inp = document.createElement('input');
+				inp.type = 'text';
+				inp.className = 'chip-trailing-input';
+				inp.value = value;
+				inp.setAttribute('spellcheck', 'false');
+				inp.autocomplete = 'off';
+				inp.setAttribute('autocapitalize', 'off');
+				inp.setAttribute('autocorrect', 'off');
+				return inp;
+			}
+
+			function getChipValues(chipCell: HTMLElement): string[] {
+				return Array.from(chipCell.querySelectorAll<HTMLSpanElement>('.chip')).map(
+					(c) => c.dataset.value ?? c.querySelector('.chip-text')?.textContent ?? ''
+				);
+			}
+
+			function getTrailingInput(chipCell: HTMLElement): HTMLInputElement | null {
+				return chipCell.querySelector<HTMLInputElement>('.chip-trailing-input');
+			}
+
+			function rebuildCombinedFromChipCell(
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement,
+				fireEvent = true
+			) {
+				const chips = getChipValues(chipCell);
+				const trailing = getTrailingInput(chipCell);
+				const trailingVal = trailing?.value.trim() ?? '';
+				const parts: string[] = [...chips];
+				if (trailingVal) parts.push(trailingVal);
+
+				let combined = '';
+				if (parts.length === 1) combined = parts[0];
+				else if (parts.length > 1) combined = parts.join('  x  ');
+
+				if (cellInput.value !== combined) {
+					cellInput.value = combined;
+					if (fireEvent) cellInput.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+			}
+
+			function splitCombinedToChipValues(combined: string, col: number): string[] {
+				if (col === 0) return combined ? [combined] : [];
+				const trimmed = combined.trim();
+				if (!trimmed) return [];
+				const parts = trimmed.split(/\s+[x×]\s+|\s+by\s+/i);
+				if (parts.length > 1) return parts.map((p) => p.trim()).filter(Boolean);
+				return [trimmed];
+			}
+
+			function setChipsFromCombined(
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement,
+				combined: string,
+				opts?: { fireEvent?: boolean }
+			) {
+				const fireEvent = opts?.fireEvent !== false;
+				const col = Number(chipCell.dataset.col ?? 0);
+				const parts = splitCombinedToChipValues(combined, col);
+
+				// Structure: [chip] [sep] [chip] ... [trailing]
+				// No separator between the last chip and the trailing input.
+				chipCell.innerHTML = '';
+				if (col === 0) {
+					// Room name: whole value lives in the trailing input (no chipping).
+					const trailing = buildTrailingInput(combined);
+					chipCell.appendChild(trailing);
+					bindTrailingEvents(trailing, chipCell, cellInput);
+				} else {
+					parts.forEach((p, i) => {
+						if (i > 0) chipCell.appendChild(buildChipSeparator());
+						const chip = buildChipSpan(p);
+						chipCell.appendChild(chip);
+						bindChipEvents(chip, chipCell, cellInput);
+					});
+					const trailing = buildTrailingInput('');
+					chipCell.appendChild(trailing);
+					bindTrailingEvents(trailing, chipCell, cellInput);
+				}
+
+				cellInput.value = combined;
+				if (fireEvent) cellInput.dispatchEvent(new Event('input', { bubbles: true }));
+			}
+
+			function isCompleteChipValue(value: string, col: number): boolean {
+				const v = value.trim();
+				if (!v) return false;
+				if (col === 1) return /\d+(?:\.\d+)?m$/.test(v);
+				if (col === 2) return /\d+’(?:\d+’’)?$/.test(v);
+				return false;
+			}
+
+			function convertAsciiQuotesInPlace(inp: HTMLInputElement) {
+				const oldVal = inp.value;
+				const cursor = inp.selectionStart ?? oldVal.length;
+				let out = '';
+				let newCursor = cursor;
+				for (let i = 0; i < oldVal.length; i++) {
+					const c = oldVal[i];
+					if (c === '"') {
+						out += FANCY_APOS + FANCY_APOS;
+						if (i < cursor) newCursor += 1;
+					} else if (c === "'") {
+						out += FANCY_APOS;
+					} else {
+						out += c;
+					}
+				}
+				if (out !== oldVal) {
+					inp.value = out;
+					inp.setSelectionRange(newCursor, newCursor);
+				}
+			}
+
+			function tryChipifyTrailing(
+				trailing: HTMLInputElement,
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement
+			): boolean {
+				const col = Number(chipCell.dataset.col ?? 0);
+				if (col !== 1 && col !== 2) return false;
+
+				const v = trailing.value;
+				let head: string | null = null;
+				let rest = '';
+
+				// Pass 1: explicit x/×/by separator
+				let m = v.match(/^(.+?)\s*(?:[x×X]|by)\s+(.*)$/i);
+				if (!m) m = v.match(/^(.+?)\s*[x×]\s*(.*)$/i);
+				if (m && m[1].trim()) {
+					head = m[1].trim();
+					rest = m[2];
+				}
+
+				// Pass 2: space after a complete-looking value
+				if (!head) {
+					const m2 = v.match(/^(.+?)\s+(.*)$/);
+					if (m2 && isCompleteChipValue(m2[1], col)) {
+						head = m2[1];
+						rest = m2[2];
+					}
+				}
+
+				if (!head) return false;
+
+				const existingChips = chipCell.querySelectorAll('.chip');
+				if (existingChips.length >= MAX_CHIPS_PER_CELL) return false;
+
+				// Insert separator (between chips) + new chip BEFORE the trailing input.
+				// No separator goes between the last chip and trailing.
+				if (existingChips.length > 0) {
+					chipCell.insertBefore(buildChipSeparator(), trailing);
+				}
+				const chip = buildChipSpan(head);
+				chipCell.insertBefore(chip, trailing);
+				bindChipEvents(chip, chipCell, cellInput);
+
+				trailing.value = rest;
+				trailing.setSelectionRange(rest.length, rest.length);
+				return true;
+			}
+
+			function removeChip(
+				chip: HTMLSpanElement,
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement
+			) {
+				// Remove chip + the inter-chip separator paired with it.
+				const prev = chip.previousElementSibling;
+				const next = chip.nextElementSibling;
+				if (next && next.classList.contains('chip-x')) next.remove();
+				else if (prev && prev.classList.contains('chip-x')) prev.remove();
+				chip.remove();
+				rebuildCombinedFromChipCell(chipCell, cellInput);
+				getTrailingInput(chipCell)?.focus();
+			}
+
+			function unfreezeChip(
+				chip: HTMLSpanElement,
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement
+			) {
+				const value = chip.dataset.value ?? '';
+				const trailing = getTrailingInput(chipCell);
+				if (!trailing) return;
+
+				const prev = chip.previousElementSibling;
+				const next = chip.nextElementSibling;
+				if (next && next.classList.contains('chip-x')) next.remove();
+				else if (prev && prev.classList.contains('chip-x')) prev.remove();
+				chip.remove();
+
+				trailing.value = value + trailing.value;
+				trailing.focus();
+				trailing.setSelectionRange(value.length, value.length);
+				rebuildCombinedFromChipCell(chipCell, cellInput);
+			}
+
+			function bindChipEvents(
+				chip: HTMLSpanElement,
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement
+			) {
+				const close = chip.querySelector<HTMLButtonElement>('.chip-remove');
+				close?.addEventListener('click', (e) => {
+					e.stopPropagation();
+					removeChip(chip, chipCell, cellInput);
+				});
+				// Click chip body (not ×) → focus trailing so backspace will unfreeze it
+				chip.addEventListener('click', (e) => {
+					if ((e.target as HTMLElement).closest('.chip-remove')) return;
+					getTrailingInput(chipCell)?.focus();
+				});
+			}
+
+			function bindTrailingEvents(
+				trailing: HTMLInputElement,
+				chipCell: HTMLElement,
+				cellInput: HTMLInputElement
+			) {
+				const col = Number(chipCell.dataset.col ?? 0);
+
+				trailing.addEventListener('input', () => {
+					if (col === 2) convertAsciiQuotesInPlace(trailing);
+					if (col === 1 || col === 2) tryChipifyTrailing(trailing, chipCell, cellInput);
+					rebuildCombinedFromChipCell(chipCell, cellInput);
+				});
+
+				// Backspace at start of empty trailing → unfreeze last chip
+				trailing.addEventListener('keydown', (e) => {
+					if (
+						e.key === 'Backspace' &&
+						trailing.value === '' &&
+						(trailing.selectionStart ?? 0) === 0
+					) {
+						const chips = chipCell.querySelectorAll<HTMLSpanElement>('.chip');
+						const last = chips[chips.length - 1];
+						if (last) {
+							e.preventDefault();
+							unfreezeChip(last, chipCell, cellInput);
+						}
+					}
+				});
+
+				// Typography normalize on focusout — and chipify if normalize produced "  x  ".
+				trailing.addEventListener('focusout', () => {
+					let n = trailing.value;
+					if (col === 1) n = normalizeMetricTypography(n);
+					else if (col === 2) n = normalizeImperialTypography(n);
+					if (n !== trailing.value) {
+						trailing.value = n;
+						if (col !== 0 && /\s+x\s+/i.test(n)) {
+							tryChipifyTrailing(trailing, chipCell, cellInput);
+						}
+						rebuildCombinedFromChipCell(chipCell, cellInput);
+					}
+				});
+			}
+
+			function bindChipCellClickToFocus(chipCell: HTMLElement) {
+				if (chipCell.dataset.cellClickBound === '1') return;
+				chipCell.dataset.cellClickBound = '1';
+				chipCell.addEventListener('click', (e) => {
+					const target = e.target as HTMLElement;
+					if (target.closest('.chip-remove')) return;
+					if (target.closest('.chip-trailing-input')) return;
+					if (target.closest('.chip')) return; // chip's own click handler runs
+					getTrailingInput(chipCell)?.focus();
+				});
+			}
+
 			function addRow(cells: string[] = ['', '', ''], options?: { silent?: boolean }) {
 				const silent = options?.silent === true;
 				const tr = document.createElement('tr');
 				tr.className = 'border-t border-neutral-100 transition-colors';
+				const cellTabSvg = `<svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="6" cy="3" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="6" cy="13" r="1"/><circle cx="10" cy="3" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="10" cy="13" r="1"/></svg>`;
+				// Each cell holds a `.chip-cell` with one or more visible `.chip-input` chips
+				// plus a hidden `.cell-input` mirroring the combined value (for compat with
+				// existing readers like getTableData / drag-swap).
+				const cellTd = (col: 0 | 1 | 2) =>
+					`<td class="p-1.5"><div class="cell-wrap relative"><div class="chip-cell" data-col="${col}"></div><input type="hidden" class="cell-input" data-col="${col}" value="${escapeHtml(cells[col] ?? '')}" /><span class="cell-drag-handle" draggable="true" title="Drag to swap cells" aria-label="Drag to swap cells">${cellTabSvg}</span></div></td>`;
 				tr.innerHTML = `
 					<td class="px-1 py-1.5 text-center align-middle"><span class="row-drag-handle inline-flex items-center justify-center w-5 h-6 text-neutral-300 hover:text-neutral-600 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder" aria-label="Drag to reorder"><svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="7" cy="4" r="1.2"/><circle cx="7" cy="10" r="1.2"/><circle cx="7" cy="16" r="1.2"/><circle cx="13" cy="4" r="1.2"/><circle cx="13" cy="10" r="1.2"/><circle cx="13" cy="16" r="1.2"/></svg></span></td>
-					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="0" value="${escapeHtml(cells[0] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="1" value="${escapeHtml(cells[1] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
-					<td class="p-1.5"><input type="text" class="cell-input w-full px-2 py-1.5 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:border-neutral-300" data-col="2" value="${escapeHtml(cells[2] ?? '')}" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" /></td>
+					${cellTd(0)}
+					${cellTd(1)}
+					${cellTd(2)}
 					<td class="p-1.5 text-right"><button type="button" class="delete-row px-2 py-1 text-xs rounded-md bg-red-50 text-red-700 hover:bg-red-100">Del</button></td>
 				`;
 				tr.querySelector('.delete-row')!.addEventListener('click', () => {
@@ -728,12 +1182,26 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					persistState();
 				});
 				tbody.appendChild(tr);
-				tr.querySelectorAll('.cell-input').forEach((el) => {
+
+				// Build initial chips for each cell from the supplied values.
+				tr.querySelectorAll<HTMLElement>('.chip-cell').forEach((chipCell) => {
+					const col = Number(chipCell.dataset.col ?? 0);
+					const cellInput = chipCell.parentElement?.querySelector<HTMLInputElement>('input.cell-input');
+					if (!cellInput) return;
+					setChipsFromCombined(chipCell, cellInput, cells[col] ?? '', { fireEvent: false });
+					bindChipCellClickToFocus(chipCell);
+				});
+
+				// Hidden .cell-input still fires `input` when chips change → trigger preview.
+				tr.querySelectorAll<HTMLInputElement>('input.cell-input').forEach((el) => {
 					el.addEventListener('input', () => {
 						renderPreview();
 					});
 				});
 				bindRowDrag(tr);
+				tr.querySelectorAll('.cell-wrap').forEach((wrap) => {
+					bindCellSwapDrag(wrap as HTMLElement);
+				});
 				if (!silent) renderPreview();
 			}
 
@@ -1452,21 +1920,188 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				persistState();
 			});
 
-			tbody.addEventListener('focusout', (e) => {
-				const t = e.target;
-				if (!(t instanceof HTMLInputElement) || !t.classList.contains('cell-input')) return;
-				const col = t.dataset.col;
-				const n =
-					col === '1'
-						? normalizeMetricTypography(t.value)
-						: col === '2'
-							? normalizeImperialTypography(t.value)
-							: null;
-				if (n !== null && n !== t.value) {
-					t.value = n;
-					t.dispatchEvent(new Event('input', { bubbles: true }));
+			// --- Per-cell drag-to-swap (custom mouse-driven, NOT HTML5 drag-and-drop) --
+			// HTML5 drag-and-drop on small handles inside form inputs proved unreliable
+			// (no visible drag image, dragend not always firing, drops swallowed by the
+			// native input's text-drop handler). Custom mouse events sidestep all of that.
+			type CellDragState = {
+				sourceWrap: HTMLElement;
+				sourceInput: HTMLInputElement;
+				ghost: HTMLElement;
+				currentTarget: HTMLElement | null;
+				armedAtX: number;
+				armedAtY: number;
+				started: boolean;
+			};
+			let cellDrag: CellDragState | null = null;
+			const CELL_DRAG_THRESHOLD = 4; // px before we commit to a drag
+
+			function buildCellDragGhost(value: string): HTMLElement {
+				const ghost = document.createElement('div');
+				ghost.textContent = value && value.length ? value : '(empty)';
+				ghost.style.cssText = [
+					'position:fixed', 'top:0', 'left:0',
+					'padding:6px 12px', 'border-radius:8px',
+					'background:#8b5cf6', 'color:#ffffff',
+					'font-family:system-ui,-apple-system,sans-serif',
+					'font-size:13px', 'font-weight:500',
+					'box-shadow:0 8px 20px rgba(0,0,0,0.25)',
+					'white-space:nowrap', 'max-width:280px',
+					'overflow:hidden', 'text-overflow:ellipsis',
+					'pointer-events:none', 'z-index:99999',
+					'transform:translate(-9999px,-9999px)',
+					'transition:none', 'opacity:0.95'
+				].join(';');
+				document.body.appendChild(ghost);
+				return ghost;
+			}
+
+			function clearCellDragVisuals() {
+				document.querySelectorAll('.cell-wrap.cell-source-dragging').forEach((el) => {
+					el.classList.remove('cell-source-dragging');
+				});
+				document.querySelectorAll('.cell-wrap.cell-drop-target').forEach((el) => {
+					el.classList.remove('cell-drop-target');
+				});
+			}
+
+			function endCellDrag(performSwap: boolean, e?: MouseEvent) {
+				if (!cellDrag) return;
+				const state = cellDrag;
+				cellDrag = null;
+
+				let target: HTMLElement | null = null;
+				if (e && state.started) {
+					state.ghost.style.display = 'none';
+					const elUnder = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+					target = elUnder?.closest('.cell-wrap') as HTMLElement | null;
 				}
+
+				state.ghost.remove();
+				clearCellDragVisuals();
+				document.body.style.userSelect = '';
+				document.body.style.cursor = '';
+				document.removeEventListener('mousemove', onCellDragMove, true);
+				document.removeEventListener('mouseup', onCellDragUp, true);
+				document.removeEventListener('keydown', onCellDragKey, true);
+
+				if (!performSwap || !state.started) return;
+				if (!target || target === state.sourceWrap || !target.classList.contains('cell-wrap')) return;
+				const targetInput = target.querySelector('.cell-input') as HTMLInputElement | null;
+				if (!targetInput) return;
+
+				const srcVal = state.sourceInput.value;
+				const tgtVal = targetInput.value;
+				// Use the chip-aware setter so the visible chip-inputs rebuild from the new value.
+				const sourceChipCell = state.sourceWrap.querySelector<HTMLElement>('.chip-cell');
+				const targetChipCell = target.querySelector<HTMLElement>('.chip-cell');
+				if (sourceChipCell) {
+					setChipsFromCombined(sourceChipCell, state.sourceInput, tgtVal);
+				} else {
+					state.sourceInput.value = tgtVal;
+					state.sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+				if (targetChipCell) {
+					setChipsFromCombined(targetChipCell, targetInput, srcVal);
+				} else {
+					targetInput.value = srcVal;
+					targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+				commitActiveSheet();
+				persistState();
+			}
+
+			function onCellDragMove(e: MouseEvent) {
+				if (!cellDrag) return;
+				e.preventDefault();
+				const dx = e.clientX - cellDrag.armedAtX;
+				const dy = e.clientY - cellDrag.armedAtY;
+				if (!cellDrag.started) {
+					if (dx * dx + dy * dy < CELL_DRAG_THRESHOLD * CELL_DRAG_THRESHOLD) return;
+					cellDrag.started = true;
+					cellDrag.sourceWrap.classList.add('cell-source-dragging');
+					document.body.style.userSelect = 'none';
+					document.body.style.cursor = 'grabbing';
+				}
+
+				cellDrag.ghost.style.transform = `translate(${e.clientX + 12}px,${e.clientY + 8}px)`;
+
+				// Find cell under cursor (hide ghost so elementFromPoint sees through it)
+				cellDrag.ghost.style.visibility = 'hidden';
+				const elUnder = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+				cellDrag.ghost.style.visibility = '';
+				const overWrap = elUnder?.closest('.cell-wrap') as HTMLElement | null;
+
+				if (cellDrag.currentTarget !== overWrap) {
+					if (cellDrag.currentTarget) {
+						cellDrag.currentTarget.classList.remove('cell-drop-target');
+					}
+					if (overWrap && overWrap !== cellDrag.sourceWrap) {
+						overWrap.classList.add('cell-drop-target');
+						cellDrag.currentTarget = overWrap;
+					} else {
+						cellDrag.currentTarget = null;
+					}
+				}
+			}
+
+			function onCellDragUp(e: MouseEvent) {
+				e.preventDefault();
+				endCellDrag(true, e);
+			}
+
+			function onCellDragKey(e: KeyboardEvent) {
+				if (e.key === 'Escape') {
+					e.preventDefault();
+					endCellDrag(false);
+				}
+			}
+
+			function bindCellSwapDrag(wrap: HTMLElement) {
+				if (wrap.dataset.cellDragBound === '1') return;
+				const handle = wrap.querySelector('.cell-drag-handle') as HTMLElement | null;
+				const input = wrap.querySelector('.cell-input') as HTMLInputElement | null;
+				if (!handle || !input) return;
+				wrap.dataset.cellDragBound = '1';
+
+				// Defensive: nothing in our markup should be HTML5-draggable for this feature.
+				handle.removeAttribute('draggable');
+				wrap.removeAttribute('draggable');
+
+				handle.addEventListener('mousedown', (e) => {
+					if (e.button !== 0) return; // left button only
+					if (cellDrag) endCellDrag(false);
+					e.preventDefault();
+					e.stopPropagation();
+
+					cellDrag = {
+						sourceWrap: wrap,
+						sourceInput: input,
+						ghost: buildCellDragGhost(input.value),
+						currentTarget: null,
+						armedAtX: e.clientX,
+						armedAtY: e.clientY,
+						started: false
+					};
+					// Park ghost at cursor immediately (transform applied on first move)
+					cellDrag.ghost.style.transform = `translate(${e.clientX + 12}px,${e.clientY + 8}px)`;
+
+					document.addEventListener('mousemove', onCellDragMove, true);
+					document.addEventListener('mouseup', onCellDragUp, true);
+					document.addEventListener('keydown', onCellDragKey, true);
+				});
+			}
+
+			// Bind the static initial row's cell handles. addRow() also binds dynamically.
+			tbody.querySelectorAll('.cell-wrap').forEach((wrap) => {
+				bindCellSwapDrag(wrap as HTMLElement);
 			});
+
+			// Window-level safety: if anything weird happens (window blur, etc.), clean up.
+			window.addEventListener('blur', () => endCellDrag(false));
+
+			// Per-chip focusout normalization is wired in bindChipInputEvents — no tbody-level
+			// handler is needed.
 
 			importPasteBtn.addEventListener('click', () => {
 				const text = (csvPaste.value ?? '').trim();
@@ -2249,7 +2884,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 
 			document.addEventListener('focusin', (e) => {
 				const t = e.target as HTMLElement | null;
-				if (t?.classList?.contains('cell-input')) {
+				if (t?.classList?.contains('chip-trailing-input')) {
 					showTokenPaletteBelowInput(t as HTMLInputElement);
 				}
 			});
@@ -2259,7 +2894,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				if (!tokenPalette || tokenPalette.style.display === 'none') return;
 				if (!target) return;
 				if (tokenPalette.contains(target)) return;
-				if (target.classList?.contains('cell-input')) return;
+				if (target.classList?.contains('chip-trailing-input')) return;
 				hideTokenPalette();
 			});
 

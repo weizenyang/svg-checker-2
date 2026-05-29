@@ -112,6 +112,20 @@ import "../styles.css";
 		#svg-container {
 			background-color: #808080; /* Grey background */
 		}
+
+		/* Floorplan dimension reference layer (dims-only SVG imports) */
+		#dims-reference {
+			pointer-events: none;
+		}
+		#dims-reference .dim-line,
+		#dims-reference .dim-ext,
+		#dims-reference line {
+			stroke: #ffffff;
+		}
+		#dims-reference .dim-text,
+		#dims-reference text {
+			fill: #ffffff;
+		}
 		
 		/* Snap guides styling */
 		.snap-guide {
@@ -274,6 +288,9 @@ import "../styles.css";
 							<strong>• Draw rect:</strong> drag on empty canvas (avoid clicking rects/handles).
 							Manual = drag box; Auto = tight box from RGB in drag area (padding below brush).
 						</p>
+						<p id="dims-reference-hint" style="display: none; color: #0a5; margin-top: 8px;">
+							<strong>Dimension SVG loaded.</strong> White lines are reference only — draw blue mask rectangles on top.
+						</p>
 					</div>
 				</section>
 			</div>
@@ -328,6 +345,113 @@ import "../styles.css";
 		var rubberBandSvg = null;
 		var rubberBandStart = { x: 0, y: 0 };
 		var suppressBackgroundClickDeselect = false;
+
+		const SVG_NS = "http://www.w3.org/2000/svg";
+
+		function isDimsReferenceSvg(svg: SVGSVGElement, fileName?: string) {
+			if (fileName && /\bdims[_-]/i.test(fileName)) return true;
+			if (fileName && /_dims\.svg$/i.test(fileName)) return true;
+			if (svg.querySelector(".dim-line, .dim-ext, .dim-text")) return true;
+			const lines = svg.querySelectorAll("line");
+			const texts = svg.querySelectorAll("text");
+			if (lines.length >= 4 && texts.length >= 4) {
+				let meterLabels = 0;
+				texts.forEach((t) => {
+					if (/\d+(\.\d+)?\s*m\b/i.test(t.textContent || "")) meterLabels++;
+				});
+				if (meterLabels >= 3) return true;
+			}
+			return false;
+		}
+
+		function getMaskRectsGroup(svg: SVGSVGElement): SVGGElement {
+			let group = svg.querySelector("#mask-rects") as SVGGElement | null;
+			if (!group) {
+				group = document.createElementNS(SVG_NS, "g");
+				group.setAttribute("id", "mask-rects");
+				svg.appendChild(group);
+			}
+			return group;
+		}
+
+		function appendMaskRect(svg: SVGSVGElement, rect: SVGRectElement) {
+			getMaskRectsGroup(svg).appendChild(rect);
+		}
+
+		function getContentRects(svg: SVGSVGElement) {
+			const maskGroup = svg.querySelector("#mask-rects");
+			const root = maskGroup || svg;
+			return root.querySelectorAll(
+				"rect:not(.transform-handle):not([data-dims-bg])",
+			);
+		}
+
+		function getDefaultRectSize(svg: SVGSVGElement) {
+			const vb = svg.viewBox.baseVal;
+			if (vb.width > 0 && vb.height > 0) {
+				return {
+					width: Math.max(vb.width * 0.05, 50),
+					height: Math.max(vb.height * 0.05, 50),
+				};
+			}
+			return { width: 100, height: 100 };
+		}
+
+		function prepareImportedSvg(svg: SVGSVGElement, fileName?: string) {
+			if (svg.getAttribute("data-mask-editor-prepared") === "true") return;
+
+			const isDims = isDimsReferenceSvg(svg, fileName);
+
+			if (!svg.getAttribute("preserveAspectRatio")) {
+				svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+			}
+
+			if (!svg.querySelector("#mask-rects")) {
+				const maskGroup = document.createElementNS(SVG_NS, "g");
+				maskGroup.setAttribute("id", "mask-rects");
+				svg.appendChild(maskGroup);
+			}
+
+			if (isDims && !svg.querySelector("#dims-reference")) {
+				const refGroup = document.createElementNS(SVG_NS, "g");
+				refGroup.setAttribute("id", "dims-reference");
+				refGroup.setAttribute("pointer-events", "none");
+
+				const children = Array.from(svg.childNodes);
+				for (const node of children) {
+					if (node.nodeType !== Node.ELEMENT_NODE) continue;
+					const el = node as Element;
+					if (el.tagName === "defs" || el.tagName === "style") continue;
+					if (el.id === "mask-rects" || el.id === "dims-reference") continue;
+					refGroup.appendChild(el);
+				}
+
+				const vb = svg.viewBox.baseVal;
+				if (vb.width > 0 && vb.height > 0) {
+					const bg = document.createElementNS(SVG_NS, "rect");
+					bg.setAttribute("data-dims-bg", "true");
+					bg.setAttribute("x", String(vb.x));
+					bg.setAttribute("y", String(vb.y));
+					bg.setAttribute("width", String(vb.width));
+					bg.setAttribute("height", String(vb.height));
+					bg.setAttribute("fill", "#000000");
+					refGroup.insertBefore(bg, refGroup.firstChild);
+				}
+
+				svg.insertBefore(refGroup, svg.querySelector("#mask-rects"));
+			}
+
+			svg.setAttribute("data-dims-reference", isDims ? "true" : "false");
+			const hint = document.getElementById("dims-reference-hint");
+			if (hint) hint.style.display = isDims ? "block" : "none";
+
+			svg.setAttribute("data-mask-editor-prepared", "true");
+		}
+
+		function resetDimsReferenceHint() {
+			const hint = document.getElementById("dims-reference-hint");
+			if (hint) hint.style.display = "none";
+		}
 
 		function getBrushMode() {
 			const auto = document.getElementById("brush-auto") as HTMLInputElement | null;
@@ -556,7 +680,7 @@ import "../styles.css";
 			newRect.setAttribute("fill", "rgba(0, 123, 255, 0.3)");
 			newRect.setAttribute("stroke", "#007bff");
 			newRect.setAttribute("stroke-width", "2");
-			svg.appendChild(newRect);
+			appendMaskRect(svg, newRect);
 			addRectEventListeners(newRect);
 			selectRect(newRect);
 		}
@@ -655,14 +779,14 @@ import "../styles.css";
 
 		// Create new SVG element
 		var createNewSVG = () => {
-			const newSVG = document.createElementNS(
-				"http://www.w3.org/2000/svg",
-				"svg",
-			);
+			const newSVG = document.createElementNS(SVG_NS, "svg");
 			newSVG.style.width = "100%";
 			newSVG.style.height = "100%";
 			newSVG.setAttribute("viewBox", "0 0 4096 4096");
 			newSVG.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+			newSVG.setAttribute("preserveAspectRatio", "xMidYMid meet");
+			getMaskRectsGroup(newSVG);
+			newSVG.setAttribute("data-mask-editor-prepared", "true");
 			return newSVG;
 		};
 
@@ -699,8 +823,8 @@ import "../styles.css";
 			
 			const target = e.target as HTMLElement;
 			
-			// First check: if clicking directly on a rect, don't pan
-			if (target && target.tagName === 'rect') {
+			// First check: if clicking directly on a mask rect, don't pan
+			if (target && target.tagName === 'rect' && !target.closest('#dims-reference')) {
 				return;
 			}
 			
@@ -717,7 +841,10 @@ import "../styles.css";
 				// Check if the actual target or any parent is a rect
 				let checkElement = target;
 				while (checkElement && checkElement !== svg) {
-					if (checkElement.tagName === 'rect') {
+					if (
+						checkElement.tagName === "rect" &&
+						!checkElement.closest("#dims-reference")
+					) {
 						return;
 					}
 					checkElement = checkElement.parentElement as HTMLElement;
@@ -774,6 +901,7 @@ import "../styles.css";
 				globalSvgContainer.innerHTML = "";
 				importedSVGs = [];
 				currentSVGIndex = 0;
+				resetDimsReferenceHint();
 
 				// Remove existing navigation
 				const existingNav = document.getElementById("svg-nav");
@@ -849,7 +977,14 @@ import "../styles.css";
 			reader.onload = (event) => {
 				const parser = new DOMParser();
 				const svgDoc = parser.parseFromString(event.target?.result as string, "image/svg+xml");
-				const svgElement = svgDoc.documentElement;
+				const svgElement = svgDoc.documentElement as unknown as SVGSVGElement;
+
+				if (svgDoc.querySelector("parsererror")) {
+					alert("Could not parse SVG file. Check that it is valid XML.");
+					return;
+				}
+
+				prepareImportedSvg(svgElement, file.name);
 				
 				// Store SVG for navigation if multiple files
 				importedSVGs.push({
@@ -907,8 +1042,9 @@ import "../styles.css";
 
 			// Prevent mousedown from starting drag - but don't interfere with rect clicks
 			svgElement.addEventListener('mousedown', (e) => {
-				// Don't prevent if clicking on a rect - let rect handlers deal with it
-				if (e.target && e.target.tagName === 'rect') {
+				// Don't prevent if clicking on a mask rect - let rect handlers deal with it
+				const t = e.target as Element;
+				if (t && t.tagName === "rect" && !t.closest("#dims-reference")) {
 					return; // Let rect handler process it
 				}
 				// Only prevent if it's on SVG elements, not our custom interactions
@@ -917,9 +1053,9 @@ import "../styles.css";
 				}
 			}, true);
 
-			// Add event listeners to all rect elements
-			const rects = svgElement.querySelectorAll('rect');
-			console.log(`Found ${rects.length} rect elements`);
+			// Add event listeners to mask rect elements only (not dim reference background)
+			const rects = getContentRects(svgElement);
+			console.log(`Found ${rects.length} mask rect elements`);
 
 			rects.forEach((rect, index) => {
 				// Log rect coordinates for debugging
@@ -988,6 +1124,8 @@ import "../styles.css";
 		}
 
 		function displaySVG(svgElement) {
+			prepareImportedSvg(svgElement as SVGSVGElement);
+
 			// Preserve background image if it exists
 			const backgroundContainer = document.getElementById('background-image-container');
 			let backgroundHTML = '';
@@ -1760,8 +1898,8 @@ import "../styles.css";
 			// Remove rubber-band previews if present
 			svgClone.querySelectorAll(".rubber-band-preview").forEach((el) => el.remove());
 
-			// Remove selection classes from rects
-			const rects = svgClone.querySelectorAll('rect');
+			// Remove selection classes from mask rects only
+			const rects = getContentRects(svgClone as unknown as SVGSVGElement);
 			rects.forEach(rect => {
 				rect.classList.remove('rect-selected');
 				// Remove any inline styles that might have been added for selection
@@ -1900,8 +2038,8 @@ import "../styles.css";
 				newRect.setAttribute(name, value);
 			});
 			
-			// Add the rect to the SVG
-			currentSvg.appendChild(newRect);
+			// Add the rect to the mask layer
+			appendMaskRect(currentSvg as SVGSVGElement, newRect);
 			
 			// Add event listeners to the new rect
 			addRectEventListeners(newRect);
@@ -2181,16 +2319,41 @@ import "../styles.css";
 		}
 
 		// Function to get all rect edges for snapping
+		function getDimReferenceEdges(svg: SVGSVGElement) {
+			const xEdges: number[] = [];
+			const yEdges: number[] = [];
+			const ref = svg.querySelector("#dims-reference");
+			if (!ref) return { xEdges, yEdges };
+
+			ref.querySelectorAll("line").forEach((line) => {
+				const x1 = parseFloat(line.getAttribute("x1") || "0");
+				const y1 = parseFloat(line.getAttribute("y1") || "0");
+				const x2 = parseFloat(line.getAttribute("x2") || "0");
+				const y2 = parseFloat(line.getAttribute("y2") || "0");
+				if (Math.abs(y1 - y2) < 1) {
+					xEdges.push(x1, x2);
+					yEdges.push(y1);
+				} else if (Math.abs(x1 - x2) < 1) {
+					yEdges.push(y1, y2);
+					xEdges.push(x1);
+				} else {
+					xEdges.push(x1, x2);
+					yEdges.push(y1, y2);
+				}
+			});
+
+			return { xEdges, yEdges };
+		}
+
 		function getAllRectEdges(excludeRect) {
-			const currentSvg = globalSvgContainer.querySelector('svg');
+			const currentSvg = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
 			if (!currentSvg) return { xEdges: [], yEdges: [] };
 			
-			// Get all rect elements but exclude transform handles
-			const rects = currentSvg.querySelectorAll('rect:not(.transform-handle)');
-			const xEdges = [];
-			const yEdges = [];
+			const rects = getContentRects(currentSvg);
+			const xEdges: number[] = [];
+			const yEdges: number[] = [];
 			
-			console.log('getAllRectEdges: Found', rects.length, 'content rects (excluding handles)');
+			console.log('getAllRectEdges: Found', rects.length, 'mask rects');
 			
 			rects.forEach(rect => {
 				if (rect === excludeRect) return; // Skip the rect being dragged
@@ -2206,6 +2369,10 @@ import "../styles.css";
 				
 				console.log('Added edges for rect:', x, y, width, height);
 			});
+
+			const dimEdges = getDimReferenceEdges(currentSvg);
+			xEdges.push(...dimEdges.xEdges);
+			yEdges.push(...dimEdges.yEdges);
 			
 			return { xEdges, yEdges };
 		}
@@ -2337,9 +2504,8 @@ import "../styles.css";
 			// Create new rect element
 			const newRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
 			
-			// Set default size and position (centered on click)
-			const defaultWidth = 100;
-			const defaultHeight = 100;
+			// Set default size and position (centered on click), scaled to viewBox
+			const { width: defaultWidth, height: defaultHeight } = getDefaultRectSize(svgElement);
 			newRect.setAttribute('x', (clickX - defaultWidth / 2).toString());
 			newRect.setAttribute('y', (clickY - defaultHeight / 2).toString());
 			newRect.setAttribute('width', defaultWidth.toString());
@@ -2350,8 +2516,8 @@ import "../styles.css";
 			newRect.setAttribute('stroke', '#007bff');
 			newRect.setAttribute('stroke-width', '2');
 			
-			// Add to SVG
-			svgElement.appendChild(newRect);
+			// Add to mask layer
+			appendMaskRect(svgElement, newRect);
 			
 			// Add event listeners
 			addRectEventListeners(newRect);

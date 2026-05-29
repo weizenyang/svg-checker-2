@@ -1658,7 +1658,7 @@ declare const JSZip: any;
       // Create Web Worker for image processing
       const workerScript = `
         self.onmessage = async function(e) {
-          const { files, rotationDegrees, batchId } = e.data;
+          const { files, rotationDegrees, batchId, startIndex = 0 } = e.data;
           const results = [];
           
           console.log('Worker: Starting batch', batchId, 'with', files.length, 'files');
@@ -1703,7 +1703,7 @@ declare const JSZip: any;
               console.log('Worker: Blob created successfully:', file.name, '(', blob.size, 'bytes)');
               
               results.push({
-                index: i,
+                index: startIndex + i,
                 filename: file.name,
                 blob: blob,
                 success: true
@@ -1721,7 +1721,7 @@ declare const JSZip: any;
             } catch (error) {
               console.error('Worker: Error processing file:', file.name, error);
               results.push({
-                index: i,
+                index: startIndex + i,
                 filename: file.name,
                 error: error.message,
                 success: false
@@ -1761,21 +1761,32 @@ declare const JSZip: any;
       
       console.log(`✅ Web Workers created successfully!`);
       
-      let activeWorkers = 0;
       let batchCounter = 0;
+      let processedFileCount = 0;
+
+      function triggerBlobDownload(blob, filename) {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
       
       // Multithreaded batch processing
       async function processBatchMultithreaded(files, rotationDegrees, prefix, preserveStructure, batchGroupingColumn) {
-        const zip = new JSZip();
         const batchSize = Math.max(1, Math.floor(files.length / maxWorkers));
         const batches = [];
         
         console.log(`🚀 Parallel processing setup: ${files.length} files, ${maxWorkers} workers, ${batchSize} files per batch`);
         console.log('Starting multithreaded batch processing...');
         
-        // Split files into batches
+        // Split files into batches with global start indices
         for (let i = 0; i < files.length; i += batchSize) {
-          batches.push(files.slice(i, i + batchSize));
+          batches.push({ files: files.slice(i, i + batchSize), startIndex: i });
         }
         
         console.log(`📦 Created ${batches.length} batches for parallel processing`);
@@ -1787,63 +1798,68 @@ declare const JSZip: any;
         }
         
         const allResults = [];
-        let completedBatches = 0;
-        
-        // Process batches in parallel
-        const batchPromises = batches.map((batch, batchIndex) => {
-          return new Promise((resolve) => {
-            const workerIndex = batchIndex % maxWorkers;
-            const worker = workerPool[workerIndex];
+        processedFileCount = 0;
+
+        function runBatchOnWorker(worker, workerIndex, batchInfo) {
+          return new Promise((resolve, reject) => {
             const batchId = batchCounter++;
-            
-            console.log(`⚡ Starting batch ${batchId} with ${batch.length} files on worker ${workerIndex + 1}/${maxWorkers}`);
-            
-            worker.onmessage = function(e) {
+            const { files: batchFiles, startIndex } = batchInfo;
+
+            console.log(`⚡ Starting batch ${batchId} with ${batchFiles.length} files on worker ${workerIndex + 1}/${maxWorkers}`);
+
+            const handler = (e) => {
+              if (e.data.batchId !== batchId) return;
+
               if (e.data.type === 'progress') {
-                // Update progress bar with better calculation
-                const totalProgress = ((completedBatches * batchSize) + e.data.current) / files.length * 100;
+                const totalProgress = (processedFileCount + e.data.current) / files.length * 100;
                 const clampedProgress = Math.min(Math.max(totalProgress, 0), 100);
                 batchProgressFill.style.width = clampedProgress + '%';
-                
-                // Log progress to console
                 console.log(`Worker ${workerIndex + 1}: Processing ${e.data.filename} (${Math.round(clampedProgress)}% - ${e.data.current}/${e.data.total} files)`);
               } else if (e.data.type === 'log') {
-                // Handle log messages from worker
                 if (e.data.level === 'error') {
                   console.error(`Worker ${workerIndex + 1}: ${e.data.message}`);
                 } else {
                   console.log(`Worker ${workerIndex + 1}: ${e.data.message}`);
                 }
               } else if (e.data.type === 'complete') {
+                worker.removeEventListener('message', handler);
                 const successfulInBatch = e.data.results.filter(r => r.success).length;
                 const totalInBatch = e.data.results.length;
-                
-                allResults.push(...e.data.results);
-                completedBatches++;
-                
-                // Log batch completion with success rate
+                processedFileCount += totalInBatch;
+                batchProgressFill.style.width = Math.min((processedFileCount / files.length) * 100, 100) + '%';
+
                 console.log(`Worker ${workerIndex + 1}: Batch ${e.data.batchId} completed: ${successfulInBatch}/${totalInBatch} files successful`);
-                
+
                 if (successfulInBatch < totalInBatch) {
                   console.warn(`⚠️ Worker ${workerIndex + 1}: ${totalInBatch - successfulInBatch} files failed in batch ${e.data.batchId}`);
                 }
-                
-                resolve();
+
+                resolve(e.data.results);
               }
             };
-            
+
+            worker.addEventListener('message', handler);
             worker.postMessage({
-              files: batch,
+              files: batchFiles,
               rotationDegrees: rotationDegrees,
-              batchId: batchId
+              batchId: batchId,
+              startIndex: startIndex
             });
           });
-        });
-        
-        // Wait for all batches to complete
+        }
+
+        // Process batches in waves so each worker handles only one batch at a time
         console.log('⏳ Waiting for all workers to complete...');
         try {
-          await Promise.all(batchPromises);
+          for (let i = 0; i < batches.length; i += maxWorkers) {
+            const wave = batches.slice(i, i + maxWorkers);
+            const waveResults = await Promise.all(
+              wave.map((batchInfo, j) => runBatchOnWorker(workerPool[j], j, batchInfo))
+            );
+            for (const results of waveResults) {
+              allResults.push(...results);
+            }
+          }
           console.log('✅ All workers completed! Processing results...');
         } catch (error) {
           console.error('❌ Error during worker processing:', error);
@@ -1869,109 +1885,47 @@ declare const JSZip: any;
           throw new Error('No files were processed successfully');
         }
         
-        // Create multiple ZIP files organized by folder structure
-        console.log('📦 Starting ZIP file organization...');
-        const zipFiles = [];
-        let currentZip = new JSZip();
-        let filesInCurrentZip = 0;
-        let zipIndex = 1;
-        let currentFolder = '';
-        
-        console.log(`📦 Organizing ${successfulResults.length} successful files into ZIP files by folder structure...`);
-        
-        // First, sort results by folder structure to keep related files together
-        console.log('🔄 Sorting results by folder structure...');
-        const sortedResults = [...successfulResults].sort((a, b) => {
-          const fileA = files[a.index];
-          const fileB = files[b.index];
-          
-          let folderA = '';
-          let folderB = '';
-          
-          if (batchGroupingColumn !== null) {
-            const groupKeyA = splitNames[a.index][batchGroupingColumn] || 'group';
-            const groupKeyB = splitNames[b.index][batchGroupingColumn] || 'group';
-            folderA = groupKeyA;
-            folderB = groupKeyB;
-          } else if (preserveStructure) {
-            const pathPartsA = (fileA as any).relativePath?.split('/') || fileA.name.split('/');
-            const pathPartsB = (fileB as any).relativePath?.split('/') || fileB.name.split('/');
-            folderA = pathPartsA.slice(0, -1).join('/');
-            folderB = pathPartsB.slice(0, -1).join('/');
-          }
-          
-          return folderA.localeCompare(folderB);
-        });
-        console.log('✅ Results sorted by folder structure');
-        
-        console.log('🔄 Starting ZIP file creation loop...');
+        // Create a single ZIP containing all processed files (folders preserved inside the ZIP).
+        // Browsers throttle multiple programmatic downloads from one user gesture, so combining
+        // everything into one archive guarantees the user gets all of their files.
+        console.log('📦 Building single ZIP archive with folder structure...');
+        const zip = new JSZip();
+        let filesAdded = 0;
+
         try {
-          for (let i = 0; i < sortedResults.length; i++) {
-            const result = sortedResults[i];
-            if (result.success) {
-              const file = files[result.index];
-              const originalPath = (file as any).relativePath || file.name;
-              const pathParts = originalPath.split('/');
-              const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
-              
-              let fullPath;
-              let currentFileFolder = '';
-              
-              if (batchGroupingColumn !== null) {
-                const groupKey = splitNames[result.index][batchGroupingColumn] || 'group';
-                fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
-                currentFileFolder = groupKey;
-              } else if (preserveStructure && pathParts.length > 0) {
-                const directory = pathParts.join('/');
-                fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
-                currentFileFolder = directory;
-              } else {
-                fullPath = prefix ? `${prefix}${filename}` : filename;
-                currentFileFolder = '';
-              }
-              
-              // Check if we need to start a new ZIP (when folder changes or max files reached)
-              const maxFilesPerZip = 50; // Increased since we're organizing by folders
-              const shouldStartNewZip = (
-                filesInCurrentZip >= maxFilesPerZip || 
-                (currentFileFolder !== currentFolder && filesInCurrentZip > 0)
-              );
-              
-              if (shouldStartNewZip) {
-                console.log(`  📦 ZIP ${zipIndex} complete (${filesInCurrentZip} files, folder: ${currentFolder || 'root'}), creating next ZIP...`);
-                zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip, folder: currentFolder });
-                currentZip = new JSZip();
-                filesInCurrentZip = 0;
-                zipIndex++;
-                currentFolder = currentFileFolder;
-              }
-              
-              currentZip.file(fullPath, result.blob);
-              filesInCurrentZip++;
-              
-              // Log progress every 10 files
-              if (i % 10 === 0 || i === sortedResults.length - 1) {
-                const progress = ((i + 1) / sortedResults.length) * 100;
-                console.log(`  📁 Organizing files: ${i + 1}/${sortedResults.length} (${Math.round(progress)}%) - Current folder: ${currentFileFolder || 'root'}`);
-              }
+          for (let i = 0; i < successfulResults.length; i++) {
+            const result = successfulResults[i];
+            const file = files[result.index];
+            const originalPath = (file as any).relativePath || file.name;
+            const pathParts = originalPath.split('/');
+            const filename = pathParts.pop().replace(/\.[^/.]+$/, '') + '.png';
+
+            let fullPath;
+            if (batchGroupingColumn !== null) {
+              const groupKey = splitNames[result.index][batchGroupingColumn] || 'group';
+              fullPath = prefix ? `${prefix}${groupKey}/${filename}` : `${groupKey}/${filename}`;
+            } else if (preserveStructure && pathParts.length > 0) {
+              const directory = pathParts.join('/');
+              fullPath = prefix ? `${prefix}${directory}/${filename}` : `${directory}/${filename}`;
             } else {
-              console.error('❌ Error processing file:', result.filename, result.error);
+              fullPath = prefix ? `${prefix}${filename}` : filename;
+            }
+
+            zip.file(fullPath, result.blob);
+            filesAdded++;
+
+            if (i % 25 === 0 || i === successfulResults.length - 1) {
+              const progress = ((i + 1) / successfulResults.length) * 100;
+              console.log(`  📁 Added ${i + 1}/${successfulResults.length} files (${Math.round(progress)}%)`);
             }
           }
-          console.log('✅ ZIP file creation loop completed successfully');
+          console.log(`✅ All ${filesAdded} files added to ZIP`);
         } catch (error) {
-          console.error('❌ Error during ZIP file creation loop:', error);
+          console.error('❌ Error while adding files to ZIP:', error);
           throw new Error('ZIP file creation failed: ' + error.message);
         }
-        
-        // Add the last ZIP if it has files
-        if (filesInCurrentZip > 0) {
-          console.log(`  📦 Creating final ZIP ${zipIndex} with ${filesInCurrentZip} files (folder: ${currentFolder || 'root'})...`);
-          zipFiles.push({ zip: currentZip, index: zipIndex, fileCount: filesInCurrentZip, folder: currentFolder });
-        }
-        
-        console.log(`📦 Created ${zipFiles.length} ZIP files to avoid memory issues`);
-        return zipFiles;
+
+        return { zip, fileCount: filesAdded };
       }
       
       // Replace the original batch processing with multithreaded version
@@ -1991,57 +1945,36 @@ declare const JSZip: any;
         (batchClearButton as HTMLButtonElement).disabled = true;
         
         try {
-          console.log('🎯 Using MULTITHREADED batch processing with multiple ZIP files...');
-          const zipFiles = await processBatchMultithreaded(
-            batchFiles, 
-            rotationDegrees, 
-            prefix, 
-            preserveStructure, 
+          console.log('🎯 Using MULTITHREADED batch processing with single ZIP output...');
+          const { zip, fileCount } = await processBatchMultithreaded(
+            batchFiles,
+            rotationDegrees,
+            prefix,
+            preserveStructure,
             batchGroupingColumn
           );
-          
-          // Generate and download multiple ZIP files
-          console.log(`📦 Generating ${zipFiles.length} ZIP files...`);
-          
-          for (let i = 0; i < zipFiles.length; i++) {
-            const zipFile = zipFiles[i];
-            const zipProgress = ((i + 1) / zipFiles.length) * 100;
-            console.log(`📦 Creating ZIP file ${i + 1}/${zipFiles.length} (${Math.round(zipProgress)}%) with ${zipFile.fileCount} files...`);
-            
-            try {
-              console.log(`  🔄 Compressing ${zipFile.fileCount} files into ZIP ${i + 1}...`);
-              const content = await zipFile.zip.generateAsync({ 
-                type: 'blob',
-                compression: 'DEFLATE',
-                compressionOptions: { level: 6 }
-              });
-              
-              console.log(`  ✅ ZIP file ${i + 1} created successfully! Size:`, (content.size / 1024 / 1024).toFixed(2), 'MB');
-              console.log(`  📥 Downloading ZIP file ${i + 1}...`);
-              
-                          const link = document.createElement('a');
-            link.href = URL.createObjectURL(content);
-            const folderName = zipFile.folder ? `_${zipFile.folder}` : '';
-            link.download = `batch_rotated_images_part_${zipFile.index}${folderName}.zip`;
-            link.click();
-            URL.revokeObjectURL(link.href);
-              
-              console.log(`  ✅ ZIP file ${i + 1} downloaded successfully!`);
-              
-              // Small delay between downloads
-              await new Promise(resolve => setTimeout(resolve, 100));
-            } catch (error) {
-              console.error(`❌ Error creating ZIP file ${i + 1}:`, error);
-              if (error.message.includes('Array buffer allocation failed')) {
-                alert(`Error: ZIP file ${i + 1} too large for browser memory. Try processing fewer files at once.`);
-                break;
-              }
+
+          console.log(`📦 Compressing ${fileCount} files into a single ZIP archive...`);
+          const content = await zip.generateAsync(
+            {
+              type: 'blob',
+              compression: 'DEFLATE',
+              compressionOptions: { level: 6 }
+            },
+            (metadata) => {
+              const pct = Math.min(Math.max(metadata.percent, 0), 100);
+              batchProgressFill.style.width = pct + '%';
             }
-          }
-          
-          // Log completion
-          console.log(`✅ Batch processing completed successfully! Downloaded ${zipFiles.length} ZIP files`);
-          
+          );
+
+          console.log(`✅ ZIP created successfully! Size: ${(content.size / 1024 / 1024).toFixed(2)} MB`);
+          console.log('📥 Triggering download...');
+
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          triggerBlobDownload(content, `batch_rotated_images_${timestamp}.zip`);
+
+          console.log(`✅ Batch processing completed successfully! Downloaded ZIP with ${fileCount} files.`);
+
         } catch (error) {
           console.error('Error in batch processing:', error);
           if (error.message.includes('Array buffer allocation failed')) {
@@ -2086,11 +2019,7 @@ declare const JSZip: any;
                 });
                 
                 // Download individual file immediately
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = file.name.replace(/\.[^/.]+$/, '') + '_rotated.png';
-                link.click();
-                URL.revokeObjectURL(link.href);
+                triggerBlobDownload(blob, file.name.replace(/\.[^/.]+$/, '') + '_rotated.png');
                 
                 // Small delay between files
                 await new Promise(resolve => setTimeout(resolve, 50));
