@@ -263,7 +263,7 @@ import "../styles.css";
 						</label>
 						<label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
 							<input type="radio" name="brush-mode" id="brush-auto" value="auto" />
-							Auto <span style="color: #888;">(RGB bbox on image)</span>
+							Auto <span style="color: #888;">(shrink-wrap bright pixels)</span>
 						</label>
 					</div>
 					<div id="auto-padding-row" style="display: none; margin-top: 8px;">
@@ -295,13 +295,6 @@ import "../styles.css";
 					>
 						Export SVG overlay
 					</button>
-					<label
-						id="export-bundle-from-backplate-wrap"
-						style="display: none; align-items: flex-start; gap: 6px; font-size: 11px; margin-bottom: 8px; cursor: pointer; line-height: 1.35;"
-					>
-						<input type="checkbox" id="export-bundle-from-backplate" style="margin-top: 2px;" />
-						<span>Soluis bundle from PNG backplate (dims_background + patch crops)</span>
-					</label>
 					<button
 						id="export-bundle-svg-btn"
 						style="width: 100%; padding: 6px 8px; background: #0a7a4b; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px; display: none;"
@@ -326,7 +319,7 @@ import "../styles.css";
 						<p>• Alt+drag to duplicate rects</p>
 						<p>
 							<strong>• Draw rect:</strong> drag on empty canvas (avoid clicking rects/handles).
-							Manual = drag box; Auto = tight box from RGB in drag area (padding below brush).
+							Manual = drag box; Auto = shrink-wrap white/bright pixels under drag center (needs PNG backplate or bundle bake; includes vector dim lines).
 						</p>
 						<p id="dims-reference-hint" style="display: none; color: #0a5; margin-top: 8px;">
 							<strong>Dimension SVG loaded.</strong> White lines are reference only — draw blue mask rectangles on top.
@@ -349,6 +342,8 @@ import "../styles.css";
 			<div
 				class="aspect-square max-h-[91vh] max-w-[91vh]"
 				id="scalable-canvas"
+				tabindex="0"
+				aria-label="Mask editor canvas"
 			>
 				<div class="output" id="svg-container">
 					<p
@@ -867,16 +862,8 @@ import "../styles.css";
 			return src && src.startsWith("data:") ? src : null;
 		}
 
-		function isBackplateBundleExportEnabled(): boolean {
-			const cb = document.getElementById(
-				"export-bundle-from-backplate",
-			) as HTMLInputElement | null;
-			return !!cb?.checked;
-		}
-
 		function canExportBundleSvg(): boolean {
 			if (bundleSourceMeta) return true;
-			if (!isBackplateBundleExportEnabled()) return false;
 			if (!getBackplateRasterDataUrl()) return false;
 			return !!globalSvgContainer.querySelector("svg");
 		}
@@ -884,20 +871,9 @@ import "../styles.css";
 		function updateExportButtonsVisibility() {
 			const bundleBtn = document.getElementById("export-bundle-svg-btn");
 			const bundleHint = document.getElementById("export-bundle-hint");
-			const backplateWrap = document.getElementById(
-				"export-bundle-from-backplate-wrap",
-			);
 			const showBundle = canExportBundleSvg();
-			const hasImportedBundle = bundleSourceMeta !== null;
-			const hasBackplate = !!getBackplateRasterDataUrl();
-			const hasOverlay = !!globalSvgContainer.querySelector("svg");
-
 			if (bundleBtn) bundleBtn.style.display = showBundle ? "block" : "none";
 			if (bundleHint) bundleHint.style.display = showBundle ? "block" : "none";
-			if (backplateWrap) {
-				backplateWrap.style.display =
-					!hasImportedBundle && hasBackplate && hasOverlay ? "flex" : "none";
-			}
 		}
 
 		async function bakeRasterToViewBoxPixels(
@@ -1017,12 +993,6 @@ import "../styles.css";
 
 		function setActiveBundleMeta(meta: BundleSourceMeta | null | undefined) {
 			bundleSourceMeta = meta ?? null;
-			if (bundleSourceMeta) {
-				const cb = document.getElementById(
-					"export-bundle-from-backplate",
-				) as HTMLInputElement | null;
-				if (cb) cb.checked = false;
-			}
 			updateExportButtonsVisibility();
 			const bundleHint = document.getElementById("combined-bundle-hint");
 			if (bundleHint) {
@@ -1133,44 +1103,125 @@ import "../styles.css";
 			setTimeout(() => URL.revokeObjectURL(url), 1000);
 		}
 
-		type RasterBrushTarget = {
-			image: HTMLImageElement;
-			samplePixelsFromClientRect: (
-				inter: { left: number; top: number; width: number; height: number },
-			) => { ix0: number; iy0: number; ix1: number; iy1: number } | null;
-		};
+		/** Raster used for Auto brush: backplate + vector dims (what you see on screen). */
+		async function resolveAutoBrushRasterImage(
+			svg: SVGSVGElement,
+		): Promise<HTMLImageElement | null> {
+			const vb = parseViewBoxAttr(svg);
 
-		function buildRasterBrushTarget(_svg: SVGSVGElement): RasterBrushTarget | null {
+			if (bundleSourceMeta?.canonicalMergedDataUrl) {
+				try {
+					return await loadHtmlImage(bundleSourceMeta.canonicalMergedDataUrl);
+				} catch {
+					/* fall through */
+				}
+			}
+
+			const base = await resolveBrushRasterImage(svg);
+			if (!base?.src) return null;
+
+			const { dataUrl: floorDataUrl, pixelWidth, pixelHeight } =
+				await bakeRasterToViewBoxPixels(base.src, vb);
+
+			const dims = svg.querySelector("#dims-reference");
+			const hasDimVectors = !!dims?.querySelector(
+				"line, path, text, polyline, polygon",
+			);
+			if (hasDimVectors) {
+				try {
+					const composite = await composeCanonicalFromBackplateAndOverlay(
+						floorDataUrl,
+						svg,
+						vb,
+						pixelWidth,
+						pixelHeight,
+					);
+					return await loadHtmlImage(composite);
+				} catch (err) {
+					console.warn("Auto brush: could not composite dim vectors:", err);
+				}
+			}
+
+			return loadHtmlImage(floorDataUrl);
+		}
+
+		async function resolveBrushRasterImage(
+			_svg: SVGSVGElement,
+		): Promise<HTMLImageElement | null> {
 			const htmlImg = globalSvgContainer.querySelector(
 				"#background-image-container img",
 			) as HTMLImageElement | null;
-			if (!htmlImg || (htmlImg.naturalWidth || 0) === 0) return null;
+			if (htmlImg?.src) {
+				if (htmlImg.complete && (htmlImg.naturalWidth || 0) > 0) {
+					return htmlImg;
+				}
+				try {
+					return await loadHtmlImage(htmlImg.src);
+				} catch {
+					/* fall through */
+				}
+			}
+			const url =
+				backplateRasterDataUrl ||
+				bundleSourceMeta?.canonicalMergedDataUrl ||
+				null;
+			if (!url) return null;
+			try {
+				return await loadHtmlImage(url);
+			} catch {
+				return null;
+			}
+		}
 
+		function rubberBandSvgToImagePixels(
+			svg: SVGSVGElement,
+			img: HTMLImageElement,
+			x: number,
+			y: number,
+			width: number,
+			height: number,
+		) {
+			const vb = parseViewBoxAttr(svg);
+			const nw = img.naturalWidth || 0;
+			const nh = img.naturalHeight || 0;
+			if (nw <= 0 || nh <= 0 || vb.w <= 0 || vb.h <= 0) return null;
+
+			const ix0 = Math.max(
+				0,
+				Math.floor(((x - vb.x) / vb.w) * nw),
+			);
+			const iy0 = Math.max(
+				0,
+				Math.floor(((y - vb.y) / vb.h) * nh),
+			);
+			const ix1 = Math.min(
+				nw,
+				Math.ceil(((x + width - vb.x) / vb.w) * nw),
+			);
+			const iy1 = Math.min(
+				nh,
+				Math.ceil(((y + height - vb.y) / vb.h) * nh),
+			);
+			if (ix1 - ix0 < 1 || iy1 - iy0 < 1) return null;
+			return { ix0, iy0, ix1, iy1 };
+		}
+
+		function imagePixelRectToSvgRect(
+			svg: SVGSVGElement,
+			img: HTMLImageElement,
+			px0: number,
+			py0: number,
+			px1: number,
+			py1: number,
+		) {
+			const vb = parseViewBoxAttr(svg);
+			const nw = img.naturalWidth || 1;
+			const nh = img.naturalHeight || 1;
 			return {
-				image: htmlImg,
-				samplePixelsFromClientRect(inter) {
-					const imgRect = htmlImg.getBoundingClientRect();
-					const nw = htmlImg.naturalWidth;
-					const nh = htmlImg.naturalHeight;
-					const sx0 = Math.floor(
-						((inter.left - imgRect.left) / imgRect.width) * nw,
-					);
-					const sy0 = Math.floor(
-						((inter.top - imgRect.top) / imgRect.height) * nh,
-					);
-					const sx1 = Math.ceil(
-						((inter.left + inter.width - imgRect.left) / imgRect.width) * nw,
-					);
-					const sy1 = Math.ceil(
-						((inter.top + inter.height - imgRect.top) / imgRect.height) * nh,
-					);
-					return {
-						ix0: Math.max(0, sx0),
-						iy0: Math.max(0, sy0),
-						ix1: Math.min(nw, sx1),
-						iy1: Math.min(nh, sy1),
-					};
-				},
+				x: vb.x + (px0 / nw) * vb.w,
+				y: vb.y + (py0 / nh) * vb.h,
+				width: ((px1 - px0) / nw) * vb.w,
+				height: ((py1 - py0) / nh) * vb.h,
 			};
 		}
 
@@ -1595,35 +1646,116 @@ import "../styles.css";
 			return { x: minSx, y: minSy, width: maxSx - minSx, height: maxSy - minSy };
 		}
 
-		/** RGB-only activity; alpha ignored per mask-editor Auto mode. */
+		const AUTO_RGB_THRESHOLD = 12;
+
+		function isAutoBrightPixel(
+			data: Uint8ClampedArray,
+			width: number,
+			x: number,
+			y: number,
+		) {
+			const i = (y * width + x) * 4;
+			return (
+				data[i] > AUTO_RGB_THRESHOLD ||
+				data[i + 1] > AUTO_RGB_THRESHOLD ||
+				data[i + 2] > AUTO_RGB_THRESHOLD
+			);
+		}
+
+		/** Full union bbox of all bright pixels in the crop. */
 		function findRgbContentBBox(imageData: ImageData) {
 			const d = imageData.data;
 			const w = imageData.width;
 			const h = imageData.height;
-			const thr = 12;
 			let minX = w,
 				minY = h,
 				maxX = -1,
 				maxY = -1;
 			for (let y = 0; y < h; y++) {
 				for (let x = 0; x < w; x++) {
-					const i = (y * w + x) * 4;
-					const r = d[i];
-					const g = d[i + 1];
-					const b = d[i + 2];
-					if (r > thr || g > thr || b > thr) {
-						if (x < minX) minX = x;
-						if (y < minY) minY = y;
-						if (x > maxX) maxX = x;
-						if (y > maxY) maxY = y;
-					}
+					if (!isAutoBrightPixel(d, w, x, y)) continue;
+					if (x < minX) minX = x;
+					if (y < minY) minY = y;
+					if (x > maxX) maxX = x;
+					if (y > maxY) maxY = y;
 				}
 			}
 			if (maxX < minX) return null;
 			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
 		}
 
-		function finalizeRubberBandRect(
+		/**
+		 * Shrink-wrap the bright blob under the drag box center (one label),
+		 * not every disconnected line in a loose rubber band.
+		 */
+		function findRgbContentBBoxNearCenter(imageData: ImageData) {
+			const d = imageData.data;
+			const w = imageData.width;
+			const h = imageData.height;
+			if (w < 1 || h < 1) return null;
+
+			const cx = Math.floor(w / 2);
+			const cy = Math.floor(h / 2);
+
+			function findSeed() {
+				if (isAutoBrightPixel(d, w, cx, cy)) return { x: cx, y: cy };
+				const maxR = Math.max(w, h);
+				for (let r = 1; r < maxR; r++) {
+					for (let dx = -r; dx <= r; dx++) {
+						for (const dy of [-r, r]) {
+							const x = cx + dx;
+							const y = cy + dy;
+							if (x < 0 || y < 0 || x >= w || y >= h) continue;
+							if (isAutoBrightPixel(d, w, x, y)) return { x, y };
+						}
+					}
+					for (let dy = -r + 1; dy <= r - 1; dy++) {
+						for (const x of [cx - r, cx + r]) {
+							const y = cy + dy;
+							if (x < 0 || y < 0 || x >= w || y >= h) continue;
+							if (isAutoBrightPixel(d, w, x, y)) return { x, y };
+						}
+					}
+				}
+				return null;
+			}
+
+			const seed = findSeed();
+			if (!seed) return findRgbContentBBox(imageData);
+
+			const visited = new Uint8Array(w * h);
+			const stack: [number, number][] = [[seed.x, seed.y]];
+			let minX = seed.x,
+				minY = seed.y,
+				maxX = seed.x,
+				maxY = seed.y;
+			visited[seed.y * w + seed.x] = 1;
+
+			while (stack.length > 0) {
+				const [x, y] = stack.pop()!;
+				if (x < minX) minX = x;
+				if (y < minY) minY = y;
+				if (x > maxX) maxX = x;
+				if (y > maxY) maxY = y;
+				for (const [nx, ny] of [
+					[x + 1, y],
+					[x - 1, y],
+					[x, y + 1],
+					[x, y - 1],
+				]) {
+					if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+					const idx = ny * w + nx;
+					if (visited[idx]) continue;
+					if (!isAutoBrightPixel(d, w, nx, ny)) continue;
+					visited[idx] = 1;
+					stack.push([nx, ny]);
+				}
+			}
+
+			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+		}
+
+		async function finalizeRubberBandRect(
 			svg: SVGSVGElement,
 			x: number,
 			y: number,
@@ -1637,76 +1769,54 @@ import "../styles.css";
 				fh = height;
 
 			if (getBrushMode() === "auto") {
-				const raster = buildRasterBrushTarget(svg);
-				const rubberClient = svgRectToClientRect(svg, x, y, width, height);
-				const screenRect = raster.image.getBoundingClientRect();
-				if (
-					raster &&
-					screenRect &&
-					screenRect.width >= 1 &&
-					screenRect.height >= 1 &&
-					raster.image.complete &&
-					(raster.image.naturalWidth || 0) > 0 &&
-					(raster.image.naturalHeight || 0) > 0
-				) {
-					const img = raster.image;
-					const inter = intersectClientRects(rubberClient, screenRect);
-					if (inter && inter.width >= 1 && inter.height >= 1) {
-						const pixels = raster.samplePixelsFromClientRect(inter);
-						if (pixels) {
-							const { ix0, iy0, ix1, iy1 } = pixels;
-							const iw = ix1 - ix0;
-							const ih = iy1 - iy0;
-							if (iw >= 1 && ih >= 1) {
-								const nw = img.naturalWidth;
-								const nh = img.naturalHeight;
-								const canvas = document.createElement("canvas");
-								canvas.width = nw;
-								canvas.height = nh;
-								const ctx = canvas.getContext("2d");
-								if (ctx) {
-									ctx.drawImage(img, 0, 0);
-									let imageData: ImageData | null = null;
-									try {
-										imageData = ctx.getImageData(ix0, iy0, iw, ih);
-									} catch {
-										imageData = null;
-									}
-									if (
-										imageData &&
-										imageData.width > 0 &&
-										imageData.height > 0
-									) {
-										const bbox = findRgbContentBBox(imageData);
-										if (bbox) {
-											const apx0 = ix0 + bbox.minX;
-											const apy0 = iy0 + bbox.minY;
-											const apx1 = ix0 + bbox.maxX;
-											const apy1 = iy0 + bbox.maxY;
-											const mapped = imageBBoxToSvgRect(
-												svg,
-												img,
-												apx0,
-												apy0,
-												apx1,
-												apy1,
-											);
-											if (
-												mapped &&
-												mapped.width > 1 &&
-												mapped.height > 1
-											) {
-												fx = mapped.x;
-												fy = mapped.y;
-												fw = mapped.width;
-												fh = mapped.height;
-											}
-										}
-									}
+				const img = await resolveAutoBrushRasterImage(svg);
+				const pixels = img
+					? rubberBandSvgToImagePixels(svg, img, x, y, width, height)
+					: null;
+				if (pixels) {
+					const { ix0, iy0, ix1, iy1 } = pixels;
+					const iw = ix1 - ix0;
+					const ih = iy1 - iy0;
+					const canvas = document.createElement("canvas");
+					canvas.width = iw;
+					canvas.height = ih;
+					const ctx = canvas.getContext("2d");
+					if (ctx) {
+						ctx.drawImage(img, ix0, iy0, iw, ih, 0, 0, iw, ih);
+						let imageData: ImageData | null = null;
+						try {
+							imageData = ctx.getImageData(0, 0, iw, ih);
+						} catch (err) {
+							console.warn(
+								"Auto brush could not read pixels (image may be cross-origin):",
+								err,
+							);
+							imageData = null;
+						}
+						if (imageData && imageData.width > 0 && imageData.height > 0) {
+							const bbox = findRgbContentBBoxNearCenter(imageData);
+							if (bbox) {
+								const mapped = imagePixelRectToSvgRect(
+									svg,
+									img,
+									ix0 + bbox.minX,
+									iy0 + bbox.minY,
+									ix0 + bbox.maxX,
+									iy0 + bbox.maxY,
+								);
+								if (mapped.width > 1 && mapped.height > 1) {
+									fx = mapped.x;
+									fy = mapped.y;
+									fw = mapped.width;
+									fh = mapped.height;
 								}
 							}
 						}
 					}
+				} else if (!img) {
+					console.warn(
+						"Auto brush needs a PNG/JPEG backplate (or combined floorplan import) aligned with the overlay.",
+					);
 				}
 			}
 
@@ -1793,10 +1903,11 @@ import "../styles.css";
 			if (w < minDrag || h < minDrag) return;
 
 			suppressBackgroundClickDeselect = true;
-			finalizeRubberBandRect(svg, x, y, w, h);
-			setTimeout(() => {
-				suppressBackgroundClickDeselect = false;
-			}, 0);
+			void finalizeRubberBandRect(svg, x, y, w, h).finally(() => {
+				setTimeout(() => {
+					suppressBackgroundClickDeselect = false;
+				}, 0);
+			});
 		}
 
 		function startRubberBandDraw(e: MouseEvent, svg: SVGSVGElement) {
@@ -2083,6 +2194,14 @@ import "../styles.css";
 				if (img) {
 					const finishRasterLoad = () => {
 						ensureSvgOverlayForRaster(img, file);
+						const nw = img.naturalWidth;
+						const nh = img.naturalHeight;
+						const svg = globalSvgContainer.querySelector(
+							"svg",
+						) as SVGSVGElement | null;
+						if (svg && nw > 0 && nh > 0) {
+							svg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+						}
 					};
 					if (img.complete) finishRasterLoad();
 					else img.onload = finishRasterLoad;
@@ -2333,12 +2452,18 @@ import "../styles.css";
 		}
 
 		// Rect selection and transform functionality
+		function focusEditorCanvas() {
+			const canvas = document.getElementById("scalable-canvas") as HTMLElement | null;
+			canvas?.focus({ preventScroll: true });
+		}
+
 		function selectRect(rect) {
 			// Deselect previous rect
 			deselectRect();
 			
 			selectedRect = rect;
 			rect.classList.add('rect-selected');
+			focusEditorCanvas();
 			
 			console.log('Rect selected:', selectedRect);
 			
@@ -2914,10 +3039,6 @@ import "../styles.css";
 			exportCleanSVG();
 		});
 
-		document
-			.getElementById("export-bundle-from-backplate")
-			?.addEventListener("change", updateExportButtonsVisibility);
-
 		document.getElementById("export-bundle-svg-btn")?.addEventListener("click", async () => {
 			const btn = document.getElementById(
 				"export-bundle-svg-btn",
@@ -2944,30 +3065,27 @@ import "../styles.css";
 		document.getElementById("brush-auto")?.addEventListener("change", updateBrushPaddingVisibility);
 		updateBrushPaddingVisibility();
 
-		// Keyboard event listener for various shortcuts
-		document.addEventListener("keydown", (e) => {
-			// Debug logging for Delete/Backspace
-			if (e.key === "Delete" || e.key === "Backspace") {
-				console.log('Delete/Backspace key pressed');
-				console.log('isTypingInInput():', isTypingInInput());
-				console.log('selectedRect:', selectedRect);
-			}
-			
-			// Only process shortcuts if not typing in an input
-			if (isTypingInInput()) {
-				console.log('Ignoring key press - typing in input');
-				return;
-			}
+		function isDeleteKey(e: KeyboardEvent) {
+			return (
+				e.key === "Delete" ||
+				e.key === "Backspace" ||
+				e.code === "Delete" ||
+				e.code === "Backspace"
+			);
+		}
 
-			// Delete or Backspace - delete selected rect
-			if (e.key === "Delete" || e.key === "Backspace") {
+		// Keyboard shortcuts (capture so toolbar radio focus does not block Delete)
+		window.addEventListener(
+			"keydown",
+			(e) => {
+			if (isTypingInInput()) return;
+
+			if (isDeleteKey(e)) {
 				if (selectedRect) {
-					console.log('Attempting to delete selected rect');
 					e.preventDefault();
 					deleteSelectedRect();
-			} else {
-					console.log('No rect selected for deletion');
 				}
+				return;
 			}
 			
 			// Ctrl+C - copy selected rect
@@ -2992,7 +3110,6 @@ import "../styles.css";
 				toggleAddRectMode();
 			}
 			
-			// Escape - cancel rubber-band draw or exit Add Rectangle mode
 			if (e.key === "Escape") {
 				if (isRubberBandDrawing) {
 					e.preventDefault();
@@ -3002,9 +3119,11 @@ import "../styles.css";
 				if (isAddRectMode) {
 					e.preventDefault();
 					exitAddRectMode();
-					}
 				}
-			});
+			}
+			},
+			true,
+		);
 
 		function cleanSvgForExport(svgClone: SVGElement) {
 			svgClone.querySelectorAll(".transform-group").forEach((g) => g.remove());
@@ -3137,7 +3256,7 @@ import "../styles.css";
 
 			if (!canExportBundleSvg()) {
 				alert(
-					"Bundle export needs a combined floorplan import, or enable “Soluis bundle from PNG backplate” with an image + SVG overlay loaded.",
+					"Bundle export needs a combined floorplan import, or a PNG/JPEG backplate with an SVG overlay loaded.",
 				);
 				return;
 			}
@@ -3229,18 +3348,19 @@ import "../styles.css";
 
 		// Helper function to check if user is typing in an input field
 		function isTypingInInput() {
-			const activeElement = document.activeElement;
-			const isInInput = activeElement && (
-				activeElement.tagName === 'INPUT' || 
-				activeElement.tagName === 'TEXTAREA' || 
-				activeElement.isContentEditable
-			);
-			
-			if (isInInput) {
-				console.log('User is typing in input:', activeElement.tagName, activeElement.id || activeElement.className);
+			const el = document.activeElement;
+			if (!el || el === document.body) return false;
+			if (el instanceof HTMLElement && el.isContentEditable) return true;
+			if (el instanceof HTMLTextAreaElement) return true;
+			if (el instanceof HTMLSelectElement) return true;
+			if (el instanceof HTMLInputElement) {
+				const t = el.type.toLowerCase();
+				if (t === "radio" || t === "checkbox" || t === "button" || t === "submit" || t === "reset" || t === "file") {
+					return false;
+				}
+				return true;
 			}
-			
-			return isInInput;
+			return false;
 		}
 
 		// Function to delete the selected rect

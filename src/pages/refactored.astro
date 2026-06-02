@@ -8625,20 +8625,18 @@ import "../styles.css";
 		// =========================================================
 		// Floorplan Generator bridge (CSV roundtrip)
 		//
-		// CORS requirement for the bridge server:
-		//   When this page is loaded from any origin other than the bridge's own
-		//   (e.g. the deployed Netlify URL with ?bridge=http://127.0.0.1:8765),
-		//   the bridge MUST send CORS headers on every response or the browser
-		//   will block all fetches and the page can never load the floorplan/csv.
+		// Cross-origin notes:
+		//   The bridge server sends CORS headers (Access-Control-Allow-Origin etc.),
+		//   so cross-origin fetches from any page origin are allowed. Do NOT add a
+		//   client-side origin "guard" that blocks fetches preemptively — it produces
+		//   a misleading "Cross-origin restriction" error even when the bridge's CORS
+		//   is correct. Just attempt the fetch; the catch handler below reports a
+		//   helpful message only on a genuine failure.
 		//
-		//   Minimum headers on every response (GET / PUT / OPTIONS):
-		//     Access-Control-Allow-Origin: *
-		//     Access-Control-Allow-Methods: GET, PUT, OPTIONS
-		//     Access-Control-Allow-Headers: Content-Type
-		//
-		//   And the server must reply to OPTIONS preflight with 204 + the same headers.
-		//   If those aren't present, this page surfaces a clear error banner instead
-		//   of the generic "Failed to fetch" devtools message.
+		//   The desktop app's "Edit CSV in Web Tool" action opens the checker proxied
+		//   through the bridge itself, e.g.
+		//     http://127.0.0.1:8765/refactored/?bridge=http://127.0.0.1:8765/session/<id>
+		//   so page origin and bridge origin already match and even non-CORS setups work.
 		// =========================================================
 		// When this page is opened with `?bridge=<url>` from the desktop
 		// Floorplan Generator, the local Python HTTP bridge serves:
@@ -8698,41 +8696,7 @@ import "../styles.css";
 				}, 4500);
 			}
 
-			function looksLikeCorsMismatch(): boolean {
-				try {
-					const pageOrigin = window.location.origin;
-					const bridgeOrigin = new URL(bridgeUrl).origin;
-					if (pageOrigin === bridgeOrigin) return false;
-					// Page is served from a non-loopback origin (e.g. deployed Netlify) and
-					// the bridge points at a local loopback address → browser will block
-					// cross-origin fetches unless the bridge sets CORS headers.
-					const pageHost = window.location.hostname;
-					const bridgeHost = new URL(bridgeUrl).hostname;
-					const isLocalHost = (h: string) =>
-						h === "localhost" || h === "127.0.0.1" || h === "::1";
-					return isLocalHost(bridgeHost) && !isLocalHost(pageHost);
-				} catch {
-					return false;
-				}
-			}
-
 			async function loadFromBridge() {
-				if (looksLikeCorsMismatch()) {
-					console.error(
-						"[ FG Bridge ] Cross-origin restriction: page origin",
-						window.location.origin,
-						"cannot fetch from local bridge",
-						bridgeUrl,
-						"unless the bridge server sends Access-Control-Allow-Origin. " +
-							"Either open this page from a localhost URL, or update the bridge server to send the appropriate CORS headers."
-					);
-					showBridgeBanner(
-						"Bridge blocked by CORS — open this page on localhost (the bridge server doesn't allow remote origins).",
-						"#a23"
-					);
-					return;
-				}
-
 				let manifest: any = null;
 				try {
 					const r = await fetch(bridgeUrl + "/manifest.json", { cache: "no-store" });
@@ -8780,7 +8744,7 @@ import "../styles.css";
 					console.error("[ FG Bridge ] floorplan/csv load failed:", e);
 					const msg =
 						e instanceof TypeError && /Failed to fetch/i.test(e.message)
-							? "Bridge unreachable — local server not responding or blocked by CORS. Open this page from localhost or enable CORS on the bridge."
+							? "Bridge unreachable — is the Floorplan Generator still running and is the session still open?"
 							: "Could not load floorplan or CSV from Floorplan Generator";
 					showBridgeBanner(msg, "#a23");
 					return;
