@@ -439,7 +439,28 @@ import "../styles.css";
 					id="shape-benchmark-section"
 					class="mt-3 p-2 bg-amber-50/90 rounded-sm border border-amber-200/70"
 				>
-					<p class="text-sm font-medium mb-0.5">Silhouette benchmark (experimental)</p>
+					<button
+						type="button"
+						id="shape-benchmark-toggle"
+						aria-expanded="false"
+						aria-controls="shape-benchmark-body"
+						class="flex w-full items-center justify-between gap-2 text-left"
+					>
+						<span class="text-sm font-medium">Silhouette benchmark (experimental)</span>
+						<svg
+							id="shape-benchmark-toggle-chevron"
+							class="w-4 h-4 shrink-0 text-neutral-500 transition-transform duration-200"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+							stroke="currentColor"
+							aria-hidden="true"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+						</svg>
+					</button>
+					<div id="shape-benchmark-body" class="hidden mt-2">
 					<p class="text-xs text-neutral-600 mb-2">
 						Binary-mask silhouette match: ranks by combined Score (default ~half IoU / half Chamfer) using amplified Euclidean edge distance plus a spread penalty (low σ preferred). Same rotation search and preprocess as before. Same OpenCV crop/bg step as Compare before masks; no ORB/SIFT in the bench.
 						Hover any path with an id and use &quot;Silhouette bench&quot; in the preview — Check Floorplans is not required. Batch export runs the same benchmark for every path with an id across loaded SVGs, then downloads a CSV. Floorplans whose cropped aspect ratio is too far from the cutout&apos;s (default max span 2.5×) are skipped before scoring. Optional &quot;Flash preprocess in preview&quot; applies only to single-path runs from the preview (not batch). Duplicate benchmark files are deduped by content hash when loading.
@@ -555,6 +576,7 @@ import "../styles.css";
 						id="shape-benchmark-results"
 						class="hidden mt-2 overflow-x-auto max-h-72 overflow-y-auto text-xs border border-neutral-200 rounded-sm bg-white"
 					></div>
+					</div>
 				</div>
 			</div>
 
@@ -8847,6 +8869,23 @@ import "../styles.css";
 
 			injectSaveBackButton();
 			loadFromBridge();
+		})();
+
+		// Collapsible "Silhouette benchmark (experimental)" section — hidden by default.
+		(function setupSilhouetteBenchToggle() {
+			const toggle = document.getElementById("shape-benchmark-toggle");
+			const body = document.getElementById("shape-benchmark-body");
+			const chevron = document.getElementById("shape-benchmark-toggle-chevron");
+			if (!toggle || !body) return;
+			const setOpen = (open: boolean) => {
+				body.classList.toggle("hidden", !open);
+				toggle.setAttribute("aria-expanded", open ? "true" : "false");
+				if (chevron) chevron.style.transform = open ? "rotate(180deg)" : "";
+			};
+			setOpen(false); // collapsed by default
+			toggle.addEventListener("click", () => {
+				setOpen(body.classList.contains("hidden"));
+			});
 		})();
 	</script>
 </html>

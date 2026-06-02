@@ -1,65 +1,113 @@
 ---
-
+const tools = [
+	{
+		href: "/refactored",
+		title: "Floorplan CSV Editor",
+		desc: "Edit and validate floorplan dimension CSVs over a backplate.",
+		img: "/images/refactored.webp",
+	},
+	{
+		href: "/three-column",
+		title: "3-Column Dimensions",
+		desc: "Metric + imperial dimension tables with PNG / CSV export.",
+		icon: "table",
+	},
+	{
+		href: "/roomscale-4",
+		title: "3D Collision Mesh Viewer",
+		desc: "Inspect roomscale collision meshes in 3D.",
+		img: "/images/roomscale-4.webp",
+	},
+	{
+		href: "/new-project",
+		title: "JSON Generator",
+		desc: "Create and edit project JSON.",
+		icon: "doc",
+	},
+	{
+		href: "/inpainting-king",
+		title: "Inpainting King",
+		desc: "Mask and inpaint images.",
+		img: "/images/inpainting-king.jpg",
+	},
+	{
+		href: "/equirectangular-editor",
+		title: "Equirectangular Editor",
+		desc: "Edit 360° equirectangular panoramas.",
+		img: "/images/equirectangular-editor.webp",
+	},
+	{
+		href: "/dxf-viewer",
+		title: "DXF Viewer & Dimensioning",
+		desc: "View DXF drawings and add dimensions.",
+		icon: "ruler",
+	},
+];
 ---
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
+		<title>Tools</title>
 	</head>
-	<body class="bg-gray-100 p-10 flex flex-col align-center justify-center text-center h-screen">
-		
-		<section class="bg-gray-200 p-10 max-w-7xl m-auto align-center justify-center">
-			<h1 class="font-bold text-2xl mb-5">Navigate to:</h1>
-			<div class="flex-col lg:flex-row w-full max-w-5xl m-auto flex rounded-md justify-evenly items-center">
-				<a href="/refactored" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<image src="/images/refactored.webp" class="max-h-80 w-full rounded-sm mb-3"/>
-					<p>Floorplan CSV Editor</p>
-				</a>
-				<a href="/three-column" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<div class="max-h-80 w-full rounded-sm mb-3 bg-neutral-50 flex items-center justify-center" style="height: 200px;">
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 text-neutral-700" fill="none" viewBox="0 0 80 80" aria-hidden="true">
-							<rect x="6" y="14" width="68" height="52" rx="4" stroke="currentColor" stroke-width="3" />
-							<line x1="29" y1="14" x2="29" y2="66" stroke="currentColor" stroke-width="3" />
-							<line x1="51" y1="14" x2="51" y2="66" stroke="currentColor" stroke-width="3" />
-							<line x1="6" y1="30" x2="74" y2="30" stroke="currentColor" stroke-width="2" />
-							<line x1="6" y1="46" x2="74" y2="46" stroke="currentColor" stroke-width="2" />
-							<text x="17.5" y="42" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" font-family="system-ui, sans-serif">A</text>
-							<text x="40" y="42" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" font-family="system-ui, sans-serif">B</text>
-							<text x="62.5" y="42" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor" font-family="system-ui, sans-serif">C</text>
-						</svg>
-					</div>
-					<p>3-Column Dimensions</p>
-				</a>
-				<a href="/roomscale-4" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<image src="/images/roomscale-4.webp" class="max-h-80 w-full rounded-sm mb-3"/>
-					<p>3D Collision Mesh Viewer</p>
-				</a>
-				<a href="/new-project" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<div class="max-h-80 w-full rounded-sm mb-3 bg-blue-100 flex items-center justify-center" style="height: 200px;">
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-						</svg>
-					</div>
-					<p>JSON Generator</p>
-				</a>
-				<a href="/inpainting-king" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<image src="/images/inpainting-king.jpg" class="max-h-80 w-full rounded-sm mb-3"/>
-					<p>Inpainting-king</p>
-				</a>
-				<a href="/equirectangular-editor" class="bg-zinc-300 p-3 rounded-sm h-fit m-5 transition-colors hover:bg-slate-300">
-					<image src="/images/equirectangular-editor.webp" class="max-h-80 w-full rounded-sm mb-3"/>
-					<p>Equirectangular-editor</p>
-				</a>
+	<body class="bg-neutral-100 min-h-screen text-neutral-900 antialiased">
+		<main class="mx-auto max-w-6xl px-6 py-12 md:py-16">
+			<header class="mb-10">
+				<h1 class="text-3xl font-bold tracking-tight">Tools</h1>
+				<p class="mt-2 text-neutral-500">
+					Floorplan, dimensioning &amp; image utilities — pick one to get started.
+				</p>
+			</header>
+
+			<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+				{tools.map((tool) => (
+					<a
+						href={tool.href}
+						class="group flex flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+					>
+						{tool.img ? (
+							<div class="aspect-[16/10] overflow-hidden bg-neutral-50">
+								<img
+									src={tool.img}
+									alt={tool.title}
+									loading="lazy"
+									decoding="async"
+									class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+								/>
+							</div>
+						) : (
+							<div class="flex aspect-[16/10] items-center justify-center bg-neutral-50 text-neutral-400 transition-colors group-hover:text-neutral-500">
+								{tool.icon === "table" && (
+									<svg class="h-14 w-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+										<rect x="3" y="4" width="18" height="16" rx="2" />
+										<path d="M9 4v16M15 4v16M3 9h18M3 14.5h18" stroke-linecap="round" />
+									</svg>
+								)}
+								{tool.icon === "doc" && (
+									<svg class="h-14 w-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+										<path d="M14 3v4a1 1 0 0 0 1 1h4" stroke-linecap="round" stroke-linejoin="round" />
+										<path d="M5 3h9l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke-linecap="round" stroke-linejoin="round" />
+										<path d="M9 13h6M9 16.5h4" stroke-linecap="round" />
+									</svg>
+								)}
+								{tool.icon === "ruler" && (
+									<svg class="h-14 w-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+										<rect x="2.5" y="8" width="19" height="8" rx="1.5" />
+										<path d="M6.5 8v3M10 8v4M13.5 8v3M17 8v4" stroke-linecap="round" />
+									</svg>
+								)}
+							</div>
+						)}
+
+						<div class="flex flex-1 flex-col p-4">
+							<h2 class="font-semibold leading-snug">{tool.title}</h2>
+							<p class="mt-1 text-sm text-neutral-500">{tool.desc}</p>
+						</div>
+					</a>
+				))}
 			</div>
-			<p class="mt-6">
-				<a href="/dxf-viewer" class="text-blue-600 underline hover:text-blue-800">DXF Viewer & Dimensioning</a>
-			</p>
-
-		</section>
-
+		</main>
 	</body>
 </html>
-
