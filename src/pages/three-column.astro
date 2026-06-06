@@ -11,7 +11,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 	</head>
 	<body class="bg-neutral-100 min-h-screen flex flex-col">
 		<!-- Hidden: full-page CSV drop + file input (no visible drop zone) -->
-		<input type="file" id="file-input" accept=".csv,text/csv" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
+		<input type="file" id="file-input" accept=".csv,text/csv,.svg,image/svg+xml" multiple class="sr-only" tabindex="-1" aria-hidden="true" />
 
 		<main class="flex-1 flex flex-col gap-4 p-4 md:p-6 max-w-7xl w-full mx-auto">
 			<!-- 1. Top band: title + tab bar + add -->
@@ -112,7 +112,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					<div id="preview-table-wrap" class="preview-table-wrap">
 						<table id="preview-table" class="preview-table w-[654px] text-left">
 							<tbody id="preview-tbody">
-								<tr><td colspan="3" class="text-neutral-400 text-center py-10">No data yet — drop a CSV, use the Input panel below, or add rows.</td></tr>
+								<tr><td colspan="3" class="text-neutral-400 text-center py-10">No data yet — drop a CSV or SVG, use the Input panel below, or add rows.</td></tr>
 							</tbody>
 						</table>
 					</div>
@@ -161,7 +161,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Input</span>
 						<span class="text-neutral-300">·</span>
-						<span class="text-xs text-neutral-600">CSV, messy notes, or image for AI</span>
+						<span class="text-xs text-neutral-600">CSV, SVG, messy notes, or image for AI</span>
 					</div>
 					<p
 						id="ai-status"
@@ -220,7 +220,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							Attach image
 						</button>
 						<button type="button" id="import-csv-btn" class="px-3 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 text-sm font-medium text-neutral-700 transition-colors">
-							Import CSV file(s)
+							Import CSV / SVG
 						</button>
 						<span class="text-[11px] text-neutral-400 hidden sm:inline">Drop images here · vision models</span>
 						<span class="flex-1 min-w-[1rem]"></span>
@@ -630,6 +630,139 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return rows;
 			}
 
+			function isCsvFile(file: File) {
+				return file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
+			}
+
+			function isSvgFile(file: File) {
+				return file.name.toLowerCase().endsWith('.svg') || file.type === 'image/svg+xml';
+			}
+
+			function normalizeImportedRows(raw: unknown): string[][] {
+				if (!Array.isArray(raw)) return [];
+				return raw
+					.filter((r) => Array.isArray(r) && r.length >= 3)
+					.map((r) => [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')])
+					.filter((r) => r.some((c) => c.length > 0));
+			}
+
+			type SvgTypographyPayload = {
+				col0?: { weight?: string; tracking?: string };
+				col1?: { weight?: string; tracking?: string };
+				col2?: { weight?: string; tracking?: string };
+			};
+
+			function applyTypographyFromSvgPayload(typography?: SvgTypographyPayload) {
+				if (!typography) return;
+				const cols = [typography.col0, typography.col1, typography.col2];
+				cols.forEach((col, i) => {
+					if (col?.weight && weightSelects[i]) {
+						weightSelects[i].value = col.weight === 'bold' ? 'bold' : 'regular';
+					}
+					if (col?.tracking != null && trackingInputs[i]) {
+						trackingInputs[i].value = String(col.tracking);
+					}
+				});
+			}
+
+			function parseRowsFromSvgTextElements(svg: Element): string[][] | null {
+				const textNodes = Array.from(svg.querySelectorAll('text')).filter((t) => (t.textContent ?? '').trim());
+				if (!textNodes.length) return null;
+
+				type Item = { y: number; x: number; anchor: string; text: string };
+				const items: Item[] = textNodes.map((t) => ({
+					y: Number.parseFloat(t.getAttribute('y') ?? '0'),
+					x: Number.parseFloat(t.getAttribute('x') ?? '0'),
+					anchor: t.getAttribute('text-anchor') ?? 'start',
+					text: (t.textContent ?? '').trim()
+				}));
+
+				items.sort((a, b) => a.y - b.y || a.x - b.x);
+
+				const ROW_Y_TOLERANCE = 8;
+				const rowGroups: Item[][] = [];
+				for (const item of items) {
+					const last = rowGroups[rowGroups.length - 1];
+					if (!last || Math.abs(item.y - last[0].y) > ROW_Y_TOLERANCE) {
+						rowGroups.push([item]);
+					} else {
+						last.push(item);
+					}
+				}
+
+				const rows = rowGroups
+					.map((group) => {
+						group.sort((a, b) => a.x - b.x);
+						const cells = ['', '', ''];
+						if (group.length === 1) {
+							if (group[0].anchor === 'end') cells[2] = group[0].text;
+							else cells[0] = group[0].text;
+						} else if (group.length === 2) {
+							cells[0] = group[0].text;
+							cells[2] = group[1].text;
+						} else {
+							cells[0] = group[0]?.text ?? '';
+							cells[1] = group[1]?.text ?? '';
+							cells[2] = group[2]?.text ?? '';
+						}
+						return cells;
+					})
+					.filter((r) => r.some((c) => c.length));
+
+				return rows.length > 0 ? rows : null;
+			}
+
+			function parseThreeColumnSvg(svgText: string): {
+				rows: string[][];
+				sheet?: string;
+				typography?: SvgTypographyPayload;
+			} | null {
+				const doc = new DOMParser().parseFromString(String(svgText ?? ''), 'image/svg+xml');
+				if (doc.querySelector('parsererror')) return null;
+
+				const svg = doc.querySelector('svg');
+				if (!svg) return null;
+
+				const metadata =
+					svg.querySelector('metadata[data-three-column-payload="json"]') ?? svg.querySelector('metadata');
+				const metaText = metadata?.textContent?.trim();
+				if (metaText) {
+					try {
+						const payload = JSON.parse(metaText) as {
+							generator?: string;
+							rows?: unknown;
+							csv?: string;
+							sheet?: string;
+							typography?: SvgTypographyPayload;
+						};
+						const fromRows = normalizeImportedRows(payload.rows);
+						if (fromRows.length) {
+							return { rows: fromRows, sheet: payload.sheet, typography: payload.typography };
+						}
+						if (typeof payload.csv === 'string' && payload.csv.trim()) {
+							const fromCsv = parseCSV(payload.csv);
+							if (fromCsv.length) {
+								return { rows: fromCsv, sheet: payload.sheet, typography: payload.typography };
+							}
+						}
+					} catch {
+						// fall through to text-element parsing
+					}
+				}
+
+				const fromText = parseRowsFromSvgTextElements(svg);
+				if (fromText?.length) return { rows: fromText };
+
+				return null;
+			}
+
+			function labelFromSvgImport(file: File, sheetName?: string) {
+				if (sheetName?.trim()) return sheetName.trim();
+				let name = file.name.replace(/\.svg$/i, '').trim();
+				name = name.replace(/-4096$/i, '').trim();
+				return name || 'Imported SVG';
+			}
+
 			const tbody = document.getElementById('rows');
 			const previewTbody = document.getElementById('preview-tbody');
 			const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -769,7 +902,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				}
 				previewTbody.innerHTML = '';
 				if (data.length === 0) {
-					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV, use Input, or add rows in the table.</td></tr>';
+					previewTbody.innerHTML = '<tr><td colspan="3" class="text-neutral-400 text-center py-8">No data. Drop a CSV or SVG, use Input, or add rows in the table.</td></tr>';
 					return;
 				}
 				data.forEach(([a, b, c]) => {
@@ -1388,7 +1521,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			}
 
 			async function importCsvFiles(fileList) {
-				const files = Array.from(fileList ?? []).filter((f): f is File => f instanceof File && (f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv'));
+				const files = Array.from(fileList ?? []).filter((f): f is File => f instanceof File && isCsvFile(f));
 				if (!files.length) return;
 				commitActiveSheet();
 				let added = 0;
@@ -1410,6 +1543,56 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					renderPreview();
 					scrollActiveTabIntoView();
 				}
+			}
+
+			async function importSvgFiles(fileList) {
+				const files = Array.from(fileList ?? []).filter((f): f is File => f instanceof File && isSvgFile(f));
+				if (!files.length) return;
+				commitActiveSheet();
+				const importStatus = document.getElementById('ai-status') as HTMLSpanElement | null;
+				let added = 0;
+				let firstNewIndex = -1;
+				let lastTypography: SvgTypographyPayload | undefined;
+				let failed = 0;
+
+				for (const file of files) {
+					if (sheets.length >= MAX_SHEETS) break;
+					const text = String(await readFileAsText(file));
+					const parsed = parseThreeColumnSvg(text);
+					if (!parsed?.rows.length) {
+						failed++;
+						continue;
+					}
+					const body = parsed.rows.slice(0, MAX_IMPORT_ROWS);
+					let label = dedupeSheetLabel(labelFromSvgImport(file, parsed.sheet));
+					sheets.push({ id: uid(), label, rows: body });
+					lastTypography = parsed.typography;
+					if (firstNewIndex < 0) firstNewIndex = sheets.length - 1;
+					added++;
+				}
+
+				if (added > 0 && firstNewIndex >= 0) {
+					activeIndex = firstNewIndex;
+					applyTypographyFromSvgPayload(lastTypography);
+					replaceEditorRows(sheets[activeIndex].rows);
+					renderTabBar();
+					renderPreview();
+					scrollActiveTabIntoView();
+					if (importStatus) {
+						const failNote = failed > 0 ? ` (${failed} file(s) skipped — no embedded data)` : '';
+						importStatus.textContent = `Imported ${added} SVG sheet(s)${failNote}.`;
+					}
+				} else if (failed > 0 && importStatus) {
+					importStatus.textContent = 'Could not read table data from SVG (expected embedded metadata or text).';
+				}
+			}
+
+			async function importDataFiles(fileList: FileList | File[] | null | undefined) {
+				const files = Array.from(fileList ?? []).filter((f): f is File => f instanceof File);
+				const csvFiles = files.filter(isCsvFile);
+				const svgFiles = files.filter(isSvgFile);
+				if (csvFiles.length) await importCsvFiles(csvFiles);
+				if (svgFiles.length) await importSvgFiles(svgFiles);
 			}
 
 			function importPastedCsv(text) {
@@ -1854,13 +2037,13 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			document.addEventListener('drop', (e) => {
 				e.preventDefault();
 				const dt = e.dataTransfer?.files;
-				if (dt?.length) void importCsvFiles(dt);
+				if (dt?.length) void importDataFiles(dt);
 			});
 
 			fileInput.addEventListener('change', () => {
 				const files = fileInput.files;
 				if (!files?.length) return;
-				void importCsvFiles(files).finally(() => {
+				void importDataFiles(files).finally(() => {
 					fileInput.value = '';
 				});
 			});
@@ -2402,8 +2585,8 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					const fl = e.dataTransfer?.files;
 					if (!fl?.length) return;
 					const all = Array.from(fl);
-					const hasCsv = all.some((f) => f.name.toLowerCase().endsWith('.csv') || f.type === 'text/csv');
-					if (hasCsv) return; // let CSV drop handler take this
+					const hasTabularImport = all.some((f) => isCsvFile(f) || isSvgFile(f));
+					if (hasTabularImport) return; // let page-level CSV/SVG drop handler take this
 					e.preventDefault();
 					e.stopPropagation();
 					void addAiImagesFromFileList(all);
