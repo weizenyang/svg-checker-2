@@ -18,7 +18,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			<header class="flex flex-col gap-2">
 				<div class="flex items-baseline justify-between gap-3 flex-wrap">
 					<h1 class="text-xl font-semibold tracking-tight">Table Dimensions</h1>
-					<span class="text-[11px] uppercase tracking-wider text-neutral-400 hidden sm:inline">3-column · metric + imperial · PNG 4096</span>
+					<span class="text-[11px] uppercase tracking-wider text-neutral-400 hidden sm:inline">3-column · metric + imperial · PNG/SVG 4096</span>
 				</div>
 				<div class="flex items-stretch gap-2 min-w-0">
 					<div
@@ -46,7 +46,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					<div class="flex items-center gap-2 min-w-0">
 						<span class="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Preview</span>
 						<span class="text-neutral-300">·</span>
-						<span class="text-xs text-neutral-600 truncate" id="preview-subtitle">Exports current view at 4096×4096</span>
+						<span class="text-xs text-neutral-600 truncate" id="preview-subtitle">Exports current view as PNG or SVG at 4096×4096</span>
 					</div>
 					<div class="flex flex-wrap gap-2 items-center">
 						<div class="inline-flex items-stretch rounded-lg shadow-sm">
@@ -66,6 +66,25 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							>
 								<span>All</span>
 								<span id="batch-export-png-count" class="text-[11px] text-white"></span>
+							</button>
+						</div>
+						<div class="inline-flex items-stretch rounded-lg shadow-sm">
+							<button
+								type="button"
+								id="export-svg"
+								class="px-3 py-1.5 rounded-l-lg bg-neutral-700 text-white hover:bg-neutral-600 text-sm font-medium border-r border-neutral-600/60"
+								title="Export current sheet as 4096×4096 SVG with embedded text data"
+							>
+								Export SVG (4096)
+							</button>
+							<button
+								type="button"
+								id="batch-export-svg"
+								class="px-2.5 py-1.5 rounded-r-lg bg-neutral-700 text-white hover:bg-neutral-600 text-sm inline-flex items-center gap-1 border-l border-neutral-600/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								title="Export all sheets as SVG (4096)"
+							>
+								<span>All</span>
+								<span id="batch-export-svg-count" class="text-[11px] text-white"></span>
 							</button>
 						</div>
 						<div class="inline-flex items-stretch rounded-lg shadow-sm">
@@ -620,10 +639,14 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			const addRowBtn = document.getElementById('add-row');
 			const exportCsvBtn = document.getElementById('export-csv') as HTMLButtonElement | null;
 			const exportPngBtn = document.getElementById('export-png') as HTMLButtonElement | null;
+			const exportSvgBtn = document.getElementById('export-svg') as HTMLButtonElement | null;
 			const batchExportCsvBtn = document.getElementById('batch-export-csv') as HTMLButtonElement | null;
 			const batchExportPngBtn = document.getElementById('batch-export-png') as HTMLButtonElement | null;
+			const batchExportSvgBtn = document.getElementById('batch-export-svg') as HTMLButtonElement | null;
 			const batchExportPngCount = document.getElementById('batch-export-png-count') as HTMLSpanElement | null;
 			const batchExportCsvCount = document.getElementById('batch-export-csv-count') as HTMLSpanElement | null;
+			const batchExportSvgCount = document.getElementById('batch-export-svg-count') as HTMLSpanElement | null;
+			const SVG_NS = 'http://www.w3.org/2000/svg';
 			const trackingInputs = [
 				document.getElementById('tracking-col-0') as HTMLInputElement,
 				document.getElementById('tracking-col-1') as HTMLInputElement,
@@ -1316,8 +1339,13 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					batchExportCsvBtn.disabled = !multi;
 					batchExportCsvBtn.title = multi ? '' : 'Add another sheet to export all.';
 				}
+				if (batchExportSvgBtn) {
+					batchExportSvgBtn.disabled = !multi;
+					batchExportSvgBtn.title = multi ? '' : 'Add another sheet to export all.';
+				}
 				if (batchExportPngCount) batchExportPngCount.textContent = count;
 				if (batchExportCsvCount) batchExportCsvCount.textContent = count;
+				if (batchExportSvgCount) batchExportSvgCount.textContent = count;
 			}
 
 			function setActiveSheet(i) {
@@ -2649,6 +2677,157 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return new Promise((r) => setTimeout(r, ms));
 			}
 
+			let embeddedFontStyleCache: string | null = null;
+
+			async function fetchFontAsDataUrl(path: string): Promise<string> {
+				const res = await fetch(path);
+				if (!res.ok) throw new Error(`Failed to load font: ${path}`);
+				const buf = await res.arrayBuffer();
+				const bytes = new Uint8Array(buf);
+				let binary = '';
+				for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+				return `data:font/ttf;base64,${btoa(binary)}`;
+			}
+
+			async function getEmbeddedFontStyleBlock(): Promise<string> {
+				if (embeddedFontStyleCache) return embeddedFontStyleCache;
+				const [regular, bold] = await Promise.all([
+					fetchFontAsDataUrl('/fonts/table-creator/MONOSPACE821BT.TTF'),
+					fetchFontAsDataUrl('/fonts/table-creator/MONOSPACE821BOLDBT.TTF')
+				]);
+				embeddedFontStyleCache =
+					`@font-face{font-family:'monospace821';font-weight:400;src:url('${regular}');}` +
+					`@font-face{font-family:'monospace821';font-weight:700;src:url('${bold}');}`;
+				return embeddedFontStyleCache;
+			}
+
+			function buildSvgEmbeddedDataPayload(rows: string[][], sheetLabel: string) {
+				return JSON.stringify({
+					generator: 'three-column',
+					version: 1,
+					sheet: sheetLabel,
+					typography: {
+						col0: { weight: weightSelects[0]?.value ?? 'bold', tracking: trackingInputs[0]?.value ?? '-0.6' },
+						col1: { weight: weightSelects[1]?.value ?? 'regular', tracking: trackingInputs[1]?.value ?? '-0.6' },
+						col2: { weight: weightSelects[2]?.value ?? 'regular', tracking: trackingInputs[2]?.value ?? '-0.6' }
+					},
+					csv: sheetRowsToCsv(rows),
+					rows
+				});
+			}
+
+			function triggerSvgDownload(svgString: string, filenameBase: string) {
+				const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `${filenameBase}-4096.svg`;
+				a.click();
+				URL.revokeObjectURL(url);
+			}
+
+			async function exportPreviewToSvg4096(filenameLabel?: string): Promise<void> {
+				const CANVAS_SIZE = 4096;
+				const LINE_WIDTH = 654;
+
+				const previewWrap = document.getElementById('preview-table-wrap');
+				const previewTable = document.getElementById('preview-table');
+				const previewLines = previewWrap
+					? (Array.from(previewWrap.querySelectorAll('div.h-\\[2px\\]')) as HTMLDivElement[])
+					: [];
+				if (!previewWrap || !previewTable || previewLines.length === 0) return;
+
+				const wrapRect = previewWrap.getBoundingClientRect();
+				const tableRect = previewTable.getBoundingClientRect();
+				const groupW = Math.max(LINE_WIDTH, wrapRect.width);
+				const groupH = Math.max(1, wrapRect.bottom - tableRect.top);
+				const offsetX = Math.round((CANVAS_SIZE - groupW) / 2);
+				const offsetY = Math.round((CANVAS_SIZE - groupH) / 2);
+
+				const rows = getTableData();
+				const sheetLabel = filenameLabel ?? sheets[activeIndex]?.label ?? 'table';
+
+				const svg = document.createElementNS(SVG_NS, 'svg');
+				svg.setAttribute('xmlns', SVG_NS);
+				svg.setAttribute('width', String(CANVAS_SIZE));
+				svg.setAttribute('height', String(CANVAS_SIZE));
+				svg.setAttribute('viewBox', `0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}`);
+				svg.setAttribute('data-three-column-export', 'true');
+
+				const metadata = document.createElementNS(SVG_NS, 'metadata');
+				metadata.setAttribute('data-three-column-payload', 'json');
+				metadata.textContent = buildSvgEmbeddedDataPayload(rows, sheetLabel);
+				svg.appendChild(metadata);
+
+				const desc = document.createElementNS(SVG_NS, 'desc');
+				desc.textContent = `Three-column dimension table (${sheetLabel})`;
+				svg.appendChild(desc);
+
+				const defs = document.createElementNS(SVG_NS, 'defs');
+				const style = document.createElementNS(SVG_NS, 'style');
+				style.textContent = await getEmbeddedFontStyleBlock();
+				defs.appendChild(style);
+				svg.appendChild(defs);
+
+				const group = document.createElementNS(SVG_NS, 'g');
+				group.setAttribute('id', 'preview-content');
+
+				for (const lineDiv of previewLines) {
+					const r = lineDiv.getBoundingClientRect();
+					const y = offsetY + (r.top - tableRect.top) + r.height / 2;
+					const line = document.createElementNS(SVG_NS, 'line');
+					line.setAttribute('x1', String(offsetX));
+					line.setAttribute('y1', String(y));
+					line.setAttribute('x2', String(offsetX + LINE_WIDTH));
+					line.setAttribute('y2', String(y));
+					line.setAttribute('stroke', '#000000');
+					line.setAttribute('stroke-width', '2');
+					group.appendChild(line);
+				}
+
+				const textEls = Array.from(previewTable.querySelectorAll('tbody tr td p')) as HTMLElement[];
+				for (const el of textEls) {
+					const text = el.textContent ?? '';
+					if (!text) continue;
+
+					const r = el.getBoundingClientRect();
+					const s = getComputedStyle(el);
+					const fontSize = s.fontSize || '14.4px';
+					const fontLineHeight = parseFloat(s.lineHeight || s.fontSize || '14.4') || parseFloat(fontSize);
+					const baselineY = offsetY + (r.top - tableRect.top) + fontLineHeight * 0.8;
+
+					const cssAlign = (s.textAlign ?? '').toLowerCase();
+					const mode =
+						cssAlign.includes('right') || cssAlign === 'end'
+							? 'right'
+							: cssAlign.includes('center') || cssAlign.includes('middle')
+								? 'center'
+								: 'left';
+
+					const leftX = offsetX + (r.left - tableRect.left);
+					const rightX = offsetX + (r.right - tableRect.left);
+					const centerX = leftX + r.width / 2;
+
+					const textNode = document.createElementNS(SVG_NS, 'text');
+					textNode.setAttribute('fill', '#111111');
+					textNode.setAttribute('font-family', 'monospace821, monospace');
+					textNode.setAttribute('font-size', fontSize);
+					textNode.setAttribute('font-weight', s.fontWeight || '400');
+					textNode.setAttribute('letter-spacing', s.letterSpacing || '0px');
+					textNode.setAttribute('y', String(baselineY));
+					textNode.setAttribute('text-anchor', mode === 'right' ? 'end' : mode === 'center' ? 'middle' : 'start');
+					textNode.setAttribute('x', String(mode === 'right' ? rightX : mode === 'center' ? centerX : leftX));
+					textNode.textContent = text;
+					group.appendChild(textNode);
+				}
+
+				svg.appendChild(group);
+
+				const svgString = new XMLSerializer().serializeToString(svg);
+				const base = sanitizeFilenameBase(sheetLabel);
+				triggerSvgDownload(svgString, base);
+			}
+
 			exportCsvBtn?.addEventListener('click', () => {
 				commitActiveSheet();
 				const csv = sheetRowsToCsv(getTableData());
@@ -2791,6 +2970,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				void exportPreviewToPng4096();
 			});
 
+			exportSvgBtn?.addEventListener('click', () => {
+				commitActiveSheet();
+				void exportPreviewToSvg4096();
+			});
+
 			batchExportCsvBtn?.addEventListener('click', async () => {
 				if (sheets.length < 2) return;
 				commitActiveSheet();
@@ -2816,6 +3000,19 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					setActiveSheet(i);
 					await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 					await exportPreviewToPng4096(sheets[i].label);
+					await delayMs(180);
+				}
+				setActiveSheet(saved);
+			});
+
+			batchExportSvgBtn?.addEventListener('click', async () => {
+				if (sheets.length < 2) return;
+				commitActiveSheet();
+				const saved = activeIndex;
+				for (let i = 0; i < sheets.length; i++) {
+					setActiveSheet(i);
+					await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+					await exportPreviewToSvg4096(sheets[i].label);
 					await delayMs(180);
 				}
 				setActiveSheet(saved);
