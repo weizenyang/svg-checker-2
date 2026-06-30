@@ -1475,6 +1475,7 @@ import ObjectList from "../components/object-list.tsx";
     class ImageManager {
         imageIndex: Map<string, any>;
         compressionCache: Map<string, any>;
+        nameResolveCache: Map<string, string | null>;
         maxImageSize: number;
         maxCacheSize: number;
         compressionQueue: Set<string>;
@@ -1488,8 +1489,12 @@ import ObjectList from "../components/object-list.tsx";
         constructor(maxImageSize = 1024) {
             this.imageIndex = new Map(); // Lightweight index of all images
             this.compressionCache = new Map(); // Recently compressed images
+            // Caches the (expensive) fuzzy name→index-key resolution so repeat
+            // lookups and neighbour prefetches don't re-scan the whole index.
+            this.nameResolveCache = new Map();
             this.maxImageSize = maxImageSize;
-            this.maxCacheSize = 20; // Only cache 20 compressed images
+            // Larger cache so back-and-forth arrow navigation keeps neighbours warm.
+            this.maxCacheSize = 60;
             this.compressionQueue = new Set(); // Track what's being compressed
             this.stats = {
                 totalImages: 0,
@@ -1501,56 +1506,78 @@ import ObjectList from "../components/object-list.tsx";
 
         async compressImage(originalData, filename, targetSize = 'medium', quality = 0.7) {
             const startTime = performance.now();
-            
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Define size targets for different quality levels
-                    const sizeTargets = {
-                        thumbnail: 256,   // For previews/lists
-                        medium: 1024,     // For normal viewing
-                        large: 2048       // For detailed viewing
-                    };
-                    
-                    const maxSize = sizeTargets[targetSize] || this.maxImageSize;
-                    
-                    // Calculate new dimensions while maintaining aspect ratio
-                    let { width, height } = img;
-                    if (width > maxSize || height > maxSize) {
-                        const ratio = Math.min(maxSize / width, maxSize / height);
-                        width = Math.round(width * ratio);
-                        height = Math.round(height * ratio);
-                    }
-                    
-                    canvas.width = width;
-                    canvas.height = height;
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    // Convert to JPEG for smaller file size
-                    const compressedData = canvas.toDataURL('image/jpeg', quality);
-                    
-                    const endTime = performance.now();
-                    this.stats.compressionTime += (endTime - startTime);
-                    
-                    resolve({
-                        name: filename,
-                        image: compressedData,
-                        originalSize: { width: img.width, height: img.height },
-                        compressedSize: { width, height },
-                        quality: targetSize,
-                        compressionTime: endTime - startTime
-                    });
-                };
-                img.src = originalData;
+
+            // Define size targets for different quality levels
+            const sizeTargets = {
+                thumbnail: 256,   // For previews/lists
+                medium: 1024,     // For normal viewing
+                large: 2048       // For detailed viewing
+            };
+            const maxSize = sizeTargets[targetSize] || this.maxImageSize;
+
+            // Decode the source image.
+            const img: HTMLImageElement = await new Promise((resolve, reject) => {
+                const im = new Image();
+                im.onload = () => resolve(im);
+                im.onerror = reject;
+                im.src = originalData;
             });
+
+            // Calculate new dimensions while maintaining aspect ratio
+            let { width, height } = img;
+            if (width > maxSize || height > maxSize) {
+                const ratio = Math.min(maxSize / width, maxSize / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Encode the JPEG. toBlob() encodes off the main thread (no UI stall),
+            // unlike the synchronous toDataURL(). FileReader turns the blob into a
+            // self-contained data URL so all existing consumers are unchanged
+            // (no object-URL lifecycle/revocation to manage).
+            const compressedData: string = await new Promise((resolve) => {
+                if (typeof canvas.toBlob === 'function') {
+                    canvas.toBlob(
+                        (blob) => {
+                            if (!blob) {
+                                resolve(canvas.toDataURL('image/jpeg', quality));
+                                return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.onerror = () => resolve(canvas.toDataURL('image/jpeg', quality));
+                            reader.readAsDataURL(blob);
+                        },
+                        'image/jpeg',
+                        quality
+                    );
+                } else {
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                }
+            });
+
+            const endTime = performance.now();
+            this.stats.compressionTime += (endTime - startTime);
+
+            return {
+                name: filename,
+                image: compressedData,
+                originalSize: { width: img.width, height: img.height },
+                compressedSize: { width, height },
+                quality: targetSize,
+                compressionTime: endTime - startTime
+            };
         }
 
         async addImage(filename, originalImageData) {
             const key = filename.toLowerCase();
-            
+
             // Store in lightweight index (no compression yet)
             this.imageIndex.set(key, {
                 name: filename,
@@ -1558,6 +1585,9 @@ import ObjectList from "../components/object-list.tsx";
                 addedAt: Date.now(),
                 accessed: 0
             });
+            // A new image may satisfy a previously-unresolved (or differently-resolved)
+            // name, so invalidate the memoised resolutions.
+            if (this.nameResolveCache.size) this.nameResolveCache.clear();
             
             this.stats.totalImages++;
             if (this.stats.totalImages % 50 === 0 || this.stats.totalImages <= 10) {
@@ -1631,31 +1661,36 @@ import ObjectList from "../components/object-list.tsx";
             }
         }
 
-        async findImageByName(targetName, quality = 'medium') {
+        // Resolve a (fuzzy) target name to a concrete index key. Result is memoised
+        // in nameResolveCache so the expensive scan runs at most once per name —
+        // repeat visits and neighbour prefetches become O(1).
+        resolveIndexedKey(targetName) {
             const lowerTarget = targetName.toLowerCase();
-            
-            // Search through index (not cache) with precise matching
-            for (const [key, indexed] of this.imageIndex) {
+            if (this.nameResolveCache.has(lowerTarget)) {
+                return this.nameResolveCache.get(lowerTarget);
+            }
+
+            const targetWithoutExt = lowerTarget.replace(/\.[^/.]+$/, "");
+            const targetParts = targetWithoutExt.split('_');
+            let foundKey: string | null = null;
+
+            for (const [key] of this.imageIndex) {
                 const keyWithoutExt = key.replace(/\.[^/.]+$/, "");
-                const targetWithoutExt = lowerTarget.replace(/\.[^/.]+$/, "");
-                
+
                 // Exact match (with or without extension)
                 if (key === lowerTarget || keyWithoutExt === targetWithoutExt) {
-                    return await this.getImageOnDemand(indexed.name, quality);
+                    foundKey = key;
+                    break;
                 }
-                
-                // Check if the image filename ends with the target name
-                // This handles cases like "image_360_prefix_0_livingroom_10.jpg" matching "0_livingroom_10"
+
+                // Filename ends with the target (e.g. "..._0_livingroom_10" matches "0_livingroom_10")
                 if (keyWithoutExt.endsWith('_' + targetWithoutExt) || keyWithoutExt.endsWith(targetWithoutExt)) {
-                    return await this.getImageOnDemand(indexed.name, quality);
+                    foundKey = key;
+                    break;
                 }
-                
-                // Additional check: see if target appears as a complete segment in the key
-                // Split both by underscores and check for exact segment matches
+
+                // Target appears as a complete underscore-delimited segment sequence
                 const keyParts = keyWithoutExt.split('_');
-                const targetParts = targetWithoutExt.split('_');
-                
-                // Look for a sequence in keyParts that exactly matches all targetParts
                 for (let i = 0; i <= keyParts.length - targetParts.length; i++) {
                     let sequenceMatch = true;
                     for (let j = 0; j < targetParts.length; j++) {
@@ -1665,14 +1700,44 @@ import ObjectList from "../components/object-list.tsx";
                         }
                     }
                     if (sequenceMatch) {
-                        return await this.getImageOnDemand(indexed.name, quality);
+                        foundKey = key;
+                        break;
                     }
                 }
+                if (foundKey) break;
             }
-            
-            console.warn(`No image found for target: ${targetName}`);
-            console.log('Available images:', Array.from(this.imageIndex.keys()).slice(0, 10), '...');
-            return null;
+
+            this.nameResolveCache.set(lowerTarget, foundKey);
+            return foundKey;
+        }
+
+        async findImageByName(targetName, quality = 'medium') {
+            const key = this.resolveIndexedKey(targetName);
+            if (!key) {
+                console.warn(`No image found for target: ${targetName}`);
+                console.log('Available images:', Array.from(this.imageIndex.keys()).slice(0, 10), '...');
+                return null;
+            }
+            const indexed = this.imageIndex.get(key);
+            return await this.getImageOnDemand(indexed.name, quality);
+        }
+
+        // Warm the cache for a target name without touching the UI. Fire-and-forget;
+        // skips work already cached or in flight. Used to preload neighbouring points
+        // during the camera tween so the next arrow press is instant.
+        prefetch(targetName, quality = 'medium') {
+            try {
+                const key = this.resolveIndexedKey(targetName);
+                if (!key) return;
+                const indexed = this.imageIndex.get(key);
+                if (!indexed) return;
+                const cacheKey = `${indexed.name.toLowerCase()}_${quality}`;
+                if (this.compressionCache.has(cacheKey) || this.compressionQueue.has(cacheKey)) return;
+                // Don't await — let it complete in the background.
+                this.getImageOnDemand(indexed.name, quality).catch(() => {});
+            } catch {
+                /* prefetch is best-effort */
+            }
         }
 
         // Legacy method for compatibility
@@ -1704,6 +1769,7 @@ import ObjectList from "../components/object-list.tsx";
             this.imageIndex.clear();
             this.compressionCache.clear();
             this.compressionQueue.clear();
+            this.nameResolveCache.clear();
             this.stats = {
                 totalImages: 0,
                 cacheHits: 0,
@@ -1747,9 +1813,11 @@ import ObjectList from "../components/object-list.tsx";
                 }
             }
             
+            if (removedCount > 0 && this.nameResolveCache.size) this.nameResolveCache.clear();
+
             this.stats.totalImages = this.imageIndex.size;
             this.updateStatsDisplay();
-            
+
             if (removedCount > 0) {
                 console.log(`Cleared ${removedCount} images for group ${simplifiedName}`);
             }
@@ -2764,6 +2832,8 @@ async function reviewVR(event) {
         console.log(`Updated currentCsvIndex to ${currentCsvIndex} for cone: ${cone.name}`);
         // Update the Next Point button text to reflect the current index
         updateNavigationDisplay();
+        // Warm neighbours so subsequent arrow navigation from here is instant.
+        prefetchCsvNeighbors(coneIndex);
     }
 
     // Helper function to apply flipping based on image name
@@ -3566,6 +3636,20 @@ async function renderOverlayCanvas(cone) {
         console.log(`Found ${csvPoints.length} CSV points for navigation`);
     }
 
+    // Warm the image cache for the points immediately before/after the current one,
+    // so the next arrow press (or click on a nearby cone) shows its 360 image
+    // instantly instead of decoding + compressing on the keypress.
+    function prefetchCsvNeighbors(centerIndex, radius = 2) {
+        if (!csvPoints || csvPoints.length <= 1) return;
+        const n = csvPoints.length;
+        for (let d = 1; d <= radius; d++) {
+            const fwd = csvPoints[(centerIndex + d) % n];
+            const back = csvPoints[(centerIndex - d + n) % n];
+            if (fwd && fwd.name) imageManager.prefetch(fwd.name.toLowerCase(), 'medium');
+            if (back && back.name) imageManager.prefetch(back.name.toLowerCase(), 'medium');
+        }
+    }
+
     // Function to focus camera on a specific CSV point
     async function focusOnCsvPoint(point) {
         if (!point) return;
@@ -3591,7 +3675,11 @@ async function renderOverlayCanvas(cone) {
         currentSelectedCone = point;
         updateSelectCurrentButtonVisibility();
         await updateVRPanelForPoint(point);
-        
+
+        // Preload neighbours while the user is looking at this one.
+        const idx = csvPoints.indexOf(point);
+        if (idx !== -1) prefetchCsvNeighbors(idx);
+
         console.log(`Navigated to CSV point: ${point.name}`);
     }
 
