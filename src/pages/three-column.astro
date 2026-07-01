@@ -2674,8 +2674,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				}
 			}
 
-			function setAiProvider(gemini: boolean, opts?: { persist?: boolean }) {
-				const persist = opts?.persist !== false;
+			function applyAiProvider(gemini: boolean) {
 				aiProviderSwitch?.setAttribute('aria-checked', gemini ? 'true' : 'false');
 				aiProviderSwitch?.setAttribute('data-on', gemini ? 'true' : 'false');
 				aiProviderSwitchKnob?.setAttribute('data-on', gemini ? 'true' : 'false');
@@ -2687,16 +2686,23 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				}
 				populateModelSelectForProvider(gemini, savedModel ?? undefined);
 				updateManualKeyRowVisibility();
-				if (persist) {
-					try {
-						localStorage.setItem(STORAGE_AI_PROVIDER, gemini ? 'gemini' : 'openrouter');
-					} catch {
-						// ignore
-					}
+			}
+
+			function saveAiProviderPreference(gemini: boolean) {
+				try {
+					localStorage.setItem(STORAGE_AI_PROVIDER, gemini ? 'gemini' : 'openrouter');
+				} catch {
+					// ignore
 				}
 			}
 
-			updateManualKeyRowVisibility();
+			function loadAiProviderPreference(): boolean {
+				try {
+					return localStorage.getItem(STORAGE_AI_PROVIDER) === 'gemini';
+				} catch {
+					return false;
+				}
+			}
 
 			function positionAiOptionsPanel() {
 				const trigger = aiOptionsTrigger;
@@ -2762,14 +2768,16 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				if (savedGeminiKey && aiApiKeyGemini && !GEMINI_KEY_FROM_ENV) {
 					aiApiKeyGemini.value = savedGeminiKey;
 				}
-				const savedProvider = localStorage.getItem(STORAGE_AI_PROVIDER);
-				setAiProvider(savedProvider === 'gemini', { persist: false });
 			} catch {
 				// ignore
 			}
 
+			applyAiProvider(loadAiProviderPreference());
+
 			aiProviderSwitch?.addEventListener('click', () => {
-				setAiProvider(!isGeminiProvider());
+				const gemini = !isGeminiProvider();
+				applyAiProvider(gemini);
+				saveAiProviderPreference(gemini);
 			});
 
 			aiModelSelect?.addEventListener('change', () => {
@@ -3019,11 +3027,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							if (!OPENROUTER_KEY_FROM_ENV) localStorage.setItem(STORAGE_OPENROUTER_KEY, key);
 							localStorage.setItem(STORAGE_OPENROUTER_MODEL, modelId);
 						}
-						localStorage.setItem(STORAGE_AI_PROVIDER, gemini ? 'gemini' : 'openrouter');
 					} catch {
 						// ignore
 					}
 				}
+				saveAiProviderPreference(gemini);
 				csvParseAiBtn.disabled = true;
 				if (aiStatus) aiStatus.textContent = gemini ? 'Calling Gemini…' : 'Calling OpenRouter…';
 				const parseDimensions = gemini ? parseDimensionsWithGemini : parseDimensionsWithOpenRouter;
