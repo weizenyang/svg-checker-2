@@ -74,3 +74,24 @@ export const DEFAULT_OPENROUTER_MODELS = [
 	{ id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
 	{ id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' }
 ] as const;
+
+/** Direct Google Gemini API models (not via OpenRouter). Override base with PUBLIC_GEMINI_API_BASE in .env. */
+function geminiApiBase(): string {
+	try {
+		const u = import.meta.env?.PUBLIC_GEMINI_API_BASE;
+		if (typeof u === 'string' && u.trim().startsWith('http')) return u.trim().replace(/\/$/, '');
+	} catch {
+		/* import.meta unavailable in some tooling */
+	}
+	return 'https://generativelanguage.googleapis.com/v1beta';
+}
+
+export const GEMINI_API_BASE = geminiApiBase();
+
+export const DEFAULT_GEMINI_MODELS = [
+	{ id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+	{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+	{ id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+	{ id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+	{ id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }
+] as const;

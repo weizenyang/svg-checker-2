@@ -170,21 +170,53 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					></p>
 				</div>
 
-				<div id="ai-manual-key-row" class="mx-4 mt-3 flex flex-wrap gap-3 items-end">
-					<label class="flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
-						<span>OpenRouter API key</span>
-						<input
-							type="password"
-							id="ai-api-key"
-							autocomplete="off"
-							placeholder="sk-or-…"
-							class="w-full px-2.5 py-1.5 rounded-md border border-neutral-200 bg-white text-sm font-mono shadow-sm"
-						/>
-					</label>
-					<label class="flex items-center gap-2 text-xs text-neutral-600 shrink-0 pb-1">
-						<input type="checkbox" id="ai-remember-key" class="rounded border-neutral-300" />
-						Remember key
-					</label>
+				<div class="mx-4 mt-3 flex flex-wrap gap-3 items-end justify-between">
+					<div id="ai-manual-key-row" class="flex flex-wrap gap-3 items-end flex-1 min-w-[200px]">
+						<label id="ai-key-label-openrouter" class="flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
+							<span>OpenRouter API key</span>
+							<input
+								type="password"
+								id="ai-api-key-openrouter"
+								autocomplete="off"
+								placeholder="sk-or-…"
+								class="w-full px-2.5 py-1.5 rounded-md border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+							/>
+						</label>
+						<label id="ai-key-label-gemini" class="hidden flex flex-col gap-1 text-xs font-medium text-neutral-600 min-w-[180px] flex-1">
+							<span>Gemini API key</span>
+							<input
+								type="password"
+								id="ai-api-key-gemini"
+								autocomplete="off"
+								placeholder="AIza…"
+								class="w-full px-2.5 py-1.5 rounded-md border border-neutral-200 bg-white text-sm font-mono shadow-sm"
+							/>
+						</label>
+						<label class="flex items-center gap-2 text-xs text-neutral-600 shrink-0 pb-1">
+							<input type="checkbox" id="ai-remember-key" class="rounded border-neutral-300" />
+							Remember key
+						</label>
+					</div>
+					<div class="flex items-center gap-2 shrink-0 pb-1">
+						<span class="text-xs font-medium text-neutral-600" id="ai-provider-label-openrouter">OpenRouter</span>
+						<button
+							type="button"
+							id="ai-provider-switch"
+							role="switch"
+							aria-checked="false"
+							aria-label="AI provider: OpenRouter or Gemini"
+							class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-neutral-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 data-[on=true]:bg-violet-600"
+							data-on="false"
+						>
+							<span
+								aria-hidden="true"
+								class="pointer-events-none inline-block h-5 w-5 translate-x-0 rounded-full bg-white shadow ring-0 transition-transform data-[on=true]:translate-x-5"
+								id="ai-provider-switch-knob"
+								data-on="false"
+							></span>
+						</button>
+						<span class="text-xs font-medium text-neutral-400" id="ai-provider-label-gemini">Gemini</span>
+					</div>
 				</div>
 
 				<div class="p-4 space-y-3">
@@ -567,6 +599,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				border-radius: 6px;
 				background-color: #f5f3ff;
 			}
+			#ai-provider-switch[data-on="true"] {
+				background-color: rgb(124 58 237);
+			}
+			#ai-provider-switch-knob[data-on="true"] {
+				transform: translateX(1.25rem);
+			}
 		</style>
 
 		<script>
@@ -575,6 +613,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				normalizeMetricTypography,
 				protectInchMarksInCsvLine
 			} from '../lib/csv-dimension-typography';
+			import { DEFAULT_GEMINI_MODELS, DEFAULT_OPENROUTER_MODELS } from '../lib/dimension-ai-prompt';
 
 			const MAX_IMPORT_ROWS = 200;
 			const MAX_SHEETS = 40;
@@ -813,6 +852,9 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			const STORAGE_KEY_V1 = 'three-column-rows-v1';
 			const STORAGE_OPENROUTER_KEY = 'three-column-openrouter-key';
 			const STORAGE_OPENROUTER_MODEL = 'three-column-openrouter-model';
+			const STORAGE_GEMINI_KEY = 'three-column-gemini-key';
+			const STORAGE_GEMINI_MODEL = 'three-column-gemini-model';
+			const STORAGE_AI_PROVIDER = 'three-column-ai-provider';
 
 			/** @type {Sheet[]} */
 			let sheets = [];
@@ -2107,6 +2149,144 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return { parts };
 			}
 
+			function dataUrlToGeminiInlineData(dataUrl: string): { mimeType: string; data: string } {
+				const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+				if (!m) throw new Error('Invalid image data URL for Gemini.');
+				return { mimeType: m[1], data: m[2] };
+			}
+
+			async function parseDimensionsWithGemini(options: {
+				apiKey: string;
+				model: string;
+				pastedText: string;
+				imageDataUrls: string[];
+				reportStatus?: (msg: string) => void;
+				onImagePart?: (detail: {
+					index: number;
+					total: number;
+					part: ReturnType<typeof extractJsonRowsFromAssistantText>;
+				}) => void;
+			}) {
+				let DIMENSION_PARSE_SYSTEM_PROMPT: string;
+				let GEMINI_API_BASE: string;
+				try {
+					const mod = await import('../lib/dimension-ai-prompt.ts');
+					DIMENSION_PARSE_SYSTEM_PROMPT = mod.DIMENSION_PARSE_SYSTEM_PROMPT;
+					GEMINI_API_BASE = mod.GEMINI_API_BASE;
+				} catch {
+					throw new Error('AI prompt module failed to load.');
+				}
+
+				const { apiKey, model, pastedText, imageDataUrls, reportStatus, onImagePart } = options;
+				const trimmed = pastedText?.trim() ?? '';
+				const imgs = Array.isArray(imageDataUrls) ? imageDataUrls.filter(Boolean) : [];
+				if (!trimmed && imgs.length === 0) {
+					throw new Error('Add pasted text and/or an image.');
+				}
+
+				type GeminiPart = { text?: string; inlineData?: { mimeType: string; data: string } };
+
+				function userPartsForSingleImage(imageUrl: string): GeminiPart[] {
+					const userParts: GeminiPart[] = [];
+					if (trimmed) {
+						userParts.push({
+							text: `Convert the following into JSON as specified in the system message. Also use the attached image for any dimensions or labels not fully captured in the text.\n\n${trimmed}`
+						});
+					} else {
+						userParts.push({
+							text: 'Read all room or area labels and metric/imperial dimensions from the attached image. Output JSON as specified in the system message.'
+						});
+					}
+					userParts.push({ inlineData: dataUrlToGeminiInlineData(imageUrl) });
+					return userParts;
+				}
+
+				const endpoint = `${GEMINI_API_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+				async function completeOneRequest(
+					userContent: string | GeminiPart[]
+				): Promise<ReturnType<typeof extractJsonRowsFromAssistantText>> {
+					const parts = typeof userContent === 'string' ? [{ text: userContent }] : userContent;
+					const body = JSON.stringify({
+						systemInstruction: { parts: [{ text: DIMENSION_PARSE_SYSTEM_PROMPT }] },
+						contents: [{ role: 'user', parts }],
+						generationConfig: { temperature: 0.15 }
+					});
+
+					let res = await fetch(endpoint, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body
+					});
+					let data = (await parseOpenRouterResponse(res)) as {
+						error?: { message?: string; status?: string };
+						candidates?: { content?: { parts?: { text?: string }[] } }[];
+					};
+
+					if (res.status === 429) {
+						const ra = res.headers.get('Retry-After');
+						const sec = Math.min(90, Math.max(4, parseInt(ra || '10', 10) || 10));
+						reportStatus?.(`Rate limited (429). Retrying in ${sec}s…`);
+						await new Promise((r) => setTimeout(r, sec * 1000));
+						res = await fetch(endpoint, {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body
+						});
+						data = (await parseOpenRouterResponse(res)) as typeof data;
+					}
+
+					if (!res.ok) {
+						const apiMsg =
+							typeof data?.error?.message === 'string'
+								? data.error.message
+								: typeof (data as { error?: string })?.error === 'string'
+									? (data as { error: string }).error
+									: '';
+						if (res.status === 429) {
+							throw new Error(
+								`Rate limited (429). Wait a few minutes or try another model. ${apiMsg || ''}`.trim()
+							);
+						}
+						throw new Error(apiMsg || `Gemini HTTP ${res.status}`);
+					}
+
+					const contentParts = data?.candidates?.[0]?.content?.parts ?? [];
+					const content = contentParts
+						.map((p) => (typeof p?.text === 'string' ? p.text : ''))
+						.filter(Boolean)
+						.join('');
+					if (!content) {
+						throw new Error('Empty response from Gemini model.');
+					}
+					return extractJsonRowsFromAssistantText(content);
+				}
+
+				if (imgs.length === 0) {
+					const single = await completeOneRequest(
+						`Convert the following into JSON as specified in the system message.\n\n${trimmed}`
+					);
+					return { parts: [single] };
+				}
+
+				if (imgs.length === 1) {
+					reportStatus?.('Parsing image…');
+					const single = await completeOneRequest(userPartsForSingleImage(imgs[0]));
+					return { parts: [single] };
+				}
+
+				reportStatus?.(`Parsing ${imgs.length} images in parallel…`);
+				const parts = await Promise.all(
+					imgs.map((url, i) =>
+						completeOneRequest(userPartsForSingleImage(url)).then((part) => {
+							onImagePart?.({ index: i, total: imgs.length, part });
+							return part;
+						})
+					)
+				);
+				return { parts };
+			}
+
 			tbody.innerHTML = '';
 			const loaded = loadState();
 			sheets = loaded.sheets;
@@ -2411,8 +2591,19 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				typeof import.meta.env.PUBLIC_OPENROUTER_API_KEY === 'string'
 					? import.meta.env.PUBLIC_OPENROUTER_API_KEY.trim()
 					: '';
+			const GEMINI_KEY_FROM_ENV =
+				typeof import.meta.env.PUBLIC_GEMINI_API_KEY === 'string'
+					? import.meta.env.PUBLIC_GEMINI_API_KEY.trim()
+					: '';
 
-			const aiApiKey = document.getElementById('ai-api-key') as HTMLInputElement | null;
+			const aiApiKeyOpenRouter = document.getElementById('ai-api-key-openrouter') as HTMLInputElement | null;
+			const aiApiKeyGemini = document.getElementById('ai-api-key-gemini') as HTMLInputElement | null;
+			const aiKeyLabelOpenRouter = document.getElementById('ai-key-label-openrouter') as HTMLLabelElement | null;
+			const aiKeyLabelGemini = document.getElementById('ai-key-label-gemini') as HTMLLabelElement | null;
+			const aiProviderSwitch = document.getElementById('ai-provider-switch') as HTMLButtonElement | null;
+			const aiProviderSwitchKnob = document.getElementById('ai-provider-switch-knob') as HTMLSpanElement | null;
+			const aiProviderLabelOpenRouter = document.getElementById('ai-provider-label-openrouter') as HTMLSpanElement | null;
+			const aiProviderLabelGemini = document.getElementById('ai-provider-label-gemini') as HTMLSpanElement | null;
 			const aiRememberKey = document.getElementById('ai-remember-key') as HTMLInputElement | null;
 			const aiModelSelect = document.getElementById('ai-model-select') as HTMLSelectElement | null;
 			const aiModelCustomWrap = document.getElementById('ai-model-custom-wrap') as HTMLDivElement | null;
@@ -2428,13 +2619,84 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			const aiOptionsPanel = document.getElementById('ai-options-panel') as HTMLDivElement | null;
 			const manualKeyRow = document.getElementById('ai-manual-key-row') as HTMLDivElement | null;
 
-			function getEffectiveApiKey(): string {
-				if (OPENROUTER_KEY_FROM_ENV) return OPENROUTER_KEY_FROM_ENV;
-				return (aiApiKey?.value ?? '').trim();
+			function isGeminiProvider(): boolean {
+				return aiProviderSwitch?.getAttribute('aria-checked') === 'true';
 			}
 
-			if (OPENROUTER_KEY_FROM_ENV) manualKeyRow?.classList.add('hidden');
-			else manualKeyRow?.classList.remove('hidden');
+			function getEffectiveApiKey(): string {
+				if (isGeminiProvider()) {
+					if (GEMINI_KEY_FROM_ENV) return GEMINI_KEY_FROM_ENV;
+					return (aiApiKeyGemini?.value ?? '').trim();
+				}
+				if (OPENROUTER_KEY_FROM_ENV) return OPENROUTER_KEY_FROM_ENV;
+				return (aiApiKeyOpenRouter?.value ?? '').trim();
+			}
+
+			function updateManualKeyRowVisibility() {
+				const gemini = isGeminiProvider();
+				const envKey = gemini ? GEMINI_KEY_FROM_ENV : OPENROUTER_KEY_FROM_ENV;
+				if (envKey) manualKeyRow?.classList.add('hidden');
+				else manualKeyRow?.classList.remove('hidden');
+				aiKeyLabelOpenRouter?.classList.toggle('hidden', gemini);
+				aiKeyLabelGemini?.classList.toggle('hidden', !gemini);
+				aiProviderLabelOpenRouter?.classList.toggle('text-neutral-600', !gemini);
+				aiProviderLabelOpenRouter?.classList.toggle('text-neutral-400', gemini);
+				aiProviderLabelGemini?.classList.toggle('text-neutral-600', gemini);
+				aiProviderLabelGemini?.classList.toggle('text-neutral-400', !gemini);
+			}
+
+			function populateModelSelectForProvider(gemini: boolean, preferredModel?: string) {
+				if (!aiModelSelect) return;
+				const models = gemini ? DEFAULT_GEMINI_MODELS : DEFAULT_OPENROUTER_MODELS;
+				const prev = preferredModel ?? aiModelSelect.value;
+				aiModelSelect.innerHTML = '';
+				for (const m of models) {
+					const opt = document.createElement('option');
+					opt.value = m.id;
+					opt.textContent = m.label;
+					aiModelSelect.appendChild(opt);
+				}
+				const custom = document.createElement('option');
+				custom.value = '__custom';
+				custom.textContent = 'Custom…';
+				aiModelSelect.appendChild(custom);
+				const match = Array.from(aiModelSelect.options).find((o) => o.value === prev);
+				if (match) {
+					aiModelSelect.value = prev;
+					aiModelCustomWrap?.classList.toggle('hidden', prev !== '__custom');
+				} else if (prev && prev !== '__custom') {
+					aiModelSelect.value = '__custom';
+					if (aiModelCustom) aiModelCustom.value = prev;
+					aiModelCustomWrap?.classList.remove('hidden');
+				} else {
+					aiModelSelect.selectedIndex = 0;
+					aiModelCustomWrap?.classList.add('hidden');
+				}
+			}
+
+			function setAiProvider(gemini: boolean, opts?: { persist?: boolean }) {
+				const persist = opts?.persist !== false;
+				aiProviderSwitch?.setAttribute('aria-checked', gemini ? 'true' : 'false');
+				aiProviderSwitch?.setAttribute('data-on', gemini ? 'true' : 'false');
+				aiProviderSwitchKnob?.setAttribute('data-on', gemini ? 'true' : 'false');
+				let savedModel: string | null = null;
+				try {
+					savedModel = localStorage.getItem(gemini ? STORAGE_GEMINI_MODEL : STORAGE_OPENROUTER_MODEL);
+				} catch {
+					// ignore
+				}
+				populateModelSelectForProvider(gemini, savedModel ?? undefined);
+				updateManualKeyRowVisibility();
+				if (persist) {
+					try {
+						localStorage.setItem(STORAGE_AI_PROVIDER, gemini ? 'gemini' : 'openrouter');
+					} catch {
+						// ignore
+					}
+				}
+			}
+
+			updateManualKeyRowVisibility();
 
 			function positionAiOptionsPanel() {
 				const trigger = aiOptionsTrigger;
@@ -2492,21 +2754,23 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			});
 
 			try {
-				const savedKey = localStorage.getItem(STORAGE_OPENROUTER_KEY);
-				if (savedKey && aiApiKey && !OPENROUTER_KEY_FROM_ENV) aiApiKey.value = savedKey;
-				const savedModel = localStorage.getItem(STORAGE_OPENROUTER_MODEL);
-				if (savedModel && aiModelSelect) {
-					const opt = Array.from(aiModelSelect.options).find((o) => o.value === savedModel);
-					if (opt) aiModelSelect.value = savedModel;
-					else if (aiModelCustom && aiModelCustomWrap) {
-						aiModelSelect.value = '__custom';
-						aiModelCustom.value = savedModel;
-						aiModelCustomWrap.classList.remove('hidden');
-					}
+				const savedOpenRouterKey = localStorage.getItem(STORAGE_OPENROUTER_KEY);
+				if (savedOpenRouterKey && aiApiKeyOpenRouter && !OPENROUTER_KEY_FROM_ENV) {
+					aiApiKeyOpenRouter.value = savedOpenRouterKey;
 				}
+				const savedGeminiKey = localStorage.getItem(STORAGE_GEMINI_KEY);
+				if (savedGeminiKey && aiApiKeyGemini && !GEMINI_KEY_FROM_ENV) {
+					aiApiKeyGemini.value = savedGeminiKey;
+				}
+				const savedProvider = localStorage.getItem(STORAGE_AI_PROVIDER);
+				setAiProvider(savedProvider === 'gemini', { persist: false });
 			} catch {
 				// ignore
 			}
+
+			aiProviderSwitch?.addEventListener('click', () => {
+				setAiProvider(!isGeminiProvider());
+			});
 
 			aiModelSelect?.addEventListener('change', () => {
 				const v = aiModelSelect?.value;
@@ -2721,10 +2985,13 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			wireImageDropZone(csvPaste);
 
 			csvParseAiBtn?.addEventListener('click', async () => {
+				const gemini = isGeminiProvider();
 				const key = getEffectiveApiKey();
 				if (!key) {
 					if (aiStatus) {
-						aiStatus.textContent = 'Set your API key in .env (build) or in the field above.';
+						aiStatus.textContent = gemini
+							? 'Set PUBLIC_GEMINI_API_KEY in .env or enter your Gemini key above.'
+							: 'Set PUBLIC_OPENROUTER_API_KEY in .env or enter your OpenRouter key above.';
 					}
 					return;
 				}
@@ -2745,14 +3012,21 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				setAiOptionsOpen(false);
 				if (aiRememberKey?.checked) {
 					try {
-						if (!OPENROUTER_KEY_FROM_ENV) localStorage.setItem(STORAGE_OPENROUTER_KEY, key);
-						localStorage.setItem(STORAGE_OPENROUTER_MODEL, modelId);
+						if (gemini) {
+							if (!GEMINI_KEY_FROM_ENV) localStorage.setItem(STORAGE_GEMINI_KEY, key);
+							localStorage.setItem(STORAGE_GEMINI_MODEL, modelId);
+						} else {
+							if (!OPENROUTER_KEY_FROM_ENV) localStorage.setItem(STORAGE_OPENROUTER_KEY, key);
+							localStorage.setItem(STORAGE_OPENROUTER_MODEL, modelId);
+						}
+						localStorage.setItem(STORAGE_AI_PROVIDER, gemini ? 'gemini' : 'openrouter');
 					} catch {
 						// ignore
 					}
 				}
 				csvParseAiBtn.disabled = true;
-				if (aiStatus) aiStatus.textContent = 'Calling OpenRouter…';
+				if (aiStatus) aiStatus.textContent = gemini ? 'Calling Gemini…' : 'Calling OpenRouter…';
+				const parseDimensions = gemini ? parseDimensionsWithGemini : parseDimensionsWithOpenRouter;
 				try {
 					const imgUrls = imageDataUrls.filter(Boolean);
 					const multiImage = imgUrls.length > 1;
@@ -2781,7 +3055,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						scrollActiveTabIntoView();
 						persistState();
 
-						const { parts } = await parseDimensionsWithOpenRouter({
+						const { parts } = await parseDimensions({
 							apiKey: key,
 							model: modelId,
 							pastedText: pasted,
@@ -2843,7 +3117,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 							aiStatus.textContent = `Done: ${parts.length} sheet(s), ${totalRows} row(s) total.`;
 						}
 					} else {
-						const { parts } = await parseDimensionsWithOpenRouter({
+						const { parts } = await parseDimensions({
 							apiKey: key,
 							model: modelId,
 							pastedText: pasted,
