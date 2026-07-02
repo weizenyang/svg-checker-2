@@ -277,6 +277,15 @@ import "../styles.css";
 							style="width: 100%; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; font-size: 11px;"
 						/>
 					</div>
+					<button
+						id="detect-all-labels-btn"
+						style="display: none; width: 100%; margin-top: 10px; padding: 6px 8px; background: #5a3d9e; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;"
+					>
+						Detect all labels (raster)
+					</button>
+					<p id="detect-all-labels-hint" style="display: none; font-size: 10px; color: #666; margin: 6px 0 0; line-height: 1.35;">
+						Scans the floorplan for bright text regions, merges glyphs into labels, splits clusters with too much empty space, then adds mask rects. No OCR — review and delete false positives.
+					</p>
 				</section>
 
 				<!-- Export Section -->
@@ -320,6 +329,9 @@ import "../styles.css";
 						<p>
 							<strong>• Draw rect:</strong> drag on empty canvas (avoid clicking rects/handles).
 							Manual = drag box; Auto = shrink-wrap white/bright pixels under drag center (needs PNG backplate or bundle bake; includes vector dim lines).
+						</p>
+						<p>
+							<strong>• Detect all labels:</strong> scans the floorplan raster for bright text regions and adds mask rects in one pass (no OCR).
 						</p>
 						<p id="dims-reference-hint" style="display: none; color: #0a5; margin-top: 8px;">
 							<strong>Dimension SVG loaded.</strong> White lines are reference only — draw blue mask rectangles on top.
@@ -868,12 +880,26 @@ import "../styles.css";
 			return !!globalSvgContainer.querySelector("svg");
 		}
 
+		function canDetectRasterLabels() {
+			if (getBackplateRasterDataUrl()) return true;
+			if (bundleSourceMeta?.canonicalMergedDataUrl) return true;
+			const htmlImg = globalSvgContainer.querySelector(
+				"#background-image-container img",
+			) as HTMLImageElement | null;
+			return !!(htmlImg?.src && htmlImg.src.length > 0);
+		}
+
 		function updateExportButtonsVisibility() {
 			const bundleBtn = document.getElementById("export-bundle-svg-btn");
 			const bundleHint = document.getElementById("export-bundle-hint");
+			const detectBtn = document.getElementById("detect-all-labels-btn");
+			const detectHint = document.getElementById("detect-all-labels-hint");
 			const showBundle = canExportBundleSvg();
+			const showDetect = canDetectRasterLabels() && !!globalSvgContainer.querySelector("svg");
 			if (bundleBtn) bundleBtn.style.display = showBundle ? "block" : "none";
 			if (bundleHint) bundleHint.style.display = showBundle ? "block" : "none";
+			if (detectBtn) detectBtn.style.display = showDetect ? "block" : "none";
+			if (detectHint) detectHint.style.display = showDetect ? "block" : "none";
 		}
 
 		async function bakeRasterToViewBoxPixels(
@@ -1662,74 +1688,46 @@ import "../styles.css";
 			);
 		}
 
-		/** Full union bbox of all bright pixels in the crop. */
-		function findRgbContentBBox(imageData: ImageData) {
-			const d = imageData.data;
-			const w = imageData.width;
-			const h = imageData.height;
-			let minX = w,
-				minY = h,
-				maxX = -1,
-				maxY = -1;
-			for (let y = 0; y < h; y++) {
-				for (let x = 0; x < w; x++) {
-					if (!isAutoBrightPixel(d, w, x, y)) continue;
-					if (x < minX) minX = x;
-					if (y < minY) minY = y;
-					if (x > maxX) maxX = x;
-					if (y > maxY) maxY = y;
-				}
-			}
-			if (maxX < minX) return null;
-			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+		type AutoBrightBBox = {
+			minX: number;
+			minY: number;
+			maxX: number;
+			maxY: number;
+		};
+
+		function unionAutoBrightBboxes(a: AutoBrightBBox, b: AutoBrightBBox): AutoBrightBBox {
+			return {
+				minX: Math.min(a.minX, b.minX),
+				minY: Math.min(a.minY, b.minY),
+				maxX: Math.max(a.maxX, b.maxX),
+				maxY: Math.max(a.maxY, b.maxY),
+			};
 		}
 
-		/**
-		 * Shrink-wrap the bright blob under the drag box center (one label),
-		 * not every disconnected line in a loose rubber band.
-		 */
-		function findRgbContentBBoxNearCenter(imageData: ImageData) {
-			const d = imageData.data;
-			const w = imageData.width;
-			const h = imageData.height;
-			if (w < 1 || h < 1) return null;
+		function autoBrightBboxesWithinGap(a: AutoBrightBBox, b: AutoBrightBBox, gap: number) {
+			return !(
+				b.maxX < a.minX - gap ||
+				b.minX > a.maxX + gap ||
+				b.maxY < a.minY - gap ||
+				b.minY > a.maxY + gap
+			);
+		}
 
-			const cx = Math.floor(w / 2);
-			const cy = Math.floor(h / 2);
-
-			function findSeed() {
-				if (isAutoBrightPixel(d, w, cx, cy)) return { x: cx, y: cy };
-				const maxR = Math.max(w, h);
-				for (let r = 1; r < maxR; r++) {
-					for (let dx = -r; dx <= r; dx++) {
-						for (const dy of [-r, r]) {
-							const x = cx + dx;
-							const y = cy + dy;
-							if (x < 0 || y < 0 || x >= w || y >= h) continue;
-							if (isAutoBrightPixel(d, w, x, y)) return { x, y };
-						}
-					}
-					for (let dy = -r + 1; dy <= r - 1; dy++) {
-						for (const x of [cx - r, cx + r]) {
-							const y = cy + dy;
-							if (x < 0 || y < 0 || x >= w || y >= h) continue;
-							if (isAutoBrightPixel(d, w, x, y)) return { x, y };
-						}
-					}
-				}
-				return null;
-			}
-
-			const seed = findSeed();
-			if (!seed) return findRgbContentBBox(imageData);
-
-			const visited = new Uint8Array(w * h);
-			const stack: [number, number][] = [[seed.x, seed.y]];
-			let minX = seed.x,
-				minY = seed.y,
-				maxX = seed.x,
-				maxY = seed.y;
-			visited[seed.y * w + seed.x] = 1;
+		function floodFillBrightComponent(
+			data: Uint8ClampedArray,
+			width: number,
+			height: number,
+			visited: Uint8Array,
+			sx: number,
+			sy: number,
+		): AutoBrightBBox | null {
+			if (!isAutoBrightPixel(data, width, sx, sy)) return null;
+			const stack: [number, number][] = [[sx, sy]];
+			let minX = sx,
+				minY = sy,
+				maxX = sx,
+				maxY = sy;
+			visited[sy * width + sx] = 1;
 
 			while (stack.length > 0) {
 				const [x, y] = stack.pop()!;
@@ -1743,16 +1741,544 @@ import "../styles.css";
 					[x, y + 1],
 					[x, y - 1],
 				]) {
-					if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-					const idx = ny * w + nx;
+					if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+					const idx = ny * width + nx;
 					if (visited[idx]) continue;
-					if (!isAutoBrightPixel(d, w, nx, ny)) continue;
+					if (!isAutoBrightPixel(data, width, nx, ny)) continue;
 					visited[idx] = 1;
 					stack.push([nx, ny]);
 				}
 			}
 
 			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+		}
+
+		function findAllBrightComponents(imageData: ImageData): AutoBrightBBox[] {
+			const d = imageData.data;
+			const w = imageData.width;
+			const h = imageData.height;
+			const visited = new Uint8Array(w * h);
+			const components: AutoBrightBBox[] = [];
+
+			for (let y = 0; y < h; y++) {
+				for (let x = 0; x < w; x++) {
+					const idx = y * w + x;
+					if (visited[idx] || !isAutoBrightPixel(d, w, x, y)) continue;
+					const bbox = floodFillBrightComponent(d, w, h, visited, x, y);
+					if (bbox) components.push(bbox);
+				}
+			}
+			return components;
+		}
+
+		function pickBrightComponentNearCenter(
+			components: AutoBrightBBox[],
+			width: number,
+			height: number,
+		) {
+			if (components.length === 0) return -1;
+			const cx = width / 2;
+			const cy = height / 2;
+			let bestIdx = 0;
+			let bestDist = Infinity;
+			for (let i = 0; i < components.length; i++) {
+				const c = components[i];
+				const mx = (c.minX + c.maxX) / 2;
+				const my = (c.minY + c.maxY) / 2;
+				const inside =
+					cx >= c.minX &&
+					cx < c.maxX &&
+					cy >= c.minY &&
+					cy < c.maxY;
+				const dist = (mx - cx) ** 2 + (my - cy) ** 2;
+				if (inside || dist < bestDist) {
+					bestDist = inside ? -1 : dist;
+					bestIdx = i;
+					if (inside) break;
+				}
+			}
+			return bestIdx;
+		}
+
+		function isLikelyDimStroke(box: AutoBrightBBox, cropW: number, cropH: number) {
+			const bw = box.maxX - box.minX;
+			const bh = box.maxY - box.minY;
+			const long = Math.max(bw, bh);
+			const short = Math.max(1, Math.min(bw, bh));
+			if (long < 20) return false;
+			if (long / short >= 6) return true;
+			return long >= Math.max(cropW, cropH) * 0.5 && short <= 4;
+		}
+
+		function mergeNearbyBrightComponents(
+			components: AutoBrightBBox[],
+			seedIdx: number,
+			gapPx: number,
+			cropW: number,
+			cropH: number,
+		) {
+			let merged = { ...components[seedIdx] };
+			const used = new Set<number>([seedIdx]);
+			let changed = true;
+			while (changed) {
+				changed = false;
+				for (let i = 0; i < components.length; i++) {
+					if (used.has(i)) continue;
+					if (i !== seedIdx && isLikelyDimStroke(components[i], cropW, cropH)) continue;
+					if (!autoBrightBboxesWithinGap(merged, components[i], gapPx)) continue;
+					merged = unionAutoBrightBboxes(merged, components[i]);
+					used.add(i);
+					changed = true;
+				}
+			}
+			return merged;
+		}
+
+		/** Full union bbox of all bright pixels in the crop. */
+		function findRgbContentBBox(imageData: ImageData) {
+			const components = findAllBrightComponents(imageData);
+			if (components.length === 0) return null;
+			let merged = components[0];
+			for (let i = 1; i < components.length; i++) {
+				merged = unionAutoBrightBboxes(merged, components[i]);
+			}
+			return merged;
+		}
+
+		/**
+		 * Shrink-wrap the label under the drag center: seed one bright blob, then
+		 * merge neighboring glyphs (letter-spacing gaps) without grabbing every
+		 * disconnected line in a loose rubber band.
+		 */
+		function findRgbContentBBoxNearCenter(imageData: ImageData) {
+			const w = imageData.width;
+			const h = imageData.height;
+			if (w < 1 || h < 1) return null;
+
+			const components = findAllBrightComponents(imageData);
+			if (components.length === 0) return null;
+
+			const seedIdx = pickBrightComponentNearCenter(components, w, h);
+			if (seedIdx < 0) return null;
+
+			const seed = components[seedIdx];
+			const seedW = seed.maxX - seed.minX;
+			const seedH = seed.maxY - seed.minY;
+			const mergeGap = Math.max(
+				8,
+				Math.min(36, Math.round(Math.max(seedW, seedH) * 1.5)),
+			);
+
+			return mergeNearbyBrightComponents(components, seedIdx, mergeGap, w, h);
+		}
+
+		const LABEL_MIN_FILL_RATIO = 0.11;
+		const LABEL_MERGE_MIN_FILL_RATIO = 0.09;
+
+		function countBrightPixelsInBox(
+			data: Uint8ClampedArray,
+			imgW: number,
+			box: AutoBrightBBox,
+		) {
+			let count = 0;
+			for (let y = box.minY; y < box.maxY; y++) {
+				for (let x = box.minX; x < box.maxX; x++) {
+					if (isAutoBrightPixel(data, imgW, x, y)) count++;
+				}
+			}
+			return count;
+		}
+
+		function computeBoxFillRatio(
+			data: Uint8ClampedArray,
+			imgW: number,
+			box: AutoBrightBBox,
+		) {
+			const area = (box.maxX - box.minX) * (box.maxY - box.minY);
+			if (area <= 0) return 0;
+			return countBrightPixelsInBox(data, imgW, box) / area;
+		}
+
+		function shrinkBoxToBrightPixels(
+			data: Uint8ClampedArray,
+			imgW: number,
+			imgH: number,
+			box: AutoBrightBBox,
+		): AutoBrightBBox | null {
+			let minX = box.maxX;
+			let minY = box.maxY;
+			let maxX = box.minX;
+			let maxY = box.minY;
+			let found = false;
+			const x0 = Math.max(0, box.minX);
+			const y0 = Math.max(0, box.minY);
+			const x1 = Math.min(imgW, box.maxX);
+			const y1 = Math.min(imgH, box.maxY);
+			for (let y = y0; y < y1; y++) {
+				for (let x = x0; x < x1; x++) {
+					if (!isAutoBrightPixel(data, imgW, x, y)) continue;
+					found = true;
+					if (x < minX) minX = x;
+					if (y < minY) minY = y;
+					if (x > maxX) maxX = x;
+					if (y > maxY) maxY = y;
+				}
+			}
+			if (!found) return null;
+			return { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+		}
+
+		function findContentSegments(counts: number[], minEmptyRun: number) {
+			const segments: Array<[number, number]> = [];
+			let i = 0;
+			const n = counts.length;
+			while (i < n) {
+				while (i < n && counts[i] === 0) i++;
+				if (i >= n) break;
+				const start = i;
+				i++;
+				while (i < n) {
+					if (counts[i] !== 0) {
+						i++;
+						continue;
+					}
+					let gap = 1;
+					while (i + gap < n && counts[i + gap] === 0) gap++;
+					if (gap >= minEmptyRun) break;
+					i += gap;
+				}
+				segments.push([start, i]);
+			}
+			return segments;
+		}
+
+		function splitBoxAtEmptyBands(
+			data: Uint8ClampedArray,
+			imgW: number,
+			imgH: number,
+			box: AutoBrightBBox,
+			minEmptyRun: number,
+		): AutoBrightBBox[] {
+			const bw = box.maxX - box.minX;
+			const bh = box.maxY - box.minY;
+			if (bw < 3 || bh < 3) return [box];
+
+			const x0 = Math.max(0, box.minX);
+			const y0 = Math.max(0, box.minY);
+			const x1 = Math.min(imgW, box.maxX);
+			const y1 = Math.min(imgH, box.maxY);
+			const cw = x1 - x0;
+			const ch = y1 - y0;
+			if (cw < 3 || ch < 3) return [box];
+
+			const rowCounts: number[] = [];
+			for (let y = y0; y < y1; y++) {
+				let c = 0;
+				for (let x = x0; x < x1; x++) {
+					if (isAutoBrightPixel(data, imgW, x, y)) c++;
+				}
+				rowCounts.push(c);
+			}
+
+			const colCounts: number[] = [];
+			for (let x = x0; x < x1; x++) {
+				let c = 0;
+				for (let y = y0; y < y1; y++) {
+					if (isAutoBrightPixel(data, imgW, x, y)) c++;
+				}
+				colCounts.push(c);
+			}
+
+			const rowSegments = findContentSegments(rowCounts, minEmptyRun);
+			const colSegments = findContentSegments(colCounts, minEmptyRun);
+
+			const pickRow =
+				rowSegments.length > 1 &&
+				(rowSegments.length >= colSegments.length || ch > cw * 1.15);
+			if (pickRow) {
+				return rowSegments.map(([sy, ey]) => ({
+					minX: x0,
+					minY: y0 + sy,
+					maxX: x1,
+					maxY: y0 + ey,
+				}));
+			}
+			if (colSegments.length > 1) {
+				return colSegments.map(([sx, ex]) => ({
+					minX: x0 + sx,
+					minY: y0,
+					maxX: x0 + ex,
+					maxY: y1,
+				}));
+			}
+			return [box];
+		}
+
+		function refineLabelCluster(
+			data: Uint8ClampedArray,
+			imgW: number,
+			imgH: number,
+			box: AutoBrightBBox,
+			depth = 0,
+		): AutoBrightBBox[] {
+			if (depth > 6) return [];
+
+			const fill = computeBoxFillRatio(data, imgW, box);
+			const minEmptyRun = Math.max(5, Math.round(Math.min(box.maxX - box.minX, box.maxY - box.minY) * 0.08));
+
+			if (fill < LABEL_MIN_FILL_RATIO) {
+				const parts = splitBoxAtEmptyBands(data, imgW, imgH, box, minEmptyRun);
+				if (parts.length > 1) {
+					return parts.flatMap((part) =>
+						refineLabelCluster(data, imgW, imgH, part, depth + 1),
+					);
+				}
+				return [];
+			}
+
+			const tight = shrinkBoxToBrightPixels(data, imgW, imgH, box);
+			if (!tight) return [];
+
+			const tightFill = computeBoxFillRatio(data, imgW, tight);
+			if (tightFill < LABEL_MIN_FILL_RATIO) {
+				const parts = splitBoxAtEmptyBands(data, imgW, imgH, box, minEmptyRun);
+				if (parts.length > 1) {
+					return parts.flatMap((part) =>
+						refineLabelCluster(data, imgW, imgH, part, depth + 1),
+					);
+				}
+				return [];
+			}
+
+			const tbw = tight.maxX - tight.minX;
+			const tbh = tight.maxY - tight.minY;
+			const long = Math.max(tbw, tbh);
+			const short = Math.max(1, Math.min(tbw, tbh));
+			if (long > short * 4 && tightFill < 0.2) {
+				const parts = splitBoxAtEmptyBands(data, imgW, imgH, tight, minEmptyRun);
+				if (parts.length > 1) {
+					return parts.flatMap((part) =>
+						refineLabelCluster(data, imgW, imgH, part, depth + 1),
+					);
+				}
+			}
+
+			return [tight];
+		}
+
+		function computeLabelMergeGap(components: AutoBrightBBox[]) {
+			if (components.length === 0) return 12;
+			const sizes = components
+				.map((c) => Math.max(c.maxX - c.minX, c.maxY - c.minY))
+				.sort((a, b) => a - b);
+			const median = sizes[Math.floor(sizes.length / 2)] ?? 12;
+			return Math.max(8, Math.min(28, Math.round(median * 1.2)));
+		}
+
+		function filterLabelCandidateComponents(
+			components: AutoBrightBBox[],
+			cropW: number,
+			cropH: number,
+		) {
+			return components.filter((c) => {
+				if (isLikelyDimStroke(c, cropW, cropH)) return false;
+				const bw = c.maxX - c.minX;
+				const bh = c.maxY - c.minY;
+				const area = bw * bh;
+				if (area < 4) return false;
+				const long = Math.max(bw, bh);
+				if (long > Math.max(cropW, cropH) * 0.12) return false;
+				if (area > cropW * cropH * 0.0015) return false;
+				return true;
+			});
+		}
+
+		function isLikelyLabelCluster(
+			box: AutoBrightBBox,
+			cropW: number,
+			cropH: number,
+		) {
+			const bw = box.maxX - box.minX;
+			const bh = box.maxY - box.minY;
+			if (bw < 3 || bh < 3) return false;
+			if (isLikelyDimStroke(box, cropW, cropH)) return false;
+			if (bw > cropW * 0.2 || bh > cropH * 0.2) return false;
+			const long = Math.max(bw, bh);
+			const short = Math.max(1, Math.min(bw, bh));
+			if (long > 60 && long / short > 10) return false;
+			return true;
+		}
+
+		function clusterComponentsByProximity(
+			components: AutoBrightBBox[],
+			gapPx: number,
+			imageData?: ImageData,
+		) {
+			const n = components.length;
+			if (n === 0) return [];
+			const parent = Array.from({ length: n }, (_, i) => i);
+			const find = (i: number): number => {
+				while (parent[i] !== i) {
+					parent[i] = parent[parent[i]];
+					i = parent[i];
+				}
+				return i;
+			};
+			const unite = (a: number, b: number) => {
+				const ra = find(a);
+				const rb = find(b);
+				if (ra !== rb) parent[rb] = ra;
+			};
+			const data = imageData?.data;
+			const imgW = imageData?.width ?? 0;
+			for (let i = 0; i < n; i++) {
+				for (let j = i + 1; j < n; j++) {
+					if (!autoBrightBboxesWithinGap(components[i], components[j], gapPx)) continue;
+					if (data && imgW > 0) {
+						const merged = unionAutoBrightBboxes(components[i], components[j]);
+						if (
+							computeBoxFillRatio(data, imgW, merged) < LABEL_MERGE_MIN_FILL_RATIO
+						) {
+							continue;
+						}
+					}
+					unite(i, j);
+				}
+			}
+			const groups = new Map<number, AutoBrightBBox>();
+			for (let i = 0; i < n; i++) {
+				const root = find(i);
+				const prev = groups.get(root);
+				groups.set(
+					root,
+					prev
+						? unionAutoBrightBboxes(prev, components[i])
+						: { ...components[i] },
+				);
+			}
+			return [...groups.values()];
+		}
+
+		function detectAllRasterLabelBboxes(imageData: ImageData) {
+			const w = imageData.width;
+			const h = imageData.height;
+			const d = imageData.data;
+			const all = findAllBrightComponents(imageData);
+			const candidates = filterLabelCandidateComponents(all, w, h);
+			if (candidates.length === 0) return [];
+			const gap = computeLabelMergeGap(candidates);
+			const clusters = clusterComponentsByProximity(candidates, gap, imageData);
+			const refined = clusters.flatMap((cluster) =>
+				refineLabelCluster(d, w, h, cluster),
+			);
+			return refined.filter((c) => {
+				if (!isLikelyLabelCluster(c, w, h)) return false;
+				return computeBoxFillRatio(d, w, c) >= LABEL_MIN_FILL_RATIO;
+			});
+		}
+
+		function appendMaskRectFromBounds(
+			svg: SVGSVGElement,
+			x: number,
+			y: number,
+			width: number,
+			height: number,
+		) {
+			const newRect = document.createElementNS(SVG_NS, "rect");
+			newRect.setAttribute("x", x.toString());
+			newRect.setAttribute("y", y.toString());
+			newRect.setAttribute("width", width.toString());
+			newRect.setAttribute("height", height.toString());
+			newRect.setAttribute("fill", "rgba(0, 123, 255, 0.3)");
+			newRect.setAttribute("stroke", "#007bff");
+			newRect.setAttribute("stroke-width", "2");
+			appendMaskRect(svg, newRect);
+			addRectEventListeners(newRect);
+			return newRect;
+		}
+
+		async function generateAllRasterLabelRects() {
+			const svg = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
+			if (!svg) {
+				alert("Import a floorplan first.");
+				return;
+			}
+
+			const img = await resolveBrushRasterImage(svg);
+			if (!img) {
+				alert(
+					"Detect all labels needs a PNG/JPEG backplate or combined floorplan import.",
+				);
+				return;
+			}
+
+			const nw = img.naturalWidth || 0;
+			const nh = img.naturalHeight || 0;
+			if (nw < 1 || nh < 1) {
+				alert("Could not read floorplan image dimensions.");
+				return;
+			}
+
+			const canvas = document.createElement("canvas");
+			canvas.width = nw;
+			canvas.height = nh;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) {
+				alert("Canvas not available.");
+				return;
+			}
+			ctx.drawImage(img, 0, 0, nw, nh);
+
+			let imageData: ImageData | null = null;
+			try {
+				imageData = ctx.getImageData(0, 0, nw, nh);
+			} catch (err) {
+				console.warn("Detect all labels: could not read pixels:", err);
+				alert(
+					"Could not read image pixels (image may be cross-origin). Try re-importing the floorplan.",
+				);
+				return;
+			}
+
+			const bboxes = detectAllRasterLabelBboxes(imageData);
+			if (bboxes.length === 0) {
+				alert("No bright label-like regions were detected on the floorplan.");
+				return;
+			}
+
+			const pad = getAutoPaddingSvg();
+			let created = 0;
+			for (const bbox of bboxes) {
+				const mapped = imagePixelRectToSvgRect(
+					svg,
+					img,
+					bbox.minX,
+					bbox.minY,
+					bbox.maxX,
+					bbox.maxY,
+				);
+				let fx = mapped.x;
+				let fy = mapped.y;
+				let fw = mapped.width;
+				let fh = mapped.height;
+				if (pad > 0) {
+					fx -= pad;
+					fy -= pad;
+					fw += pad * 2;
+					fh += pad * 2;
+				}
+				if (fw < 4 || fh < 4) continue;
+				appendMaskRectFromBounds(svg, fx, fy, fw, fh);
+				created++;
+			}
+
+			if (created === 0) {
+				alert("No label rectangles met the minimum size after padding.");
+				return;
+			}
+
+			deselectRect();
+			alert(`Added ${created} label rectangle${created === 1 ? "" : "s"}. Review and delete any false positives.`);
 		}
 
 		async function finalizeRubberBandRect(
@@ -1830,16 +2356,7 @@ import "../styles.css";
 			const minDim = 4;
 			if (fw < minDim || fh < minDim) return;
 
-			const newRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-			newRect.setAttribute("x", fx.toString());
-			newRect.setAttribute("y", fy.toString());
-			newRect.setAttribute("width", fw.toString());
-			newRect.setAttribute("height", fh.toString());
-			newRect.setAttribute("fill", "rgba(0, 123, 255, 0.3)");
-			newRect.setAttribute("stroke", "#007bff");
-			newRect.setAttribute("stroke-width", "2");
-			appendMaskRect(svg, newRect);
-			addRectEventListeners(newRect);
+			const newRect = appendMaskRectFromBounds(svg, fx, fy, fw, fh);
 			selectRect(newRect);
 		}
 
@@ -2194,17 +2711,11 @@ import "../styles.css";
 				if (img) {
 					const finishRasterLoad = () => {
 						ensureSvgOverlayForRaster(img, file);
-						const nw = img.naturalWidth;
-						const nh = img.naturalHeight;
-						const svg = globalSvgContainer.querySelector(
-							"svg",
-						) as SVGSVGElement | null;
-						if (svg && nw > 0 && nh > 0) {
-							svg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
-						}
 					};
 					if (img.complete) finishRasterLoad();
 					else img.onload = finishRasterLoad;
+				} else if (file?.name) {
+					updateCurrentFileName(file.name);
 				}
 
 				console.log("Background image added underneath SVG");
@@ -2307,22 +2818,36 @@ import "../styles.css";
 			});
 		}
 
-		function ensureSvgOverlayForRaster(img: HTMLImageElement, sourceFile?: File) {
-			let svg = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
-			if (svg) return;
+		function clearAllMaskRects(svg: SVGSVGElement) {
+			deselectRect();
+			const maskGroup = svg.querySelector("#mask-rects");
+			if (maskGroup) maskGroup.innerHTML = "";
+		}
 
+		function ensureSvgOverlayForRaster(
+			img: HTMLImageElement,
+			sourceFile?: File,
+		) {
 			const nw = img.naturalWidth || 4096;
 			const nh = img.naturalHeight || 4096;
-			const newSvg = createNewSVG();
-			newSvg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
-			ensureInteractionPlane(newSvg);
-			globalSvgContainer.appendChild(newSvg);
-			wireSvgInteractions(newSvg);
-			updateExportButtonsVisibility();
+			let svg = globalSvgContainer.querySelector("svg") as SVGSVGElement | null;
 
-			if (sourceFile && importedSVGs.length === 0) {
-				const base = sourceFile.name.replace(/\.[^.]+$/, "");
-				updateCurrentFileName(base.length ? base : "mask");
+			if (!svg) {
+				svg = createNewSVG();
+				svg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+				ensureInteractionPlane(svg);
+				globalSvgContainer.appendChild(svg);
+				wireSvgInteractions(svg);
+			} else {
+				clearAllMaskRects(svg);
+				if (nw > 0 && nh > 0) {
+					svg.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+				}
+			}
+
+			updateExportButtonsVisibility();
+			if (sourceFile?.name) {
+				updateCurrentFileName(sourceFile.name);
 			}
 		}
 
@@ -2440,9 +2965,8 @@ import "../styles.css";
 
 		// Function to update current filename for export
 		function updateCurrentFileName(filename) {
-			// Remove the .svg extension to get the base name
-			const baseName = filename.replace(/\.svg$/i, '');
-			currentFileName = baseName;
+			const baseName = filename.replace(/\.(svg|png|jpe?g|webp|gif)$/i, "");
+			currentFileName = baseName || "mask";
 			
 			// Update the export filename input
 			const exportInput = document.getElementById('export-filename') as HTMLInputElement;
@@ -3063,6 +3587,28 @@ import "../styles.css";
 
 		document.getElementById("brush-manual")?.addEventListener("change", updateBrushPaddingVisibility);
 		document.getElementById("brush-auto")?.addEventListener("change", updateBrushPaddingVisibility);
+		document.getElementById("detect-all-labels-btn")?.addEventListener("click", async () => {
+			const btn = document.getElementById(
+				"detect-all-labels-btn",
+			) as HTMLButtonElement | null;
+			if (btn) {
+				btn.disabled = true;
+				btn.textContent = "Detecting…";
+			}
+			try {
+				await generateAllRasterLabelRects();
+			} catch (err) {
+				console.error(err);
+				alert(
+					`Label detection failed.\n\n${err instanceof Error ? err.message : String(err)}`,
+				);
+			} finally {
+				if (btn) {
+					btn.disabled = false;
+					btn.textContent = "Detect all labels (raster)";
+				}
+			}
+		});
 		updateBrushPaddingVisibility();
 
 		function isDeleteKey(e: KeyboardEvent) {

@@ -88,10 +88,34 @@ function geminiApiBase(): string {
 
 export const GEMINI_API_BASE = geminiApiBase();
 
+/** Direct Gemini API — Flash-Lite first (cheapest + most generous free tier as of mid-2026). */
 export const DEFAULT_GEMINI_MODELS = [
-	{ id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-	{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-	{ id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-	{ id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-	{ id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }
+	{ id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite (default)' },
+	{ id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+	{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
 ] as const;
+
+/** Strip OpenRouter-style ids (e.g. google/gemini-2.5-flash) for direct Gemini API calls. */
+export function normalizeGeminiModelId(raw: string): string {
+	let id = String(raw ?? '').trim();
+	if (!id) return DEFAULT_GEMINI_MODELS[0].id;
+	if (id.startsWith('models/')) id = id.slice('models/'.length);
+	const googleSlash = id.match(/^google\/(.+)$/i);
+	if (googleSlash) id = googleSlash[1];
+	id = id.replace(/:free$/i, '');
+	const deprecatedToCurrent: Record<string, string> = {
+		'gemini-2.0-flash': 'gemini-3.1-flash-lite',
+		'gemini-2.0-flash-001': 'gemini-3.1-flash-lite',
+		'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite',
+		'gemini-2.0-flash-lite-001': 'gemini-2.5-flash-lite',
+		'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+		'gemini-2.5-flash-lite-preview-09-2025': 'gemini-2.5-flash-lite'
+	};
+	if (deprecatedToCurrent[id]) id = deprecatedToCurrent[id];
+	return id;
+}
+
+export function isPlausibleGeminiModelId(id: string): boolean {
+	const t = id.trim();
+	return t.length > 0 && /^[a-z0-9][a-z0-9._-]*$/i.test(t) && !t.includes('/');
+}

@@ -613,7 +613,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				normalizeMetricTypography,
 				protectInchMarksInCsvLine
 			} from '../lib/csv-dimension-typography';
-			import { DEFAULT_GEMINI_MODELS, DEFAULT_OPENROUTER_MODELS } from '../lib/dimension-ai-prompt';
+			import {
+				DEFAULT_GEMINI_MODELS,
+				DEFAULT_OPENROUTER_MODELS,
+				isPlausibleGeminiModelId,
+				normalizeGeminiModelId
+			} from '../lib/dimension-ai-prompt';
 
 			const MAX_IMPORT_ROWS = 200;
 			const MAX_SHEETS = 40;
@@ -2169,15 +2174,25 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 			}) {
 				let DIMENSION_PARSE_SYSTEM_PROMPT: string;
 				let GEMINI_API_BASE: string;
+				let normalizeGeminiModel: (raw: string) => string;
+				let plausibleGeminiModel: (id: string) => boolean;
 				try {
 					const mod = await import('../lib/dimension-ai-prompt.ts');
 					DIMENSION_PARSE_SYSTEM_PROMPT = mod.DIMENSION_PARSE_SYSTEM_PROMPT;
 					GEMINI_API_BASE = mod.GEMINI_API_BASE;
+					normalizeGeminiModel = mod.normalizeGeminiModelId;
+					plausibleGeminiModel = mod.isPlausibleGeminiModelId;
 				} catch {
 					throw new Error('AI prompt module failed to load.');
 				}
 
-				const { apiKey, model, pastedText, imageDataUrls, reportStatus, onImagePart } = options;
+				const { apiKey, model: rawModel, pastedText, imageDataUrls, reportStatus, onImagePart } = options;
+				const model = normalizeGeminiModel(rawModel);
+				if (!plausibleGeminiModel(model)) {
+					throw new Error(
+						`Invalid Gemini model id "${rawModel}". Use a Gemini model (e.g. gemini-2.0-flash-001), not an OpenRouter id.`
+					);
+				}
 				const trimmed = pastedText?.trim() ?? '';
 				const imgs = Array.isArray(imageDataUrls) ? imageDataUrls.filter(Boolean) : [];
 				if (!trimmed && imgs.length === 0) {
@@ -2645,10 +2660,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				aiProviderLabelGemini?.classList.toggle('text-neutral-400', !gemini);
 			}
 
-			function populateModelSelectForProvider(gemini: boolean, preferredModel?: string) {
+			function populateModelSelectForProvider(gemini: boolean, preferredModel?: string | null) {
 				if (!aiModelSelect) return;
 				const models = gemini ? DEFAULT_GEMINI_MODELS : DEFAULT_OPENROUTER_MODELS;
-				const prev = preferredModel ?? aiModelSelect.value;
+				// Never reuse the other provider's selected model when switching.
+				let prev = preferredModel != null && preferredModel !== '' ? preferredModel : '';
+				if (gemini && prev) prev = normalizeGeminiModelId(prev);
 				aiModelSelect.innerHTML = '';
 				for (const m of models) {
 					const opt = document.createElement('option');
@@ -2664,7 +2681,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				if (match) {
 					aiModelSelect.value = prev;
 					aiModelCustomWrap?.classList.toggle('hidden', prev !== '__custom');
-				} else if (prev && prev !== '__custom') {
+				} else if (
+					prev &&
+					prev !== '__custom' &&
+					(!gemini || isPlausibleGeminiModelId(prev))
+				) {
 					aiModelSelect.value = '__custom';
 					if (aiModelCustom) aiModelCustom.value = prev;
 					aiModelCustomWrap?.classList.remove('hidden');
@@ -2681,10 +2702,17 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				let savedModel: string | null = null;
 				try {
 					savedModel = localStorage.getItem(gemini ? STORAGE_GEMINI_MODEL : STORAGE_OPENROUTER_MODEL);
+					if (gemini && savedModel) {
+						const normalized = normalizeGeminiModelId(savedModel);
+						if (normalized !== savedModel) {
+							savedModel = normalized;
+							localStorage.setItem(STORAGE_GEMINI_MODEL, normalized);
+						}
+					}
 				} catch {
 					// ignore
 				}
-				populateModelSelectForProvider(gemini, savedModel ?? undefined);
+				populateModelSelectForProvider(gemini, savedModel);
 				updateManualKeyRowVisibility();
 			}
 
@@ -3011,6 +3039,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						return;
 					}
 				}
+				if (gemini) modelId = normalizeGeminiModelId(modelId);
 				const pasted = csvPaste?.value ?? '';
 				const imageDataUrls = aiAttachments.map((a) => a.dataUrl);
 				if (!pasted.trim() && imageDataUrls.length === 0) {
