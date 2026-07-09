@@ -348,46 +348,66 @@ import "../styles.css";
 
 		<section class="container editor grid">
 			<div id="image-list-container" class="hidden flex-col">
-				<div class="flex items-center mb-2 p-2 bg-neutral-50 rounded-sm">
+				<div class="flex gap-1 items-stretch">
 					<input
-						type="checkbox"
-						id="matching-mode-toggle"
-						class="mr-2"
-						checked
+						type="text"
+						placeholder="To Remove"
+						id="text-replacement"
 					/>
-					<label for="matching-mode-toggle" class="text-sm cursor-pointer">
-						<span id="matching-mode-label">Default Matching (Final 3 elements in image name)</span>
+					<label
+						for="check-floorplans-button"
+						class="flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-center"
+					>
+						Check Floorplans
 					</label>
+					<input
+						type="file"
+						class="input-style"
+						id="check-floorplans-button"
+						accept="image/jpeg, image/png, image/webp, video/mp4, video/webm, video/ogg"
+						name="filename"
+						multiple
+						style="display:none; "
+					/>
+					<button
+						id="clear-images"
+						class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-center"
+						type="button"
+					>
+						Clear Images
+					</button>
+
+					<!-- Compact image-list window (opens dialog) -->
+					<button
+						type="button"
+						id="image-list-window"
+						title="View loaded images"
+						class="ml-auto flex items-center gap-1.5 min-w-[7.5rem] max-w-[10rem] h-9 px-2 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-sm text-left"
+					>
+						<div
+							id="image-list-window-preview"
+							class="flex items-center gap-0.5 overflow-hidden flex-1 min-w-0 h-6"
+						></div>
+						<span
+							id="image-list-window-count"
+							class="shrink-0 text-[11px] text-neutral-600 font-medium"
+						>0</span>
+					</button>
+
+					<!-- Compact silhouette benchmark button (opens dialog) -->
+					<button
+						type="button"
+						id="shape-benchmark-toggle"
+						aria-expanded="false"
+						aria-controls="shape-benchmark-dialog"
+						title="Silhouette benchmark"
+						class="flex items-center gap-1.5 h-9 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-200/70 rounded-sm text-xs font-medium text-amber-900 whitespace-nowrap"
+					>
+						<span>Silhouette</span>
+						<span id="shape-benchmark-count" class="text-[11px] font-normal text-amber-800/80">0</span>
+					</button>
 				</div>
-				
-				<div class="flex gap-1">
-				<input
-					type="text"
-					placeholder="To Remove"
-					id="text-replacement"
-				/>
-				<label
-					for="check-floorplans-button"
-					class="flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
-				>
-					Check Floorplans
-				</label>
-				<input
-					type="file"
-					class="input-style"
-					id="check-floorplans-button"
-					accept="image/jpeg, image/png, image/webp, video/mp4, video/webm, video/ogg"
-					name="filename"
-					multiple
-					style="display:none; "
-				/>
-				<button id="clear-images"
-        class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-sm self-end"
-        type="button">
-  Clear Images
-</button>
-				</div>
-				
+
 				<div class="flex gap-2 mt-2">
 					<label
 						for="upload-unit-reference-button"
@@ -420,162 +440,6 @@ import "../styles.css";
 							</div>
 							<div id="batch-opencv-progress-text" class="mt-1 text-right">0 / 0</div>
 						</div>
-					</div>
-				</div>
-				
-				<div
-					id="image-carousel-container"
-					class="hidden flex-col p-2 bg-neutral-100 rounded-sm"
-				>
-					<p class="text-sm mb-2">Image List</p>
-					<ul
-						class="flex flex-row max-h-20 w-full space-x-2 overflow-x-scroll overflow-y-hidden"
-						id="image-list-carousel"
-					>
-					</ul>
-				</div>
-
-				<div
-					id="shape-benchmark-section"
-					class="mt-3 p-2 bg-amber-50/90 rounded-sm border border-amber-200/70"
-				>
-					<button
-						type="button"
-						id="shape-benchmark-toggle"
-						aria-expanded="false"
-						aria-controls="shape-benchmark-body"
-						class="flex w-full items-center justify-between gap-2 text-left"
-					>
-						<span class="text-sm font-medium">Silhouette benchmark (experimental)</span>
-						<svg
-							id="shape-benchmark-toggle-chevron"
-							class="w-4 h-4 shrink-0 text-neutral-500 transition-transform duration-200"
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke-width="2"
-							stroke="currentColor"
-							aria-hidden="true"
-						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-						</svg>
-					</button>
-					<div id="shape-benchmark-body" class="hidden mt-2">
-					<p class="text-xs text-neutral-600 mb-2">
-						Binary-mask silhouette match: ranks by combined Score (default ~half IoU / half Chamfer) using amplified Euclidean edge distance plus a spread penalty (low σ preferred). Same rotation search and preprocess as before. Same OpenCV crop/bg step as Compare before masks; no ORB/SIFT in the bench.
-						Hover any path with an id and use &quot;Silhouette bench&quot; in the preview — Check Floorplans is not required. Batch export runs the same benchmark for every path with an id across loaded SVGs, then downloads a CSV. Floorplans whose cropped aspect ratio is too far from the cutout&apos;s (default max span 2.5×) are skipped before scoring. Optional &quot;Flash preprocess in preview&quot; applies only to single-path runs from the preview (not batch). Duplicate benchmark files are deduped by content hash when loading.
-						<strong class="font-medium">Preprocess cache:</strong> cropped floor images (same JS pipeline as silhouette IoU) are kept in memory; benchmark scores are also cached per path/cutout/max grid. Use export/import ZIP to persist fingerprints after a first pass—reloading the same floorplan files matches by content hash and skips expensive preprocessing.
-						Optional <strong class="font-medium">unit reference JSON</strong> (<code class="text-[11px]">units[]</code> with <code class="text-[11px]">name</code> + <code class="text-[11px]">type</code>): for each path whose id contains a unit <code class="text-[11px]">name</code> (normalized), only benchmark images whose underscore tokens match the <code class="text-[11px]">type</code> rules are scored (see implementation). Paths with no matching unit still use the full image set.
-					</p>
-					<div class="flex flex-wrap gap-2 items-center">
-						<label
-							for="shape-benchmark-files"
-							class="cursor-pointer flex w-fit align-center text-center bg-amber-100 hover:bg-amber-200 p-1 pl-2 pr-2 rounded-sm text-sm"
-						>
-							Load benchmark images
-						</label>
-						<input
-							type="file"
-							id="shape-benchmark-files"
-							accept="image/png,image/jpeg,image/webp"
-							multiple
-							class="hidden"
-						/>
-						<span id="shape-benchmark-count" class="text-xs text-neutral-600">0 images</span>
-						<button
-							type="button"
-							id="shape-benchmark-clear"
-							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
-						>
-							Clear set
-						</button>
-						<label class="flex items-center gap-1.5 text-xs text-neutral-700 cursor-pointer select-none ml-1">
-							<input
-								type="checkbox"
-								id="shape-bench-flash-preprocess"
-								class="rounded border-neutral-400"
-							/>
-							Flash preprocess in preview
-						</label>
-						<button
-							type="button"
-							id="silhouette-bench-export-preprocess-cache"
-							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
-						>
-							Export preprocess ZIP
-						</button>
-						<label
-							class="cursor-pointer flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
-						>
-							Import preprocess ZIP
-							<input
-								type="file"
-								id="silhouette-bench-import-preprocess-cache"
-								accept=".zip,application/zip"
-								class="hidden"
-							/>
-						</label>
-					</div>
-					<div class="flex flex-wrap gap-2 items-center mt-2">
-						<label
-							for="unit-reference-json-input"
-							class="cursor-pointer flex w-fit align-center text-center bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 p-1 pl-2 pr-2 rounded-sm text-xs text-emerald-900"
-						>
-							Load unit reference JSON
-						</label>
-						<input
-							type="file"
-							id="unit-reference-json-input"
-							accept=".json,application/json"
-							class="hidden"
-						/>
-						<button
-							type="button"
-							id="unit-reference-json-clear"
-							class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
-						>
-							Clear unit filter
-						</button>
-						<span id="unit-reference-json-status" class="text-xs text-neutral-600 max-w-[280px] leading-tight"
-							>No unit filter file</span>
-					</div>
-					<div class="flex flex-wrap gap-2 items-end mt-2">
-						<button
-							type="button"
-							id="batch-shape-bench-button"
-							class="flex align-center text-center bg-amber-200 hover:bg-amber-300 p-1 pl-2 pr-2 rounded-sm text-sm border border-amber-300/80"
-						>
-							Batch Silhouette bench
-						</button>
-						<div id="batch-shape-bench-progress" class="hidden w-48 text-xs text-neutral-700">
-							<div class="w-full bg-neutral-200 h-1 rounded">
-								<div
-									id="batch-shape-bench-progress-bar"
-									class="h-1 bg-amber-600 rounded"
-									style="width:0%"
-								></div>
-							</div>
-							<div id="batch-shape-bench-progress-text" class="mt-1 text-right truncate" title="">
-								0 / 0
-							</div>
-						</div>
-					</div>
-					<div id="shape-benchmark-progress" class="hidden w-full max-w-md mt-2 text-xs text-neutral-700">
-						<div class="w-full bg-neutral-200 h-1.5 rounded">
-							<div
-								id="shape-benchmark-progress-bar"
-								class="h-1.5 bg-amber-600 rounded transition-[width] duration-150"
-								style="width:0%"
-							></div>
-						</div>
-						<div id="shape-benchmark-progress-text" class="mt-1 text-neutral-600 truncate" title="">
-							0 / 0
-						</div>
-					</div>
-					<div
-						id="shape-benchmark-results"
-						class="hidden mt-2 overflow-x-auto max-h-72 overflow-y-auto text-xs border border-neutral-200 rounded-sm bg-white"
-					></div>
 					</div>
 				</div>
 			</div>
@@ -669,11 +533,200 @@ import "../styles.css";
 				</div>
 			</div>
 
+			<div
+				id="svg-nav"
+				class="flex items-center justify-center gap-3 mt-2 min-h-[2rem]"
+			>
+				<button
+					type="button"
+					id="svg-prev"
+					class="px-2 py-1 rounded-sm bg-neutral-100 hover:bg-neutral-200 text-sm disabled:opacity-40 disabled:pointer-events-none"
+					aria-label="Previous SVG"
+					disabled
+				>
+					&#8592;
+				</button>
+				<span
+					id="svg-current-name"
+					class="text-sm text-neutral-700 truncate max-w-[min(60vw,28rem)] text-center"
+					title=""
+				></span>
+				<button
+					type="button"
+					id="svg-next"
+					class="px-2 py-1 rounded-sm bg-neutral-100 hover:bg-neutral-200 text-sm disabled:opacity-40 disabled:pointer-events-none"
+					aria-label="Next SVG"
+					disabled
+				>
+					&#8594;
+				</button>
+			</div>
+
 			<div class="space-y-4" id="tag" style="display:none">
 				<h3 id="label">-</h3>
 			</div>
 			<svg id="svg" height="0px"></svg>
 		</section>
+
+		<dialog
+			id="image-list-dialog"
+			class="rounded-md border border-neutral-200 p-0 shadow-lg backdrop:bg-black/40 max-w-[min(90vw,42rem)] w-full"
+		>
+			<div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-neutral-200 bg-neutral-50">
+				<p class="text-sm font-medium">Image List</p>
+				<button
+					type="button"
+					id="image-list-dialog-close"
+					class="text-sm px-2 py-0.5 rounded-sm bg-neutral-100 hover:bg-neutral-200"
+				>
+					Close
+				</button>
+			</div>
+			<div class="p-3 max-h-[70vh] overflow-y-auto">
+				<ul
+					class="flex flex-row flex-wrap gap-2"
+					id="image-list-carousel"
+				></ul>
+				<p
+					id="image-list-dialog-empty"
+					class="hidden text-sm text-neutral-500"
+				>
+					No images loaded
+				</p>
+			</div>
+		</dialog>
+
+		<dialog
+			id="shape-benchmark-dialog"
+			class="rounded-md border border-amber-200/70 p-0 shadow-lg backdrop:bg-black/40 max-w-[min(92vw,48rem)] w-full"
+		>
+			<div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-amber-200/70 bg-amber-50/90">
+				<p class="text-sm font-medium">Silhouette benchmark (experimental)</p>
+				<button
+					type="button"
+					id="shape-benchmark-dialog-close"
+					class="text-sm px-2 py-0.5 rounded-sm bg-neutral-100 hover:bg-neutral-200"
+				>
+					Close
+				</button>
+			</div>
+			<div id="shape-benchmark-body" class="p-3 max-h-[80vh] overflow-y-auto">
+				<p class="text-xs text-neutral-600 mb-2">
+					Binary-mask silhouette match: ranks by combined Score (default ~half IoU / half Chamfer) using amplified Euclidean edge distance plus a spread penalty (low σ preferred). Same rotation search and preprocess as before. Same OpenCV crop/bg step as Compare before masks; no ORB/SIFT in the bench.
+					Hover any path with an id and use &quot;Silhouette bench&quot; in the preview — Check Floorplans is not required. Batch export runs the same benchmark for every path with an id across loaded SVGs, then downloads a CSV. Floorplans whose cropped aspect ratio is too far from the cutout&apos;s (default max span 2.5×) are skipped before scoring. Optional &quot;Flash preprocess in preview&quot; applies only to single-path runs from the preview (not batch). Duplicate benchmark files are deduped by content hash when loading.
+					<strong class="font-medium">Preprocess cache:</strong> cropped floor images (same JS pipeline as silhouette IoU) are kept in memory; benchmark scores are also cached per path/cutout/max grid. Use export/import ZIP to persist fingerprints after a first pass—reloading the same floorplan files matches by content hash and skips expensive preprocessing.
+					Optional <strong class="font-medium">unit reference JSON</strong> (<code class="text-[11px]">units[]</code> with <code class="text-[11px]">name</code> + <code class="text-[11px]">type</code>): for each path whose id contains a unit <code class="text-[11px]">name</code> (normalized), only benchmark images whose underscore tokens match the <code class="text-[11px]">type</code> rules are scored (see implementation). Paths with no matching unit still use the full image set.
+				</p>
+				<div class="flex flex-wrap gap-2 items-center">
+					<label
+						for="shape-benchmark-files"
+						class="cursor-pointer flex w-fit align-center text-center bg-amber-100 hover:bg-amber-200 p-1 pl-2 pr-2 rounded-sm text-sm"
+					>
+						Load benchmark images
+					</label>
+					<input
+						type="file"
+						id="shape-benchmark-files"
+						accept="image/png,image/jpeg,image/webp"
+						multiple
+						class="hidden"
+					/>
+					<button
+						type="button"
+						id="shape-benchmark-clear"
+						class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+					>
+						Clear set
+					</button>
+					<label class="flex items-center gap-1.5 text-xs text-neutral-700 cursor-pointer select-none ml-1">
+						<input
+							type="checkbox"
+							id="shape-bench-flash-preprocess"
+							class="rounded border-neutral-400"
+						/>
+						Flash preprocess in preview
+					</label>
+					<button
+						type="button"
+						id="silhouette-bench-export-preprocess-cache"
+						class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+					>
+						Export preprocess ZIP
+					</button>
+					<label
+						class="cursor-pointer flex w-fit align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+					>
+						Import preprocess ZIP
+						<input
+							type="file"
+							id="silhouette-bench-import-preprocess-cache"
+							accept=".zip,application/zip"
+							class="hidden"
+						/>
+					</label>
+				</div>
+				<div class="flex flex-wrap gap-2 items-center mt-2">
+					<label
+						for="unit-reference-json-input"
+						class="cursor-pointer flex w-fit align-center text-center bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 p-1 pl-2 pr-2 rounded-sm text-xs text-emerald-900"
+					>
+						Load unit reference JSON
+					</label>
+					<input
+						type="file"
+						id="unit-reference-json-input"
+						accept=".json,application/json"
+						class="hidden"
+					/>
+					<button
+						type="button"
+						id="unit-reference-json-clear"
+						class="flex align-center text-center bg-neutral-100 hover:bg-neutral-300 p-1 pl-2 pr-2 rounded-sm text-xs"
+					>
+						Clear unit filter
+					</button>
+					<span id="unit-reference-json-status" class="text-xs text-neutral-600 max-w-[280px] leading-tight"
+						>No unit filter file</span>
+				</div>
+				<div class="flex flex-wrap gap-2 items-end mt-2">
+					<button
+						type="button"
+						id="batch-shape-bench-button"
+						class="flex align-center text-center bg-amber-200 hover:bg-amber-300 p-1 pl-2 pr-2 rounded-sm text-sm border border-amber-300/80"
+					>
+						Batch Silhouette bench
+					</button>
+					<div id="batch-shape-bench-progress" class="hidden w-48 text-xs text-neutral-700">
+						<div class="w-full bg-neutral-200 h-1 rounded">
+							<div
+								id="batch-shape-bench-progress-bar"
+								class="h-1 bg-amber-600 rounded"
+								style="width:0%"
+							></div>
+						</div>
+						<div id="batch-shape-bench-progress-text" class="mt-1 text-right truncate" title="">
+							0 / 0
+						</div>
+					</div>
+				</div>
+				<div id="shape-benchmark-progress" class="hidden w-full max-w-md mt-2 text-xs text-neutral-700">
+					<div class="w-full bg-neutral-200 h-1.5 rounded">
+						<div
+							id="shape-benchmark-progress-bar"
+							class="h-1.5 bg-amber-600 rounded transition-[width] duration-150"
+							style="width:0%"
+						></div>
+					</div>
+					<div id="shape-benchmark-progress-text" class="mt-1 text-neutral-600 truncate" title="">
+						0 / 0
+					</div>
+				</div>
+				<div
+					id="shape-benchmark-results"
+					class="hidden mt-2 overflow-x-auto max-h-72 overflow-y-auto text-xs border border-neutral-200 rounded-sm bg-white"
+				></div>
+			</div>
+		</dialog>
 
 		<!-- Toast notification -->
 		<div id="toast" class="toast"></div>
@@ -1235,14 +1288,9 @@ import "../styles.css";
 						}
 					}
 
-					// Show navigation if multiple SVGs
-					if (importedSVGs.length > 1) {
-						console.log('Showing SVG navigation for multiple SVGs');
+					// Bind/update SVG name + prev/next row under the viewer
+					if (importedSVGs.length > 0) {
 						spawnSVGNavigation();
-					} else if (importedSVGs.length === 1) {
-						console.log('Single SVG loaded, no navigation needed');
-					} else {
-						console.log('No SVGs were loaded');
 					}
 				}
 
@@ -1471,24 +1519,7 @@ import "../styles.css";
 				imageList.push(...results);
 				const imageListContainer = document.getElementById("image-list-container");
 				if (imageListContainer?.classList.contains("hidden")) imageListContainer.classList.remove("hidden");
-				const imgCarouselContainer = document.getElementById("image-carousel-container");
-				if (imgCarouselContainer?.classList.contains("hidden")) {
-					imgCarouselContainer.classList.remove("hidden");
-					imgCarouselContainer.classList.add("flex");
-				}
-				const imageListCarousel = document.getElementById("image-list-carousel");
-				if (imageListCarousel) {
-					imageListCarousel.innerHTML = "";
-					imageList.forEach((image) => {
-						const listItem = document.createElement("li");
-						listItem.style.height = "100%";
-						const imageElement = document.createElement("img");
-						imageElement.src = image.data;
-						imageElement.style.height = "60px";
-						listItem.appendChild(imageElement);
-						imageListCarousel.appendChild(listItem);
-					});
-				}
+				renderImageListCarousel();
 				const svgElement = document.getElementById("svg-container")?.querySelector("svg");
 				if (svgElement) previewBackplate(svgElement);
 				showToast(`Loaded ${results.length} floorplan image(s) for overlay`, 'success');
@@ -1538,58 +1569,8 @@ import "../styles.css";
 				console.error('Image list container not found!');
 			}
 
-			// Show the image carousel UI
-			const imgCarouselContainer = document.getElementById("image-carousel-container");
-			console.log('Image carousel container element:', imgCarouselContainer);
-			if (imgCarouselContainer) {
-				console.log('Image carousel container classes before:', imgCarouselContainer.classList.value);
-				console.log('Contains hidden?', imgCarouselContainer.classList.contains("hidden"));
-				console.log('Computed display style:', window.getComputedStyle(imgCarouselContainer).display);
-
-				// Check parent elements
-				let parent = imgCarouselContainer.parentElement;
-				let depth = 0;
-				while (parent && depth < 5) {
-					console.log(`Parent ${depth}:`, parent.tagName, parent.id || parent.className, 'display:', window.getComputedStyle(parent).display);
-					parent = parent.parentElement;
-					depth++;
-				}
-
-				// Check sibling elements
-				const siblings = Array.from(imgCarouselContainer.parentElement?.children || []);
-				console.log('Siblings:', siblings.map(s => `${s.tagName}#${s.id || 'no-id'}.${s.className}`).join(', '));
-
-				console.log('Removing hidden class and setting display to block with !important');
-				imgCarouselContainer.classList.remove("hidden");
-				imgCarouselContainer.style.setProperty('display', 'block', 'important');
-
-				console.log('Image carousel container classes after:', imgCarouselContainer.classList.value);
-				console.log('Image carousel container display style:', imgCarouselContainer.style.display);
-				console.log('Computed display style after:', window.getComputedStyle(imgCarouselContainer).display);
-			} else {
-				console.error('Image carousel container not found!');
-			}
-
-			// Update the image carousel display
-			const imageListCarousel = document.getElementById("image-list-carousel");
-			console.log('Image list carousel element:', imageListCarousel);
-			if (imageListCarousel) {
-				imageListCarousel.innerHTML = "";
-				imageList.forEach((image, index) => {
-					console.log(`Creating thumbnail ${index + 1}: ${image.name}`);
-					const listItem = document.createElement("li");
-					listItem.style.height = "100%";
-					const imageElement = document.createElement("img");
-					imageElement.src = image.data;
-					imageElement.style.height = "60px";
-					imageElement.title = image.name; // Add tooltip
-					listItem.appendChild(imageElement);
-					imageListCarousel.appendChild(listItem);
-				});
-				console.log('Created thumbnails for all images');
-			} else {
-				console.error('Image list carousel not found!');
-			}
+			renderImageListCarousel();
+			console.log('Updated compact image list window / dialog thumbnails');
 
 			// Set up image overlay functionality
 			// Wait a bit for SVG to be fully loaded into DOM
@@ -2858,53 +2839,47 @@ import "../styles.css";
 
 		fetchDataFromServer();
 
-		function spawnSVGNavigation() {
-			// Check if navigation already exists and remove if needed
-			let navContainer = document.getElementById("svg-nav");
-			if (!navContainer) {
-				navContainer = document.createElement("div");
-				navContainer.id = "svg-nav";
-				// Style the container as desired (here we center the arrows)
-				navContainer.style.display = "flex";
-				navContainer.style.justifyContent = "center";
-				navContainer.style.marginTop = "1em";
-
-				// Create left arrow button
-				const leftArrow = document.createElement("button");
-				leftArrow.id = "svg-prev";
-				leftArrow.innerHTML = "&#8592;"; // left arrow symbol
-				leftArrow.style.marginRight = "1em";
-
-				// Create right arrow button
-				const rightArrow = document.createElement("button");
-				rightArrow.id = "svg-next";
-				rightArrow.innerHTML = "&#8594;"; // right arrow symbol
-
-				// Append the buttons to the nav container
-				navContainer.appendChild(leftArrow);
-				navContainer.appendChild(rightArrow);
-
-				// Append the nav container to the document, e.g. just below your svg-container
-				const svgContainer = document.getElementById("svg-container");
-				svgContainer.parentNode.insertBefore(
-					navContainer,
-					svgContainer.nextSibling,
-				);
-
-				// Add event listeners to change the current SVG
-				leftArrow.addEventListener("click", () => {
-					if (currentSVGIndex > 0) {
-						currentSVGIndex--;
-						processSVG(importedSVGs[currentSVGIndex].element);
-					}
-				});
-				rightArrow.addEventListener("click", () => {
-					if (currentSVGIndex < importedSVGs.length - 1) {
-						currentSVGIndex++;
-						processSVG(importedSVGs[currentSVGIndex].element);
-					}
-				});
+		function updateSVGNavigationUI() {
+			const nameEl = document.getElementById("svg-current-name");
+			const prevBtn = document.getElementById("svg-prev") as HTMLButtonElement | null;
+			const nextBtn = document.getElementById("svg-next") as HTMLButtonElement | null;
+			const current = importedSVGs[currentSVGIndex];
+			const name = current?.name || "";
+			if (nameEl) {
+				nameEl.textContent = name;
+				nameEl.title = name;
 			}
+			if (prevBtn) prevBtn.disabled = currentSVGIndex <= 0 || importedSVGs.length <= 1;
+			if (nextBtn) {
+				nextBtn.disabled =
+					currentSVGIndex >= importedSVGs.length - 1 || importedSVGs.length <= 1;
+			}
+		}
+
+		function spawnSVGNavigation() {
+			const leftArrow = document.getElementById("svg-prev");
+			const rightArrow = document.getElementById("svg-next");
+			if (!leftArrow || !rightArrow) return;
+			if (leftArrow.dataset.navBound === "1") {
+				updateSVGNavigationUI();
+				return;
+			}
+			leftArrow.dataset.navBound = "1";
+			leftArrow.addEventListener("click", () => {
+				if (currentSVGIndex > 0) {
+					currentSVGIndex--;
+					processSVG(importedSVGs[currentSVGIndex].element);
+					updateSVGNavigationUI();
+				}
+			});
+			rightArrow.addEventListener("click", () => {
+				if (currentSVGIndex < importedSVGs.length - 1) {
+					currentSVGIndex++;
+					processSVG(importedSVGs[currentSVGIndex].element);
+					updateSVGNavigationUI();
+				}
+			});
+			updateSVGNavigationUI();
 		}
 
 		// SVG Context Menu
@@ -3172,6 +3147,8 @@ import "../styles.css";
 					: idFormat === format.dash
 						? "dash"
 						: "";
+
+			updateSVGNavigationUI();
 		};
 
 		function getBaseName(fileName) {
@@ -3432,14 +3409,7 @@ import "../styles.css";
 						if (importedSVGs.length === filesToProcess.length) {
 							currentSVGIndex = 0;
 							processSVG(importedSVGs[currentSVGIndex].element);
-							if (importedSVGs.length > 1) {
-								spawnSVGNavigation();
-							} else {
-								// Remove navigation if only one SVG is imported
-								const existingNav =
-									document.getElementById("svg-nav");
-								if (existingNav) existingNav.remove();
-							}
+							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
 							loadFloorplanFilesToImageList(fileArr);
 						}
@@ -3481,14 +3451,7 @@ import "../styles.css";
 						if (importedSVGs.length === filesToProcess.length) {
 							currentSVGIndex = 0;
 							processSVG(importedSVGs[currentSVGIndex].element);
-							if (importedSVGs.length > 1) {
-								spawnSVGNavigation();
-							} else {
-								// Remove navigation if only one SVG is imported
-								const existingNav =
-									document.getElementById("svg-nav");
-								if (existingNav) existingNav.remove();
-							}
+							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
 							loadFloorplanFilesToImageList(fileArr);
 						}
@@ -4015,11 +3978,46 @@ import "../styles.css";
 		function updateShapeBenchmarkCountLabel() {
 			const el = document.getElementById("shape-benchmark-count");
 			if (el) {
-				el.textContent =
-					shapeBenchmarkCandidates.length === 0
-						? "0 images"
-						: `${shapeBenchmarkCandidates.length} image(s)`;
+				el.textContent = String(shapeBenchmarkCandidates.length);
 			}
+		}
+
+		function updateImageListWindowUI() {
+			const countEl = document.getElementById("image-list-window-count");
+			const previewEl = document.getElementById("image-list-window-preview");
+			const emptyEl = document.getElementById("image-list-dialog-empty");
+			const carousel = document.getElementById("image-list-carousel");
+			if (countEl) countEl.textContent = String(imageList.length);
+			if (previewEl) {
+				previewEl.innerHTML = "";
+				imageList.slice(0, 4).forEach((image) => {
+					const thumb = document.createElement("img");
+					thumb.src = image.data;
+					thumb.alt = "";
+					thumb.className = "h-6 w-6 object-cover rounded-sm shrink-0 bg-white";
+					thumb.title = image.name;
+					previewEl.appendChild(thumb);
+				});
+			}
+			if (emptyEl) emptyEl.classList.toggle("hidden", imageList.length > 0);
+			if (carousel) carousel.classList.toggle("hidden", imageList.length === 0);
+		}
+
+		function renderImageListCarousel() {
+			const imageListCarousel = document.getElementById("image-list-carousel");
+			if (!imageListCarousel) return;
+			imageListCarousel.innerHTML = "";
+			imageList.forEach((image) => {
+				const listItem = document.createElement("li");
+				listItem.className = "shrink-0";
+				const imageElement = document.createElement("img");
+				imageElement.src = image.data;
+				imageElement.className = "h-[72px] w-auto object-contain rounded-sm border border-neutral-200 bg-white";
+				imageElement.title = image.name;
+				listItem.appendChild(imageElement);
+				imageListCarousel.appendChild(listItem);
+			});
+			updateImageListWindowUI();
 		}
 
 		/**
@@ -4606,23 +4604,26 @@ import "../styles.css";
 
 		updateShapeBenchmarkCountLabel();
 
-		let useDefaultMatching = true; // Default matching mode enabled by default
-		
-		// Toggle for matching mode
-		document.getElementById("matching-mode-toggle").addEventListener("change", (e) => {
-			useDefaultMatching = e.target.checked;
-			const label = document.getElementById("matching-mode-label");
-			if (useDefaultMatching) {
-				label.textContent = "Default Matching (Final 3 elements in image name)";
-			} else {
-				label.textContent = "Custom Matching (Text replacement + substring)";
-			}
-			highlightPathsWithoutMatchingImages();
-		});
+		const useDefaultMatching = true; // Default matching (final 3 path id elements)
 
 		document.getElementById("text-replacement").addEventListener("input", () => {
 			highlightPathsWithoutMatchingImages();
 		});
+
+		(function setupImageListDialog() {
+			const windowBtn = document.getElementById("image-list-window");
+			const dialog = document.getElementById("image-list-dialog") as HTMLDialogElement | null;
+			const closeBtn = document.getElementById("image-list-dialog-close");
+			if (!windowBtn || !dialog) return;
+			windowBtn.addEventListener("click", () => {
+				updateImageListWindowUI();
+				dialog.showModal();
+			});
+			closeBtn?.addEventListener("click", () => dialog.close());
+			dialog.addEventListener("click", (e) => {
+				if (e.target === dialog) dialog.close();
+			});
+		})();
 		
 		document.getElementById("check-floorplans-button").addEventListener("change", (e) => {
 			console.log("Change") 
@@ -4930,22 +4931,14 @@ import "../styles.css";
 			// 1. empty the array that the previewer uses
 			imageList.splice(0, imageList.length);
 
-			// 2. remove thumbnails
-			const carousel = document.getElementById("image-list-carousel");
-			if (carousel) carousel.innerHTML = "";
+			// 2. refresh compact window + dialog thumbnails
+			renderImageListCarousel();
 
-			// 3. hide the image-list UI if it's open
-			const imgListContainer = document.getElementById("image-carousel-container");
-			if (imgListContainer && imgListContainer.classList.contains("flex")) {
-				imgListContainer.classList.remove("flex");
-				imgListContainer.classList.add("hidden");
-			}
-
-			// 4. hide the floating previewer if it exists
+			// 3. hide the floating previewer if it exists
 			const previewer = document.getElementById("image-previewer-container");
 			if (previewer) previewer.style.display = "none";
 
-			// 5. Re-highlight paths (all will be red with no images)
+			// 4. Re-highlight paths (all will be red with no images)
 			highlightPathsWithoutMatchingImages();
 		});
 
@@ -4962,37 +4955,11 @@ import "../styles.css";
 				});
 			};
 
-			if (
-				document
-					.getElementById("image-carousel-container")
-					.classList.contains("hidden")
-			) {
-				document
-					.getElementById("image-carousel-container")
-					.classList.remove("hidden");
-				document
-					.getElementById("image-carousel-container")
-					.classList.add("flex");
-			}
-
 			Promise.all(Array.from(files).map(readFile))
 				.then((results) => {
 					imageList.splice(0, imageList.length);
 					imageList.push(...results);
-					const imageListCarousel = document.getElementById(
-						"image-list-carousel",
-					);
-					imageListCarousel.innerHTML = "";
-					imageList.forEach((image) => {
-						const listItem = document.createElement("li");
-						listItem.style.height = "100%";
-						const imageElement = document.createElement("img");
-						imageElement.src = image.data;
-						imageElement.style.height = "60px";
-						// imageElement.setAttribute("data-name", image.name)
-						listItem.appendChild(imageElement);
-						imageListCarousel.appendChild(listItem);
-					});
+					renderImageListCarousel();
 					
 					// Only set up preview if SVG exists
 					const svgElement = document.getElementById("svg-container")?.querySelector("svg");
@@ -5532,7 +5499,7 @@ import "../styles.css";
 				return;
 			}
 			if (shapeBenchmarkCandidates.length === 0) {
-				showToast("Load benchmark images in the Silhouette benchmark panel", "warning");
+				showToast("Load benchmark images via the Silhouette button", "warning");
 				return;
 			}
 			let totalTasks = 0;
@@ -6068,8 +6035,9 @@ import "../styles.css";
 						return;
 					}
 					if (shapeBenchmarkCandidates.length === 0) {
-						showToast("Load benchmark images in the Silhouette benchmark panel", "warning");
+						showToast("Load benchmark images via the Silhouette button", "warning");
 						if (scoresEl) scoresEl.textContent = "No benchmark images loaded";
+						openShapeBenchmarkDialog();
 						return;
 					}
 					const benchPathIdEarly =
@@ -6080,6 +6048,7 @@ import "../styles.css";
 						.replace(/>/g, "&gt;")
 						.replace(/"/g, "&quot;");
 					shapeBenchCarouselDismissedPathId = null;
+					openShapeBenchmarkDialog();
 					const benchResultsWrap = document.getElementById("shape-benchmark-results");
 					if (benchResultsWrap) {
 						benchResultsWrap.classList.remove("hidden");
@@ -8871,20 +8840,33 @@ import "../styles.css";
 			loadFromBridge();
 		})();
 
-		// Collapsible "Silhouette benchmark (experimental)" section — hidden by default.
+		function openShapeBenchmarkDialog() {
+			const toggle = document.getElementById("shape-benchmark-toggle");
+			const dialog = document.getElementById("shape-benchmark-dialog") as HTMLDialogElement | null;
+			if (!dialog || dialog.open) return;
+			toggle?.setAttribute("aria-expanded", "true");
+			dialog.showModal();
+		}
+
+		// Silhouette benchmark controls open in a dialog from the compact button.
 		(function setupSilhouetteBenchToggle() {
 			const toggle = document.getElementById("shape-benchmark-toggle");
-			const body = document.getElementById("shape-benchmark-body");
-			const chevron = document.getElementById("shape-benchmark-toggle-chevron");
-			if (!toggle || !body) return;
-			const setOpen = (open: boolean) => {
-				body.classList.toggle("hidden", !open);
-				toggle.setAttribute("aria-expanded", open ? "true" : "false");
-				if (chevron) chevron.style.transform = open ? "rotate(180deg)" : "";
-			};
-			setOpen(false); // collapsed by default
+			const dialog = document.getElementById("shape-benchmark-dialog") as HTMLDialogElement | null;
+			const closeBtn = document.getElementById("shape-benchmark-dialog-close");
+			if (!toggle || !dialog) return;
 			toggle.addEventListener("click", () => {
-				setOpen(body.classList.contains("hidden"));
+				openShapeBenchmarkDialog();
+			});
+			const closeDialog = () => {
+				dialog.close();
+				toggle.setAttribute("aria-expanded", "false");
+			};
+			closeBtn?.addEventListener("click", closeDialog);
+			dialog.addEventListener("close", () => {
+				toggle.setAttribute("aria-expanded", "false");
+			});
+			dialog.addEventListener("click", (e) => {
+				if (e.target === dialog) closeDialog();
 			});
 		})();
 	</script>
