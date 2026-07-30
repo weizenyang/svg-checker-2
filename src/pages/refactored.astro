@@ -1238,11 +1238,105 @@ import "../styles.css";
 
 			// Process based on mode
 			if (convertedData.mode === 'refactored') {
-				console.log('Processing refactored mode assets');
+				console.log('Processing refactored mode assets', {
+					workflow: convertedData.workflow,
+					images: convertedData.images?.length || 0,
+					unitFloorplans: convertedData.unitFloorplans?.length || 0,
+					csv: convertedData.cameraCSV ? convertedData.cameraCSV.csvName : null
+				});
+
+				const isPreviewThumb = (name) => /_w\d+_q\d+/i.test(name || '') || /_thumb/i.test(name || '');
+				const isUnitFloorplanName = (name) => {
+					const n = name || '';
+					return n.includes('backplate_image_floorplan') && !n.includes('tower-floorplate');
+				};
+
+				const svgImages = (convertedData.images || []).filter(img => img.mimeType === 'image/svg+xml');
+				let unitFloorplans = [];
+				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
+					unitFloorplans = convertedData.unitFloorplans.filter(img => !isPreviewThumb(img.imageName));
+				}
+				// Also pick unit rasters that accidentally arrived in images[]
+				(convertedData.images || []).forEach(img => {
+					if (img.mimeType === 'image/svg+xml') return;
+					if (!isUnitFloorplanName(img.imageName || '')) return;
+					if (isPreviewThumb(img.imageName)) return;
+					if (!unitFloorplans.some(u => u.imageName === img.imageName)) {
+						unitFloorplans.push(img);
+					}
+				});
+
+				const workflow =
+					convertedData.workflow ||
+					(svgImages.length === 0 && unitFloorplans.length > 0 ? 'unit-floorplan' : 'tower-qa');
+
+				// ------------------------------------------------------------------
+				// Unit floorplan edit: CSV + raster backplate. Never require tower SVG.
+				// Same load path as the Floorplan Generator bridge (image then CSV).
+				// ------------------------------------------------------------------
+				if (workflow === 'unit-floorplan' || (svgImages.length === 0 && unitFloorplans.length > 0)) {
+					console.log('📐 Unit-floorplan workflow — loading CSV + image (no tower SVG)');
+
+					try {
+						flipYX = false;
+						const yxToggle = document.getElementById("yx-flip");
+						if (yxToggle) yxToggle.checked = false;
+					} catch (e) {
+						console.warn('Could not set flipYX=false:', e);
+					}
+
+					const primary = unitFloorplans[0];
+					const csvInfo = convertedData.cameraCSV;
+
+					async function dataUrlToFile(dataUrl, filename, mimeHint) {
+						const res = await fetch(dataUrl);
+						const blob = await res.blob();
+						return new File([blob], filename, { type: mimeHint || blob.type || 'application/octet-stream' });
+					}
+
+					try {
+						const fpFile = await dataUrlToFile(
+							primary.data,
+							primary.imageName || 'backplate_image_floorplan.webp',
+							primary.mimeType
+						);
+						let csvFile = null;
+						if (csvInfo && csvInfo.data) {
+							csvFile = new File(
+								[csvInfo.data],
+								csvInfo.csvName || 'csv_floorplan.csv',
+								{ type: 'text/csv' }
+							);
+						}
+
+						if (csvFile) {
+							handleFileChange([fpFile], { pendingCsv: csvFile });
+						} else {
+							handleFileChange([fpFile]);
+							console.warn('📐 No CSV in API payload — image only');
+						}
+
+						// List siblings in Check Floorplans for switching overlays
+						window.unitFloorplans = unitFloorplans;
+						loadApiImagesToImageList(unitFloorplans, 'unitFloorplans', { quiet: true });
+
+						setupFtaCsvSaveButton(getProjectKey());
+						showToast(
+							csvFile
+								? `Loaded floorplan + CSV (${csvFile.name})`
+								: `Loaded floorplan image (no CSV found)`,
+							'success'
+						);
+					} catch (e) {
+						console.error('📐 Unit-floorplan load failed:', e);
+						showToast('Failed to load floorplan/CSV from Project Opener', 'error');
+					}
+					return;
+				}
 
 				let backgroundImages = [];
 
-				// Load SVG floorplates and collect background images
+				// Load SVG floorplates and collect background images (tower QA only)
 				if (convertedData.images && convertedData.images.length > 0) {
 					console.log('Processing images array:', convertedData.images.length, 'items');
 
@@ -1253,7 +1347,6 @@ import "../styles.css";
 
 				// Separate SVGs from background images (tower floorplates)
 				// Also filter out unit floorplan images (they should be in unitFloorplans array, not images)
-				const svgImages = convertedData.images.filter(img => img.mimeType === 'image/svg+xml');
 				backgroundImages = convertedData.images.filter(img => {
 					// Exclude SVGs
 					if (img.mimeType === 'image/svg+xml') return false;
@@ -1301,11 +1394,7 @@ import "../styles.css";
 				}) : [];
 
 				// Combine unitFloorplans from both sources
-				let allUnitFloorplans = [];
-				if (convertedData.unitFloorplans && convertedData.unitFloorplans.length > 0) {
-					allUnitFloorplans = convertedData.unitFloorplans;
-					console.log('📋 Found unitFloorplans array:', convertedData.unitFloorplans.length, 'items');
-				}
+				let allUnitFloorplans = unitFloorplans.slice();
 				if (unitFloorplanImagesFromImagesArray.length > 0) {
 					console.log('📋 Found unit floorplan images in images array:', unitFloorplanImagesFromImagesArray.length, 'items');
 					// Merge with existing unitFloorplans (avoid duplicates)
@@ -1526,8 +1615,8 @@ import "../styles.css";
 			}).catch((err) => console.error('Error loading floorplan images:', err));
 		}
 
-		// Load API images into imageList for overlay functionality
-		function loadApiImagesToImageList(apiImages, source = 'unknown') {
+		// Load API images into imageList for overlay / check-floorplans list
+		function loadApiImagesToImageList(apiImages, source = 'unknown', opts = {}) {
 			console.log(`🔄 loadApiImagesToImageList called with ${apiImages.length} images from source: ${source}`);
 			console.log('API images:', apiImages.map(img => ({ name: img.imageName, mimeType: img.mimeType, dataLength: img.data?.length })));
 
@@ -1536,68 +1625,121 @@ import "../styles.css";
 				return;
 			}
 
-			// Clear existing images only if this is the first load
 			if (imageList.length === 0) {
 				console.log('Clearing existing imageList');
 				imageList.splice(0, imageList.length);
 			}
 
-			// Add API images to imageList
 			let addedCount = 0;
 			apiImages.forEach(img => {
 				console.log(`Adding image: ${img.imageName}, mimeType: ${img.mimeType}, data length: ${img.data?.length}`);
 				imageList.push({
 					name: img.imageName,
-					data: img.data // Already converted to data URL format
+					data: img.data
 				});
 				addedCount++;
 			});
 
 			console.log(`Added ${addedCount} images to imageList. Total images now: ${imageList.length}`);
 
-			// Show the parent image-list-container first
 			const imageListContainer = document.getElementById("image-list-container");
-			console.log('Image list container element:', imageListContainer);
 			if (imageListContainer) {
-				console.log('Image list container classes before:', imageListContainer.classList.value);
 				if (imageListContainer.classList.contains("hidden")) {
-					console.log('Removing "hidden" class from image-list-container');
 					imageListContainer.classList.remove("hidden");
 				}
-				console.log('Image list container classes after:', imageListContainer.classList.value);
 			} else {
 				console.error('Image list container not found!');
 			}
 
-			renderImageListCarousel();
-			console.log('Updated compact image list window / dialog thumbnails');
+			if (typeof renderImageListCarousel === 'function') {
+				try { renderImageListCarousel(); } catch (e) { /* optional */ }
+			}
 
-			// Set up image overlay functionality
-			// Wait a bit for SVG to be fully loaded into DOM
+			// Tower-QA overlay: attach preview listeners when an SVG is already present
 			setTimeout(() => {
 				const currentSVG = document.getElementById("svg-container")?.querySelector("svg");
-				console.log('Current SVG element:', currentSVG);
 				if (currentSVG) {
-					console.log('Setting up previewBackplate for current SVG');
 					previewBackplate(currentSVG);
-				} else {
-					console.log('No current SVG found, previewBackplate not called');
 				}
-
-				// Also set up overlay for any existing SVGs in importedSVGs
 				if (importedSVGs.length > 0) {
-					console.log(`Setting up previewBackplate for ${importedSVGs.length} imported SVGs`);
-					importedSVGs.forEach((svgInfo, index) => {
-						console.log(`Setting up overlay for imported SVG ${index}: ${svgInfo.name}`);
+					importedSVGs.forEach((svgInfo) => {
 						previewBackplate(svgInfo.element);
 					});
 				}
 			}, 100);
 
-			console.log(`Successfully loaded ${apiImages.length} images into overlay system from ${source}`);
+			console.log(`Successfully loaded ${apiImages.length} images from ${source}`);
+			if (!opts.quiet) {
+				showToast(`Loaded ${apiImages.length} floorplan image(s)`, 'success');
+			}
+		}
 
-			// Show toast notification that floorplans are loaded
-			showToast(`Loaded ${apiImages.length} floorplan image(s) for overlay`, 'success');
+		/**
+		 * Save edited room-label CSV back to the FTA file opened by Project Opener.
+		 * Mirrors the Floorplan Generator bridge "Save to Floorplan Generator" button.
+		 */
+		function setupFtaCsvSaveButton(projectKey) {
+			if (document.getElementById("fta-save-csv-btn")) return;
+			const exportBtn = document.getElementById("export-csv-layer");
+			if (!exportBtn || !exportBtn.parentElement) return;
+
+			const btn = document.createElement("button");
+			btn.id = "fta-save-csv-btn";
+			btn.type = "button";
+			btn.className = exportBtn.className || "button-style";
+			btn.style.marginBottom = "10px";
+			btn.style.marginLeft = "8px";
+			btn.style.background = "#2a6";
+			btn.style.color = "#fff";
+			btn.textContent = "Save CSV to FTA";
+			btn.title = "Write edited points back to the csv_floorplan file under For_The_App";
+
+			btn.addEventListener("click", async () => {
+				btn.disabled = true;
+				try {
+					const svg = document.querySelector("#svg-container svg");
+					if (!svg) {
+						showToast("No floorplan canvas to save from", "error");
+						return;
+					}
+					const circles = Array.from(svg.querySelectorAll("g circle"));
+					const rows = [];
+					for (const c of circles) {
+						const id = c.getAttribute("data-name") || c.getAttribute("id") || "";
+						const cx = c.getAttribute("cx");
+						const cy = c.getAttribute("cy");
+						if (!id || cx == null || cy == null) continue;
+						rows.push(`${id},${cx},${cy}`);
+					}
+					if (rows.length === 0) {
+						showToast("No points to save", "warning");
+						return;
+					}
+					const body = rows.join("\n") + "\n";
+					const key = projectKey || getProjectKey() || "default";
+					const resp = await fetch(`${API_BASE_URL}/api/project/${encodeURIComponent(key)}/csv`, {
+						method: "PUT",
+						headers: { "Content-Type": "text/csv" },
+						body,
+					});
+					if (!resp.ok) {
+						const txt = await resp.text();
+						throw new Error(`HTTP ${resp.status}: ${txt}`);
+					}
+					const out = await resp.json().catch(() => ({}));
+					showToast(
+						out.written ? `Saved to FTA: ${out.written}` : "Saved CSV to FTA",
+						"success"
+					);
+				} catch (e) {
+					console.error("[ FTA Save ] failed:", e);
+					showToast("Save to FTA failed: " + (e && e.message ? e.message : e), "error");
+				} finally {
+					btn.disabled = false;
+				}
+			});
+
+			exportBtn.parentElement.appendChild(btn);
 		}
 
 		// Show toast notification
