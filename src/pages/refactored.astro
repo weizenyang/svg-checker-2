@@ -3321,7 +3321,7 @@ import "../styles.css";
 					console.log(isVideo ? "Video name:" : "Image name:", mediaFile.name, "-> last 2 segments:", mediaLastTwoSegments)
 					console.log(importedSVGs)
 
-					const applyToMatchedSvgs = (rasterW, rasterH) => {
+					const applyToMatchedSvgs = () => {
 					// Loop through the imported SVG objects to find a matching name
 					importedSVGs.forEach((svgObj) => {
 						console.log("SVGOBJ")
@@ -3392,15 +3392,10 @@ import "../styles.css";
 								console.log("Adding new background video to SVG");
 								svgElement.insertBefore(foreignObject, svgElement.firstChild);
 							} else {
-								const nw =
-									rasterW != null
-										? rasterW
-										: Number(viewBox[2]) || 4096;
-								const nh =
-									rasterH != null
-										? rasterH
-										: Number(viewBox[3]) || 4096;
-								svgElement.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
+								// Keep existing viewBox (4096×4096); CSV coords are authored in that space.
+								// Stretch the bitmap to fill — do not resize viewBox to naturalWidth.
+								const nw = Number(viewBox[2]) || 4096;
+								const nh = Number(viewBox[3]) || 4096;
 								const svgImage = document.createElementNS(
 									"http://www.w3.org/2000/svg",
 									"image",
@@ -3423,19 +3418,7 @@ import "../styles.css";
 					});
 					};
 
-					if (isVideo) {
-						applyToMatchedSvgs(null, null);
-					} else {
-						const probe = new Image();
-						probe.onload = () => {
-							applyToMatchedSvgs(
-								probe.naturalWidth || undefined,
-								probe.naturalHeight || undefined,
-							);
-						};
-						probe.onerror = () => applyToMatchedSvgs(null, null);
-						probe.src = contents;
-					}
+					applyToMatchedSvgs();
 				};
 				reader.readAsDataURL(mediaFile);
 			});
@@ -3682,50 +3665,38 @@ import "../styles.css";
 					} else {
 						// Default <image> preserveAspectRatio is xMidYMid meet, which letterboxes
 						// inside width×height while CSV coords use the full viewBox — markers look
-						// shifted (often upward). Match viewBox + image rect to bitmap pixels.
+						// shifted (often upward). Fill the existing viewBox; never resize it to
+						// naturalWidth (e.g. 4320) — production coords are always 4096-space.
 						const runPendingCsv = () => {
 							if (pendingCsvFollowUp) {
 								const pc = pendingCsvFollowUp;
 								queueMicrotask(() => handleFileChange([pc]));
 							}
 						};
-						const fallbackW = Number(svgViewbox[2]) || 4096;
-						const fallbackH = Number(svgViewbox[3]) || 4096;
-						const placeBg = (nw, nh) => {
-							internalSVG.setAttribute("viewBox", `0 0 ${nw} ${nh}`);
-							const svgImage = document.createElementNS(
-								"http://www.w3.org/2000/svg",
-								"image",
-							);
-							svgImage.setAttributeNS(null, "href", contents);
-							svgImage.setAttributeNS(null, "x", "0");
-							svgImage.setAttributeNS(null, "y", "0");
-							svgImage.setAttributeNS(null, "width", String(nw));
-							svgImage.setAttributeNS(null, "height", String(nh));
-							svgImage.setAttributeNS(
-								null,
-								"preserveAspectRatio",
-								"none",
-							);
-							svgImage.setAttributeNS(
-								null,
-								"data-original-filename",
-								file.name || "",
-							);
-							console.log("Adding new background image");
-							internalSVG.insertBefore(svgImage, internalSVG.firstChild);
-							runPendingCsv();
-						};
-						const probe = new Image();
-						probe.onload = () => {
-							const nw = probe.naturalWidth || fallbackW;
-							const nh = probe.naturalHeight || fallbackH;
-							placeBg(nw, nh);
-						};
-						probe.onerror = () => {
-							placeBg(fallbackW, fallbackH);
-						};
-						probe.src = contents;
+						const vbW = Number(svgViewbox[2]) || 4096;
+						const vbH = Number(svgViewbox[3]) || 4096;
+						const svgImage = document.createElementNS(
+							"http://www.w3.org/2000/svg",
+							"image",
+						);
+						svgImage.setAttributeNS(null, "href", contents);
+						svgImage.setAttributeNS(null, "x", "0");
+						svgImage.setAttributeNS(null, "y", "0");
+						svgImage.setAttributeNS(null, "width", String(vbW));
+						svgImage.setAttributeNS(null, "height", String(vbH));
+						svgImage.setAttributeNS(
+							null,
+							"preserveAspectRatio",
+							"none",
+						);
+						svgImage.setAttributeNS(
+							null,
+							"data-original-filename",
+							file.name || "",
+						);
+						console.log("Adding new background image");
+						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
+						runPendingCsv();
 					}
 					if (pendingCsvFollowUp && isVideo) {
 						const pc = pendingCsvFollowUp;
