@@ -68,6 +68,16 @@ import "../styles.css";
 				fill: #ef4444 !important;
 				fill-opacity: 0.6;
 			}
+
+			/* CSV point → path collision (editor only; stripped on SVG export) */
+			path.csv-collision-single {
+				fill: #2563eb !important;
+				fill-opacity: 0.55;
+			}
+			path.csv-collision-multi {
+				fill: #dc2626 !important;
+				fill-opacity: 0.55;
+			}
 		</style>
 	</head>
 	<body class="">
@@ -174,6 +184,7 @@ import "../styles.css";
 						class="input-style"
 						id="myFile"
 						name="filename"
+						multiple
 						style="display:none; "
 					/>
 					<label
@@ -310,6 +321,7 @@ import "../styles.css";
 								type="button"
 							>
 								Export SVG
+								<span style="margin-left: 8px" class="boxed">4096px</span>
 							</button>
 							<button
 								id="export-csv-layer"
@@ -493,7 +505,7 @@ import "../styles.css";
 					<div class="output" id="svg-container">
 						<div id="svg-empty-state" class="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none select-none">
 							<img src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http://www.w3.org/2000/svg%27%20width%3D%2740%27%20height%3D%2740%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%23d4d4d8%27%20stroke-width%3D%271.2%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpath%20d%3D%27M21%2015v4a2%202%200%200%201-2%202H5a2%202%200%200%201-2-2v-4%27/%3E%3Cpolyline%20points%3D%2717%208%2012%203%207%208%27/%3E%3Cline%20x1%3D%2712%27%20y1%3D%273%27%20x2%3D%2712%27%20y2%3D%2715%27/%3E%3C/svg%3E" width="40" height="40" alt="" aria-hidden="true" />
-							<p style="font-size:0.82rem;color:#a1a1aa;font-weight:500;margin:0;">Drop an SVG or click Import</p>
+							<p style="font-size:0.82rem;color:#a1a1aa;font-weight:500;margin:0;">Drop an SVG or CSV, or click Import</p>
 						</div>
 					</div>
 				</div>
@@ -2733,6 +2745,9 @@ import "../styles.css";
 			if (hasMovedDuringDrag) {
 				// Save the state after the move/scale operation completes
 				saveState();
+				if (csvCollisionActive) {
+					applyCsvPathCollisions();
+				}
 			} else if (hasSavedStateForCurrentOperation) {
 				// If we saved state on mouse down but didn't move, remove it to avoid clutter
 				// (user just clicked without dragging)
@@ -2830,8 +2845,21 @@ import "../styles.css";
 			}
 		});
 
+		function getOrCreatePointLayer() {
+			const svg = globalSvgContainer.querySelector("svg");
+			if (!svg) return null;
+			let g = svg.querySelector("#g-instance");
+			if (!g) {
+				g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+				g.setAttribute("id", "g-instance");
+				svg.appendChild(g);
+			}
+			return g;
+		}
+
 		function spawnCircle(id, cx, cy, data) {
-			const g = globalSvgContainer.querySelector("g");
+			const g = getOrCreatePointLayer();
+			if (!g) return null;
 			const circle = document.createElementNS(
 				"http://www.w3.org/2000/svg",
 				"circle",
@@ -2848,6 +2876,245 @@ import "../styles.css";
 			g.appendChild(circle);
 
 			return circle;
+		}
+
+		function isCsvFile(file) {
+			if (!file) return false;
+			const name = String(file.name || "").toLowerCase();
+			return (
+				file.type === "text/csv" ||
+				file.type === "application/vnd.ms-excel" ||
+				file.type === "application/csv" ||
+				name.endsWith(".csv")
+			);
+		}
+
+		function isSvgFile(file) {
+			if (!file) return false;
+			const name = String(file.name || "").toLowerCase();
+			return file.type === "image/svg+xml" || name.endsWith(".svg");
+		}
+
+		function toSpacedTitleCase(raw) {
+			if (raw == null) return "";
+			const spaced = String(raw)
+				.replace(/[_-]+/g, " ")
+				.replace(/([a-z])([A-Z])/g, "$1 $2")
+				.replace(/\s+/g, " ")
+				.trim();
+			if (!spaced) return "";
+			return spaced.replace(/\S+/g, (word) => {
+				return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+			});
+		}
+
+		function getCsvPointCoords(el) {
+			let x = parseFloat(el.getAttribute("cx"));
+			let y = parseFloat(el.getAttribute("cy"));
+			if (isNaN(x) || isNaN(y)) {
+				x = parseFloat(el.getAttribute("data-center-x"));
+				y = parseFloat(el.getAttribute("data-center-y"));
+			}
+			return { x, y };
+		}
+
+		function pathContainsUserPoint(path, svg, x, y) {
+			if (!path || !svg || !isFinite(x) || !isFinite(y)) return false;
+			try {
+				const pt = svg.createSVGPoint();
+				pt.x = x;
+				pt.y = y;
+				if (typeof path.isPointInFill === "function" && path.isPointInFill(pt)) {
+					return true;
+				}
+				if (typeof path.isPointInStroke === "function" && path.isPointInStroke(pt)) {
+					return true;
+				}
+			} catch (_err) {
+				/* path not rendered or geometry unavailable */
+			}
+			return false;
+		}
+
+		function pathArea(path) {
+			try {
+				const box = path.getBBox();
+				return Math.abs(box.width * box.height);
+			} catch (_err) {
+				return Number.POSITIVE_INFINITY;
+			}
+		}
+
+		function restoreCsvPathCollisions(svg) {
+			if (!svg) return;
+			svg.querySelectorAll("path[data-csv-collision]").forEach((path) => {
+				const origId = path.getAttribute("data-csv-original-id");
+				const origName = path.getAttribute("data-csv-original-name");
+				if (origId !== null) path.setAttribute("id", origId);
+				if (origName) path.setAttribute("name", origName);
+				else path.removeAttribute("name");
+				path.removeAttribute("data-csv-original-id");
+				path.removeAttribute("data-csv-original-name");
+				path.removeAttribute("data-csv-collision");
+				path.classList.remove("csv-collision-single", "csv-collision-multi");
+			});
+		}
+
+		function takeUniqueSvgId(desired, usedIds) {
+			const base = desired == null || desired === "" ? "-" : String(desired);
+			if (!usedIds.has(base)) {
+				usedIds.add(base);
+				return base;
+			}
+			let n = 2;
+			let candidate = `${base}_${n}`;
+			while (usedIds.has(candidate)) {
+				n += 1;
+				candidate = `${base}_${n}`;
+			}
+			usedIds.add(candidate);
+			return candidate;
+		}
+
+		function refreshIdListFromSvg(svg) {
+			const listEl = document.getElementById("id-list");
+			if (!listEl || !svg) return;
+			listEl.innerHTML = "";
+			svg.querySelectorAll("[id]").forEach((el) => {
+				if (el === svg) return;
+				if (el.closest("#g-instance")) return;
+				const li = document.createElement("li");
+				const name = el.getAttribute("name");
+				li.textContent =
+					name && name !== el.id ? `${el.id}  ${name}` : el.id;
+				li.style.listStyle = "none";
+				li.style.padding = "0.5em 0em";
+				listEl.append(li);
+			});
+		}
+
+		function stripCsvCollisionFromClone(svgClone) {
+			if (!svgClone) return;
+			svgClone.querySelectorAll("path[data-csv-collision]").forEach((path) => {
+				const origId = path.getAttribute("data-csv-original-id");
+				const origName = path.getAttribute("data-csv-original-name");
+				if (origId !== null) path.setAttribute("id", origId);
+				if (origName) path.setAttribute("name", origName);
+				else path.removeAttribute("name");
+				path.removeAttribute("data-csv-original-id");
+				path.removeAttribute("data-csv-original-name");
+				path.removeAttribute("data-csv-collision");
+				path.classList.remove("csv-collision-single", "csv-collision-multi");
+			});
+			svgClone.querySelectorAll("#g-instance").forEach((g) => g.remove());
+			svgClone.querySelectorAll("circle").forEach((c) => c.remove());
+			svgClone.querySelectorAll("[data-triangle]").forEach((el) => el.remove());
+		}
+
+		let csvCollisionActive = false;
+
+		function applyCsvPathCollisions() {
+			const svg = document.querySelector("#svg-container svg");
+			if (!svg) {
+				csvCollisionActive = false;
+				return;
+			}
+
+			restoreCsvPathCollisions(svg);
+
+			const paths = Array.from(svg.querySelectorAll("path")).filter((path) => {
+				if (path.closest("#g-instance")) return false;
+				const d = path.getAttribute("d");
+				return d && d.trim().length > 0;
+			});
+			const points = Array.from(
+				svg.querySelectorAll("#g-instance circle, #g-instance [data-triangle]"),
+			);
+
+			if (paths.length === 0 || points.length === 0) {
+				csvCollisionActive = false;
+				refreshIdListFromSvg(svg);
+				return;
+			}
+
+			const hitsByPath = new Map();
+			points.forEach((pointEl, pointIndex) => {
+				const { x, y } = getCsvPointCoords(pointEl);
+				if (!isFinite(x) || !isFinite(y)) return;
+
+				const containing = paths.filter((path) =>
+					pathContainsUserPoint(path, svg, x, y),
+				);
+				if (containing.length === 0) return;
+
+				let chosen = containing[0];
+				if (containing.length > 1) {
+					let bestArea = pathArea(chosen);
+					for (let i = 1; i < containing.length; i++) {
+						const area = pathArea(containing[i]);
+						if (area < bestArea) {
+							bestArea = area;
+							chosen = containing[i];
+						}
+					}
+				}
+
+				if (!hitsByPath.has(chosen)) hitsByPath.set(chosen, []);
+				const rowAttr = pointEl.getAttribute("data-csv-row");
+				const rowIndex =
+					rowAttr != null && rowAttr !== ""
+						? rowAttr
+						: String(pointIndex);
+				const fullName = pointEl.getAttribute("data-fullname");
+				const rawName =
+					pointEl.getAttribute("id") ||
+					(fullName && fullName !== "undefined" ? fullName : "") ||
+					"";
+				hitsByPath.get(chosen).push({
+					rowIndex,
+					name: toSpacedTitleCase(rawName),
+				});
+			});
+
+			const usedIds = new Set();
+			svg.querySelectorAll("[id]").forEach((el) => {
+				if (el === svg) return;
+				if (el.closest("#g-instance")) return;
+				if (hitsByPath.has(el)) return;
+				if (el.id) usedIds.add(el.id);
+			});
+
+			hitsByPath.forEach((hits, path) => {
+				if (!path.hasAttribute("data-csv-original-id")) {
+					path.setAttribute(
+						"data-csv-original-id",
+						path.getAttribute("id") || "",
+					);
+					path.setAttribute(
+						"data-csv-original-name",
+						path.getAttribute("name") || "",
+					);
+				}
+
+				path.classList.remove("csv-collision-single", "csv-collision-multi");
+
+				if (hits.length === 1) {
+					const nextId = takeUniqueSvgId(String(hits[0].rowIndex), usedIds);
+					path.setAttribute("id", nextId);
+					path.setAttribute("name", hits[0].name || "-");
+					path.setAttribute("data-csv-collision", "single");
+					path.classList.add("csv-collision-single");
+				} else {
+					const nextId = takeUniqueSvgId("-", usedIds);
+					path.setAttribute("id", nextId);
+					path.setAttribute("name", "-");
+					path.setAttribute("data-csv-collision", "multi");
+					path.classList.add("csv-collision-multi");
+				}
+			});
+
+			csvCollisionActive = hitsByPath.size > 0;
+			refreshIdListFromSvg(svg);
 		}
 
 		//Listen to the UpdateValeusModal for circle spawn updates
@@ -3155,7 +3422,9 @@ import "../styles.css";
 		}
 
 		const processSVG = (svgElement) => {
-			const list = svgElement.querySelectorAll(`[id]`);
+			const list = Array.from(svgElement.querySelectorAll(`[id]`)).filter(
+				(el) => el !== svgElement && !el.closest("#g-instance"),
+			);
 			svgElement.setAttribute("data-csv-editor", "svg");
 			document.getElementById("id-list").innerHTML = "";
 
@@ -3178,6 +3447,7 @@ import "../styles.css";
 								: currentId;
 
 					const selected = svgElement.getElementById(`${currentId}`);
+					if (!selected) return;
 					const groupMatched = selected.id.match(regexGroupName);
 					const unitMatched = selected.id.match(regexUnitNumber);
 
@@ -3291,6 +3561,7 @@ import "../styles.css";
 						: "";
 
 			updateSVGNavigationUI();
+			requestAnimationFrame(() => applyCsvPathCollisions());
 		};
 
 		function getBaseName(fileName) {
@@ -3438,22 +3709,12 @@ import "../styles.css";
 			const pendingCsvFollowUp =
 				opts && opts.pendingCsv ? opts.pendingCsv : null;
 
-			// One drop with raster + CSV: decode background first, then CSV (parity with bridge + manual two-step load)
+			// Mixed drop: load SVG / raster first, then CSV so points land on the mounted canvas
 			if (!pendingCsvFollowUp && fileArr.length >= 2) {
-				const csvFile = fileArr.find(
-					(f) =>
-						f.type === "text/csv" ||
-						(f.name && String(f.name).toLowerCase().endsWith(".csv")),
-				);
-				const rasterFile = fileArr.find(
-					(f) =>
-						f.type === "image/jpeg" ||
-						f.type === "image/png" ||
-						f.type === "image/webp" ||
-						(f.type && f.type.startsWith("video/")),
-				);
-				if (csvFile && rasterFile) {
-					handleFileChange([rasterFile], { pendingCsv: csvFile });
+				const csvFile = fileArr.find((f) => isCsvFile(f));
+				const rest = fileArr.filter((f) => f !== csvFile);
+				if (csvFile && rest.length > 0) {
+					handleFileChange(rest, { pendingCsv: csvFile });
 					return;
 				}
 			}
@@ -3484,9 +3745,7 @@ import "../styles.css";
 			// 	globalSvgContainer.innerHTML = "";
 			// }
 			// importedSVGs = []; // Reset the array
-			let filesToProcess = fileArr.filter(
-				(file) => file.type === "image/svg+xml",
-			);
+			let filesToProcess = fileArr.filter((file) => isSvgFile(file));
 
 			// if (filesToProcess.length === 0) {
 			// 	alert("Please import valid SVG files.");
@@ -3513,7 +3772,7 @@ import "../styles.css";
 			console.log(fileArr.length)
 			if(fileArr.length > 1){
 				
-				if (file.type === "image/svg+xml") {
+				if (isSvgFile(file)) {
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
 						document.getElementById("image-list-container").classList.remove("hidden")
 					}
@@ -3537,6 +3796,10 @@ import "../styles.css";
 							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
 							loadFloorplanFilesToImageList(fileArr);
+							if (pendingCsvFollowUp) {
+								const pc = pendingCsvFollowUp;
+								queueMicrotask(() => handleFileChange([pc]));
+							}
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3548,10 +3811,15 @@ import "../styles.css";
 				file.type.startsWith("video/")
 			) {
 				handleDraggedImages(fileArr)
-			} else if (file.type === "text/csv") {
+				if (pendingCsvFollowUp) {
+					const pc = pendingCsvFollowUp;
+					queueMicrotask(() => handleFileChange([pc]));
+				}
+			} else if (isCsvFile(file)) {
+				// Fall through: treat first CSV in a multi-file drop
 			}
 			} else {
-				if (file.type === "image/svg+xml") {
+				if (isSvgFile(file)) {
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
 						document.getElementById("image-list-container").classList.remove("hidden")
 					}
@@ -3579,6 +3847,10 @@ import "../styles.css";
 							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
 							loadFloorplanFilesToImageList(fileArr);
+							if (pendingCsvFollowUp) {
+								const pc = pendingCsvFollowUp;
+								queueMicrotask(() => handleFileChange([pc]));
+							}
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -3704,7 +3976,7 @@ import "../styles.css";
 					}
 				};
 				reader.readAsDataURL(file);
-			} else if (file.type === "text/csv") {
+			} else if (isCsvFile(file)) {
 				if (
 					document
 						.getElementById("svg-container")
@@ -3759,16 +4031,12 @@ import "../styles.css";
 						document.getElementById("svg-container");
 
 					if (svgContainer.querySelector("svg")) {
-						//If SVG already exists
+						// Keep tower path groups; only replace previous point layer
 						svgContainer
 							.querySelector("svg")
-							.querySelectorAll("g")
+							.querySelectorAll("#g-instance")
 							.forEach((g) => {
-								if (g.id !== "Reference") {
-									g.remove();
-									console.log(g);
-									console.log("^ removed");
-								}
+								g.remove();
 							});
 					} else {
 						const newSVG = createNewSVG();
@@ -3817,6 +4085,10 @@ import "../styles.css";
 								: fields[0];
 
 							const data = [];
+							data.push({
+								field: "data-csv-row",
+								value: String(i),
+							});
 							if (floor) {
 								const floorData = {
 									field: "data-floor",
@@ -3825,12 +4097,12 @@ import "../styles.css";
 								data.push(floorData);
 							}
 
-							const fullName = {
-								// Custom attribute to be used as unique identifier for functions
-								field: "data-fullname",
-								value: fields[3],
-							};
-							data.push(fullName);
+							if (fields[3]) {
+								data.push({
+									field: "data-fullname",
+									value: fields[3],
+								});
+							}
 
 							globalFloors.push({
 								floor: floor,
@@ -3841,7 +4113,7 @@ import "../styles.css";
 									data,
 								),
 							});
-						} else {
+						} else if (i > 0 && fields[0] && fields[0].toLowerCase() !== "name") {
 							console.error(
 								`${
 									fields[0]
@@ -3957,6 +4229,7 @@ import "../styles.css";
 							totalCircles,
 						);
 					}
+					requestAnimationFrame(() => applyCsvPathCollisions());
 					// scaleBoundingBoxToFit(svgContainer.querySelector("svg"));
 				};
 				reader.readAsText(file);
@@ -6661,7 +6934,7 @@ import "../styles.css";
 		}
 
 		fileInput.addEventListener("change", () => {
-			handleFileChange(fileInput.files[0]);
+			handleFileChange(fileInput.files);
 		});
 
 		document
@@ -7253,19 +7526,23 @@ import "../styles.css";
 			var svg = document
 				.querySelector("#svg-container")
 				.querySelector("svg");
-			document.querySelectorAll("[id]").forEach((e) => {
-				const str = e.getAttribute("id");
-				e.setAttribute("data-name", str.replace(/\s+/g, "_"));
-			});
-			document.querySelectorAll("[group-attribute]").forEach((e) => {
-				e.removeAttribute("group-attribute");
-			});
-			document.querySelectorAll("[unit-attribute]").forEach((e) => {
-				e.removeAttribute("unit-attribute");
-			});
 			if (svg) {
+				var svgClone = svg.cloneNode(true);
+				stripCsvCollisionFromClone(svgClone);
+				svgClone.querySelectorAll("[id]").forEach((e) => {
+					const str = e.getAttribute("id");
+					if (str != null) {
+						e.setAttribute("data-name", str.replace(/\s+/g, "_"));
+					}
+				});
+				svgClone.querySelectorAll("[group-attribute]").forEach((e) => {
+					e.removeAttribute("group-attribute");
+				});
+				svgClone.querySelectorAll("[unit-attribute]").forEach((e) => {
+					e.removeAttribute("unit-attribute");
+				});
 				var serializer = new XMLSerializer();
-				var svgString = serializer.serializeToString(svg);
+				var svgString = serializer.serializeToString(svgClone);
 				var blob = new Blob([svgString], { type: "image/svg+xml" });
 				var url = URL.createObjectURL(blob);
 				var link = document.createElement("a");
@@ -7303,64 +7580,37 @@ import "../styles.css";
 					.querySelector("#svg-container")
 					.querySelector("svg");
 
-				const layers = Array.from(doc.querySelectorAll("g"))
+				const pointLayer = doc.querySelector("#g-instance");
+				const layerNodes = pointLayer
+					? [pointLayer]
+					: Array.from(doc.querySelectorAll("g"));
+				const layers = layerNodes
 					.map((layer, index) => {
-						if (
-							layer.getAttribute("id") != null ||
-							layer.getAttribute("id") != undefined
-						) {
-							if (
-								layer.getAttribute("id").toLowerCase() !=
-								"reference"
-							) {
-								console.log("Layer ID is found");
-								const id = layer
-									.getAttribute("id")
-									.replace("_", "");
-								const children = Array.from(layer.children).map(
-									(child) => {
-										console.log(child);
-										const childId = child.getAttribute(
-											"data-name",
-										)
-											? decodeHtml(
-													child.getAttribute(
-														"data-name",
-													),
-												)
-											: child.getAttribute("id");
-
-										const x = child.getAttribute("cx");
-										const y = child.getAttribute("cy");
-										return { id: childId, x, y };
-									},
-								);
-								console.log(id, children);
-								return { id, children };
-							}
-						} else {
-							console.log("Layer ID is null");
-							console.log(layer);
-							const id = `item-${index}`;
-							const children = Array.from(layer.children).map(
-								(child) => {
-									console.log(child);
-									const childId = child.getAttribute(
-										"data-name",
-									)
-										? decodeHtml(
-												child.getAttribute("data-name"),
-											)
-										: child.getAttribute("id");
-
-									const x = child.getAttribute("cx");
-									const y = child.getAttribute("cy");
-									return { id: childId, x, y };
-								},
-							);
-							console.log(id, children);
-							return { id, children };
+						const layerId = layer.getAttribute("id");
+						if (layerId && layerId.toLowerCase() === "reference") {
+							return undefined;
 						}
+						const id = layerId
+							? layerId.replace("_", "")
+							: `item-${index}`;
+						const children = Array.from(layer.children)
+							.filter((child) => {
+								const x = child.getAttribute("cx");
+								const y = child.getAttribute("cy");
+								return x != null && y != null;
+							})
+							.map((child) => {
+								const childId = child.getAttribute("data-name")
+									? decodeHtml(child.getAttribute("data-name"))
+									: child.getAttribute("id");
+								return {
+									id: childId,
+									x: child.getAttribute("cx"),
+									y: child.getAttribute("cy"),
+								};
+							});
+						if (children.length === 0) return undefined;
+						return { id, children };
 					})
 					.filter((layer) => layer !== undefined);
 
@@ -8447,7 +8697,7 @@ import "../styles.css";
 					continue;
 				}
 
-				const point = { x, y, z, dir, id, visible: true };
+				const point = { x, y, z, dir, id, visible: true, rowIndex: i };
 				projectData.push(point);
 
 				// Group by Z level
@@ -8673,6 +8923,9 @@ import "../styles.css";
 				mainPolygon.setAttribute('data-center-x', String(mainPx));
 				mainPolygon.setAttribute('data-center-y', String(mainPy));
 				mainPolygon.setAttribute('data-scale', '1');
+				if (pt.rowIndex != null) {
+					mainPolygon.setAttribute('data-csv-row', String(pt.rowIndex));
+				}
 				
 				mainPolygon.style.cursor = 'pointer';
 				console.log('Adding triangle to gInstance:', mainPolygon);
@@ -8680,6 +8933,7 @@ import "../styles.css";
 			});
 			
 			console.log('gInstance children count:', gInstance.children.length);
+			requestAnimationFrame(() => applyCsvPathCollisions());
 		}
 
 		function showProjectLabel(x, y, id, dir, z) {
