@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" id="_4bvb1m" data-name="4bvb1m" viewBox="0 0 4096 4096">
+  <path id="9" name="Powder Room" d="M2685.88,2178.76h-304.25v-95.9h11.96v-261.29h292.29v357.2Z"/>
+  <path id="laundry" d="M1908.95,1901.15h-120.69v-79.58h120.69v79.58Z"/>
+  <path id="4" name="Back Kitchen" d="M1908.95,1901.15v202.71h-120.69v-202.71"/>
+  <path id="powderroom" d="M2017.84,2021.05v82.81s-108.89,0-108.89,0v-82.81h108.89Z"/>
+  <path id="masterbedroom" d="M1788.26,1821.57v282.29h-175.07v-336.77h182.87v54.48h-7.8Z"/>
+  <path id="0" name="Master Bedroom" d="M1613.19,2098.26h-210.22v-331.16h210.22v331.16Z"/>
+  <path id="1" name="Guest Bedroom 1" d="M1588.43,2098.26v60.44h-6v286.43h-179.46v-346.86h185.46Z"/>
+  <path id="2" name="Guest Bedroom 2" d="M1582.43,2158.69h175.38v133.34h-19.4v153.08h-155.98v-286.43Z"/>
+  <path id="5" name="Bedroom 3" d="M1757.82,2158.69h245.57v108h-117.89v178.43h-147.09v-153.08h19.4v-133.34Z"/>
+  <path id="6" name="Maid Bedroom" d="M1885.5,2266.69h117.89v84.12h68.65v94.3h-186.53v-178.43Z"/>
+  <path id="8" name="Terrace" d="M2773.89,2178.76h-88.01v-357.2h-889.82v-54.48h-393.09v678.03h508.02v112.58h-545.37v-920.66h623.64v-85.78h784.63v627.51Z"/>
+  <path id="3" name="Family Living" d="M2116.09,1821.57 h277.51 v261.29 h-277.51 Z"/>
+  <path id="7" name="Show Kitchen" d="M2116.09,1821.57 L1908.95,1821.57 L1908.95,2021.05 L2017.84,2021.05 L2017.84,2073.51 L2116.09,2073.51 L2116.09,1821.57 Z"/>
+</svg>

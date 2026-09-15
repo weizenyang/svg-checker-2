@@ -397,10 +397,18 @@ h3 {
     transform: rotate(180deg);
 }
 
-/* ── Paths without matching floorplan images ─────────── */
-path.no-matching-floorplan {
+/* ── Path hover overlays (resting fill stays as in the SVG) ─────────── */
+path.no-matching-floorplan:hover {
     fill: #ef4444 !important;
     fill-opacity: 0.6;
+}
+path.csv-collision-single:hover {
+    fill: #2563eb !important;
+    fill-opacity: 0.55;
+}
+path.csv-collision-multi:hover {
+    fill: #dc2626 !important;
+    fill-opacity: 0.55;
 }
 
 /* ── Floor toggle drag styles ───────────────────────── */

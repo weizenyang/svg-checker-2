@@ -63,18 +63,18 @@ import "../styles.css";
 				color: #000;
 			}
 
-			/* Paths without matching floorplan images */
-			path.no-matching-floorplan {
+			/* Paths without matching floorplan images — hover only */
+			path.no-matching-floorplan:hover {
 				fill: #ef4444 !important;
 				fill-opacity: 0.6;
 			}
 
 			/* CSV point → path collision (editor only; stripped on SVG export) */
-			path.csv-collision-single {
+			path.csv-collision-single:hover {
 				fill: #2563eb !important;
 				fill-opacity: 0.55;
 			}
-			path.csv-collision-multi {
+			path.csv-collision-multi:hover {
 				fill: #dc2626 !important;
 				fill-opacity: 0.55;
 			}
@@ -1826,6 +1826,7 @@ import "../styles.css";
 					
 					// Update labels and other UI
 					spawnLabel();
+					applyCsvPathCollisions();
 				}
 			}
 		}
@@ -1924,6 +1925,15 @@ import "../styles.css";
 				//Set global var MouseInContainer
 				mouseInContainer = false;
 			});
+
+		document.getElementById("svg-container").addEventListener("mouseleave", () => {
+			document.querySelectorAll(".hovered").forEach((el) => {
+				el.classList.remove("hovered");
+				if (!el.classList.contains("svg-tool-selected")) {
+					el.style.fill = "";
+				}
+			});
+		});
 
 		var createNewSVG = () => {
 			// Create new SVG if it's not present
@@ -2157,15 +2167,25 @@ import "../styles.css";
 
 					document.getElementById("label").append(label);
 					currentSelected = e.srcElement;
-					e.srcElement.classList.add("hovered");
+					if (e.srcElement.nodeName.toLowerCase() !== "svg") {
+						e.srcElement.classList.add("hovered");
+					}
 				} else {
 					document.getElementById("tag").style.display = "none";
 					mouseInContainer = false;
 					// console.log(e.srcElement.parentNode.nodeName);
 				}
 
-				document.querySelectorAll(".hovered").forEach((e) => {
-					e.style.fill = "#87CEEB66";
+				document.querySelectorAll(".hovered").forEach((el) => {
+					if (el.nodeName.toLowerCase() === "svg") return;
+					if (
+						el.classList.contains("no-matching-floorplan") ||
+						el.classList.contains("csv-collision-single") ||
+						el.classList.contains("csv-collision-multi")
+					) {
+						return;
+					}
+					el.style.fill = "#87CEEB66";
 				});
 			});
 
@@ -2468,6 +2488,7 @@ import "../styles.css";
 						hasMovedDuringDrag = true; // Track that we moved something
 					}
 
+					if (hasMovedDuringDrag) scheduleCsvPathCollisions();
 					// console.log("Mouse Down + Move");
 				}
 			} else if (rightMouseDown && mouseInContainer) {
@@ -2492,6 +2513,7 @@ import "../styles.css";
 						scaleElement(item, scaleFactor, anchorPoint),
 					);
 					hasMovedDuringDrag = true; // Track that we scaled something
+					scheduleCsvPathCollisions();
 
 					console.log("Scaling all items");
 				}
@@ -2745,9 +2767,7 @@ import "../styles.css";
 			if (hasMovedDuringDrag) {
 				// Save the state after the move/scale operation completes
 				saveState();
-				if (csvCollisionActive) {
-					applyCsvPathCollisions();
-				}
+				applyCsvPathCollisions();
 			} else if (hasSavedStateForCurrentOperation) {
 				// If we saved state on mouse down but didn't move, remove it to avoid clutter
 				// (user just clicked without dragging)
@@ -2895,17 +2915,72 @@ import "../styles.css";
 			return file.type === "image/svg+xml" || name.endsWith(".svg");
 		}
 
+		const ROOM_NAME_TOKENS = [
+			"master",
+			"guest",
+			"maid",
+			"family",
+			"formal",
+			"show",
+			"back",
+			"boh",
+			"powder",
+			"bedroom",
+			"bathroom",
+			"kitchen",
+			"living",
+			"laundry",
+			"terrace",
+			"wardrobe",
+			"dining",
+			"dinning",
+			"corridor",
+			"entrance",
+			"room",
+		].sort((a, b) => b.length - a.length);
+
+		function splitCompoundRoomWord(word) {
+			if (/^\d+$/.test(word)) return [word];
+			let rest = String(word || "").toLowerCase();
+			const parts = [];
+			while (rest.length) {
+				if (/^\d+/.test(rest)) {
+					const n = rest.match(/^\d+/)[0];
+					parts.push(n);
+					rest = rest.slice(n.length);
+					continue;
+				}
+				const tok = ROOM_NAME_TOKENS.find((t) => rest.startsWith(t));
+				if (tok) {
+					parts.push(tok);
+					rest = rest.slice(tok.length);
+				} else {
+					parts.push(rest);
+					break;
+				}
+			}
+			return parts;
+		}
+
 		function toSpacedTitleCase(raw) {
 			if (raw == null) return "";
 			const spaced = String(raw)
 				.replace(/[_-]+/g, " ")
 				.replace(/([a-z])([A-Z])/g, "$1 $2")
+				.replace(/([a-zA-Z])(\d+)/g, "$1 $2")
 				.replace(/\s+/g, " ")
 				.trim();
 			if (!spaced) return "";
-			return spaced.replace(/\S+/g, (word) => {
-				return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-			});
+			return spaced
+				.split(" ")
+				.filter(Boolean)
+				.flatMap(splitCompoundRoomWord)
+				.map((word) => {
+					if (/^\d+$/.test(word)) return word;
+					if (word.toLowerCase() === "boh") return "BOH";
+					return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+				})
+				.join(" ");
 		}
 
 		function getCsvPointCoords(el) {
@@ -2927,13 +3002,54 @@ import "../styles.css";
 				if (typeof path.isPointInFill === "function" && path.isPointInFill(pt)) {
 					return true;
 				}
-				if (typeof path.isPointInStroke === "function" && path.isPointInStroke(pt)) {
-					return true;
-				}
 			} catch (_err) {
 				/* path not rendered or geometry unavailable */
 			}
 			return false;
+		}
+
+		function bboxContainsPoint(path, x, y) {
+			if (!path || !isFinite(x) || !isFinite(y)) return false;
+			try {
+				const box = path.getBBox();
+				return (
+					x >= box.x &&
+					x <= box.x + box.width &&
+					y >= box.y &&
+					y <= box.y + box.height
+				);
+			} catch (_err) {
+				return false;
+			}
+		}
+
+		function pickSmallestPath(paths) {
+			if (!paths.length) return null;
+			let chosen = paths[0];
+			let bestArea = pathArea(chosen);
+			for (let i = 1; i < paths.length; i++) {
+				const area = pathArea(paths[i]);
+				if (area < bestArea) {
+					bestArea = area;
+					chosen = paths[i];
+				}
+			}
+			return chosen;
+		}
+
+		function csvPointRowIndex(pointEl, fallbackIndex) {
+			const rowAttr = pointEl.getAttribute("data-csv-row");
+			if (rowAttr != null && rowAttr !== "") return String(rowAttr);
+			return String(fallbackIndex);
+		}
+
+		function csvPointDisplayName(pointEl) {
+			const fullName = pointEl.getAttribute("data-fullname");
+			const rawName =
+				pointEl.getAttribute("id") ||
+				(fullName && fullName !== "undefined" ? fullName : "") ||
+				"";
+			return toSpacedTitleCase(rawName);
 		}
 
 		function pathArea(path) {
@@ -2993,25 +3109,72 @@ import "../styles.css";
 			});
 		}
 
+		function convertShapesToPaths(svg) {
+			if (!svg) return;
+			const ns = "http://www.w3.org/2000/svg";
+			svg.querySelectorAll("polygon, polyline, rect").forEach((el) => {
+				if (el.closest("#g-instance, defs, clipPath, mask, symbol")) return;
+				const tag = el.tagName.toLowerCase();
+				let d = "";
+				if (tag === "polygon" || tag === "polyline") {
+					const raw = el.getAttribute("points") || "";
+					const nums = raw.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+					if (nums.length < 4) return;
+					const pairs = [];
+					for (let i = 0; i < nums.length; i += 2) {
+						if (!isFinite(nums[i]) || !isFinite(nums[i + 1])) continue;
+						pairs.push(`${nums[i]},${nums[i + 1]}`);
+					}
+					if (pairs.length < 2) return;
+					d = `M${pairs.join(" L")}${tag === "polygon" ? " Z" : ""}`;
+				} else if (tag === "rect") {
+					const x = parseFloat(el.getAttribute("x") || "0");
+					const y = parseFloat(el.getAttribute("y") || "0");
+					const w = parseFloat(el.getAttribute("width") || "0");
+					const h = parseFloat(el.getAttribute("height") || "0");
+					if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h)) return;
+					d = `M${x},${y} h${w} v${h} h${-w} Z`;
+				}
+				const path = document.createElementNS(ns, "path");
+				Array.from(el.attributes).forEach((attr) => {
+					if (["points", "x", "y", "width", "height", "rx", "ry"].includes(attr.name)) return;
+					path.setAttribute(attr.name, attr.value);
+				});
+				path.setAttribute("d", d);
+				el.replaceWith(path);
+			});
+		}
+
 		function stripCsvCollisionFromClone(svgClone) {
 			if (!svgClone) return;
-			svgClone.querySelectorAll("path[data-csv-collision]").forEach((path) => {
-				const origId = path.getAttribute("data-csv-original-id");
-				const origName = path.getAttribute("data-csv-original-name");
-				if (origId !== null) path.setAttribute("id", origId);
-				if (origName) path.setAttribute("name", origName);
-				else path.removeAttribute("name");
+			convertShapesToPaths(svgClone);
+			svgClone.querySelectorAll("image").forEach((el) => el.remove());
+			svgClone.querySelectorAll("#g-instance").forEach((g) => g.remove());
+			svgClone.querySelectorAll("circle").forEach((c) => c.remove());
+			svgClone.querySelectorAll("[data-triangle]").forEach((el) => el.remove());
+			svgClone.querySelectorAll("[data-csv-collision]").forEach((path) => {
 				path.removeAttribute("data-csv-original-id");
 				path.removeAttribute("data-csv-original-name");
 				path.removeAttribute("data-csv-collision");
 				path.classList.remove("csv-collision-single", "csv-collision-multi");
 			});
-			svgClone.querySelectorAll("#g-instance").forEach((g) => g.remove());
-			svgClone.querySelectorAll("circle").forEach((c) => c.remove());
-			svgClone.querySelectorAll("[data-triangle]").forEach((el) => el.remove());
+			svgClone.querySelectorAll(".no-matching-floorplan, .hovered, .svg-tool-selected").forEach((el) => {
+				el.classList.remove("no-matching-floorplan", "hovered", "svg-tool-selected");
+				if (el.getAttribute("class") === "") el.removeAttribute("class");
+				if (el.getAttribute("style") === "") el.removeAttribute("style");
+			});
 		}
 
 		let csvCollisionActive = false;
+		let csvCollisionRaf = 0;
+
+		function scheduleCsvPathCollisions() {
+			if (csvCollisionRaf) return;
+			csvCollisionRaf = requestAnimationFrame(() => {
+				csvCollisionRaf = 0;
+				applyCsvPathCollisions();
+			});
+		}
 
 		function applyCsvPathCollisions() {
 			const svg = document.querySelector("#svg-container svg");
@@ -3021,58 +3184,54 @@ import "../styles.css";
 			}
 
 			restoreCsvPathCollisions(svg);
+			convertShapesToPaths(svg);
 
 			const paths = Array.from(svg.querySelectorAll("path")).filter((path) => {
-				if (path.closest("#g-instance")) return false;
+				if (path.closest("#g-instance, defs, clipPath, mask, symbol")) return false;
 				const d = path.getAttribute("d");
 				return d && d.trim().length > 0;
 			});
 			const points = Array.from(
 				svg.querySelectorAll("#g-instance circle, #g-instance [data-triangle]"),
-			);
+			).sort((a, b) => {
+				const ra = Number(a.getAttribute("data-csv-row"));
+				const rb = Number(b.getAttribute("data-csv-row"));
+				return (
+					(Number.isFinite(ra) ? ra : 1e9) -
+					(Number.isFinite(rb) ? rb : 1e9)
+				);
+			});
 
+			csvCollisionActive = points.length > 0;
 			if (paths.length === 0 || points.length === 0) {
-				csvCollisionActive = false;
 				refreshIdListFromSvg(svg);
 				return;
 			}
 
-			const hitsByPath = new Map();
+			const usedPaths = new Set();
+			const assignments = [];
 			points.forEach((pointEl, pointIndex) => {
 				const { x, y } = getCsvPointCoords(pointEl);
 				if (!isFinite(x) || !isFinite(y)) return;
 
-				const containing = paths.filter((path) =>
-					pathContainsUserPoint(path, svg, x, y),
+				const unused = paths.filter((path) => !usedPaths.has(path));
+				let chosen = pickSmallestPath(
+					unused.filter((path) =>
+						pathContainsUserPoint(path, svg, x, y),
+					),
 				);
-				if (containing.length === 0) return;
-
-				let chosen = containing[0];
-				if (containing.length > 1) {
-					let bestArea = pathArea(chosen);
-					for (let i = 1; i < containing.length; i++) {
-						const area = pathArea(containing[i]);
-						if (area < bestArea) {
-							bestArea = area;
-							chosen = containing[i];
-						}
-					}
+				if (!chosen) {
+					chosen = pickSmallestPath(
+						unused.filter((path) => bboxContainsPoint(path, x, y)),
+					);
 				}
+				if (!chosen) return;
 
-				if (!hitsByPath.has(chosen)) hitsByPath.set(chosen, []);
-				const rowAttr = pointEl.getAttribute("data-csv-row");
-				const rowIndex =
-					rowAttr != null && rowAttr !== ""
-						? rowAttr
-						: String(pointIndex);
-				const fullName = pointEl.getAttribute("data-fullname");
-				const rawName =
-					pointEl.getAttribute("id") ||
-					(fullName && fullName !== "undefined" ? fullName : "") ||
-					"";
-				hitsByPath.get(chosen).push({
-					rowIndex,
-					name: toSpacedTitleCase(rawName),
+				usedPaths.add(chosen);
+				assignments.push({
+					path: chosen,
+					rowIndex: csvPointRowIndex(pointEl, pointIndex),
+					name: csvPointDisplayName(pointEl),
 				});
 			});
 
@@ -3080,11 +3239,11 @@ import "../styles.css";
 			svg.querySelectorAll("[id]").forEach((el) => {
 				if (el === svg) return;
 				if (el.closest("#g-instance")) return;
-				if (hitsByPath.has(el)) return;
+				if (usedPaths.has(el)) return;
 				if (el.id) usedIds.add(el.id);
 			});
 
-			hitsByPath.forEach((hits, path) => {
+			assignments.forEach(({ path, rowIndex, name }) => {
 				if (!path.hasAttribute("data-csv-original-id")) {
 					path.setAttribute(
 						"data-csv-original-id",
@@ -3097,23 +3256,13 @@ import "../styles.css";
 				}
 
 				path.classList.remove("csv-collision-single", "csv-collision-multi");
-
-				if (hits.length === 1) {
-					const nextId = takeUniqueSvgId(String(hits[0].rowIndex), usedIds);
-					path.setAttribute("id", nextId);
-					path.setAttribute("name", hits[0].name || "-");
-					path.setAttribute("data-csv-collision", "single");
-					path.classList.add("csv-collision-single");
-				} else {
-					const nextId = takeUniqueSvgId("-", usedIds);
-					path.setAttribute("id", nextId);
-					path.setAttribute("name", "-");
-					path.setAttribute("data-csv-collision", "multi");
-					path.classList.add("csv-collision-multi");
-				}
+				path.setAttribute("id", takeUniqueSvgId(String(rowIndex), usedIds));
+				if (name) path.setAttribute("name", name);
+				else path.removeAttribute("name");
+				path.setAttribute("data-csv-collision", "single");
+				path.classList.add("csv-collision-single");
 			});
 
-			csvCollisionActive = hitsByPath.size > 0;
 			refreshIdListFromSvg(svg);
 		}
 
@@ -3422,6 +3571,7 @@ import "../styles.css";
 		}
 
 		const processSVG = (svgElement) => {
+			convertShapesToPaths(svgElement);
 			const list = Array.from(svgElement.querySelectorAll(`[id]`)).filter(
 				(el) => el !== svgElement && !el.closest("#g-instance"),
 			);
@@ -5324,7 +5474,7 @@ import "../styles.css";
 			const previewer = document.getElementById("image-previewer-container");
 			if (previewer) previewer.style.display = "none";
 
-			// 4. Re-highlight paths (all will be red with no images)
+			// 4. Drop unmatched-path hover marks once no images remain
 			highlightPathsWithoutMatchingImages();
 		});
 
@@ -6151,16 +6301,17 @@ import "../styles.css";
 			}
 		});
 
-		// Highlight paths that don't have a corresponding floorplan image
+		// Mark paths that don't have a corresponding floorplan image (red fill on hover only)
 		function highlightPathsWithoutMatchingImages() {
 			const svgElement = document.getElementById("svg-container")?.querySelector("svg");
 			if (!svgElement) return;
+			const hasImages = imageList.length > 0;
 			svgElement.querySelectorAll("path").forEach((path) => {
 				const pathId = path.getAttribute("id") || path.id;
-				const hasMatch = pathId ? !!findMatchingImage(pathId) : false;
-				if (hasMatch) {
+				const hasMatch = hasImages && pathId ? !!findMatchingImage(pathId) : false;
+				if (!hasImages || hasMatch || !pathId) {
 					path.classList.remove("no-matching-floorplan");
-				} else if (pathId) {
+				} else {
 					path.classList.add("no-matching-floorplan");
 				}
 			});
@@ -7372,6 +7523,7 @@ import "../styles.css";
 					}
 				}
 			});
+			applyCsvPathCollisions();
 		}
 
 		//Add zero to single digit
@@ -7520,6 +7672,49 @@ import "../styles.css";
 			}
 		}
 
+		function escapeXmlAttr(value) {
+			return String(value)
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/"/g, "&quot;");
+		}
+
+		function serializeMappedSvgForExport(sourceSvg) {
+			const clone = sourceSvg.cloneNode(true);
+			stripCsvCollisionFromClone(clone);
+
+			const svgId = clone.getAttribute("id") || "";
+			let dataName = clone.getAttribute("data-name") || "";
+			if (!dataName && svgId) dataName = svgId.replace(/^_/, "");
+			const viewBox = clone.getAttribute("viewBox") || "0 0 4096 4096";
+
+			const paths = Array.from(clone.querySelectorAll("path")).filter((path) => {
+				if (path.closest("defs, clipPath, mask, symbol")) return false;
+				const d = path.getAttribute("d");
+				return d && d.trim().length > 0;
+			});
+
+			const svgAttrs = ['xmlns="http://www.w3.org/2000/svg"'];
+			if (svgId) svgAttrs.push(`id="${escapeXmlAttr(svgId)}"`);
+			if (dataName) svgAttrs.push(`data-name="${escapeXmlAttr(dataName)}"`);
+			svgAttrs.push(`viewBox="${escapeXmlAttr(viewBox)}"`);
+
+			const body = paths
+				.map((path) => {
+					const pid = path.getAttribute("id");
+					const name = path.getAttribute("name");
+					const d = path.getAttribute("d") || "";
+					let line = "  <path";
+					if (pid) line += ` id="${escapeXmlAttr(pid)}"`;
+					if (name) line += ` name="${escapeXmlAttr(name)}"`;
+					line += ` d="${escapeXmlAttr(d)}"/>`;
+					return line;
+				})
+				.join("\n");
+
+			return `<?xml version="1.0" encoding="UTF-8"?>\n<svg ${svgAttrs.join(" ")}>\n${body}\n</svg>\n`;
+		}
+
 		//SVG Conversion
 		function exportSVG() {
 			const file = fileNameGlobal;
@@ -7527,22 +7722,8 @@ import "../styles.css";
 				.querySelector("#svg-container")
 				.querySelector("svg");
 			if (svg) {
-				var svgClone = svg.cloneNode(true);
-				stripCsvCollisionFromClone(svgClone);
-				svgClone.querySelectorAll("[id]").forEach((e) => {
-					const str = e.getAttribute("id");
-					if (str != null) {
-						e.setAttribute("data-name", str.replace(/\s+/g, "_"));
-					}
-				});
-				svgClone.querySelectorAll("[group-attribute]").forEach((e) => {
-					e.removeAttribute("group-attribute");
-				});
-				svgClone.querySelectorAll("[unit-attribute]").forEach((e) => {
-					e.removeAttribute("unit-attribute");
-				});
-				var serializer = new XMLSerializer();
-				var svgString = serializer.serializeToString(svgClone);
+				applyCsvPathCollisions();
+				var svgString = serializeMappedSvgForExport(svg);
 				var blob = new Blob([svgString], { type: "image/svg+xml" });
 				var url = URL.createObjectURL(blob);
 				var link = document.createElement("a");
