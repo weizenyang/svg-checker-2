@@ -1527,27 +1527,16 @@ import "../styles.css";
 			apiImages.forEach((imageData) => {
 				console.log(`Processing background image: ${imageData.imageName}`);
 
-				const mediaBaseName = getBaseName(imageData.imageName);
-				// Extract last 2 segments from image name
-				const mediaNameParts = mediaBaseName.split("_");
-				const mediaLastTwoSegments = mediaNameParts.length >= 2
-					? mediaNameParts.slice(-2).join("_")
-					: mediaBaseName;
+				const matchedSvgs = findMatchedSvgObjects(
+					imageData.imageName,
+					importedSVGs,
+				);
+				console.log(
+					`Image name: ${imageData.imageName} -> matches`,
+					matchedSvgs.map((s) => s.name),
+				);
 
-				console.log(`Image name: ${imageData.imageName} -> last 2 segments: ${mediaLastTwoSegments}`);
-
-				// Loop through the imported SVG objects to find a matching name
-				importedSVGs.forEach((svgObj) => {
-					const svgBaseName = getBaseName(svgObj.name);
-					// Extract last 2 segments from SVG name
-					const svgNameParts = svgBaseName.split("_");
-					const svgLastTwoSegments = svgNameParts.length >= 2
-						? svgNameParts.slice(-2).join("_")
-						: svgBaseName;
-
-					console.log(`Comparing SVG: ${svgObj.name} (${svgLastTwoSegments}) with image (${mediaLastTwoSegments})`);
-
-					if (svgLastTwoSegments === mediaLastTwoSegments) {
+				matchedSvgs.forEach((svgObj) => {
 						console.log(`Found match! Loading ${imageData.imageName} as background for ${svgObj.name}`);
 
 						const svgElement = svgObj.element;
@@ -1594,7 +1583,6 @@ import "../styles.css";
 						}
 
 						console.log(`Successfully added background image ${imageData.imageName} to SVG ${svgObj.name}`);
-					}
 				});
 			});
 
@@ -1604,9 +1592,17 @@ import "../styles.css";
 		// Load backplate_image_floorplan files from File[] into imageList (Check Floorplans). Call after SVG load.
 		function loadFloorplanFilesToImageList(files) {
 			const floorplanFiles = Array.from(files).filter((f) => {
-				const isImage = f.type === 'image/jpeg' || f.type === 'image/png' || f.type === 'image/webp';
-				const hasFloorplanInName = f.name.includes('backplate_image_floorplan') && !f.name.includes('tower-floorplate');
-				return isImage && hasFloorplanInName;
+				const isImage =
+					isRasterOrVideoFile(f) &&
+					!String(f.type || "").startsWith("video/") &&
+					!/\.(mp4|webm|ogg)$/i.test(f.name || "");
+				const hasFloorplanInName =
+					f.name.includes("backplate_image_floorplan") &&
+					!f.name.includes("tower-floorplate");
+				if (!isImage || !hasFloorplanInName) return false;
+				if (isUnitPlateFileName(f.name)) return false;
+				if (findMatchedSvgObjects(f.name, importedSVGs).length > 0) return false;
+				return true;
 			});
 			if (floorplanFiles.length === 0) return;
 			console.log(`📋 Auto-loading ${floorplanFiles.length} backplate_image_floorplan file(s) into Check Floorplans`);
@@ -2915,6 +2911,19 @@ import "../styles.css";
 			return file.type === "image/svg+xml" || name.endsWith(".svg");
 		}
 
+		function isRasterOrVideoFile(file) {
+			if (!file) return false;
+			const name = String(file.name || "").toLowerCase();
+			const type = String(file.type || "").toLowerCase();
+			return (
+				type === "image/jpeg" ||
+				type === "image/png" ||
+				type === "image/webp" ||
+				type.startsWith("video/") ||
+				/\.(jpe?g|png|webp|mp4|webm|ogg)$/i.test(name)
+			);
+		}
+
 		const ROOM_NAME_TOKENS = [
 			"master",
 			"guest",
@@ -3715,51 +3724,161 @@ import "../styles.css";
 		};
 
 		function getBaseName(fileName) {
-			return fileName.replace(/\.[^/.]+$/, "").toLowerCase();
+			return String(fileName || "")
+				.replace(/\.[^/.]+$/, "")
+				.toLowerCase();
+		}
+
+		function unitMatchKey(fileName) {
+			return getBaseName(fileName)
+				.replace(/^backplate_image_floorplan_/, "")
+				.replace(/^backplate_image_tower-floorplate_/, "")
+				.replace(/^backplate_image_camera_/, "")
+				.replace(/^backplate_image_/, "")
+				.replace(/^csv_floorplan_/, "")
+				.replace(/_s\d+_\d+$/i, "");
+		}
+
+		function lastUnderscoreSegments(base, n) {
+			const parts = String(base || "")
+				.toLowerCase()
+				.split("_")
+				.filter(Boolean);
+			if (parts.length === 0) return "";
+			if (parts.length < n) return parts.join("_");
+			return parts.slice(-n).join("_");
+		}
+
+		function isGenericSceneSuffix(seg) {
+			return /^s\d+_\d+$/i.test(String(seg || ""));
+		}
+
+		function hyphenUnitToken(key) {
+			const m = String(key || "").match(/[a-z][a-z0-9]*-\d+-\d+/i);
+			return m ? m[0].toLowerCase() : "";
+		}
+
+		function isUnitPlateFileName(fileName) {
+			const key = unitMatchKey(fileName);
+			return /^[a-z][a-z0-9]*-\d+-\d+$/i.test(key);
+		}
+
+		function svgMediaMatchScore(svgName, mediaName) {
+			const sBase = getBaseName(svgName);
+			const mBase = getBaseName(mediaName);
+			if (sBase && sBase === mBase) return 4;
+			const sKey = unitMatchKey(svgName);
+			const mKey = unitMatchKey(mediaName);
+			if (sKey && mKey && sKey === mKey) return 3;
+			const sTok = hyphenUnitToken(sKey);
+			const mTok = hyphenUnitToken(mKey);
+			if (sTok && mTok && sTok === mTok) return 2;
+			const s2 = lastUnderscoreSegments(sBase, 2);
+			const m2 = lastUnderscoreSegments(mBase, 2);
+			if (s2 && s2 === m2 && !isGenericSceneSuffix(s2)) return 1;
+			return 0;
+		}
+
+		function findMatchedSvgObjects(mediaName, svgObjs) {
+			const list = svgObjs || [];
+			let best = 0;
+			const hits = [];
+			list.forEach((svgObj) => {
+				const score = svgMediaMatchScore(svgObj.name, mediaName);
+				if (score > best) {
+					best = score;
+					hits.length = 0;
+				}
+				if (score > 0 && score === best) hits.push(svgObj);
+			});
+			return hits;
+		}
+
+		function shouldSkipDropDirectory(name) {
+			const n = String(name || "").toLowerCase();
+			return n === "transparent" || n === "_ss" || (n.startsWith("_") && n !== "svgs");
+		}
+
+		async function filesFromDataTransfer(dataTransfer) {
+			if (!dataTransfer) return [];
+			const walkEntry = async (entry) => {
+				if (!entry) return [];
+				if (entry.isFile) {
+					const file = await new Promise((resolve, reject) =>
+						entry.file(resolve, reject),
+					);
+					return file ? [file] : [];
+				}
+				if (entry.isDirectory) {
+					if (shouldSkipDropDirectory(entry.name)) return [];
+					const reader = entry.createReader();
+					const collected = [];
+					const readAll = async () => {
+						const batch = await new Promise((resolve, reject) =>
+							reader.readEntries(resolve, reject),
+						);
+						if (!batch.length) return;
+						collected.push(...batch);
+						await readAll();
+					};
+					await readAll();
+					const nested = [];
+					for (const child of collected) {
+						nested.push(...(await walkEntry(child)));
+					}
+					return nested;
+				}
+				return [];
+			};
+
+			const items = dataTransfer.items;
+			const entries = [];
+			if (items && items.length) {
+				for (let i = 0; i < items.length; i++) {
+					const item = items[i];
+					const entry =
+						typeof item.webkitGetAsEntry === "function"
+							? item.webkitGetAsEntry()
+							: null;
+					if (entry) entries.push(entry);
+				}
+			}
+			if (entries.length) {
+				const out = [];
+				for (const entry of entries) {
+					out.push(...(await walkEntry(entry)));
+				}
+				if (out.length) return out;
+			}
+			return Array.from(dataTransfer.files || []);
 		}
 
 		function handleDraggedImages(files) {
 			const mediaFiles = Array.from(files).filter((file) =>
-				file.type.startsWith("image/") || file.type.startsWith("video/"),
+				isRasterOrVideoFile(file),
 			);
 			if (mediaFiles.length === 0) return;
 
 			mediaFiles.forEach((mediaFile) => {
 				const reader = new FileReader();
-				const isVideo = mediaFile.type.startsWith("video/");
+				const isVideo =
+					String(mediaFile.type || "").startsWith("video/") ||
+					/\.(mp4|webm|ogg)$/i.test(mediaFile.name || "");
 				reader.onload = (event) => {
 					const contents = event.target.result;
-					console.log(isVideo ? "Video File" : "Image File")
-					console.log(mediaFile.name)
-					const mediaBaseName = getBaseName(mediaFile.name);
-					// Extract last 2 segments from media name
-					// Example: "backplate_image_tower-floorplate_b1_01.webp" -> "b1_01"
-					const mediaNameParts = mediaBaseName.split("_");
-					const mediaLastTwoSegments = mediaNameParts.length >= 2 
-						? mediaNameParts.slice(-2).join("_")
-						: mediaBaseName;
-					
-					console.log(isVideo ? "Video name:" : "Image name:", mediaFile.name, "-> last 2 segments:", mediaLastTwoSegments)
-					console.log(importedSVGs)
+					const matchedSvgs = findMatchedSvgObjects(
+						mediaFile.name,
+						importedSVGs,
+					);
+					console.log(
+						isVideo ? "Video File" : "Image File",
+						mediaFile.name,
+						"->",
+						matchedSvgs.map((s) => s.name),
+					);
 
 					const applyToMatchedSvgs = () => {
-					// Loop through the imported SVG objects to find a matching name
-					importedSVGs.forEach((svgObj) => {
-						console.log("SVGOBJ")
-						console.log(svgObj)
-						const svgBaseName = getBaseName(svgObj.name);
-						// Extract last 2 segments from SVG name
-						// Example: "fahidbeachresidencesii_b1_01.svg" -> "b1_01"
-						const svgNameParts = svgBaseName.split("_");
-						const svgLastTwoSegments = svgNameParts.length >= 2 
-							? svgNameParts.slice(-2).join("_")
-							: svgBaseName;
-						
-						console.log("SVG name:", svgObj.name, "-> last 2 segments:", svgLastTwoSegments);
-						
-						if (svgLastTwoSegments === mediaLastTwoSegments) {
-							console.log(svgBaseName)
-							console.log(mediaBaseName)
+					matchedSvgs.forEach((svgObj) => {
 							const svgElement = svgObj.element;
 							const viewBox = svgElement.getAttribute("viewBox").split(" ");
 							
@@ -3835,7 +3954,6 @@ import "../styles.css";
 								console.log("Adding new background image to SVG");
 								svgElement.insertBefore(svgImage, svgElement.firstChild);
 							}
-						}
 					});
 					};
 
@@ -3861,7 +3979,9 @@ import "../styles.css";
 
 			// Mixed drop: load SVG / raster first, then CSV so points land on the mounted canvas
 			if (!pendingCsvFollowUp && fileArr.length >= 2) {
-				const csvFile = fileArr.find((f) => isCsvFile(f));
+				const csvFile = fileArr.find(
+					(f) => isCsvFile(f) && !/^automation_/i.test(f.name || ""),
+				);
 				const rest = fileArr.filter((f) => f !== csvFile);
 				if (csvFile && rest.length > 0) {
 					handleFileChange(rest, { pendingCsv: csvFile });
@@ -3871,9 +3991,9 @@ import "../styles.css";
 
 			console.log(fileArr);
 			const file = fileArr[0];
-			// Determine if this is a raster image or video import (jpeg/png/webp/mp4/webm)
+			let filesToProcess = fileArr.filter((f) => isSvgFile(f));
 			const isRasterMedia =
-				file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp" || file.type.startsWith("video/"));
+				filesToProcess.length === 0 && isRasterOrVideoFile(file);
 
 			// Only reset global states when not importing a raster media (image/video)
 			if (!isRasterMedia) {
@@ -3895,7 +4015,6 @@ import "../styles.css";
 			// 	globalSvgContainer.innerHTML = "";
 			// }
 			// importedSVGs = []; // Reset the array
-			let filesToProcess = fileArr.filter((file) => isSvgFile(file));
 
 			// if (filesToProcess.length === 0) {
 			// 	alert("Please import valid SVG files.");
@@ -3922,10 +4041,13 @@ import "../styles.css";
 			console.log(fileArr.length)
 			if(fileArr.length > 1){
 				
-				if (isSvgFile(file)) {
+				if (filesToProcess.length > 0) {
 					if(document.getElementById("image-list-container").classList.contains("hidden")){
 						document.getElementById("image-list-container").classList.remove("hidden")
 					}
+					importedSVGs = [];
+					currentSVGIndex = 0;
+					globalSvgContainer.innerHTML = "";
 				filesToProcess.forEach((fileToProcess, index) => {
 					const reader = new FileReader();
 					reader.onload = () => {
@@ -3944,7 +4066,7 @@ import "../styles.css";
 							currentSVGIndex = 0;
 							processSVG(importedSVGs[currentSVGIndex].element);
 							spawnSVGNavigation();
-							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
+							handleDraggedImages(fileArr.filter((f) => isRasterOrVideoFile(f)));
 							loadFloorplanFilesToImageList(fileArr);
 							if (pendingCsvFollowUp) {
 								const pc = pendingCsvFollowUp;
@@ -3954,12 +4076,7 @@ import "../styles.css";
 					};
 					reader.readAsText(fileToProcess);
 				});
-			} else if (
-				file.type === "image/jpeg" ||
-				file.type === "image/png" ||
-				file.type === "image/webp" ||
-				file.type.startsWith("video/")
-			) {
+			} else if (isRasterOrVideoFile(file)) {
 				handleDraggedImages(fileArr)
 				if (pendingCsvFollowUp) {
 					const pc = pendingCsvFollowUp;
@@ -4005,13 +4122,17 @@ import "../styles.css";
 					};
 					reader.readAsText(fileToProcess);
 				});
-			} else if (
-				file.type === "image/jpeg" ||
-				file.type === "image/png" ||
-				file.type === "image/webp" ||
-				file.type.startsWith("video/")
-			) {
-				const isVideo = file.type.startsWith("video/");
+			} else if (isRasterOrVideoFile(file)) {
+				if (importedSVGs.length > 0) {
+					handleDraggedImages(fileArr);
+					if (pendingCsvFollowUp) {
+						const pc = pendingCsvFollowUp;
+						queueMicrotask(() => handleFileChange([pc]));
+					}
+				} else {
+				const isVideo =
+					String(file.type || "").startsWith("video/") ||
+					/\.(mp4|webm|ogg)$/i.test(file.name || "");
 				fileNameGlobal = file.name
 					.replace("backplate_image_camera", "csv_floorplan")
 					.replace("backplate_image_floorplan", "csv_floorplan")
@@ -4126,6 +4247,7 @@ import "../styles.css";
 					}
 				};
 				reader.readAsDataURL(file);
+				}
 			} else if (isCsvFile(file)) {
 				if (
 					document
@@ -7130,11 +7252,12 @@ import "../styles.css";
 				.classList.remove("appear");
 		});
 
-		document.body.addEventListener("drop", (e) => {
+		document.body.addEventListener("drop", async (e) => {
 			e.preventDefault();
 			console.log(e);
-			console.log(e.dataTransfer.files[0]);
-			handleFileChange(e.dataTransfer.files);
+			const dropped = await filesFromDataTransfer(e.dataTransfer);
+			console.log(dropped[0]);
+			handleFileChange(dropped);
 			document
 				.querySelector(".drag-drop-prompt")
 				.classList.remove("appear");
