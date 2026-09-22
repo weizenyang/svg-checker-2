@@ -574,6 +574,40 @@ import "../styles.css";
 				</button>
 			</div>
 
+			<!-- CSV Navigation (multi-CSV carousel) -->
+			<div
+				id="csv-nav"
+				class="hidden flex items-center justify-center gap-3 mt-2 min-h-[2rem]"
+			>
+				<button
+					type="button"
+					id="csv-prev"
+					class="px-2 py-1 rounded-sm bg-amber-100 hover:bg-amber-200 text-sm disabled:opacity-40 disabled:pointer-events-none"
+					aria-label="Previous CSV"
+					disabled
+				>
+					&#8592;
+				</button>
+				<span
+					id="csv-current-name"
+					class="text-sm text-amber-700 truncate max-w-[min(60vw,28rem)] text-center"
+					title=""
+				></span>
+				<span
+					id="csv-nav-index"
+					class="text-xs text-amber-600 font-medium"
+				></span>
+				<button
+					type="button"
+					id="csv-next"
+					class="px-2 py-1 rounded-sm bg-amber-100 hover:bg-amber-200 text-sm disabled:opacity-40 disabled:pointer-events-none"
+					aria-label="Next CSV"
+					disabled
+				>
+					&#8594;
+				</button>
+			</div>
+
 			<div class="space-y-4" id="tag" style="display:none">
 				<h3 id="label">-</h3>
 			</div>
@@ -1866,6 +1900,11 @@ import "../styles.css";
 		//Multiple SVGs
 		var importedSVGs = [];
 		var currentSVGIndex = 0;
+
+		//Multiple CSVs (carousel)
+		/** @type {{ name: string, file: File, contents: string, matchScore: number }[]} */
+		var importedCSVs = [];
+		var currentCSVIndex = 0;
 
 		//3d objectID
 		var object3dCount = 0;
@@ -3437,6 +3476,7 @@ import "../styles.css";
 					currentSVGIndex--;
 					processSVG(importedSVGs[currentSVGIndex].element);
 					updateSVGNavigationUI();
+					selectBestMatchingCSV();
 				}
 			});
 			rightArrow.addEventListener("click", () => {
@@ -3444,9 +3484,320 @@ import "../styles.css";
 					currentSVGIndex++;
 					processSVG(importedSVGs[currentSVGIndex].element);
 					updateSVGNavigationUI();
+					selectBestMatchingCSV();
 				}
 			});
 			updateSVGNavigationUI();
+		}
+
+		// CSV Navigation (multi-CSV carousel)
+		function updateCSVNavigationUI() {
+			const navEl = document.getElementById("csv-nav");
+			const nameEl = document.getElementById("csv-current-name");
+			const indexEl = document.getElementById("csv-nav-index");
+			const prevBtn = document.getElementById("csv-prev") as HTMLButtonElement | null;
+			const nextBtn = document.getElementById("csv-next") as HTMLButtonElement | null;
+
+			if (!navEl) return;
+
+			if (importedCSVs.length <= 1) {
+				navEl.classList.add("hidden");
+				navEl.classList.remove("flex");
+				return;
+			}
+
+			navEl.classList.remove("hidden");
+			navEl.classList.add("flex");
+
+			const current = importedCSVs[currentCSVIndex];
+			const name = current?.name || "";
+			if (nameEl) {
+				nameEl.textContent = name;
+				nameEl.title = name;
+			}
+			if (indexEl) {
+				indexEl.textContent = `(${currentCSVIndex + 1}/${importedCSVs.length})`;
+			}
+			if (prevBtn) prevBtn.disabled = currentCSVIndex <= 0;
+			if (nextBtn) nextBtn.disabled = currentCSVIndex >= importedCSVs.length - 1;
+		}
+
+		function spawnCSVNavigation() {
+			const leftArrow = document.getElementById("csv-prev");
+			const rightArrow = document.getElementById("csv-next");
+			if (!leftArrow || !rightArrow) return;
+			if (leftArrow.dataset.navBound === "1") {
+				updateCSVNavigationUI();
+				return;
+			}
+			leftArrow.dataset.navBound = "1";
+			leftArrow.addEventListener("click", () => {
+				if (currentCSVIndex > 0) {
+					currentCSVIndex--;
+					applySelectedCSV();
+					updateCSVNavigationUI();
+				}
+			});
+			rightArrow.addEventListener("click", () => {
+				if (currentCSVIndex < importedCSVs.length - 1) {
+					currentCSVIndex++;
+					applySelectedCSV();
+					updateCSVNavigationUI();
+				}
+			});
+			updateCSVNavigationUI();
+		}
+
+		function applySelectedCSV() {
+			const csvObj = importedCSVs[currentCSVIndex];
+			if (!csvObj) return;
+
+			fileNameGlobal = csvObj.name
+				.replace("backplate_image_camera", "csv_floorplan")
+				.replace("backplate_image_floorplan", "csv_floorplan")
+				.replace("camera", "floorplan");
+			const exportInput = document.getElementById("export-file-name") as HTMLInputElement | null;
+			if (exportInput) exportInput.value = fileNameGlobal;
+
+			renderCSVContents(csvObj.contents);
+		}
+
+		function renderCSVContents(contents: string) {
+			const lines = contents.trim().split("\n");
+			const firstLineFields = lines[0].split(",");
+			let transformedLines = lines;
+			let scaleToFit = false;
+
+			if (firstLineFields.length > 3) {
+				transformedLines = lines.map((line) => {
+					if (!line || line.trim() === "") return "";
+					const fields = line.split(",");
+					const [name, x, y, z] = fields;
+					const cleanedName = `${name.split("_")[0]}~${name.split("_")[1]}`;
+					scaleToFit = true;
+					return `${cleanedName},${-y},${-x},${name}`;
+				}).filter(line => line !== "");
+			}
+
+			const gInstance = document.createElementNS("http://www.w3.org/2000/svg", "g");
+			gInstance.setAttribute("id", "g-instance");
+			const svgContainer = document.getElementById("svg-container");
+
+			if (svgContainer?.querySelector("svg")) {
+				svgContainer.querySelector("svg")?.querySelectorAll("#g-instance").forEach((g) => {
+					g.remove();
+				});
+			} else {
+				const newSVG = createNewSVG();
+				newSVG.appendChild(gInstance);
+				svgContainer?.appendChild(newSVG);
+
+				const tempImage = svgContainer?.querySelector("img:not(#svg-empty-state img)");
+				if (tempImage) {
+					const svgimg = document.createElementNS("http://www.w3.org/2000/svg", "image");
+					svgimg.style.width = "100%";
+					svgimg.style.height = "100%";
+					svgimg.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", (tempImage as HTMLImageElement).src);
+					const newSvgEl = svgContainer?.querySelector("svg");
+					newSvgEl?.append(svgimg);
+					tempImage.remove();
+				}
+			}
+
+			svgContainer?.querySelector("svg")?.appendChild(gInstance);
+
+			const isProjectCSV = lines[0] && lines[0].toLowerCase().includes('position_x_meters');
+			if (isProjectCSV) {
+				console.log('Project CSV detected - processing as Project CSV');
+				renderProjectCsvPreview(contents);
+				return;
+			}
+
+			globalFloors = [];
+			globalFloorsAggregated = [];
+
+			for (let i = 0; i < transformedLines.length; i++) {
+				const fields = transformedLines[i].split(",");
+				if (Number(fields[1]) || Number(fields[2])) {
+					const floor = fields[0].includes("~") ? fields[0].split("~")[0] : null;
+					const name = fields[0].includes("~") ? fields[0].split("~")[1] : fields[0];
+					const data = [];
+					data.push({ field: "data-csv-row", value: String(i) });
+					if (floor) {
+						data.push({ field: "data-floor", value: floor });
+					}
+					if (fields[3]) {
+						data.push({ field: "data-fullname", value: fields[3] });
+					}
+					globalFloors.push({
+						floor: floor,
+						circle: spawnCircle(
+							name,
+							Number(fields[flipYX ? 2 : 1]).toFixed(4),
+							Number(fields[flipYX ? 1 : 2]).toFixed(4),
+							data,
+						),
+					});
+				} else if (i > 0 && fields[0] && fields[0].toLowerCase() !== "name") {
+					console.error(`${fields[0] ? fields[0] : `(Nameless), Row ${i + 1}`} does not contain any cx, cy data`);
+				}
+			}
+
+			var floorNumbers = [];
+			const labelDivInstance = document.getElementById("labelDiv");
+			if (labelDivInstance) labelDivInstance.remove();
+			globalFloors.forEach((e) => {
+				if (!floorNumbers.includes(e.floor)) floorNumbers.push(e.floor);
+			});
+
+			const floorSection = document.getElementById("show-floors");
+			floorSection?.querySelectorAll("div").forEach((e) => e.remove());
+
+			if (floorNumbers.length > 0) {
+				if (floorSection?.classList.contains("hidden")) floorSection.classList.remove("hidden");
+				checkboxesId = [];
+				floorNumbers.forEach((e) => {
+					const div = document.createElement("div");
+					const checkbox = document.createElement("input");
+					const label = document.createElement("label");
+					label.innerText = `Floor ${e}`;
+					label.htmlFor = `floor-${e}-checkbox`;
+					checkbox.type = "checkbox";
+					checkbox.checked = true;
+					checkbox.id = `floor-${e}-checkbox`;
+					checkboxesId.push(`floor-${e}-checkbox`);
+					div.appendChild(checkbox);
+					div.appendChild(label);
+					checkbox.addEventListener("change", () => {
+						toggleFloors(aggregatePoints);
+						spawnLabel();
+					});
+					floorSection?.appendChild(div);
+				});
+			}
+
+			const globalFloorsCopy = Object.assign(globalFloors);
+			globalFloorsAggregated = getAveragedCircles(globalFloorsCopy);
+
+			if (document.getElementById("aggregate-points-parent")) {
+				document.getElementById("aggregate-points-parent")?.remove();
+			}
+			const editOptions = document.getElementById("edit-options");
+			const div = document.createElement("div");
+			div.id = "aggregate-points-parent";
+			const aggregateOptionsCheckbox = document.createElement("input");
+			const label = document.createElement("label");
+			div.classList.add("col-span-2");
+			div.classList.add("mt-2");
+			label.innerText = `Aggregate points`;
+			label.classList.add("ml-1");
+			label.htmlFor = `aggregate-points`;
+			aggregateOptionsCheckbox.type = "checkbox";
+			aggregateOptionsCheckbox.checked = true;
+			aggregateOptionsCheckbox.id = `aggregate-points`;
+			div.appendChild(aggregateOptionsCheckbox);
+			div.appendChild(label);
+			editOptions?.appendChild(div);
+
+			aggregatePoints = true;
+			toggleFloors(aggregatePoints);
+			spawnLabel();
+
+			aggregateOptionsCheckbox.addEventListener("change", (e) => {
+				aggregatePoints = (e.target as HTMLInputElement).checked;
+				toggleFloors(aggregatePoints);
+				spawnLabel();
+			});
+
+			if (scaleToFit) {
+				scaleToFitSVG();
+			}
+		}
+
+		function csvMediaMatchScore(csvName: string, targetName: string): number {
+			const cBase = getBaseName(csvName);
+			const tBase = getBaseName(targetName);
+			if (cBase && cBase === tBase) return 4;
+			const cKey = unitMatchKey(csvName);
+			const tKey = unitMatchKey(targetName);
+			if (cKey && tKey && cKey === tKey) return 3;
+			const cTok = hyphenUnitToken(cKey);
+			const tTok = hyphenUnitToken(tKey);
+			if (cTok && tTok && cTok === tTok) return 2;
+			const c2 = lastUnderscoreSegments(cBase, 2);
+			const t2 = lastUnderscoreSegments(tBase, 2);
+			if (c2 && c2 === t2 && !isGenericSceneSuffix(c2)) return 1;
+			return 0;
+		}
+
+		function selectBestMatchingCSV() {
+			if (importedCSVs.length === 0) return;
+			const currentSvg = importedSVGs[currentSVGIndex];
+			if (!currentSvg) return;
+
+			let bestIdx = 0;
+			let bestScore = 0;
+			importedCSVs.forEach((csvObj, idx) => {
+				const score = csvMediaMatchScore(csvObj.name, currentSvg.name);
+				if (score > bestScore) {
+					bestScore = score;
+					bestIdx = idx;
+				}
+			});
+			if (bestScore > 0 && bestIdx !== currentCSVIndex) {
+				currentCSVIndex = bestIdx;
+				applySelectedCSV();
+				updateCSVNavigationUI();
+			}
+		}
+
+		function processMultipleCsvFiles(csvFiles: File[]) {
+			if (!csvFiles || csvFiles.length === 0) return;
+
+			importedCSVs = [];
+			currentCSVIndex = 0;
+
+			const currentSvgName = importedSVGs[currentSVGIndex]?.name || "";
+			const currentImageName = imageList[0]?.name || "";
+
+			let filesProcessed = 0;
+			const tempCsvData: { name: string, file: File, contents: string, matchScore: number }[] = [];
+
+			csvFiles.forEach((csvFile) => {
+				const reader = new FileReader();
+				reader.onload = (event) => {
+					const contents = event.target?.result as string;
+					const csvName = getBaseName(csvFile.name);
+
+					let matchScore = 0;
+					if (currentSvgName) {
+						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, currentSvgName));
+					}
+					if (currentImageName) {
+						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, currentImageName));
+					}
+
+					tempCsvData.push({
+						name: csvName,
+						file: csvFile,
+						contents: contents,
+						matchScore: matchScore
+					});
+
+					filesProcessed++;
+					if (filesProcessed === csvFiles.length) {
+						tempCsvData.sort((a, b) => b.matchScore - a.matchScore);
+						importedCSVs = tempCsvData;
+
+						if (importedCSVs.length > 0) {
+							currentCSVIndex = 0;
+							applySelectedCSV();
+							spawnCSVNavigation();
+						}
+					}
+				};
+				reader.readAsText(csvFile);
+			});
 		}
 
 		// SVG Context Menu
@@ -3736,7 +4087,10 @@ import "../styles.css";
 				.replace(/^backplate_image_camera_/, "")
 				.replace(/^backplate_image_/, "")
 				.replace(/^csv_floorplan_/, "")
-				.replace(/_s\d+_\d+$/i, "");
+				.replace(/^csv_camera_/, "")
+				.replace(/_export$/i, "")
+				.replace(/_s\d+_\d+$/i, "")
+				.replace(/_s\d+$/i, "");
 		}
 
 		function lastUnderscoreSegments(base, n) {
@@ -3974,17 +4328,21 @@ import "../styles.css";
 			} else {
 				fileArr = [files];
 			}
-			const pendingCsvFollowUp =
-				opts && opts.pendingCsv ? opts.pendingCsv : null;
+			let pendingCsvFollowUp = null;
+			if (opts && opts.pendingCsvs) {
+				pendingCsvFollowUp = opts.pendingCsvs;
+			} else if (opts && opts.pendingCsv) {
+				pendingCsvFollowUp = [opts.pendingCsv];
+			}
 
-			// Mixed drop: load SVG / raster first, then CSV so points land on the mounted canvas
+			// Mixed drop: load SVG / raster first, then CSVs so points land on the mounted canvas
 			if (!pendingCsvFollowUp && fileArr.length >= 2) {
-				const csvFile = fileArr.find(
+				const csvFiles = fileArr.filter(
 					(f) => isCsvFile(f) && !/^automation_/i.test(f.name || ""),
 				);
-				const rest = fileArr.filter((f) => f !== csvFile);
-				if (csvFile && rest.length > 0) {
-					handleFileChange(rest, { pendingCsv: csvFile });
+				const rest = fileArr.filter((f) => !csvFiles.includes(f));
+				if (csvFiles.length > 0 && rest.length > 0) {
+					handleFileChange(rest, { pendingCsvs: csvFiles });
 					return;
 				}
 			}
@@ -4068,9 +4426,8 @@ import "../styles.css";
 							spawnSVGNavigation();
 							handleDraggedImages(fileArr.filter((f) => isRasterOrVideoFile(f)));
 							loadFloorplanFilesToImageList(fileArr);
-							if (pendingCsvFollowUp) {
-								const pc = pendingCsvFollowUp;
-								queueMicrotask(() => handleFileChange([pc]));
+							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 							}
 						}
 					};
@@ -4078,9 +4435,8 @@ import "../styles.css";
 				});
 			} else if (isRasterOrVideoFile(file)) {
 				handleDraggedImages(fileArr)
-				if (pendingCsvFollowUp) {
-					const pc = pendingCsvFollowUp;
-					queueMicrotask(() => handleFileChange([pc]));
+				if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+					queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 				}
 			} else if (isCsvFile(file)) {
 				// Fall through: treat first CSV in a multi-file drop
@@ -4114,9 +4470,8 @@ import "../styles.css";
 							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
 							loadFloorplanFilesToImageList(fileArr);
-							if (pendingCsvFollowUp) {
-								const pc = pendingCsvFollowUp;
-								queueMicrotask(() => handleFileChange([pc]));
+							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 							}
 						}
 					};
@@ -4125,9 +4480,8 @@ import "../styles.css";
 			} else if (isRasterOrVideoFile(file)) {
 				if (importedSVGs.length > 0) {
 					handleDraggedImages(fileArr);
-					if (pendingCsvFollowUp) {
-						const pc = pendingCsvFollowUp;
-						queueMicrotask(() => handleFileChange([pc]));
+					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+						queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 					}
 				} else {
 				const isVideo =
@@ -4211,9 +4565,8 @@ import "../styles.css";
 						// shifted (often upward). Fill the existing viewBox; never resize it to
 						// naturalWidth (e.g. 4320) — production coords are always 4096-space.
 						const runPendingCsv = () => {
-							if (pendingCsvFollowUp) {
-								const pc = pendingCsvFollowUp;
-								queueMicrotask(() => handleFileChange([pc]));
+							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 							}
 						};
 						const vbW = Number(svgViewbox[2]) || 4096;
@@ -4241,9 +4594,8 @@ import "../styles.css";
 						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
 						runPendingCsv();
 					}
-					if (pendingCsvFollowUp && isVideo) {
-						const pc = pendingCsvFollowUp;
-						queueMicrotask(() => handleFileChange([pc]));
+					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0 && isVideo) {
+						queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
 					}
 				};
 				reader.readAsDataURL(file);
@@ -4503,6 +4855,16 @@ import "../styles.css";
 					}
 					requestAnimationFrame(() => applyCsvPathCollisions());
 					// scaleBoundingBoxToFit(svgContainer.querySelector("svg"));
+
+					// Add single CSV to importedCSVs for carousel tracking
+					importedCSVs = [{
+						name: getBaseName(file.name),
+						file: file,
+						contents: contents,
+						matchScore: 0
+					}];
+					currentCSVIndex = 0;
+					updateCSVNavigationUI();
 				};
 				reader.readAsText(file);
 
