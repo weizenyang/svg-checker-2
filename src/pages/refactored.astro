@@ -2186,6 +2186,24 @@ import "../styles.css";
 		const HANDLE_SIZE = 8; // pixels for handle size
 
 		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-2: Path edit mode state (double-click vertex/edge editing)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		let pathEditMode = false;
+		let pathEditTargetPath = null;
+		let pathEditVertices = []; // Array of {idx, cmd, x, y} for each command point
+		let vertexDragActive = false;
+		let vertexDragIndex = -1;
+		let vertexDragStartX = 0;
+		let vertexDragStartY = 0;
+		let edgeDragActive = false;
+		let edgeDragIndex = -1;
+		let edgeDragStartX = 0;
+		let edgeDragStartY = 0;
+		const VERTEX_HANDLE_SIZE = 6;
+		const EDGE_HANDLE_SIZE = 5;
+
+		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Client ↔ SVG coordinate conversion
 		// ─────────────────────────────────────────────────────────────────────────────
 
@@ -2280,10 +2298,80 @@ import "../styles.css";
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────────
-		// SC-SEL-1: Get paths intersecting marquee (bbox intersection)
+		// SC-SEL-2: Get paths intersecting marquee (path geometry, not bbox-only)
+		// Uses Paper.js for accurate path-rectangle intersection. Bbox is prefilter only.
 		// ─────────────────────────────────────────────────────────────────────────────
 
-		function getPathsInMarquee(x1, y1, x2, y2) {
+		let paperSetupDone = false;
+		let paperModule = null;
+
+		async function ensurePaperSetup() {
+			if (!paperSetupDone) {
+				paperModule = await import('paper');
+				const tempCanvas = document.createElement('canvas');
+				tempCanvas.width = 1;
+				tempCanvas.height = 1;
+				paperModule.default.setup(tempCanvas);
+				paperSetupDone = true;
+			}
+			return paperModule;
+		}
+
+		function pathIntersectsRect(pathD, rectMinX, rectMinY, rectMaxX, rectMaxY, paper) {
+			if (!pathD || !paper) return false;
+			try {
+				const paperPath = new paper.default.CompoundPath(pathD);
+				const rectPath = new paper.default.Path.Rectangle(
+					new paper.default.Point(rectMinX, rectMinY),
+					new paper.default.Point(rectMaxX, rectMaxY)
+				);
+				
+				const intersects = paperPath.intersects(rectPath);
+				if (intersects) {
+					paperPath.remove();
+					rectPath.remove();
+					return true;
+				}
+				
+				const intersection = paperPath.intersect(rectPath, { insert: false });
+				const hasIntersection = intersection && !intersection.isEmpty();
+				
+				if (hasIntersection) {
+					intersection.remove();
+					paperPath.remove();
+					rectPath.remove();
+					return true;
+				}
+				
+				const pathBounds = paperPath.bounds;
+				if (pathBounds.width > 0 && pathBounds.height > 0) {
+					if (rectMinX <= pathBounds.x && rectMaxX >= pathBounds.x + pathBounds.width &&
+						rectMinY <= pathBounds.y && rectMaxY >= pathBounds.y + pathBounds.height) {
+						paperPath.remove();
+						rectPath.remove();
+						return true;
+					}
+				}
+				
+				const rectBounds = rectPath.bounds;
+				if (rectBounds.width > 0 && rectBounds.height > 0) {
+					const rectCenter = rectPath.bounds.center;
+					if (paperPath.contains(rectCenter)) {
+						paperPath.remove();
+						rectPath.remove();
+						return true;
+					}
+				}
+				
+				paperPath.remove();
+				rectPath.remove();
+				return false;
+			} catch (e) {
+				return false;
+			}
+		}
+
+		function getPathsInMarqueeSync(x1, y1, x2, y2) {
 			const svg = document.querySelector('#svg-container svg');
 			if (!svg) return [];
 
@@ -2298,14 +2386,19 @@ import "../styles.css";
 			paths.forEach((path) => {
 				try {
 					const bbox = path.getBBox();
-					// Check bbox intersection
-					const intersects = !(
+					const bboxIntersects = !(
 						bbox.x + bbox.width < minX ||
 						bbox.x > maxX ||
 						bbox.y + bbox.height < minY ||
 						bbox.y > maxY
 					);
-					if (intersects) {
+					
+					if (bboxIntersects && paperModule) {
+						const d = path.getAttribute('d');
+						if (d && pathIntersectsRect(d, minX, minY, maxX, maxY, paperModule)) {
+							intersecting.push(path);
+						}
+					} else if (bboxIntersects && !paperModule) {
 						intersecting.push(path);
 					}
 				} catch (e) {
@@ -2315,6 +2408,14 @@ import "../styles.css";
 
 			return intersecting;
 		}
+
+		function getPathsInMarquee(x1, y1, x2, y2) {
+			return getPathsInMarqueeSync(x1, y1, x2, y2);
+		}
+
+		(async function initPaperForMarquee() {
+			await ensurePaperSetup();
+		})();
 
 		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Selection bounding box rendering
@@ -2350,6 +2451,9 @@ import "../styles.css";
 
 			// Remove existing bbox elements
 			ui.querySelectorAll('.selection-bbox, .selection-handle').forEach(el => el.remove());
+
+			// SC-SEL-2: Don't render bbox when in path edit mode (vertex handles shown instead)
+			if (pathEditMode) return;
 
 			const bounds = getSelectionBounds();
 			if (!bounds || bounds.width === 0 || bounds.height === 0) return;
@@ -2528,7 +2632,352 @@ import "../styles.css";
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-2: Path edit mode functions (vertex/edge editing)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function parsePathVertices(d) {
+			if (!d) return [];
+			const vertices = [];
+			const cmdRegex = /([MLHVCSQTAZmlhvcsqtaz])([^MLHVCSQTAZmlhvcsqtaz]*)/g;
+			let match;
+			let currentX = 0, currentY = 0;
+			let startX = 0, startY = 0;
+			let idx = 0;
+
+			while ((match = cmdRegex.exec(d)) !== null) {
+				const cmd = match[1];
+				const argsStr = match[2].trim();
+				const args = argsStr ? argsStr.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n)) : [];
+				const cmdUpper = cmd.toUpperCase();
+				const isRelative = cmd !== cmdUpper;
+
+				if (cmdUpper === 'M' || cmdUpper === 'L') {
+					for (let i = 0; i < args.length; i += 2) {
+						if (i + 1 < args.length) {
+							const x = isRelative ? currentX + args[i] : args[i];
+							const y = isRelative ? currentY + args[i + 1] : args[i + 1];
+							vertices.push({ idx: idx++, cmd: cmdUpper === 'M' && i === 0 ? 'M' : 'L', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+							if (cmdUpper === 'M' && i === 0) {
+								startX = x;
+								startY = y;
+							}
+						}
+					}
+				} else if (cmdUpper === 'H') {
+					for (let i = 0; i < args.length; i++) {
+						const x = isRelative ? currentX + args[i] : args[i];
+						vertices.push({ idx: idx++, cmd: 'H', x, y: currentY, origCmd: cmd, argStartIdx: i });
+						currentX = x;
+					}
+				} else if (cmdUpper === 'V') {
+					for (let i = 0; i < args.length; i++) {
+						const y = isRelative ? currentY + args[i] : args[i];
+						vertices.push({ idx: idx++, cmd: 'V', x: currentX, y, origCmd: cmd, argStartIdx: i });
+						currentY = y;
+					}
+				} else if (cmdUpper === 'Z') {
+					vertices.push({ idx: idx++, cmd: 'Z', x: startX, y: startY, origCmd: cmd });
+					currentX = startX;
+					currentY = startY;
+				} else if (cmdUpper === 'C') {
+					for (let i = 0; i < args.length; i += 6) {
+						if (i + 5 < args.length) {
+							const x = isRelative ? currentX + args[i + 4] : args[i + 4];
+							const y = isRelative ? currentY + args[i + 5] : args[i + 5];
+							vertices.push({ idx: idx++, cmd: 'C', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+						}
+					}
+				} else if (cmdUpper === 'S') {
+					for (let i = 0; i < args.length; i += 4) {
+						if (i + 3 < args.length) {
+							const x = isRelative ? currentX + args[i + 2] : args[i + 2];
+							const y = isRelative ? currentY + args[i + 3] : args[i + 3];
+							vertices.push({ idx: idx++, cmd: 'S', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+						}
+					}
+				} else if (cmdUpper === 'Q') {
+					for (let i = 0; i < args.length; i += 4) {
+						if (i + 3 < args.length) {
+							const x = isRelative ? currentX + args[i + 2] : args[i + 2];
+							const y = isRelative ? currentY + args[i + 3] : args[i + 3];
+							vertices.push({ idx: idx++, cmd: 'Q', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+						}
+					}
+				} else if (cmdUpper === 'T') {
+					for (let i = 0; i < args.length; i += 2) {
+						if (i + 1 < args.length) {
+							const x = isRelative ? currentX + args[i] : args[i];
+							const y = isRelative ? currentY + args[i + 1] : args[i + 1];
+							vertices.push({ idx: idx++, cmd: 'T', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+						}
+					}
+				} else if (cmdUpper === 'A') {
+					for (let i = 0; i < args.length; i += 7) {
+						if (i + 6 < args.length) {
+							const x = isRelative ? currentX + args[i + 5] : args[i + 5];
+							const y = isRelative ? currentY + args[i + 6] : args[i + 6];
+							vertices.push({ idx: idx++, cmd: 'A', x, y, origCmd: cmd, argStartIdx: i });
+							currentX = x;
+							currentY = y;
+						}
+					}
+				}
+			}
+			return vertices;
+		}
+
+		function rebuildPathD(vertices, originalD) {
+			if (!vertices.length) return originalD;
+			
+			let newD = '';
+			let prevX = 0, prevY = 0;
+			
+			for (const v of vertices) {
+				if (v.cmd === 'M') {
+					newD += `M ${v.x} ${v.y} `;
+				} else if (v.cmd === 'L') {
+					newD += `L ${v.x} ${v.y} `;
+				} else if (v.cmd === 'H') {
+					newD += `L ${v.x} ${v.y} `;
+				} else if (v.cmd === 'V') {
+					newD += `L ${v.x} ${v.y} `;
+				} else if (v.cmd === 'Z') {
+					newD += 'Z ';
+				} else if (v.cmd === 'C' || v.cmd === 'S' || v.cmd === 'Q' || v.cmd === 'T' || v.cmd === 'A') {
+					newD += `L ${v.x} ${v.y} `;
+				}
+				prevX = v.x;
+				prevY = v.y;
+			}
+			
+			return newD.trim();
+		}
+
+		function enterPathEditMode(path) {
+			if (!path || !isSelectablePath(path)) return;
+			
+			exitPathEditMode();
+			
+			saveState();
+			
+			pathEditMode = true;
+			pathEditTargetPath = path;
+			
+			const d = path.getAttribute('d');
+			pathEditVertices = parsePathVertices(d);
+			
+			clearSelection();
+			addToSelection(path);
+			
+			renderPathEditHandles();
+		}
+
+		function exitPathEditMode() {
+			if (!pathEditMode) return;
+			
+			pathEditMode = false;
+			pathEditTargetPath = null;
+			pathEditVertices = [];
+			vertexDragActive = false;
+			edgeDragActive = false;
+			
+			clearPathEditHandles();
+			updateSelectionBbox();
+		}
+
+		function renderPathEditHandles() {
+			const ui = ensureSelectionUi();
+			if (!ui || !pathEditTargetPath) return;
+
+			clearPathEditHandles();
+
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return;
+			const ctm = svg.getScreenCTM();
+			const scale = ctm ? 1 / ctm.a : 1;
+			const vertexSize = VERTEX_HANDLE_SIZE * scale;
+			const edgeSize = EDGE_HANDLE_SIZE * scale;
+			const strokeWidth = 1.5 * scale;
+
+			for (let i = 0; i < pathEditVertices.length; i++) {
+				const v = pathEditVertices[i];
+				if (v.cmd === 'Z') continue;
+
+				const handle = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+				handle.setAttribute('class', 'vertex-handle');
+				handle.setAttribute('data-vertex-idx', i);
+				handle.setAttribute('x', v.x - vertexSize / 2);
+				handle.setAttribute('y', v.y - vertexSize / 2);
+				handle.setAttribute('width', vertexSize);
+				handle.setAttribute('height', vertexSize);
+				handle.setAttribute('fill', '#3b82f6');
+				handle.setAttribute('stroke', '#ffffff');
+				handle.setAttribute('stroke-width', strokeWidth);
+				handle.style.cursor = 'move';
+				handle.style.pointerEvents = 'all';
+				ui.appendChild(handle);
+
+				const nextIdx = i + 1;
+				if (nextIdx < pathEditVertices.length) {
+					const nextV = pathEditVertices[nextIdx];
+					if (nextV.cmd !== 'Z' && nextV.cmd !== 'M') {
+						const midX = (v.x + nextV.x) / 2;
+						const midY = (v.y + nextV.y) / 2;
+
+						const edgeHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+						edgeHandle.setAttribute('class', 'edge-handle');
+						edgeHandle.setAttribute('data-edge-idx', i);
+						edgeHandle.setAttribute('cx', midX);
+						edgeHandle.setAttribute('cy', midY);
+						edgeHandle.setAttribute('r', edgeSize / 2);
+						edgeHandle.setAttribute('fill', '#10b981');
+						edgeHandle.setAttribute('stroke', '#ffffff');
+						edgeHandle.setAttribute('stroke-width', strokeWidth);
+						edgeHandle.style.cursor = 'move';
+						edgeHandle.style.pointerEvents = 'all';
+						ui.appendChild(edgeHandle);
+					}
+				}
+			}
+		}
+
+		function clearPathEditHandles() {
+			const ui = getSelectionUi();
+			if (ui) {
+				ui.querySelectorAll('.vertex-handle, .edge-handle').forEach(el => el.remove());
+			}
+		}
+
+		function startVertexDrag(handle, svgPt) {
+			const idx = parseInt(handle.getAttribute('data-vertex-idx'), 10);
+			if (isNaN(idx) || idx < 0 || idx >= pathEditVertices.length) return;
+			
+			vertexDragActive = true;
+			vertexDragIndex = idx;
+			vertexDragStartX = svgPt.x;
+			vertexDragStartY = svgPt.y;
+		}
+
+		function startEdgeDrag(handle, svgPt) {
+			const idx = parseInt(handle.getAttribute('data-edge-idx'), 10);
+			if (isNaN(idx) || idx < 0 || idx >= pathEditVertices.length - 1) return;
+			
+			edgeDragActive = true;
+			edgeDragIndex = idx;
+			edgeDragStartX = svgPt.x;
+			edgeDragStartY = svgPt.y;
+		}
+
+		function handleVertexDrag(svgPt) {
+			if (!vertexDragActive || vertexDragIndex < 0) return;
+			
+			const dx = svgPt.x - vertexDragStartX;
+			const dy = svgPt.y - vertexDragStartY;
+			
+			const v = pathEditVertices[vertexDragIndex];
+			v.x += dx;
+			v.y += dy;
+			
+			vertexDragStartX = svgPt.x;
+			vertexDragStartY = svgPt.y;
+			
+			applyVertexChanges();
+		}
+
+		function handleEdgeDrag(svgPt) {
+			if (!edgeDragActive || edgeDragIndex < 0) return;
+			
+			const dx = svgPt.x - edgeDragStartX;
+			const dy = svgPt.y - edgeDragStartY;
+			
+			const v1 = pathEditVertices[edgeDragIndex];
+			const v2 = pathEditVertices[edgeDragIndex + 1];
+			
+			if (v1 && v1.cmd !== 'Z') {
+				v1.x += dx;
+				v1.y += dy;
+			}
+			if (v2 && v2.cmd !== 'Z') {
+				v2.x += dx;
+				v2.y += dy;
+			}
+			
+			edgeDragStartX = svgPt.x;
+			edgeDragStartY = svgPt.y;
+			
+			applyVertexChanges();
+		}
+
+		function applyVertexChanges() {
+			if (!pathEditTargetPath) return;
+			
+			const originalD = pathEditTargetPath.getAttribute('d');
+			const newD = rebuildPathD(pathEditVertices, originalD);
+			pathEditTargetPath.setAttribute('d', newD);
+			pathEditTargetPath.removeAttribute('transform');
+			
+			renderPathEditHandles();
+		}
+
+		function endVertexDrag() {
+			if (vertexDragActive) {
+				vertexDragActive = false;
+				vertexDragIndex = -1;
+				scheduleCsvPathCollisions();
+			}
+		}
+
+		function endEdgeDrag() {
+			if (edgeDragActive) {
+				edgeDragActive = false;
+				edgeDragIndex = -1;
+				scheduleCsvPathCollisions();
+			}
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-2: Hit-test for selectable paths at a point (through overlays)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function getSelectablePathAtPoint(svgPt) {
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return null;
+			
+			const paths = Array.from(svg.querySelectorAll('path')).filter(isSelectablePath);
+			let smallestPath = null;
+			let smallestArea = Infinity;
+			
+			for (const path of paths) {
+				try {
+					if (pathContainsUserPoint(path, svg, svgPt.x, svgPt.y)) {
+						const bbox = path.getBBox();
+						const area = bbox.width * bbox.height;
+						if (area < smallestArea) {
+							smallestArea = area;
+							smallestPath = path;
+						}
+					}
+				} catch (e) {
+					// Skip paths that fail hit-testing
+				}
+			}
+			
+			return smallestPath;
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Mousedown handler for svg-container with interaction priority
+		// SC-SEL-2: Updated priority - Ctrl/Cmd+path toggle beats bbox interior move
 		// ─────────────────────────────────────────────────────────────────────────────
 
 		let scSel1Handled = false; // Flag to track if SC-SEL-1 handled the event
@@ -2544,9 +2993,38 @@ import "../styles.css";
 
 			const target = e.target;
 			const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 
-			// Priority 1: Check if target is a bbox handle
-			if (target.classList && target.classList.contains('selection-handle')) {
+			// SC-SEL-2 Priority 1: If path edit mode is active, handle vertex/edge drags
+			if (pathEditMode && pathEditTargetPath) {
+				if (target.classList && target.classList.contains('vertex-handle')) {
+					e.preventDefault();
+					e.stopPropagation();
+					scSel1Handled = true;
+					startVertexDrag(target, svgPt);
+					return;
+				}
+				if (target.classList && target.classList.contains('edge-handle')) {
+					e.preventDefault();
+					e.stopPropagation();
+					scSel1Handled = true;
+					startEdgeDrag(target, svgPt);
+					return;
+				}
+				const clickedOnEditPath = target === pathEditTargetPath || 
+					pathContainsUserPoint(pathEditTargetPath, svg, svgPt.x, svgPt.y);
+				const clickedOnSelectionUi = target.closest('#selection-ui');
+				if (!clickedOnEditPath && !clickedOnSelectionUi) {
+					exitPathEditMode();
+					e.preventDefault();
+					e.stopPropagation();
+					scSel1Handled = true;
+					return;
+				}
+			}
+
+			// Priority 2: Check if target is a bbox handle (scale) - not during edit mode
+			if (!pathEditMode && target.classList && target.classList.contains('selection-handle')) {
 				e.preventDefault();
 				e.stopPropagation();
 				scSel1Handled = true;
@@ -2554,12 +3032,10 @@ import "../styles.css";
 				const handleId = target.getAttribute('data-handle');
 				bboxDragMode = 'scale-' + handleId;
 				
-				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 				bboxDragStartX = svgPt.x;
 				bboxDragStartY = svgPt.y;
 				bboxOriginalBounds = getSelectionBounds();
 				
-				// Anchor is opposite corner
 				if (bboxOriginalBounds) {
 					const b = bboxOriginalBounds;
 					if (handleId === 'nw') bboxScaleAnchor = { x: b.x + b.width, y: b.y + b.height };
@@ -2575,14 +3051,30 @@ import "../styles.css";
 				return;
 			}
 
-			// Priority 2: Check if target is bbox interior (for move)
-			if (target.getAttribute && target.getAttribute('data-bbox-interior') === 'true' && groupGlobal.length > 0) {
+			// SC-SEL-2 Priority 3: Ctrl/Cmd+click on selectable path = toggle (hit-test through overlay)
+			if (isCtrlOrCmd && !pathEditMode) {
+				let toggleTarget = isSelectablePath(target) ? target : null;
+				
+				if (!toggleTarget && (target.closest('#selection-ui') || target.getAttribute?.('data-bbox-interior') === 'true')) {
+					toggleTarget = getSelectablePathAtPoint(svgPt);
+				}
+				
+				if (toggleTarget) {
+					e.preventDefault();
+					e.stopPropagation();
+					scSel1Handled = true;
+					toggleSelection(toggleTarget);
+					return;
+				}
+			}
+
+			// Priority 4: Check if target is bbox interior (for move) - only when not Ctrl/Cmd
+			if (!pathEditMode && !isCtrlOrCmd && target.getAttribute && target.getAttribute('data-bbox-interior') === 'true' && groupGlobal.length > 0) {
 				e.preventDefault();
 				e.stopPropagation();
 				scSel1Handled = true;
 				
 				bboxDragMode = 'move';
-				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 				bboxDragStartX = svgPt.x;
 				bboxDragStartY = svgPt.y;
 				
@@ -2593,49 +3085,31 @@ import "../styles.css";
 				return;
 			}
 
-			// Priority 3: Check if target is a selectable path with Ctrl/Cmd (toggle)
-			if (isSelectablePath(target) && isCtrlOrCmd) {
-				e.preventDefault();
-				e.stopPropagation();
-				scSel1Handled = true;
-				
-				toggleSelection(target);
-				return;
-			}
-
-			// Priority 4: Check if target is a selectable path (select and allow drag)
-			// Let the existing handler deal with this - it handles path selection
-			if (isSelectablePath(target)) {
-				// Don't mark as handled - let existing code handle selection
-				// But we need to update bbox after selection
+			// Priority 5: Check if target is a selectable path (select and allow drag)
+			if (isSelectablePath(target) && !isCtrlOrCmd && !pathEditMode) {
 				setTimeout(() => updateSelectionBbox(), 0);
 				return;
 			}
 
-			// Priority 5: Empty SVG surface - start marquee
-			// Check if we clicked on the SVG itself or empty space
+			// Priority 6: Empty SVG surface - start marquee
 			const tagName = target.nodeName.toLowerCase();
 			const parentName = target.parentNode?.nodeName?.toLowerCase();
 			
-			// Start marquee if clicking on svg element itself, or on a non-path child
 			const isEmptyArea = tagName === 'svg' || 
 				(parentName === 'svg' && !isSelectablePath(target)) ||
 				target.closest('#selection-ui');
 			
-			if (isEmptyArea && !target.closest('#selection-ui .selection-handle') && 
+			if (!pathEditMode && isEmptyArea && !target.closest('#selection-ui .selection-handle') && 
 				!target.getAttribute?.('data-bbox-interior')) {
 				e.preventDefault();
-				// Don't stop propagation for pan/zoom
 				scSel1Handled = true;
 				
 				marqueeActive = true;
-				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 				marqueeStartX = svgPt.x;
 				marqueeStartY = svgPt.y;
 				marqueeStartClientX = e.clientX;
 				marqueeStartClientY = e.clientY;
 				
-				// Clear selection for plain marquee (no modifier)
 				if (!isCtrlOrCmd) {
 					clearSelection();
 				}
@@ -2645,17 +3119,29 @@ import "../styles.css";
 
 		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Mousemove handler for marquee and bbox drag
+		// SC-SEL-2: Also handles vertex/edge drag during path edit mode
 		// ─────────────────────────────────────────────────────────────────────────────
 
 		document.addEventListener('mousemove', (e) => {
 			const svg = document.querySelector('#svg-container svg');
 			if (!svg) return;
 
+			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+
+			// SC-SEL-2: Handle vertex/edge drag during path edit mode
+			if (pathEditMode) {
+				if (vertexDragActive) {
+					handleVertexDrag(svgPt);
+					return;
+				}
+				if (edgeDragActive) {
+					handleEdgeDrag(svgPt);
+					return;
+				}
+			}
+
 			// Handle marquee drawing
 			if (marqueeActive) {
-				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
-				
-				// Check if we've exceeded the threshold
 				const clientDx = e.clientX - marqueeStartClientX;
 				const clientDy = e.clientY - marqueeStartClientY;
 				const clientDist = Math.sqrt(clientDx * clientDx + clientDy * clientDy);
@@ -2731,16 +3217,26 @@ import "../styles.css";
 
 		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Mouseup handler for marquee finalization and bbox drag end
+		// SC-SEL-2: Also handles vertex/edge drag end during path edit mode
 		// ─────────────────────────────────────────────────────────────────────────────
 
 		document.addEventListener('mouseup', (e) => {
 			const svg = document.querySelector('#svg-container svg');
 
+			// SC-SEL-2: Handle vertex/edge drag end
+			if (pathEditMode) {
+				if (vertexDragActive) {
+					endVertexDrag();
+				}
+				if (edgeDragActive) {
+					endEdgeDrag();
+				}
+			}
+
 			// Handle marquee finalization
 			if (marqueeActive && svg) {
 				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 				
-				// Check if we exceeded the threshold
 				const clientDx = e.clientX - marqueeStartClientX;
 				const clientDy = e.clientY - marqueeStartClientY;
 				const clientDist = Math.sqrt(clientDx * clientDx + clientDy * clientDy);
@@ -2750,10 +3246,8 @@ import "../styles.css";
 					const paths = getPathsInMarquee(marqueeStartX, marqueeStartY, svgPt.x, svgPt.y);
 					
 					if (isCtrlOrCmd) {
-						// Add to selection (union)
 						paths.forEach((p) => addToSelection(p));
 					} else {
-						// Replace selection
 						setSelection(paths);
 					}
 				}
@@ -2769,6 +3263,52 @@ import "../styles.css";
 			}
 		});
 
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-2: Double-click handler for entering path edit mode
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		document.getElementById('svg-container').addEventListener('dblclick', (e) => {
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return;
+
+			const target = e.target;
+			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+
+			if (pathEditMode && pathEditTargetPath) {
+				if (isSelectablePath(target) && target !== pathEditTargetPath) {
+					enterPathEditMode(target);
+					e.preventDefault();
+					e.stopPropagation();
+					return;
+				}
+			}
+
+			let pathToEdit = isSelectablePath(target) ? target : null;
+			
+			if (!pathToEdit) {
+				pathToEdit = getSelectablePathAtPoint(svgPt);
+			}
+
+			if (pathToEdit) {
+				enterPathEditMode(pathToEdit);
+				e.preventDefault();
+				e.stopPropagation();
+			}
+		}, true);
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-2: Keyboard handler for exiting path edit mode (Escape, Enter)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		document.addEventListener('keydown', (e) => {
+			if (pathEditMode) {
+				if (e.key === 'Escape' || e.key === 'Enter') {
+					exitPathEditMode();
+					e.preventDefault();
+				}
+			}
+		});
+
 		// track the primary button
 		let primaryMouseIsDown = false;
 		document.addEventListener('mousedown', e => {
@@ -2780,9 +3320,9 @@ import "../styles.css";
 
 		document.getElementById('svg-container')
 		.addEventListener('mousemove', e => {
-			if (!primaryMouseIsDown || !e.shiftKey) return;              // nothing to do
+			if (!primaryMouseIsDown || !e.shiftKey) return;
 
-			const target = e.target;                                     // element under cursor
+			const target = e.target;
 			const parentIsG = target.parentNode?.nodeName.toLowerCase() === 'g';
 			const valid     = parentIsG || target.nodeName.toLowerCase() === 'circle';
 
@@ -2931,6 +3471,18 @@ import "../styles.css";
 					
 					// Preserve selection on right-click (context menu)
 					if (e.button === 2 && groupName.classList.contains('svg-tool-selected')) {
+						return;
+					}
+					
+					// SC-SEL-2: Skip selection changes when SC-SEL-1/2 handler already processed the event
+					// This prevents Ctrl+click toggle from being overwritten
+					if (scSel1Handled) {
+						return;
+					}
+					
+					// SC-SEL-2: Skip selection replacement when Ctrl/Cmd is held (toggle handled above)
+					const isCtrlOrCmdLegacy = e.ctrlKey || e.metaKey;
+					if (isCtrlOrCmdLegacy && e.button === 0) {
 						return;
 					}
 					
