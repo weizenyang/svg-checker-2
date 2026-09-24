@@ -2215,6 +2215,104 @@ import "../styles.css";
 		let legacyMoveCumulativeY = 0;  // Cumulative Y displacement for legacy move
 		let legacyMoveGestureActive = false;  // Track if legacy move gesture is in progress
 
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-5: Move opacity state (fill opacity 50% during shape move)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		const fillOpacitySnapshot = new Map(); // element → { attr: string|null, style: string }
+		let moveOpacityApplied = false;  // Guard against double-apply
+
+		/**
+		 * SC-SEL-5: Snapshot fill opacity of all selected elements and set to 50%.
+		 */
+		function applyMoveOpacity() {
+			if (moveOpacityApplied) return;
+			moveOpacityApplied = true;
+			fillOpacitySnapshot.clear();
+			
+			groupGlobal.forEach((el) => {
+				const attrOpacity = el.getAttribute('fill-opacity');
+				const styleOpacity = el.style.fillOpacity || '';
+				fillOpacitySnapshot.set(el, { attr: attrOpacity, style: styleOpacity });
+				el.style.fillOpacity = '0.5';
+			});
+		}
+
+		/**
+		 * SC-SEL-5: Restore fill opacity of all elements to their pre-drag state.
+		 */
+		function restoreMoveOpacity() {
+			if (!moveOpacityApplied) return;
+			moveOpacityApplied = false;
+			
+			fillOpacitySnapshot.forEach((snapshot, el) => {
+				if (snapshot.style) {
+					el.style.fillOpacity = snapshot.style;
+				} else {
+					el.style.fillOpacity = '';
+				}
+			});
+			fillOpacitySnapshot.clear();
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-5: Handle multi-selection state (Ctrl/Cmd multi-select vertices/edges)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		// Set of selected handles: { kind: 'vertex'|'edge', index: number }
+		let handleSelection = [];  // Array of { kind: 'vertex'|'edge', index: number }
+		let multiHandleDragActive = false;
+		let multiHandleDragStartX = 0;
+		let multiHandleDragStartY = 0;
+
+		/**
+		 * SC-SEL-5: Check if a handle is in the selection set.
+		 */
+		function isHandleSelected(kind, index) {
+			return handleSelection.some(h => h.kind === kind && h.index === index);
+		}
+
+		/**
+		 * SC-SEL-5: Add a handle to the selection set if not already present.
+		 */
+		function addHandleToSelection(kind, index) {
+			if (!isHandleSelected(kind, index)) {
+				handleSelection.push({ kind, index });
+			}
+		}
+
+		/**
+		 * SC-SEL-5: Remove a handle from the selection set.
+		 */
+		function removeHandleFromSelection(kind, index) {
+			handleSelection = handleSelection.filter(h => !(h.kind === kind && h.index === index));
+		}
+
+		/**
+		 * SC-SEL-5: Toggle a handle in the selection set.
+		 */
+		function toggleHandleSelection(kind, index) {
+			if (isHandleSelected(kind, index)) {
+				removeHandleFromSelection(kind, index);
+			} else {
+				addHandleToSelection(kind, index);
+			}
+		}
+
+		/**
+		 * SC-SEL-5: Clear all handle selections.
+		 */
+		function clearHandleSelection() {
+			handleSelection = [];
+		}
+
+		/**
+		 * SC-SEL-5: Set handle selection to a single handle.
+		 */
+		function setHandleSelectionSingle(kind, index) {
+			handleSelection = [{ kind, index }];
+		}
+
 		/**
 		 * SC-SEL-3: Constrain delta to locked axis (gesture-start dominant algorithm).
 		 * When Shift is held, determines axis based on total displacement from gesture start:
@@ -2897,6 +2995,9 @@ import "../styles.css";
 			const d = path.getAttribute('d');
 			pathEditVertices = parsePathVertices(d);
 			
+			// SC-SEL-5: Clear handle selection when entering new path edit
+			clearHandleSelection();
+			
 			clearSelection();
 			addToSelection(path);
 			
@@ -2911,6 +3012,8 @@ import "../styles.css";
 			pathEditVertices = [];
 			vertexDragActive = false;
 			edgeDragActive = false;
+			// SC-SEL-5: Clear handle selection when exiting path edit mode
+			clearHandleSelection();
 			
 			clearPathEditHandles();
 			updateSelectionBbox();
@@ -2929,10 +3032,15 @@ import "../styles.css";
 			const vertexSize = VERTEX_HANDLE_SIZE * scale;
 			const edgeSize = EDGE_HANDLE_SIZE * scale;
 			const strokeWidth = 1.5 * scale;
+			// SC-SEL-5: Thicker stroke for selected handles
+			const selectedStrokeWidth = 2.5 * scale;
 
 			for (let i = 0; i < pathEditVertices.length; i++) {
 				const v = pathEditVertices[i];
 				if (v.cmd === 'Z') continue;
+
+				// SC-SEL-5: Check if this vertex is selected
+				const vertexSelected = isHandleSelected('vertex', i);
 
 				const handle = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
 				handle.setAttribute('class', 'vertex-handle');
@@ -2941,9 +3049,10 @@ import "../styles.css";
 				handle.setAttribute('y', v.y - vertexSize / 2);
 				handle.setAttribute('width', vertexSize);
 				handle.setAttribute('height', vertexSize);
-				handle.setAttribute('fill', '#3b82f6');
-				handle.setAttribute('stroke', '#ffffff');
-				handle.setAttribute('stroke-width', strokeWidth);
+				// SC-SEL-5: Different fill/stroke for selected vertices
+				handle.setAttribute('fill', vertexSelected ? '#1d4ed8' : '#3b82f6');
+				handle.setAttribute('stroke', vertexSelected ? '#fbbf24' : '#ffffff');
+				handle.setAttribute('stroke-width', vertexSelected ? selectedStrokeWidth : strokeWidth);
 				handle.style.cursor = 'move';
 				handle.style.pointerEvents = 'all';
 				ui.appendChild(handle);
@@ -2955,15 +3064,19 @@ import "../styles.css";
 						const midX = (v.x + nextV.x) / 2;
 						const midY = (v.y + nextV.y) / 2;
 
+						// SC-SEL-5: Check if this edge is selected
+						const edgeSelected = isHandleSelected('edge', i);
+
 						const edgeHandle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 						edgeHandle.setAttribute('class', 'edge-handle');
 						edgeHandle.setAttribute('data-edge-idx', i);
 						edgeHandle.setAttribute('cx', midX);
 						edgeHandle.setAttribute('cy', midY);
 						edgeHandle.setAttribute('r', edgeSize / 2);
-						edgeHandle.setAttribute('fill', '#10b981');
-						edgeHandle.setAttribute('stroke', '#ffffff');
-						edgeHandle.setAttribute('stroke-width', strokeWidth);
+						// SC-SEL-5: Different fill/stroke for selected edges
+						edgeHandle.setAttribute('fill', edgeSelected ? '#047857' : '#10b981');
+						edgeHandle.setAttribute('stroke', edgeSelected ? '#fbbf24' : '#ffffff');
+						edgeHandle.setAttribute('stroke-width', edgeSelected ? selectedStrokeWidth : strokeWidth);
 						edgeHandle.style.cursor = 'move';
 						edgeHandle.style.pointerEvents = 'all';
 						ui.appendChild(edgeHandle);
@@ -2979,10 +3092,32 @@ import "../styles.css";
 			}
 		}
 
-		function startVertexDrag(handle, svgPt) {
+		function startVertexDrag(handle, svgPt, isCtrlOrCmd) {
 			const idx = parseInt(handle.getAttribute('data-vertex-idx'), 10);
 			if (isNaN(idx) || idx < 0 || idx >= pathEditVertices.length) return;
 			
+			// SC-SEL-5: Handle multi-selection
+			if (isCtrlOrCmd) {
+				// Toggle this handle in selection
+				toggleHandleSelection('vertex', idx);
+				renderPathEditHandles();
+				return; // Don't start drag on Ctrl/Cmd click
+			}
+			
+			// SC-SEL-5: If the handle is not selected, select it alone (Illustrator-style)
+			if (!isHandleSelected('vertex', idx)) {
+				setHandleSelectionSingle('vertex', idx);
+				renderPathEditHandles();
+			}
+			
+			// SC-SEL-5: Start multi-handle drag if there are selections
+			if (handleSelection.length > 0) {
+				multiHandleDragActive = true;
+				multiHandleDragStartX = svgPt.x;
+				multiHandleDragStartY = svgPt.y;
+			}
+			
+			// Keep legacy single-drag tracking for compatibility
 			vertexDragActive = true;
 			vertexDragIndex = idx;
 			vertexDragStartX = svgPt.x;
@@ -2991,10 +3126,32 @@ import "../styles.css";
 			startAxisLockGesture(svgPt.x, svgPt.y);
 		}
 
-		function startEdgeDrag(handle, svgPt) {
+		function startEdgeDrag(handle, svgPt, isCtrlOrCmd) {
 			const idx = parseInt(handle.getAttribute('data-edge-idx'), 10);
 			if (isNaN(idx) || idx < 0 || idx >= pathEditVertices.length - 1) return;
 			
+			// SC-SEL-5: Handle multi-selection
+			if (isCtrlOrCmd) {
+				// Toggle this handle in selection
+				toggleHandleSelection('edge', idx);
+				renderPathEditHandles();
+				return; // Don't start drag on Ctrl/Cmd click
+			}
+			
+			// SC-SEL-5: If the handle is not selected, select it alone (Illustrator-style)
+			if (!isHandleSelected('edge', idx)) {
+				setHandleSelectionSingle('edge', idx);
+				renderPathEditHandles();
+			}
+			
+			// SC-SEL-5: Start multi-handle drag if there are selections
+			if (handleSelection.length > 0) {
+				multiHandleDragActive = true;
+				multiHandleDragStartX = svgPt.x;
+				multiHandleDragStartY = svgPt.y;
+			}
+			
+			// Keep legacy single-drag tracking for compatibility
 			edgeDragActive = true;
 			edgeDragIndex = idx;
 			edgeDragStartX = svgPt.x;
@@ -3014,12 +3171,20 @@ import "../styles.css";
 			dx = constrained.dx;
 			dy = constrained.dy;
 			
-			const v = pathEditVertices[vertexDragIndex];
-			v.x += dx;
-			v.y += dy;
+			// SC-SEL-5: Move all selected handles with deduplication
+			if (multiHandleDragActive && handleSelection.length > 0) {
+				moveSelectedHandles(dx, dy);
+			} else {
+				// Fallback: single vertex move (legacy)
+				const v = pathEditVertices[vertexDragIndex];
+				v.x += dx;
+				v.y += dy;
+			}
 			
 			vertexDragStartX += dx;
 			vertexDragStartY += dy;
+			multiHandleDragStartX += dx;
+			multiHandleDragStartY += dy;
 			
 			applyVertexChanges();
 		}
@@ -3035,22 +3200,61 @@ import "../styles.css";
 			dx = constrained.dx;
 			dy = constrained.dy;
 			
-			const v1 = pathEditVertices[edgeDragIndex];
-			const v2 = pathEditVertices[edgeDragIndex + 1];
-			
-			if (v1 && v1.cmd !== 'Z') {
-				v1.x += dx;
-				v1.y += dy;
-			}
-			if (v2 && v2.cmd !== 'Z') {
-				v2.x += dx;
-				v2.y += dy;
+			// SC-SEL-5: Move all selected handles with deduplication
+			if (multiHandleDragActive && handleSelection.length > 0) {
+				moveSelectedHandles(dx, dy);
+			} else {
+				// Fallback: single edge move (legacy - moves two vertices)
+				const v1 = pathEditVertices[edgeDragIndex];
+				const v2 = pathEditVertices[edgeDragIndex + 1];
+				
+				if (v1 && v1.cmd !== 'Z') {
+					v1.x += dx;
+					v1.y += dy;
+				}
+				if (v2 && v2.cmd !== 'Z') {
+					v2.x += dx;
+					v2.y += dy;
+				}
 			}
 			
 			edgeDragStartX += dx;
 			edgeDragStartY += dy;
+			multiHandleDragStartX += dx;
+			multiHandleDragStartY += dy;
 			
 			applyVertexChanges();
+		}
+
+		/**
+		 * SC-SEL-5: Move all selected handles by (dx, dy) with vertex deduplication.
+		 * An edge moves its two adjacent vertices. If a vertex is selected both directly
+		 * and via an adjacent edge, it should only move once.
+		 */
+		function moveSelectedHandles(dx, dy) {
+			// Collect all vertex indices that need to move (with deduplication)
+			const verticesToMove = new Set();
+			
+			for (const h of handleSelection) {
+				if (h.kind === 'vertex') {
+					verticesToMove.add(h.index);
+				} else if (h.kind === 'edge') {
+					// Edge at index i connects vertex i and vertex i+1
+					verticesToMove.add(h.index);
+					verticesToMove.add(h.index + 1);
+				}
+			}
+			
+			// Apply move to each unique vertex
+			for (const idx of verticesToMove) {
+				if (idx >= 0 && idx < pathEditVertices.length) {
+					const v = pathEditVertices[idx];
+					if (v && v.cmd !== 'Z') {
+						v.x += dx;
+						v.y += dy;
+					}
+				}
+			}
 		}
 
 		function applyVertexChanges() {
@@ -3068,6 +3272,8 @@ import "../styles.css";
 			if (vertexDragActive) {
 				vertexDragActive = false;
 				vertexDragIndex = -1;
+				// SC-SEL-5: Reset multi-handle drag state
+				multiHandleDragActive = false;
 				scheduleCsvPathCollisions();
 				// SC-SEL-3: End axis lock gesture tracking
 				endAxisLockGesture();
@@ -3078,6 +3284,8 @@ import "../styles.css";
 			if (edgeDragActive) {
 				edgeDragActive = false;
 				edgeDragIndex = -1;
+				// SC-SEL-5: Reset multi-handle drag state
+				multiHandleDragActive = false;
 				scheduleCsvPathCollisions();
 				// SC-SEL-3: End axis lock gesture tracking
 				endAxisLockGesture();
@@ -3135,25 +3343,28 @@ import "../styles.css";
 			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 
 			// SC-SEL-2 Priority 1: If path edit mode is active, handle vertex/edge drags
+			// SC-SEL-5: Pass Ctrl/Cmd state for multi-select support
 			if (pathEditMode && pathEditTargetPath) {
 				if (target.classList && target.classList.contains('vertex-handle')) {
 					e.preventDefault();
 					e.stopPropagation();
 					scSel1Handled = true;
-					startVertexDrag(target, svgPt);
+					startVertexDrag(target, svgPt, isCtrlOrCmd);
 					return;
 				}
 				if (target.classList && target.classList.contains('edge-handle')) {
 					e.preventDefault();
 					e.stopPropagation();
 					scSel1Handled = true;
-					startEdgeDrag(target, svgPt);
+					startEdgeDrag(target, svgPt, isCtrlOrCmd);
 					return;
 				}
+				// SC-SEL-5: Empty click in path edit mode clears handle selection
 				const clickedOnEditPath = target === pathEditTargetPath || 
 					pathContainsUserPoint(pathEditTargetPath, svg, svgPt.x, svgPt.y);
 				const clickedOnSelectionUi = target.closest('#selection-ui');
 				if (!clickedOnEditPath && !clickedOnSelectionUi) {
+					clearHandleSelection();
 					exitPathEditMode();
 					e.preventDefault();
 					e.stopPropagation();
@@ -3218,6 +3429,8 @@ import "../styles.css";
 				bboxDragStartY = svgPt.y;
 				// SC-SEL-3: Start axis lock gesture tracking
 				startAxisLockGesture(svgPt.x, svgPt.y);
+				// SC-SEL-5: Apply 50% fill opacity during move
+				applyMoveOpacity();
 				
 				if (!hasSavedStateForCurrentOperation) {
 					saveState();
@@ -3409,6 +3622,8 @@ import "../styles.css";
 				// SC-SEL-3: End axis lock gesture if bbox move was active
 				if (bboxDragMode === 'move') {
 					endAxisLockGesture();
+					// SC-SEL-5: Restore fill opacity after move
+					restoreMoveOpacity();
 				}
 				bboxDragMode = null;
 				bboxOriginalBounds = null;
@@ -9446,9 +9661,17 @@ import "../styles.css";
 					// SC-SEL-3: End axis lock gesture if bbox move was active
 					if (bboxDragMode === 'move') {
 						endAxisLockGesture();
+						// SC-SEL-5: Restore fill opacity on cancel
+						restoreMoveOpacity();
 					}
 					bboxDragMode = null;
 					bboxOriginalBounds = null;
+				}
+
+				// SC-SEL-5: Clear handle selection on Escape
+				if (pathEditMode) {
+					clearHandleSelection();
+					renderPathEditHandles();
 				}
 
 				if (multiSelect) {
@@ -9789,9 +10012,17 @@ import "../styles.css";
 					// SC-SEL-3: End axis lock gesture if bbox move was active
 					if (bboxDragMode === 'move') {
 						endAxisLockGesture();
+						// SC-SEL-5: Restore fill opacity on cancel
+						restoreMoveOpacity();
 					}
 					bboxDragMode = null;
 					bboxOriginalBounds = null;
+				}
+
+				// SC-SEL-5: Clear handle selection on Escape
+				if (pathEditMode) {
+					clearHandleSelection();
+					renderPathEditHandles();
 				}
 			}
 
