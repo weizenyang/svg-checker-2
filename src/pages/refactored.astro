@@ -1638,7 +1638,14 @@ import "../styles.css";
 				if (findMatchedSvgObjects(f.name, importedSVGs).length > 0) return false;
 				return true;
 			});
-			if (floorplanFiles.length === 0) return;
+			if (floorplanFiles.length === 0) {
+				if (_pendingCsvFilesForReScore && _pendingCsvFilesForReScore.length > 0) {
+					const csvs = _pendingCsvFilesForReScore;
+					_pendingCsvFilesForReScore = null;
+					processMultipleCsvFiles(csvs);
+				}
+				return;
+			}
 			console.log(`📋 Auto-loading ${floorplanFiles.length} backplate_image_floorplan file(s) into Check Floorplans`);
 			Promise.all(floorplanFiles.map((file) => new Promise((resolve, reject) => {
 				const reader = new FileReader();
@@ -1654,6 +1661,11 @@ import "../styles.css";
 				const svgElement = document.getElementById("svg-container")?.querySelector("svg");
 				if (svgElement) previewBackplate(svgElement);
 				showToast(`Loaded ${results.length} floorplan image(s) for overlay`, 'success');
+				if (_pendingCsvFilesForReScore && _pendingCsvFilesForReScore.length > 0) {
+					const csvs = _pendingCsvFilesForReScore;
+					_pendingCsvFilesForReScore = null;
+					processMultipleCsvFiles(csvs);
+				}
 			}).catch((err) => console.error('Error loading floorplan images:', err));
 		}
 
@@ -1905,6 +1917,11 @@ import "../styles.css";
 		/** @type {{ name: string, file: File, contents: string, matchScore: number }[]} */
 		var importedCSVs = [];
 		var currentCSVIndex = 0;
+
+		// Flag to prevent feedback loops in bidirectional CSV/SVG/Image sync
+		let _syncingMedia = false;
+		// Pending CSVs waiting for images to load (for timing fix)
+		let _pendingCsvFilesForReScore: File[] | null = null;
 
 		//3d objectID
 		var object3dCount = 0;
@@ -3561,6 +3578,7 @@ import "../styles.css";
 					currentCSVIndex--;
 					applySelectedCSV();
 					updateCSVNavigationUI();
+					syncSVGAndBackplateToCSV();
 				}
 			});
 			rightArrow.addEventListener("click", () => {
@@ -3568,6 +3586,7 @@ import "../styles.css";
 					currentCSVIndex++;
 					applySelectedCSV();
 					updateCSVNavigationUI();
+					syncSVGAndBackplateToCSV();
 				}
 			});
 			updateCSVNavigationUI();
@@ -3757,6 +3776,7 @@ import "../styles.css";
 
 		function selectBestMatchingCSV() {
 			if (importedCSVs.length === 0) return;
+			if (_syncingMedia) return;
 			const currentSvg = importedSVGs[currentSVGIndex];
 			if (!currentSvg) return;
 
@@ -3770,10 +3790,76 @@ import "../styles.css";
 				}
 			});
 			if (bestScore > 0 && bestIdx !== currentCSVIndex) {
+				_syncingMedia = true;
 				currentCSVIndex = bestIdx;
 				applySelectedCSV();
 				updateCSVNavigationUI();
+				_syncingMedia = false;
 			}
+		}
+
+		function selectBestMatchingCSVForImage(imageName: string) {
+			if (importedCSVs.length === 0) return;
+			if (_syncingMedia) return;
+			if (!imageName) return;
+
+			let bestIdx = 0;
+			let bestScore = 0;
+			importedCSVs.forEach((csvObj, idx) => {
+				const score = csvMediaMatchScore(csvObj.name, imageName);
+				if (score > bestScore) {
+					bestScore = score;
+					bestIdx = idx;
+				}
+			});
+			if (bestScore > 0 && bestIdx !== currentCSVIndex) {
+				_syncingMedia = true;
+				currentCSVIndex = bestIdx;
+				applySelectedCSV();
+				updateCSVNavigationUI();
+				_syncingMedia = false;
+			}
+		}
+
+		function syncSVGAndBackplateToCSV() {
+			if (_syncingMedia) return;
+			if (importedCSVs.length === 0) return;
+			const csvObj = importedCSVs[currentCSVIndex];
+			if (!csvObj) return;
+
+			_syncingMedia = true;
+
+			let bestSvgIdx = currentSVGIndex;
+			let bestSvgScore = 0;
+			importedSVGs.forEach((svgObj, idx) => {
+				const score = csvMediaMatchScore(csvObj.name, svgObj.name);
+				if (score > bestSvgScore) {
+					bestSvgScore = score;
+					bestSvgIdx = idx;
+				}
+			});
+
+			if (bestSvgScore > 0 && bestSvgIdx !== currentSVGIndex) {
+				currentSVGIndex = bestSvgIdx;
+				processSVG(importedSVGs[currentSVGIndex].element);
+				updateSVGNavigationUI();
+			}
+
+			let bestImgName: string | null = null;
+			let bestImgScore = 0;
+			imageList.forEach((imgObj) => {
+				const score = csvMediaMatchScore(csvObj.name, imgObj.name);
+				if (score > bestImgScore) {
+					bestImgScore = score;
+					bestImgName = imgObj.name;
+				}
+			});
+
+			if (bestImgScore > 0 && bestImgName && bestImgName !== currentHoveredImageName) {
+				currentHoveredImageName = bestImgName;
+			}
+
+			_syncingMedia = false;
 		}
 
 		function processMultipleCsvFiles(csvFiles: File[]) {
@@ -3781,9 +3867,6 @@ import "../styles.css";
 
 			importedCSVs = [];
 			currentCSVIndex = 0;
-
-			const currentSvgName = importedSVGs[currentSVGIndex]?.name || "";
-			const currentImageName = imageList[0]?.name || "";
 
 			let filesProcessed = 0;
 			const tempCsvData: { name: string, file: File, contents: string, matchScore: number }[] = [];
@@ -3795,12 +3878,12 @@ import "../styles.css";
 					const csvName = getBaseName(csvFile.name);
 
 					let matchScore = 0;
-					if (currentSvgName) {
-						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, currentSvgName));
-					}
-					if (currentImageName) {
-						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, currentImageName));
-					}
+					importedSVGs.forEach((svgObj) => {
+						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, svgObj.name));
+					});
+					imageList.forEach((imgObj) => {
+						matchScore = Math.max(matchScore, csvMediaMatchScore(csvName, imgObj.name));
+					});
 
 					tempCsvData.push({
 						name: csvName,
@@ -3818,6 +3901,7 @@ import "../styles.css";
 							currentCSVIndex = 0;
 							applySelectedCSV();
 							spawnCSVNavigation();
+							syncSVGAndBackplateToCSV();
 						}
 					}
 				};
@@ -4256,6 +4340,10 @@ import "../styles.css";
 						matchedSvgs.map((s) => s.name),
 					);
 
+					if (!isVideo && !imageList.some((img) => img.name === mediaFile.name)) {
+						imageList.push({ name: mediaFile.name, data: contents as string });
+					}
+
 					const applyToMatchedSvgs = () => {
 					matchedSvgs.forEach((svgObj) => {
 							const svgElement = svgObj.element;
@@ -4450,10 +4538,10 @@ import "../styles.css";
 							processSVG(importedSVGs[currentSVGIndex].element);
 							spawnSVGNavigation();
 							handleDraggedImages(fileArr.filter((f) => isRasterOrVideoFile(f)));
-							loadFloorplanFilesToImageList(fileArr);
 							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
+								_pendingCsvFilesForReScore = pendingCsvFollowUp;
 							}
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -4461,10 +4549,13 @@ import "../styles.css";
 			} else if (isRasterOrVideoFile(file)) {
 				handleDraggedImages(fileArr)
 				if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-					queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
+					setTimeout(() => processMultipleCsvFiles(pendingCsvFollowUp), 100);
 				}
 			} else if (isCsvFile(file)) {
-				// Fall through: treat first CSV in a multi-file drop
+				const allCsvs = fileArr.filter((f) => isCsvFile(f) && !/^automation_/i.test(f.name || ""));
+				if (allCsvs.length > 0) {
+					processMultipleCsvFiles(allCsvs);
+				}
 			}
 			} else {
 				if (isSvgFile(file)) {
@@ -4494,10 +4585,10 @@ import "../styles.css";
 							processSVG(importedSVGs[currentSVGIndex].element);
 							spawnSVGNavigation();
 							// Auto-load backplate_image_floorplan images from the selection into Check Floorplans
-							loadFloorplanFilesToImageList(fileArr);
 							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
+								_pendingCsvFilesForReScore = pendingCsvFollowUp;
 							}
+							loadFloorplanFilesToImageList(fileArr);
 						}
 					};
 					reader.readAsText(fileToProcess);
@@ -4506,7 +4597,7 @@ import "../styles.css";
 				if (importedSVGs.length > 0) {
 					handleDraggedImages(fileArr);
 					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-						queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
+						processMultipleCsvFiles(pendingCsvFollowUp);
 					}
 				} else {
 				const isVideo =
@@ -4589,11 +4680,6 @@ import "../styles.css";
 						// inside width×height while CSV coords use the full viewBox — markers look
 						// shifted (often upward). Fill the existing viewBox; never resize it to
 						// naturalWidth (e.g. 4320) — production coords are always 4096-space.
-						const runPendingCsv = () => {
-							if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-								queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
-							}
-						};
 						const vbW = Number(svgViewbox[2]) || 4096;
 						const vbH = Number(svgViewbox[3]) || 4096;
 						const svgImage = document.createElementNS(
@@ -4617,10 +4703,9 @@ import "../styles.css";
 						);
 						console.log("Adding new background image");
 						internalSVG.insertBefore(svgImage, internalSVG.firstChild);
-						runPendingCsv();
 					}
-					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0 && isVideo) {
-						queueMicrotask(() => processMultipleCsvFiles(pendingCsvFollowUp));
+					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+						processMultipleCsvFiles(pendingCsvFollowUp);
 					}
 				};
 				reader.readAsDataURL(file);
@@ -5054,12 +5139,16 @@ import "../styles.css";
 			imageListCarousel.innerHTML = "";
 			imageList.forEach((image) => {
 				const listItem = document.createElement("li");
-				listItem.className = "shrink-0";
+				listItem.className = "shrink-0 cursor-pointer";
 				const imageElement = document.createElement("img");
 				imageElement.src = image.data;
-				imageElement.className = "h-[72px] w-auto object-contain rounded-sm border border-neutral-200 bg-white";
+				imageElement.className = "h-[72px] w-auto object-contain rounded-sm border border-neutral-200 bg-white hover:border-blue-500";
 				imageElement.title = image.name;
 				listItem.appendChild(imageElement);
+				listItem.addEventListener("click", () => {
+					currentHoveredImageName = image.name;
+					selectBestMatchingCSVForImage(image.name);
+				});
 				imageListCarousel.appendChild(listItem);
 			});
 			updateImageListWindowUI();
