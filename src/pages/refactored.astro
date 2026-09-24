@@ -2556,6 +2556,17 @@ import "../styles.css";
 		}
 
 		function updateSelectionBbox() {
+			// SC-SEL-4: Defense in depth - scrub any SVG nodes from selection
+			// This catches any edge case where root SVG slips into groupGlobal
+			for (let i = groupGlobal.length - 1; i >= 0; i--) {
+				const el = groupGlobal[i];
+				if (el && el.nodeName && el.nodeName.toLowerCase() === 'svg') {
+					el.classList.remove('svg-tool-selected');
+					el.style.fill = '';
+					groupGlobal.splice(i, 1);
+				}
+			}
+			
 			const ui = ensureSelectionUi();
 			if (!ui) return;
 
@@ -3626,6 +3637,12 @@ import "../styles.css";
 						return;
 					}
 					
+					// SC-SEL-4: Never select root SVG or non-selectable elements
+					// Only paths that pass isSelectablePath may enter selection
+					if (!isSelectablePath(groupName)) {
+						return;
+					}
+					
 					// SC-SEL-2: Skip selection replacement when Ctrl/Cmd is held (toggle handled above)
 					const isCtrlOrCmdLegacy = e.ctrlKey || e.metaKey;
 					if (isCtrlOrCmdLegacy && e.button === 0) {
@@ -3998,6 +4015,16 @@ import "../styles.css";
 				
 				// Preserve selection on right-click (context menu)
 				if (e.button === 2 && groupName.classList.contains('svg-tool-selected')) {
+					return;
+				}
+				
+				// SC-SEL-4: Honor scSel1Handled to prevent undoing SC-SEL-1 empty-click clear/marquee
+				if (scSel1Handled) {
+					return;
+				}
+				
+				// SC-SEL-4: Never select root SVG or non-selectable elements
+				if (!isSelectablePath(groupName)) {
 					return;
 				}
 				
