@@ -3328,7 +3328,7 @@ import "../styles.css";
 			});
 
 			const nonCollidingPaths = paths.filter((p) => !usedPaths.has(p));
-			let nextThreeDigit = 1;
+			let nextFourDigit = 1;
 			nonCollidingPaths.forEach((path) => {
 				if (!path.hasAttribute("data-csv-original-id")) {
 					path.setAttribute(
@@ -3337,19 +3337,19 @@ import "../styles.css";
 					);
 				}
 
-				while (usedIds.has(String(nextThreeDigit).padStart(3, "0"))) {
-					nextThreeDigit++;
-					if (nextThreeDigit > 999) break;
+				while (usedIds.has(`-${String(nextFourDigit).padStart(4, "0")}`)) {
+					nextFourDigit++;
+					if (nextFourDigit > 9999) break;
 				}
-				if (nextThreeDigit > 999) return;
+				if (nextFourDigit > 9999) return;
 
-				const newId = String(nextThreeDigit).padStart(3, "0");
+				const newId = `-${String(nextFourDigit).padStart(4, "0")}`;
 				usedIds.add(newId);
 				path.setAttribute("id", newId);
 				path.removeAttribute("name");
 				path.setAttribute("data-csv-collision", "renumbered");
 				path.classList.add("csv-collision-renumbered");
-				nextThreeDigit++;
+				nextFourDigit++;
 			});
 
 			refreshIdListFromSvg(svg);
