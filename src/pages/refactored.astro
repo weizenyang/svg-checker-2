@@ -2442,7 +2442,7 @@ import "../styles.css";
 			const d = path.getAttribute('d');
 			if (!d) return;
 
-			// Parse and scale path commands
+			// Parse and scale path commands - bake into d attribute
 			const scaled = d.replace(/(-?\d*\.?\d+)/g, (match, num, offset) => {
 				const val = parseFloat(num);
 				if (isNaN(val)) return match;
@@ -2474,17 +2474,26 @@ import "../styles.css";
 			});
 
 			path.setAttribute('d', scaled);
+			// SC-SEL-1: Clear any lingering transform attribute (geometry is now baked into d)
+			path.removeAttribute('transform');
 		}
 
 		function moveSelectionBy(dx, dy) {
 			groupGlobal.forEach((el) => {
-				moveElement(el, dx, dy);
+				if (el.nodeName.toLowerCase() === 'path') {
+					// SC-SEL-1: Bake path move into d attribute (not transform)
+					movePathBy(el, dx, dy);
+					// Clear any lingering transform attribute
+					el.removeAttribute('transform');
+				} else {
+					moveElement(el, dx, dy);
+				}
 			});
 			scheduleCsvPathCollisions();
 			updateSelectionBbox();
 		}
 
-		// Move path by translating all coordinates in d attribute
+		// Move path by translating all coordinates in d attribute (bakes geometry)
 		function movePathBy(path, dx, dy) {
 			const d = path.getAttribute('d');
 			if (!d) return;
@@ -2514,6 +2523,8 @@ import "../styles.css";
 			});
 
 			path.setAttribute('d', moved);
+			// SC-SEL-1: Clear any lingering transform attribute (geometry is now baked into d)
+			path.removeAttribute('transform');
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────────
