@@ -2206,6 +2206,16 @@ import "../styles.css";
 		const EDGE_HANDLE_SIZE = 5;
 
 		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-ROUND-1: Fillet drag state
+		// ─────────────────────────────────────────────────────────────────────────────
+		let filletDragActive = false;
+		let filletDragIndex = -1;
+		let filletDragStartX = 0;
+		let filletDragStartY = 0;
+		let filletDragInitialRadius = 0;
+		const FILLET_HANDLE_SIZE = 5;
+
+		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-3: Shift axis lock state (gesture-start dominant algorithm)
 		// ─────────────────────────────────────────────────────────────────────────────
 
@@ -2763,41 +2773,110 @@ import "../styles.css";
 			updateSelectionBbox();
 		}
 
+		// SC-ROUND-1: Command-aware path transform to properly handle A commands
+		function transformPathCommands(d, transformCoord, transformRadius) {
+			if (!d) return d;
+			const cmdRegex = /([MLHVCSQTAZmlhvcsqtaz])([^MLHVCSQTAZmlhvcsqtaz]*)/g;
+			let result = '';
+			let match;
+			
+			while ((match = cmdRegex.exec(d)) !== null) {
+				const cmd = match[1];
+				const argsStr = match[2].trim();
+				const args = argsStr ? argsStr.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n)) : [];
+				const cmdUpper = cmd.toUpperCase();
+				const isRelative = cmd !== cmdUpper;
+				
+				if (cmdUpper === 'M' || cmdUpper === 'L' || cmdUpper === 'T') {
+					const transformed = [];
+					for (let i = 0; i < args.length; i += 2) {
+						if (i + 1 < args.length) {
+							const { x, y } = transformCoord(args[i], args[i + 1], isRelative);
+							transformed.push(x, y);
+						}
+					}
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'H') {
+					const transformed = args.map(x => transformCoord(x, 0, isRelative).x);
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'V') {
+					const transformed = args.map(y => transformCoord(0, y, isRelative).y);
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'Z') {
+					result += cmd + ' ';
+				} else if (cmdUpper === 'C') {
+					const transformed = [];
+					for (let i = 0; i < args.length; i += 6) {
+						if (i + 5 < args.length) {
+							const p1 = transformCoord(args[i], args[i + 1], isRelative);
+							const p2 = transformCoord(args[i + 2], args[i + 3], isRelative);
+							const p3 = transformCoord(args[i + 4], args[i + 5], isRelative);
+							transformed.push(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+						}
+					}
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'S') {
+					const transformed = [];
+					for (let i = 0; i < args.length; i += 4) {
+						if (i + 3 < args.length) {
+							const p1 = transformCoord(args[i], args[i + 1], isRelative);
+							const p2 = transformCoord(args[i + 2], args[i + 3], isRelative);
+							transformed.push(p1.x, p1.y, p2.x, p2.y);
+						}
+					}
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'Q') {
+					const transformed = [];
+					for (let i = 0; i < args.length; i += 4) {
+						if (i + 3 < args.length) {
+							const p1 = transformCoord(args[i], args[i + 1], isRelative);
+							const p2 = transformCoord(args[i + 2], args[i + 3], isRelative);
+							transformed.push(p1.x, p1.y, p2.x, p2.y);
+						}
+					}
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				} else if (cmdUpper === 'A') {
+					// A rx ry x-axis-rotation large-arc-flag sweep-flag x y
+					const transformed = [];
+					for (let i = 0; i < args.length; i += 7) {
+						if (i + 6 < args.length) {
+							// Scale rx and ry as radii, not as coordinates
+							const rx = transformRadius ? transformRadius(args[i], 'x') : args[i];
+							const ry = transformRadius ? transformRadius(args[i + 1], 'y') : args[i + 1];
+							const rotation = args[i + 2]; // Keep rotation unchanged
+							const largeArc = args[i + 3]; // Keep flag unchanged
+							const sweep = args[i + 4]; // Keep flag unchanged
+							const endpoint = transformCoord(args[i + 5], args[i + 6], isRelative);
+							transformed.push(rx, ry, rotation, largeArc, sweep, endpoint.x, endpoint.y);
+						}
+					}
+					result += cmd + ' ' + transformed.join(' ') + ' ';
+				}
+			}
+			return result.trim();
+		}
+
 		function scalePathAboutAnchor(path, scaleX, scaleY, anchorX, anchorY) {
 			const d = path.getAttribute('d');
 			if (!d) return;
 
-			// Parse and scale path commands - bake into d attribute
-			const scaled = d.replace(/(-?\d*\.?\d+)/g, (match, num, offset) => {
-				const val = parseFloat(num);
-				if (isNaN(val)) return match;
-
-				// Determine if X or Y coordinate based on command context
-				// Simplified: alternate x/y after move/line commands
-				const before = d.substring(0, offset);
-				const cmdMatch = before.match(/[MLHVCSQTAZmlhvcsqtaz]/g);
-				const lastCmd = cmdMatch ? cmdMatch[cmdMatch.length - 1] : 'M';
-
-				// Count numbers since last command to determine x/y
-				const numsBefore = before.substring(before.lastIndexOf(lastCmd)).match(/-?\d*\.?\d+/g) || [];
-				const idx = numsBefore.length;
-
-				// H = horizontal (x only), V = vertical (y only)
-				if (lastCmd === 'H' || lastCmd === 'h') {
-					return (anchorX + (val - anchorX) * scaleX).toString();
+			// SC-ROUND-1: Use command-aware transform to properly handle A commands
+			const transformCoord = (x, y, isRelative) => {
+				if (isRelative) {
+					return { x: x * scaleX, y: y * scaleY };
 				}
-				if (lastCmd === 'V' || lastCmd === 'v') {
-					return (anchorY + (val - anchorY) * scaleY).toString();
-				}
+				return {
+					x: anchorX + (x - anchorX) * scaleX,
+					y: anchorY + (y - anchorY) * scaleY
+				};
+			};
+			
+			const transformRadius = (r, axis) => {
+				// Scale radii by the appropriate scale factor
+				return axis === 'x' ? Math.abs(r * scaleX) : Math.abs(r * scaleY);
+			};
 
-				// For other commands, even indices are X, odd are Y
-				if (idx % 2 === 0) {
-					return (anchorX + (val - anchorX) * scaleX).toString();
-				} else {
-					return (anchorY + (val - anchorY) * scaleY).toString();
-				}
-			});
-
+			const scaled = transformPathCommands(d, transformCoord, transformRadius);
 			path.setAttribute('d', scaled);
 			// SC-SEL-1: Clear any lingering transform attribute (geometry is now baked into d)
 			path.removeAttribute('transform');
@@ -2819,34 +2898,23 @@ import "../styles.css";
 		}
 
 		// Move path by translating all coordinates in d attribute (bakes geometry)
+		// SC-ROUND-1: Use command-aware transform to properly handle A commands
 		function movePathBy(path, dx, dy) {
 			const d = path.getAttribute('d');
 			if (!d) return;
 
-			const moved = d.replace(/(-?\d*\.?\d+)/g, (match, num, offset) => {
-				const val = parseFloat(num);
-				if (isNaN(val)) return match;
-
-				const before = d.substring(0, offset);
-				const cmdMatch = before.match(/[MLHVCSQTAZmlhvcsqtaz]/g);
-				const lastCmd = cmdMatch ? cmdMatch[cmdMatch.length - 1] : 'M';
-				const numsBefore = before.substring(before.lastIndexOf(lastCmd)).match(/-?\d*\.?\d+/g) || [];
-				const idx = numsBefore.length;
-
-				if (lastCmd === 'H' || lastCmd === 'h') {
-					return (val + dx).toString();
+			const transformCoord = (x, y, isRelative) => {
+				// Relative commands don't need translation (they're deltas)
+				if (isRelative) {
+					return { x, y };
 				}
-				if (lastCmd === 'V' || lastCmd === 'v') {
-					return (val + dy).toString();
-				}
+				return { x: x + dx, y: y + dy };
+			};
+			
+			// Radii don't change during translation
+			const transformRadius = (r, axis) => r;
 
-				if (idx % 2 === 0) {
-					return (val + dx).toString();
-				} else {
-					return (val + dy).toString();
-				}
-			});
-
+			const moved = transformPathCommands(d, transformCoord, transformRadius);
 			path.setAttribute('d', moved);
 			// SC-SEL-1: Clear any lingering transform attribute (geometry is now baked into d)
 			path.removeAttribute('transform');
@@ -2877,7 +2945,8 @@ import "../styles.css";
 						if (i + 1 < args.length) {
 							const x = isRelative ? currentX + args[i] : args[i];
 							const y = isRelative ? currentY + args[i + 1] : args[i + 1];
-							vertices.push({ idx: idx++, cmd: cmdUpper === 'M' && i === 0 ? 'M' : 'L', x, y, origCmd: cmd, argStartIdx: i });
+							// SC-ROUND-1: Add filletRadius property (default 0)
+							vertices.push({ idx: idx++, cmd: cmdUpper === 'M' && i === 0 ? 'M' : 'L', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0 });
 							currentX = x;
 							currentY = y;
 							if (cmdUpper === 'M' && i === 0) {
@@ -2889,17 +2958,19 @@ import "../styles.css";
 				} else if (cmdUpper === 'H') {
 					for (let i = 0; i < args.length; i++) {
 						const x = isRelative ? currentX + args[i] : args[i];
-						vertices.push({ idx: idx++, cmd: 'H', x, y: currentY, origCmd: cmd, argStartIdx: i });
+						// SC-ROUND-1: Add filletRadius property (default 0)
+						vertices.push({ idx: idx++, cmd: 'H', x, y: currentY, origCmd: cmd, argStartIdx: i, filletRadius: 0 });
 						currentX = x;
 					}
 				} else if (cmdUpper === 'V') {
 					for (let i = 0; i < args.length; i++) {
 						const y = isRelative ? currentY + args[i] : args[i];
-						vertices.push({ idx: idx++, cmd: 'V', x: currentX, y, origCmd: cmd, argStartIdx: i });
+						// SC-ROUND-1: Add filletRadius property (default 0)
+						vertices.push({ idx: idx++, cmd: 'V', x: currentX, y, origCmd: cmd, argStartIdx: i, filletRadius: 0 });
 						currentY = y;
 					}
 				} else if (cmdUpper === 'Z') {
-					vertices.push({ idx: idx++, cmd: 'Z', x: startX, y: startY, origCmd: cmd });
+					vertices.push({ idx: idx++, cmd: 'Z', x: startX, y: startY, origCmd: cmd, filletRadius: 0 });
 					currentX = startX;
 					currentY = startY;
 				} else if (cmdUpper === 'C') {
@@ -2907,7 +2978,12 @@ import "../styles.css";
 						if (i + 5 < args.length) {
 							const x = isRelative ? currentX + args[i + 4] : args[i + 4];
 							const y = isRelative ? currentY + args[i + 5] : args[i + 5];
-							vertices.push({ idx: idx++, cmd: 'C', x, y, origCmd: cmd, argStartIdx: i });
+							// SC-ROUND-1: Store control points for C commands
+							const cp1x = isRelative ? currentX + args[i] : args[i];
+							const cp1y = isRelative ? currentY + args[i + 1] : args[i + 1];
+							const cp2x = isRelative ? currentX + args[i + 2] : args[i + 2];
+							const cp2y = isRelative ? currentY + args[i + 3] : args[i + 3];
+							vertices.push({ idx: idx++, cmd: 'C', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0, cp1x, cp1y, cp2x, cp2y });
 							currentX = x;
 							currentY = y;
 						}
@@ -2917,7 +2993,10 @@ import "../styles.css";
 						if (i + 3 < args.length) {
 							const x = isRelative ? currentX + args[i + 2] : args[i + 2];
 							const y = isRelative ? currentY + args[i + 3] : args[i + 3];
-							vertices.push({ idx: idx++, cmd: 'S', x, y, origCmd: cmd, argStartIdx: i });
+							// SC-ROUND-1: Store control point for S commands
+							const cp2x = isRelative ? currentX + args[i] : args[i];
+							const cp2y = isRelative ? currentY + args[i + 1] : args[i + 1];
+							vertices.push({ idx: idx++, cmd: 'S', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0, cp2x, cp2y });
 							currentX = x;
 							currentY = y;
 						}
@@ -2927,7 +3006,10 @@ import "../styles.css";
 						if (i + 3 < args.length) {
 							const x = isRelative ? currentX + args[i + 2] : args[i + 2];
 							const y = isRelative ? currentY + args[i + 3] : args[i + 3];
-							vertices.push({ idx: idx++, cmd: 'Q', x, y, origCmd: cmd, argStartIdx: i });
+							// SC-ROUND-1: Store control point for Q commands
+							const cpx = isRelative ? currentX + args[i] : args[i];
+							const cpy = isRelative ? currentY + args[i + 1] : args[i + 1];
+							vertices.push({ idx: idx++, cmd: 'Q', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0, cpx, cpy });
 							currentX = x;
 							currentY = y;
 						}
@@ -2937,7 +3019,7 @@ import "../styles.css";
 						if (i + 1 < args.length) {
 							const x = isRelative ? currentX + args[i] : args[i];
 							const y = isRelative ? currentY + args[i + 1] : args[i + 1];
-							vertices.push({ idx: idx++, cmd: 'T', x, y, origCmd: cmd, argStartIdx: i });
+							vertices.push({ idx: idx++, cmd: 'T', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0 });
 							currentX = x;
 							currentY = y;
 						}
@@ -2947,7 +3029,13 @@ import "../styles.css";
 						if (i + 6 < args.length) {
 							const x = isRelative ? currentX + args[i + 5] : args[i + 5];
 							const y = isRelative ? currentY + args[i + 6] : args[i + 6];
-							vertices.push({ idx: idx++, cmd: 'A', x, y, origCmd: cmd, argStartIdx: i });
+							// SC-ROUND-1: Preserve full arc parameters (rx, ry, rotation, largeArc, sweep)
+							const rx = args[i];
+							const ry = args[i + 1];
+							const rotation = args[i + 2];
+							const largeArc = args[i + 3];
+							const sweep = args[i + 4];
+							vertices.push({ idx: idx++, cmd: 'A', x, y, origCmd: cmd, argStartIdx: i, filletRadius: 0, rx, ry, rotation, largeArc, sweep });
 							currentX = x;
 							currentY = y;
 						}
@@ -2957,14 +3045,177 @@ import "../styles.css";
 			return vertices;
 		}
 
+		// SC-ROUND-1: Check if a vertex represents a straight segment (M/L/H/V, not a curve command)
+		function isVertexStraightSegment(v) {
+			return v && (v.cmd === 'M' || v.cmd === 'L' || v.cmd === 'H' || v.cmd === 'V');
+		}
+
+		// SC-ROUND-1: Check if a corner is eligible for filleting (both adjacent segments are straight)
+		function isCornerFilletEligible(vertices, vertexIdx) {
+			const v = vertices[vertexIdx];
+			if (!v || v.cmd === 'Z' || v.cmd === 'M') return false;
+			
+			const prev = vertices[vertexIdx - 1];
+			const next = vertices[vertexIdx + 1];
+			
+			// Check if the incoming edge is straight
+			if (!isVertexStraightSegment(v)) return false;
+			
+			// Special case: first vertex after M in a closed path
+			// The corner is between the closing edge (last→first) and the first edge (first→second)
+			if (prev && prev.cmd === 'M') {
+				// Find if path is closed
+				const hasZ = vertices.some(vv => vv.cmd === 'Z');
+				if (hasZ) {
+					// Find the last vertex before Z (the incoming edge comes from there via the closing Z)
+					let lastBeforeZ = null;
+					for (let i = vertices.length - 1; i >= 0; i--) {
+						if (vertices[i].cmd === 'Z') continue;
+						if (vertices[i].cmd !== 'M' && isVertexStraightSegment(vertices[i])) {
+							lastBeforeZ = vertices[i];
+							break;
+						}
+					}
+					if (!lastBeforeZ) return false;
+					
+					// Check if the outgoing edge is straight
+					if (next && next.cmd !== 'Z' && isVertexStraightSegment(next)) {
+						return true;
+					}
+				}
+				return false;
+			}
+			
+			// Check if the outgoing edge is straight (or it's the closing corner)
+			if (next) {
+				if (next.cmd === 'Z') {
+					// Closing corner - check the first vertex after M
+					const firstAfterM = vertices.find((vv, i) => i > 0 && vv.cmd !== 'M' && vv.cmd !== 'Z');
+					return firstAfterM ? isVertexStraightSegment(firstAfterM) : false;
+				}
+				return isVertexStraightSegment(next);
+			}
+			return false;
+		}
+
+		// SC-ROUND-1: Compute fillet geometry for a corner
+		// Returns { t1x, t1y, t2x, t2y, cx, cy, r, sweep } or null if not applicable
+		function computeFilletGeometry(vertices, vertexIdx, requestedRadius) {
+			if (requestedRadius <= 0) return null;
+			
+			const v = vertices[vertexIdx];
+			const prev = vertices[vertexIdx - 1];
+			let next = vertices[vertexIdx + 1];
+			
+			if (!v || !prev) return null;
+			
+			// Determine the "prev" point for the incoming edge
+			let prevX, prevY;
+			if (prev.cmd === 'M') {
+				// First vertex after M in a closed path - incoming edge comes from last vertex before Z
+				let lastBeforeZ = null;
+				for (let i = vertices.length - 1; i >= 0; i--) {
+					if (vertices[i].cmd === 'Z') continue;
+					if (vertices[i].cmd !== 'M') {
+						lastBeforeZ = vertices[i];
+						break;
+					}
+				}
+				if (lastBeforeZ) {
+					prevX = lastBeforeZ.x;
+					prevY = lastBeforeZ.y;
+				} else {
+					return null;
+				}
+			} else {
+				prevX = prev.x;
+				prevY = prev.y;
+			}
+			
+			// Handle closing corner (last vertex before Z)
+			let nextX, nextY;
+			if (next && next.cmd === 'Z') {
+				// Find the first vertex after M (the closing target)
+				const firstAfterM = vertices.find((vv, i) => i > 0 && vv.cmd !== 'M' && vv.cmd !== 'Z');
+				if (firstAfterM) {
+					nextX = firstAfterM.x;
+					nextY = firstAfterM.y;
+				} else {
+					return null;
+				}
+			} else if (next) {
+				nextX = next.x;
+				nextY = next.y;
+			} else {
+				return null;
+			}
+			
+			// Compute vectors from vertex to prev and next
+			const dx1 = prevX - v.x;
+			const dy1 = prevY - v.y;
+			const dx2 = nextX - v.x;
+			const dy2 = nextY - v.y;
+			
+			const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+			const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+			
+			if (len1 < 0.001 || len2 < 0.001) return null;
+			
+			// Normalize direction vectors
+			const ux1 = dx1 / len1;
+			const uy1 = dy1 / len1;
+			const ux2 = dx2 / len2;
+			const uy2 = dy2 / len2;
+			
+			// Compute angle between edges
+			const dot = ux1 * ux2 + uy1 * uy2;
+			const cross = ux1 * uy2 - uy1 * ux2;
+			const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+			
+			// For very small angles (nearly straight) or very large angles (nearly 180°), skip
+			if (angle < 0.01 || angle > Math.PI - 0.01) return null;
+			
+			// Compute max radius that fits both edges (tangent point can't go past midpoint)
+			const maxRadius = Math.min(len1, len2) * Math.tan(angle / 2);
+			const r = Math.min(requestedRadius, maxRadius * 0.99); // Small margin to avoid edge issues
+			
+			if (r <= 0.001) return null;
+			
+			// Distance from vertex to tangent point
+			const tangentDist = r / Math.tan(angle / 2);
+			
+			// Tangent points
+			const t1x = v.x + ux1 * tangentDist;
+			const t1y = v.y + uy1 * tangentDist;
+			const t2x = v.x + ux2 * tangentDist;
+			const t2y = v.y + uy2 * tangentDist;
+			
+			// Determine sweep direction based on cross product
+			const sweep = cross > 0 ? 0 : 1;
+			
+			return { t1x, t1y, t2x, t2y, r, sweep };
+		}
+
 		function rebuildPathD(vertices, originalD) {
 			if (!vertices.length) return originalD;
 			
 			let newD = '';
 			let prevX = 0, prevY = 0;
 			
-			for (const v of vertices) {
-				if (v.cmd === 'M') {
+			for (let i = 0; i < vertices.length; i++) {
+				const v = vertices[i];
+				
+				// SC-ROUND-1: Check for fillet radius on this vertex
+				const filletRadius = v.filletRadius || 0;
+				const filletGeom = (filletRadius > 0 && isCornerFilletEligible(vertices, i)) 
+					? computeFilletGeometry(vertices, i, filletRadius) 
+					: null;
+				
+				if (filletGeom) {
+					// Output line to first tangent point, then arc to second tangent point
+					newD += `L ${filletGeom.t1x} ${filletGeom.t1y} `;
+					newD += `A ${filletGeom.r} ${filletGeom.r} 0 0 ${filletGeom.sweep} ${filletGeom.t2x} ${filletGeom.t2y} `;
+				} else if (v.cmd === 'M') {
 					newD += `M ${v.x} ${v.y} `;
 				} else if (v.cmd === 'L') {
 					newD += `L ${v.x} ${v.y} `;
@@ -2974,8 +3225,37 @@ import "../styles.css";
 					newD += `L ${v.x} ${v.y} `;
 				} else if (v.cmd === 'Z') {
 					newD += 'Z ';
-				} else if (v.cmd === 'C' || v.cmd === 'S' || v.cmd === 'Q' || v.cmd === 'T' || v.cmd === 'A') {
-					newD += `L ${v.x} ${v.y} `;
+				} else if (v.cmd === 'C') {
+					// SC-ROUND-1: Preserve cubic Bézier curve commands
+					if (v.cp1x !== undefined && v.cp1y !== undefined && v.cp2x !== undefined && v.cp2y !== undefined) {
+						newD += `C ${v.cp1x} ${v.cp1y} ${v.cp2x} ${v.cp2y} ${v.x} ${v.y} `;
+					} else {
+						newD += `L ${v.x} ${v.y} `;
+					}
+				} else if (v.cmd === 'S') {
+					// SC-ROUND-1: Preserve smooth cubic Bézier curve commands
+					if (v.cp2x !== undefined && v.cp2y !== undefined) {
+						newD += `S ${v.cp2x} ${v.cp2y} ${v.x} ${v.y} `;
+					} else {
+						newD += `L ${v.x} ${v.y} `;
+					}
+				} else if (v.cmd === 'Q') {
+					// SC-ROUND-1: Preserve quadratic Bézier curve commands
+					if (v.cpx !== undefined && v.cpy !== undefined) {
+						newD += `Q ${v.cpx} ${v.cpy} ${v.x} ${v.y} `;
+					} else {
+						newD += `L ${v.x} ${v.y} `;
+					}
+				} else if (v.cmd === 'T') {
+					// SC-ROUND-1: Preserve smooth quadratic Bézier (T) commands
+					newD += `T ${v.x} ${v.y} `;
+				} else if (v.cmd === 'A') {
+					// SC-ROUND-1: Preserve arc commands with full parameters
+					if (v.rx !== undefined && v.ry !== undefined) {
+						newD += `A ${v.rx} ${v.ry} ${v.rotation || 0} ${v.largeArc || 0} ${v.sweep || 0} ${v.x} ${v.y} `;
+					} else {
+						newD += `L ${v.x} ${v.y} `;
+					}
 				}
 				prevX = v.x;
 				prevY = v.y;
@@ -3014,6 +3294,9 @@ import "../styles.css";
 			pathEditVertices = [];
 			vertexDragActive = false;
 			edgeDragActive = false;
+			// SC-ROUND-1: Reset fillet drag state
+			filletDragActive = false;
+			filletDragIndex = -1;
 			// SC-SEL-5: Clear handle selection when exiting path edit mode
 			clearHandleSelection();
 			
@@ -3033,6 +3316,7 @@ import "../styles.css";
 			const scale = ctm ? 1 / ctm.a : 1;
 			const vertexSize = VERTEX_HANDLE_SIZE * scale;
 			const edgeSize = EDGE_HANDLE_SIZE * scale;
+			const filletSize = FILLET_HANDLE_SIZE * scale;
 			const strokeWidth = 1.5 * scale;
 			// SC-SEL-5: Thicker stroke for selected handles
 			const selectedStrokeWidth = 2.5 * scale;
@@ -3058,6 +3342,14 @@ import "../styles.css";
 				handle.style.cursor = 'move';
 				handle.style.pointerEvents = 'all';
 				ui.appendChild(handle);
+
+				// SC-ROUND-1: Add fillet handle for eligible corners
+				if (isCornerFilletEligible(pathEditVertices, i)) {
+					const filletHandle = createFilletHandle(i, v, scale);
+					if (filletHandle) {
+						ui.appendChild(filletHandle);
+					}
+				}
 
 				const nextIdx = i + 1;
 				if (nextIdx < pathEditVertices.length) {
@@ -3087,10 +3379,81 @@ import "../styles.css";
 			}
 		}
 
+		// SC-ROUND-1: Create a fillet handle (diamond shape) for a vertex
+		function createFilletHandle(vertexIdx, v, scale) {
+			const prev = pathEditVertices[vertexIdx - 1];
+			if (!prev) return null;
+			
+			const filletSize = FILLET_HANDLE_SIZE * scale;
+			const strokeWidth = 1.5 * scale;
+			const radius = v.filletRadius || 0;
+			
+			// Determine the "prev" point for the incoming edge direction
+			let prevX, prevY;
+			if (prev.cmd === 'M') {
+				// First vertex after M - incoming edge comes from last vertex before Z
+				let lastBeforeZ = null;
+				for (let i = pathEditVertices.length - 1; i >= 0; i--) {
+					if (pathEditVertices[i].cmd === 'Z') continue;
+					if (pathEditVertices[i].cmd !== 'M') {
+						lastBeforeZ = pathEditVertices[i];
+						break;
+					}
+				}
+				if (lastBeforeZ) {
+					prevX = lastBeforeZ.x;
+					prevY = lastBeforeZ.y;
+				} else {
+					return null;
+				}
+			} else {
+				prevX = prev.x;
+				prevY = prev.y;
+			}
+			
+			// Compute direction from vertex toward prev
+			const dx = prevX - v.x;
+			const dy = prevY - v.y;
+			const len = Math.sqrt(dx * dx + dy * dy);
+			if (len < 0.001) return null;
+			
+			// Position fillet handle offset from vertex along the incoming edge
+			// The handle position indicates the current fillet tangent point
+			const offsetDist = Math.max(radius, 8 * scale); // Min offset for visibility
+			const handleX = v.x + (dx / len) * offsetDist;
+			const handleY = v.y + (dy / len) * offsetDist;
+			
+			// Create diamond shape
+			const handle = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+			const points = [
+				`${handleX},${handleY - filletSize}`,
+				`${handleX + filletSize},${handleY}`,
+				`${handleX},${handleY + filletSize}`,
+				`${handleX - filletSize},${handleY}`
+			].join(' ');
+			
+			handle.setAttribute('class', 'fillet-handle');
+			handle.setAttribute('data-fillet-idx', vertexIdx);
+			handle.setAttribute('points', points);
+			// Orange/amber color to distinguish from vertex (blue) and edge (green) handles
+			handle.setAttribute('fill', radius > 0 ? '#f59e0b' : '#fbbf24');
+			handle.setAttribute('stroke', '#ffffff');
+			handle.setAttribute('stroke-width', strokeWidth);
+			handle.style.cursor = 'ns-resize'; // Vertical resize cursor indicates drag direction
+			handle.style.pointerEvents = 'all';
+			
+			// Add title tooltip showing current radius
+			const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+			title.textContent = `Fillet radius: ${radius.toFixed(1)}`;
+			handle.appendChild(title);
+			
+			return handle;
+		}
+
 		function clearPathEditHandles() {
 			const ui = getSelectionUi();
 			if (ui) {
-				ui.querySelectorAll('.vertex-handle, .edge-handle').forEach(el => el.remove());
+				ui.querySelectorAll('.vertex-handle, .edge-handle, .fillet-handle').forEach(el => el.remove());
 			}
 		}
 
@@ -3295,6 +3658,139 @@ import "../styles.css";
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-ROUND-1: Fillet handle drag functions
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function startFilletDrag(handle, svgPt) {
+			const idx = parseInt(handle.getAttribute('data-fillet-idx'), 10);
+			if (isNaN(idx) || idx < 0 || idx >= pathEditVertices.length) return;
+			
+			const v = pathEditVertices[idx];
+			if (!v) return;
+			
+			filletDragActive = true;
+			filletDragIndex = idx;
+			filletDragStartX = svgPt.x;
+			filletDragStartY = svgPt.y;
+			filletDragInitialRadius = v.filletRadius || 0;
+			
+			saveState();
+		}
+
+		function handleFilletDrag(svgPt) {
+			if (!filletDragActive || filletDragIndex < 0) return;
+			
+			const v = pathEditVertices[filletDragIndex];
+			const prev = pathEditVertices[filletDragIndex - 1];
+			if (!v || !prev) return;
+			
+			// Determine the "prev" point for the incoming edge direction
+			let prevX, prevY;
+			if (prev.cmd === 'M') {
+				// First vertex after M - incoming edge comes from last vertex before Z
+				let lastBeforeZ = null;
+				for (let i = pathEditVertices.length - 1; i >= 0; i--) {
+					if (pathEditVertices[i].cmd === 'Z') continue;
+					if (pathEditVertices[i].cmd !== 'M') {
+						lastBeforeZ = pathEditVertices[i];
+						break;
+					}
+				}
+				if (lastBeforeZ) {
+					prevX = lastBeforeZ.x;
+					prevY = lastBeforeZ.y;
+				} else {
+					return;
+				}
+			} else {
+				prevX = prev.x;
+				prevY = prev.y;
+			}
+			
+			// Compute drag distance along the edge direction
+			const edgeDx = prevX - v.x;
+			const edgeDy = prevY - v.y;
+			const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+			if (edgeLen < 0.001) return;
+			
+			// Project mouse delta onto edge direction
+			const mouseDx = svgPt.x - filletDragStartX;
+			const mouseDy = svgPt.y - filletDragStartY;
+			const projectedDist = (mouseDx * edgeDx + mouseDy * edgeDy) / edgeLen;
+			
+			// New radius = initial + projected distance
+			let newRadius = filletDragInitialRadius + projectedDist;
+			
+			// Clamp radius to adjacent edge lengths
+			const maxRadius = computeMaxFilletRadius(pathEditVertices, filletDragIndex);
+			newRadius = Math.max(0, Math.min(newRadius, maxRadius));
+			
+			v.filletRadius = newRadius;
+			applyVertexChanges();
+		}
+
+		function endFilletDrag() {
+			if (filletDragActive) {
+				filletDragActive = false;
+				filletDragIndex = -1;
+				scheduleCsvPathCollisions();
+			}
+		}
+
+		// SC-ROUND-1: Compute maximum fillet radius for a vertex (half of shorter adjacent edge)
+		function computeMaxFilletRadius(vertices, vertexIdx) {
+			const v = vertices[vertexIdx];
+			const prev = vertices[vertexIdx - 1];
+			let next = vertices[vertexIdx + 1];
+			
+			if (!v || !prev) return 0;
+			
+			// Determine the "prev" point for the incoming edge
+			let prevX, prevY;
+			if (prev.cmd === 'M') {
+				// First vertex after M - incoming edge comes from last vertex before Z
+				let lastBeforeZ = null;
+				for (let i = vertices.length - 1; i >= 0; i--) {
+					if (vertices[i].cmd === 'Z') continue;
+					if (vertices[i].cmd !== 'M') {
+						lastBeforeZ = vertices[i];
+						break;
+					}
+				}
+				if (lastBeforeZ) {
+					prevX = lastBeforeZ.x;
+					prevY = lastBeforeZ.y;
+				} else {
+					return 0;
+				}
+			} else {
+				prevX = prev.x;
+				prevY = prev.y;
+			}
+			
+			// Compute edge lengths
+			const len1 = Math.sqrt((v.x - prevX) ** 2 + (v.y - prevY) ** 2);
+			
+			let len2;
+			if (next && next.cmd === 'Z') {
+				// Closing corner - measure to first vertex after M
+				const firstAfterM = vertices.find((vv, i) => i > 0 && vv.cmd !== 'M' && vv.cmd !== 'Z');
+				if (firstAfterM) {
+					len2 = Math.sqrt((firstAfterM.x - v.x) ** 2 + (firstAfterM.y - v.y) ** 2);
+				} else {
+					len2 = len1;
+				}
+			} else if (next) {
+				len2 = Math.sqrt((next.x - v.x) ** 2 + (next.y - v.y) ** 2);
+			} else {
+				len2 = len1;
+			}
+			
+			// Max radius is half of shorter edge (to avoid overlapping fillets)
+			return Math.min(len1, len2) * 0.5;
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-2: Hit-test for selectable paths at a point (through overlays)
 		// ─────────────────────────────────────────────────────────────────────────────
 
@@ -3344,9 +3840,17 @@ import "../styles.css";
 			const isCtrlOrCmd = e.ctrlKey || e.metaKey;
 			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 
-			// SC-SEL-2 Priority 1: If path edit mode is active, handle vertex/edge drags
+			// SC-SEL-2 Priority 1: If path edit mode is active, handle vertex/edge/fillet drags
 			// SC-SEL-5: Pass Ctrl/Cmd state for multi-select support
 			if (pathEditMode && pathEditTargetPath) {
+				// SC-ROUND-1: Handle fillet handle drag (check first to take priority)
+				if (target.classList && target.classList.contains('fillet-handle')) {
+					e.preventDefault();
+					e.stopPropagation();
+					scSel1Handled = true;
+					startFilletDrag(target, svgPt);
+					return;
+				}
 				if (target.classList && target.classList.contains('vertex-handle')) {
 					e.preventDefault();
 					e.stopPropagation();
@@ -3485,8 +3989,13 @@ import "../styles.css";
 			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 
 			// SC-SEL-2: Handle vertex/edge drag during path edit mode
+			// SC-ROUND-1: Also handle fillet drag
 			// SC-SEL-3: Pass shift key state for axis lock
 			if (pathEditMode) {
+				if (filletDragActive) {
+					handleFilletDrag(svgPt);
+					return;
+				}
 				if (vertexDragActive) {
 					handleVertexDrag(svgPt, e.shiftKey);
 					return;
@@ -3587,7 +4096,11 @@ import "../styles.css";
 			const svg = document.querySelector('#svg-container svg');
 
 			// SC-SEL-2: Handle vertex/edge drag end
+			// SC-ROUND-1: Also handle fillet drag end
 			if (pathEditMode) {
+				if (filletDragActive) {
+					endFilletDrag();
+				}
 				if (vertexDragActive) {
 					endVertexDrag();
 				}
