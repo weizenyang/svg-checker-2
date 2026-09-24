@@ -3328,7 +3328,7 @@ import "../styles.css";
 			});
 
 			const nonCollidingPaths = paths.filter((p) => !usedPaths.has(p));
-			let nextFourDigit = 1;
+			let nextFourDigit = 1001;
 			nonCollidingPaths.forEach((path) => {
 				if (!path.hasAttribute("data-csv-original-id")) {
 					path.setAttribute(
