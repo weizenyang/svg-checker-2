@@ -27,6 +27,7 @@
     "jszip": "^3.10.1",
     "lunr": "^2.3.9",
     "nanostores": "^0.11.3",
+    "paper": "^0.12.18",
     "puppeteer": "^24.2.0",
     "react": "^19.0.0-beta",
     "react-dom": "^19.0.0-beta",
