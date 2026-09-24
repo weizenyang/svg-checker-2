@@ -5683,22 +5683,8 @@ import "../styles.css";
 				return;
 			}
 			leftArrow.dataset.navBound = "1";
-			leftArrow.addEventListener("click", () => {
-				if (currentSVGIndex > 0) {
-					currentSVGIndex--;
-					processSVG(importedSVGs[currentSVGIndex].element);
-					updateSVGNavigationUI();
-					selectBestMatchingCSV();
-				}
-			});
-			rightArrow.addEventListener("click", () => {
-				if (currentSVGIndex < importedSVGs.length - 1) {
-					currentSVGIndex++;
-					processSVG(importedSVGs[currentSVGIndex].element);
-					updateSVGNavigationUI();
-					selectBestMatchingCSV();
-				}
-			});
+			leftArrow.addEventListener("click", () => navigateSVGPrev());
+			rightArrow.addEventListener("click", () => navigateSVGNext());
 			updateSVGNavigationUI();
 		}
 
@@ -5743,24 +5729,109 @@ import "../styles.css";
 				return;
 			}
 			leftArrow.dataset.navBound = "1";
-			leftArrow.addEventListener("click", () => {
-				if (currentCSVIndex > 0) {
-					currentCSVIndex--;
-					applySelectedCSV();
-					updateCSVNavigationUI();
-					syncSVGAndBackplateToCSV();
-				}
-			});
-			rightArrow.addEventListener("click", () => {
-				if (currentCSVIndex < importedCSVs.length - 1) {
-					currentCSVIndex++;
-					applySelectedCSV();
-					updateCSVNavigationUI();
-					syncSVGAndBackplateToCSV();
-				}
-			});
+			leftArrow.addEventListener("click", () => navigateCSVPrev());
+			rightArrow.addEventListener("click", () => navigateCSVNext());
 			updateCSVNavigationUI();
 		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-ARROW-NAV-1: Arrow key navigation for carousels
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function navigateSVGPrev(): boolean {
+			if (importedSVGs.length <= 1) return false;
+			if (currentSVGIndex > 0) {
+				currentSVGIndex--;
+				processSVG(importedSVGs[currentSVGIndex].element);
+				updateSVGNavigationUI();
+				selectBestMatchingCSV();
+				return true;
+			}
+			return false;
+		}
+
+		function navigateSVGNext(): boolean {
+			if (importedSVGs.length <= 1) return false;
+			if (currentSVGIndex < importedSVGs.length - 1) {
+				currentSVGIndex++;
+				processSVG(importedSVGs[currentSVGIndex].element);
+				updateSVGNavigationUI();
+				selectBestMatchingCSV();
+				return true;
+			}
+			return false;
+		}
+
+		function navigateCSVPrev(): boolean {
+			if (importedCSVs.length <= 1) return false;
+			if (currentCSVIndex > 0) {
+				currentCSVIndex--;
+				applySelectedCSV();
+				updateCSVNavigationUI();
+				syncSVGAndBackplateToCSV();
+				return true;
+			}
+			return false;
+		}
+
+		function navigateCSVNext(): boolean {
+			if (importedCSVs.length <= 1) return false;
+			if (currentCSVIndex < importedCSVs.length - 1) {
+				currentCSVIndex++;
+				applySelectedCSV();
+				updateCSVNavigationUI();
+				syncSVGAndBackplateToCSV();
+				return true;
+			}
+			return false;
+		}
+
+		function isCarouselArrowKeyBlocked(): boolean {
+			const activeEl = document.activeElement as HTMLElement | null;
+			if (activeEl) {
+				const tag = activeEl.tagName;
+				if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || activeEl.isContentEditable) {
+					return true;
+				}
+			}
+
+			const previewContainer = document.getElementById("image-previewer-container");
+			if (previewContainer && previewContainer.style.display !== "none" && currentHoveredImageName) {
+				return true;
+			}
+
+			if (pathEditMode) {
+				return true;
+			}
+
+			return false;
+		}
+
+		document.addEventListener("keydown", (e) => {
+			if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+			if (isCarouselArrowKeyBlocked()) return;
+
+			if (importedCSVs.length > 1) {
+				e.preventDefault();
+				if (e.key === "ArrowLeft") {
+					navigateCSVPrev();
+				} else {
+					navigateCSVNext();
+				}
+				return;
+			}
+
+			if (importedSVGs.length > 1) {
+				e.preventDefault();
+				if (e.key === "ArrowLeft") {
+					navigateSVGPrev();
+				} else {
+					navigateSVGNext();
+				}
+				return;
+			}
+		});
 
 		function applySelectedCSV() {
 			const csvObj = importedCSVs[currentCSVIndex];
