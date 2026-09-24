@@ -2773,6 +2773,20 @@ import "../styles.css";
 			updateSelectionBbox();
 		}
 
+		// SVG allows numbers to abut: "c12.3-4.5.6.7 8-9" — split-on-comma/space
+		// drops the minus/dot-separated values, so C/Q/S get too few args and vanish.
+		function parseSvgPathNumbers(str) {
+			if (!str) return [];
+			const nums = [];
+			const re = /[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?/g;
+			let m;
+			while ((m = re.exec(str)) !== null) {
+				const n = parseFloat(m[0]);
+				if (!isNaN(n)) nums.push(n);
+			}
+			return nums;
+		}
+
 		// SC-ROUND-1: Command-aware path transform to properly handle A commands
 		function transformPathCommands(d, transformCoord, transformRadius) {
 			if (!d) return d;
@@ -2783,7 +2797,7 @@ import "../styles.css";
 			while ((match = cmdRegex.exec(d)) !== null) {
 				const cmd = match[1];
 				const argsStr = match[2].trim();
-				const args = argsStr ? argsStr.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n)) : [];
+				const args = parseSvgPathNumbers(argsStr);
 				const cmdUpper = cmd.toUpperCase();
 				const isRelative = cmd !== cmdUpper;
 				
@@ -2814,7 +2828,9 @@ import "../styles.css";
 							transformed.push(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
 						}
 					}
-					result += cmd + ' ' + transformed.join(' ') + ' ';
+					result += transformed.length
+						? cmd + ' ' + transformed.join(' ') + ' '
+						: cmd + argsStr + ' ';
 				} else if (cmdUpper === 'S') {
 					const transformed = [];
 					for (let i = 0; i < args.length; i += 4) {
@@ -2824,7 +2840,9 @@ import "../styles.css";
 							transformed.push(p1.x, p1.y, p2.x, p2.y);
 						}
 					}
-					result += cmd + ' ' + transformed.join(' ') + ' ';
+					result += transformed.length
+						? cmd + ' ' + transformed.join(' ') + ' '
+						: cmd + argsStr + ' ';
 				} else if (cmdUpper === 'Q') {
 					const transformed = [];
 					for (let i = 0; i < args.length; i += 4) {
@@ -2834,7 +2852,9 @@ import "../styles.css";
 							transformed.push(p1.x, p1.y, p2.x, p2.y);
 						}
 					}
-					result += cmd + ' ' + transformed.join(' ') + ' ';
+					result += transformed.length
+						? cmd + ' ' + transformed.join(' ') + ' '
+						: cmd + argsStr + ' ';
 				} else if (cmdUpper === 'A') {
 					// A rx ry x-axis-rotation large-arc-flag sweep-flag x y
 					const transformed = [];
@@ -2850,7 +2870,9 @@ import "../styles.css";
 							transformed.push(rx, ry, rotation, largeArc, sweep, endpoint.x, endpoint.y);
 						}
 					}
-					result += cmd + ' ' + transformed.join(' ') + ' ';
+					result += transformed.length
+						? cmd + ' ' + transformed.join(' ') + ' '
+						: cmd + argsStr + ' ';
 				}
 			}
 			return result.trim();
@@ -2936,7 +2958,7 @@ import "../styles.css";
 			while ((match = cmdRegex.exec(d)) !== null) {
 				const cmd = match[1];
 				const argsStr = match[2].trim();
-				const args = argsStr ? argsStr.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n)) : [];
+				const args = parseSvgPathNumbers(argsStr);
 				const cmdUpper = cmd.toUpperCase();
 				const isRelative = cmd !== cmdUpper;
 
@@ -4859,6 +4881,10 @@ import "../styles.css";
 			} else if (element.getAttribute("data-triangle") === "true") {
 				// Handle triangle scaling
 				scaleTriangle(element, scaleFactor, anchor);
+			} else if (element.nodeName && element.nodeName.toLowerCase() === "path") {
+				if (anchor && isFinite(anchor.x) && isFinite(anchor.y) && isFinite(scaleFactor)) {
+					scalePathAboutAnchor(element, scaleFactor, scaleFactor, anchor.x, anchor.y);
+				}
 			}
 		}
 
