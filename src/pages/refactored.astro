@@ -2118,7 +2118,645 @@ import "../styles.css";
 				el.style.fill = '#87CEEB';
 				groupGlobal.push(el);
 			}
+			updateSelectionBbox();
 		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Centralized selection helpers
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function clearSelection() {
+			document.querySelectorAll('.svg-tool-selected').forEach((el) => {
+				el.classList.remove('svg-tool-selected');
+				el.style.fill = '';
+			});
+			groupGlobal = [];
+			updateSelectionBbox();
+		}
+
+		function setSelection(els) {
+			clearSelection();
+			els.forEach((el) => {
+				if (!el || el.nodeName.toLowerCase() === 'svg') return;
+				el.classList.add('svg-tool-selected');
+				el.style.fill = '#87CEEB';
+				groupGlobal.push(el);
+			});
+			updateSelectionBbox();
+		}
+
+		function removeFromSelection(el) {
+			if (!el) return;
+			el.classList.remove('svg-tool-selected');
+			el.style.fill = '';
+			const idx = groupGlobal.indexOf(el);
+			if (idx !== -1) groupGlobal.splice(idx, 1);
+			updateSelectionBbox();
+		}
+
+		function toggleSelection(el) {
+			if (!el || el.nodeName.toLowerCase() === 'svg') return;
+			if (el.classList.contains('svg-tool-selected')) {
+				removeFromSelection(el);
+			} else {
+				addToSelection(el);
+			}
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Marquee selection state
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		let marqueeActive = false;
+		let marqueeStartX = 0;
+		let marqueeStartY = 0;
+		let marqueeStartClientX = 0;
+		let marqueeStartClientY = 0;
+		const MARQUEE_THRESHOLD = 5; // pixels - small drag threshold to avoid tiny marquees
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Selection bbox state
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		let bboxDragMode = null; // 'move' | 'scale-nw' | 'scale-ne' | 'scale-sw' | 'scale-se' | null
+		let bboxDragStartX = 0;
+		let bboxDragStartY = 0;
+		let bboxScaleAnchor = { x: 0, y: 0 };
+		let bboxOriginalBounds = null;
+		const HANDLE_SIZE = 8; // pixels for handle size
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Client ↔ SVG coordinate conversion
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function clientToSvg(svgEl, clientX, clientY) {
+			if (!svgEl) return { x: 0, y: 0 };
+			const pt = svgEl.createSVGPoint();
+			pt.x = clientX;
+			pt.y = clientY;
+			const ctm = svgEl.getScreenCTM();
+			if (!ctm) return { x: 0, y: 0 };
+			const svgPt = pt.matrixTransform(ctm.inverse());
+			return { x: svgPt.x, y: svgPt.y };
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Check if element is selectable (not chrome/csv points)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function isSelectablePath(el) {
+			if (!el) return false;
+			const tag = el.nodeName.toLowerCase();
+			if (tag !== 'path') return false;
+			if (el.closest('#g-instance, defs, clipPath, mask, symbol, #selection-ui')) return false;
+			const d = el.getAttribute('d');
+			return d && d.trim().length > 0;
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Selection UI overlay management
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function ensureSelectionUi() {
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return null;
+			let ui = svg.querySelector('#selection-ui');
+			if (!ui) {
+				ui = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+				ui.setAttribute('id', 'selection-ui');
+				ui.style.pointerEvents = 'none';
+				svg.appendChild(ui);
+			}
+			return ui;
+		}
+
+		function getSelectionUi() {
+			const svg = document.querySelector('#svg-container svg');
+			return svg ? svg.querySelector('#selection-ui') : null;
+		}
+
+		function clearSelectionUi() {
+			const ui = getSelectionUi();
+			if (ui) ui.innerHTML = '';
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Marquee drawing
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function drawMarquee(x1, y1, x2, y2) {
+			const ui = ensureSelectionUi();
+			if (!ui) return;
+
+			let marqueeRect = ui.querySelector('#marquee-rect');
+			if (!marqueeRect) {
+				marqueeRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+				marqueeRect.setAttribute('id', 'marquee-rect');
+				marqueeRect.setAttribute('fill', 'rgba(59, 130, 246, 0.15)');
+				marqueeRect.setAttribute('stroke', '#3b82f6');
+				marqueeRect.setAttribute('stroke-width', '1');
+				marqueeRect.setAttribute('stroke-dasharray', '4 2');
+				marqueeRect.style.pointerEvents = 'none';
+				ui.appendChild(marqueeRect);
+			}
+
+			const minX = Math.min(x1, x2);
+			const minY = Math.min(y1, y2);
+			const width = Math.abs(x2 - x1);
+			const height = Math.abs(y2 - y1);
+
+			marqueeRect.setAttribute('x', minX);
+			marqueeRect.setAttribute('y', minY);
+			marqueeRect.setAttribute('width', width);
+			marqueeRect.setAttribute('height', height);
+		}
+
+		function hideMarquee() {
+			const ui = getSelectionUi();
+			if (ui) {
+				const marqueeRect = ui.querySelector('#marquee-rect');
+				if (marqueeRect) marqueeRect.remove();
+			}
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Get paths intersecting marquee (bbox intersection)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function getPathsInMarquee(x1, y1, x2, y2) {
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return [];
+
+			const minX = Math.min(x1, x2);
+			const maxX = Math.max(x1, x2);
+			const minY = Math.min(y1, y2);
+			const maxY = Math.max(y1, y2);
+
+			const paths = Array.from(svg.querySelectorAll('path')).filter(isSelectablePath);
+			const intersecting = [];
+
+			paths.forEach((path) => {
+				try {
+					const bbox = path.getBBox();
+					// Check bbox intersection
+					const intersects = !(
+						bbox.x + bbox.width < minX ||
+						bbox.x > maxX ||
+						bbox.y + bbox.height < minY ||
+						bbox.y > maxY
+					);
+					if (intersects) {
+						intersecting.push(path);
+					}
+				} catch (e) {
+					// getBBox can fail on some paths
+				}
+			});
+
+			return intersecting;
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Selection bounding box rendering
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function getSelectionBounds() {
+			if (groupGlobal.length === 0) return null;
+
+			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+			groupGlobal.forEach((el) => {
+				try {
+					const bbox = el.getBBox();
+					if (bbox.x < minX) minX = bbox.x;
+					if (bbox.x + bbox.width > maxX) maxX = bbox.x + bbox.width;
+					if (bbox.y < minY) minY = bbox.y;
+					if (bbox.y + bbox.height > maxY) maxY = bbox.y + bbox.height;
+				} catch (e) {
+					// getBBox can fail
+				}
+			});
+
+			if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) {
+				return null;
+			}
+
+			return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+		}
+
+		function updateSelectionBbox() {
+			const ui = ensureSelectionUi();
+			if (!ui) return;
+
+			// Remove existing bbox elements
+			ui.querySelectorAll('.selection-bbox, .selection-handle').forEach(el => el.remove());
+
+			const bounds = getSelectionBounds();
+			if (!bounds || bounds.width === 0 || bounds.height === 0) return;
+
+			// Get SVG scale for handle sizing
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return;
+			const ctm = svg.getScreenCTM();
+			const scale = ctm ? 1 / ctm.a : 1;
+			const handleSize = HANDLE_SIZE * scale;
+			const strokeWidth = 1.5 * scale;
+
+			// Draw bbox rectangle
+			const bboxRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			bboxRect.setAttribute('class', 'selection-bbox');
+			bboxRect.setAttribute('x', bounds.x);
+			bboxRect.setAttribute('y', bounds.y);
+			bboxRect.setAttribute('width', bounds.width);
+			bboxRect.setAttribute('height', bounds.height);
+			bboxRect.setAttribute('fill', 'transparent');
+			bboxRect.setAttribute('stroke', '#3b82f6');
+			bboxRect.setAttribute('stroke-width', strokeWidth);
+			bboxRect.style.pointerEvents = 'all';
+			bboxRect.style.cursor = 'move';
+			bboxRect.setAttribute('data-bbox-interior', 'true');
+			ui.appendChild(bboxRect);
+
+			// Draw corner handles: NW, NE, SW, SE
+			const handles = [
+				{ id: 'nw', x: bounds.x - handleSize/2, y: bounds.y - handleSize/2, cursor: 'nwse-resize' },
+				{ id: 'ne', x: bounds.x + bounds.width - handleSize/2, y: bounds.y - handleSize/2, cursor: 'nesw-resize' },
+				{ id: 'sw', x: bounds.x - handleSize/2, y: bounds.y + bounds.height - handleSize/2, cursor: 'nesw-resize' },
+				{ id: 'se', x: bounds.x + bounds.width - handleSize/2, y: bounds.y + bounds.height - handleSize/2, cursor: 'nwse-resize' },
+			];
+
+			handles.forEach((h) => {
+				const handle = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+				handle.setAttribute('class', 'selection-handle');
+				handle.setAttribute('data-handle', h.id);
+				handle.setAttribute('x', h.x);
+				handle.setAttribute('y', h.y);
+				handle.setAttribute('width', handleSize);
+				handle.setAttribute('height', handleSize);
+				handle.setAttribute('fill', '#ffffff');
+				handle.setAttribute('stroke', '#3b82f6');
+				handle.setAttribute('stroke-width', strokeWidth * 0.8);
+				handle.style.pointerEvents = 'all';
+				handle.style.cursor = h.cursor;
+				ui.appendChild(handle);
+			});
+
+			// Enable pointer events on ui group for handles/bbox
+			ui.style.pointerEvents = 'all';
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Scale elements about anchor
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function scaleSelectionAboutAnchor(scaleX, scaleY, anchorX, anchorY) {
+			groupGlobal.forEach((el) => {
+				if (el.nodeName.toLowerCase() === 'path') {
+					scalePathAboutAnchor(el, scaleX, scaleY, anchorX, anchorY);
+				} else if (el.getAttribute('cx') != null && el.getAttribute('cy') != null) {
+					// Circle
+					const cx = parseFloat(el.getAttribute('cx'));
+					const cy = parseFloat(el.getAttribute('cy'));
+					const newCx = anchorX + (cx - anchorX) * scaleX;
+					const newCy = anchorY + (cy - anchorY) * scaleY;
+					el.setAttribute('cx', newCx);
+					el.setAttribute('cy', newCy);
+				} else if (el.getAttribute('data-triangle') === 'true') {
+					// Triangle
+					const cx = parseFloat(el.getAttribute('data-center-x'));
+					const cy = parseFloat(el.getAttribute('data-center-y'));
+					if (!isNaN(cx) && !isNaN(cy)) {
+						const newCx = anchorX + (cx - anchorX) * scaleX;
+						const newCy = anchorY + (cy - anchorY) * scaleY;
+						el.setAttribute('data-center-x', newCx);
+						el.setAttribute('data-center-y', newCy);
+						updateTrianglePoints(el, newCx, newCy);
+					}
+				}
+			});
+			scheduleCsvPathCollisions();
+			updateSelectionBbox();
+		}
+
+		function scalePathAboutAnchor(path, scaleX, scaleY, anchorX, anchorY) {
+			const d = path.getAttribute('d');
+			if (!d) return;
+
+			// Parse and scale path commands
+			const scaled = d.replace(/(-?\d*\.?\d+)/g, (match, num, offset) => {
+				const val = parseFloat(num);
+				if (isNaN(val)) return match;
+
+				// Determine if X or Y coordinate based on command context
+				// Simplified: alternate x/y after move/line commands
+				const before = d.substring(0, offset);
+				const cmdMatch = before.match(/[MLHVCSQTAZmlhvcsqtaz]/g);
+				const lastCmd = cmdMatch ? cmdMatch[cmdMatch.length - 1] : 'M';
+
+				// Count numbers since last command to determine x/y
+				const numsBefore = before.substring(before.lastIndexOf(lastCmd)).match(/-?\d*\.?\d+/g) || [];
+				const idx = numsBefore.length;
+
+				// H = horizontal (x only), V = vertical (y only)
+				if (lastCmd === 'H' || lastCmd === 'h') {
+					return (anchorX + (val - anchorX) * scaleX).toString();
+				}
+				if (lastCmd === 'V' || lastCmd === 'v') {
+					return (anchorY + (val - anchorY) * scaleY).toString();
+				}
+
+				// For other commands, even indices are X, odd are Y
+				if (idx % 2 === 0) {
+					return (anchorX + (val - anchorX) * scaleX).toString();
+				} else {
+					return (anchorY + (val - anchorY) * scaleY).toString();
+				}
+			});
+
+			path.setAttribute('d', scaled);
+		}
+
+		function moveSelectionBy(dx, dy) {
+			groupGlobal.forEach((el) => {
+				moveElement(el, dx, dy);
+			});
+			scheduleCsvPathCollisions();
+			updateSelectionBbox();
+		}
+
+		// Move path by translating all coordinates in d attribute
+		function movePathBy(path, dx, dy) {
+			const d = path.getAttribute('d');
+			if (!d) return;
+
+			const moved = d.replace(/(-?\d*\.?\d+)/g, (match, num, offset) => {
+				const val = parseFloat(num);
+				if (isNaN(val)) return match;
+
+				const before = d.substring(0, offset);
+				const cmdMatch = before.match(/[MLHVCSQTAZmlhvcsqtaz]/g);
+				const lastCmd = cmdMatch ? cmdMatch[cmdMatch.length - 1] : 'M';
+				const numsBefore = before.substring(before.lastIndexOf(lastCmd)).match(/-?\d*\.?\d+/g) || [];
+				const idx = numsBefore.length;
+
+				if (lastCmd === 'H' || lastCmd === 'h') {
+					return (val + dx).toString();
+				}
+				if (lastCmd === 'V' || lastCmd === 'v') {
+					return (val + dy).toString();
+				}
+
+				if (idx % 2 === 0) {
+					return (val + dx).toString();
+				} else {
+					return (val + dy).toString();
+				}
+			});
+
+			path.setAttribute('d', moved);
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Mousedown handler for svg-container with interaction priority
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		let scSel1Handled = false; // Flag to track if SC-SEL-1 handled the event
+
+		document.getElementById('svg-container').addEventListener('mousedown', (e) => {
+			scSel1Handled = false;
+			
+			// Only handle left mouse button for SC-SEL-1 features
+			if (e.button !== 0) return;
+			
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return;
+
+			const target = e.target;
+			const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+			// Priority 1: Check if target is a bbox handle
+			if (target.classList && target.classList.contains('selection-handle')) {
+				e.preventDefault();
+				e.stopPropagation();
+				scSel1Handled = true;
+				
+				const handleId = target.getAttribute('data-handle');
+				bboxDragMode = 'scale-' + handleId;
+				
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				bboxDragStartX = svgPt.x;
+				bboxDragStartY = svgPt.y;
+				bboxOriginalBounds = getSelectionBounds();
+				
+				// Anchor is opposite corner
+				if (bboxOriginalBounds) {
+					const b = bboxOriginalBounds;
+					if (handleId === 'nw') bboxScaleAnchor = { x: b.x + b.width, y: b.y + b.height };
+					else if (handleId === 'ne') bboxScaleAnchor = { x: b.x, y: b.y + b.height };
+					else if (handleId === 'sw') bboxScaleAnchor = { x: b.x + b.width, y: b.y };
+					else if (handleId === 'se') bboxScaleAnchor = { x: b.x, y: b.y };
+				}
+				
+				if (!hasSavedStateForCurrentOperation) {
+					saveState();
+					hasSavedStateForCurrentOperation = true;
+				}
+				return;
+			}
+
+			// Priority 2: Check if target is bbox interior (for move)
+			if (target.getAttribute && target.getAttribute('data-bbox-interior') === 'true' && groupGlobal.length > 0) {
+				e.preventDefault();
+				e.stopPropagation();
+				scSel1Handled = true;
+				
+				bboxDragMode = 'move';
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				bboxDragStartX = svgPt.x;
+				bboxDragStartY = svgPt.y;
+				
+				if (!hasSavedStateForCurrentOperation) {
+					saveState();
+					hasSavedStateForCurrentOperation = true;
+				}
+				return;
+			}
+
+			// Priority 3: Check if target is a selectable path with Ctrl/Cmd (toggle)
+			if (isSelectablePath(target) && isCtrlOrCmd) {
+				e.preventDefault();
+				e.stopPropagation();
+				scSel1Handled = true;
+				
+				toggleSelection(target);
+				return;
+			}
+
+			// Priority 4: Check if target is a selectable path (select and allow drag)
+			// Let the existing handler deal with this - it handles path selection
+			if (isSelectablePath(target)) {
+				// Don't mark as handled - let existing code handle selection
+				// But we need to update bbox after selection
+				setTimeout(() => updateSelectionBbox(), 0);
+				return;
+			}
+
+			// Priority 5: Empty SVG surface - start marquee
+			// Check if we clicked on the SVG itself or empty space
+			const tagName = target.nodeName.toLowerCase();
+			const parentName = target.parentNode?.nodeName?.toLowerCase();
+			
+			// Start marquee if clicking on svg element itself, or on a non-path child
+			const isEmptyArea = tagName === 'svg' || 
+				(parentName === 'svg' && !isSelectablePath(target)) ||
+				target.closest('#selection-ui');
+			
+			if (isEmptyArea && !target.closest('#selection-ui .selection-handle') && 
+				!target.getAttribute?.('data-bbox-interior')) {
+				e.preventDefault();
+				// Don't stop propagation for pan/zoom
+				scSel1Handled = true;
+				
+				marqueeActive = true;
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				marqueeStartX = svgPt.x;
+				marqueeStartY = svgPt.y;
+				marqueeStartClientX = e.clientX;
+				marqueeStartClientY = e.clientY;
+				
+				// Clear selection for plain marquee (no modifier)
+				if (!isCtrlOrCmd) {
+					clearSelection();
+				}
+				return;
+			}
+		}, true); // Use capture phase to run before other handlers
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Mousemove handler for marquee and bbox drag
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		document.addEventListener('mousemove', (e) => {
+			const svg = document.querySelector('#svg-container svg');
+			if (!svg) return;
+
+			// Handle marquee drawing
+			if (marqueeActive) {
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				
+				// Check if we've exceeded the threshold
+				const clientDx = e.clientX - marqueeStartClientX;
+				const clientDy = e.clientY - marqueeStartClientY;
+				const clientDist = Math.sqrt(clientDx * clientDx + clientDy * clientDy);
+				
+				if (clientDist >= MARQUEE_THRESHOLD) {
+					drawMarquee(marqueeStartX, marqueeStartY, svgPt.x, svgPt.y);
+				}
+				return;
+			}
+
+			// Handle bbox move
+			if (bboxDragMode === 'move') {
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				const dx = svgPt.x - bboxDragStartX;
+				const dy = svgPt.y - bboxDragStartY;
+				
+				bboxDragStartX = svgPt.x;
+				bboxDragStartY = svgPt.y;
+				
+				moveSelectionBy(dx, dy);
+				hasMovedDuringDrag = true;
+				return;
+			}
+
+			// Handle bbox scale
+			if (bboxDragMode && bboxDragMode.startsWith('scale-') && bboxOriginalBounds) {
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				const b = bboxOriginalBounds;
+				
+				// Calculate scale factors based on handle position
+				const handleId = bboxDragMode.replace('scale-', '');
+				let scaleX = 1, scaleY = 1;
+				
+				// Calculate distance from anchor to current position vs original bounds
+				if (handleId === 'se') {
+					scaleX = b.width > 0 ? (svgPt.x - bboxScaleAnchor.x) / b.width : 1;
+					scaleY = b.height > 0 ? (svgPt.y - bboxScaleAnchor.y) / b.height : 1;
+				} else if (handleId === 'sw') {
+					scaleX = b.width > 0 ? (bboxScaleAnchor.x - svgPt.x) / b.width : 1;
+					scaleY = b.height > 0 ? (svgPt.y - bboxScaleAnchor.y) / b.height : 1;
+				} else if (handleId === 'ne') {
+					scaleX = b.width > 0 ? (svgPt.x - bboxScaleAnchor.x) / b.width : 1;
+					scaleY = b.height > 0 ? (bboxScaleAnchor.y - svgPt.y) / b.height : 1;
+				} else if (handleId === 'nw') {
+					scaleX = b.width > 0 ? (bboxScaleAnchor.x - svgPt.x) / b.width : 1;
+					scaleY = b.height > 0 ? (bboxScaleAnchor.y - svgPt.y) / b.height : 1;
+				}
+				
+				// Clamp to prevent inversion
+				scaleX = Math.max(0.01, scaleX);
+				scaleY = Math.max(0.01, scaleY);
+				
+				// Uniform scale by default (use average)
+				const uniformScale = (scaleX + scaleY) / 2;
+				scaleX = uniformScale;
+				scaleY = uniformScale;
+				
+				// Apply relative scale from original bounds
+				const relScaleX = scaleX;
+				const relScaleY = scaleY;
+				
+				// Reset to original and apply new scale
+				// We track cumulative scale so just apply delta each frame
+				scaleSelectionAboutAnchor(relScaleX, relScaleY, bboxScaleAnchor.x, bboxScaleAnchor.y);
+				
+				// Update original bounds for next delta
+				bboxOriginalBounds = getSelectionBounds();
+				
+				hasMovedDuringDrag = true;
+				return;
+			}
+		});
+
+		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-1: Mouseup handler for marquee finalization and bbox drag end
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		document.addEventListener('mouseup', (e) => {
+			const svg = document.querySelector('#svg-container svg');
+
+			// Handle marquee finalization
+			if (marqueeActive && svg) {
+				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
+				
+				// Check if we exceeded the threshold
+				const clientDx = e.clientX - marqueeStartClientX;
+				const clientDy = e.clientY - marqueeStartClientY;
+				const clientDist = Math.sqrt(clientDx * clientDx + clientDy * clientDy);
+				
+				if (clientDist >= MARQUEE_THRESHOLD) {
+					const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+					const paths = getPathsInMarquee(marqueeStartX, marqueeStartY, svgPt.x, svgPt.y);
+					
+					if (isCtrlOrCmd) {
+						// Add to selection (union)
+						paths.forEach((p) => addToSelection(p));
+					} else {
+						// Replace selection
+						setSelection(paths);
+					}
+				}
+				
+				hideMarquee();
+				marqueeActive = false;
+			}
+
+			// Handle bbox drag end
+			if (bboxDragMode) {
+				bboxDragMode = null;
+				bboxOriginalBounds = null;
+			}
+		});
 
 		// track the primary button
 		let primaryMouseIsDown = false;
@@ -2346,6 +2984,9 @@ import "../styles.css";
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.style.fill = "#87CEEB";
 				});
+				
+				// SC-SEL-1: Update selection bbox after selection changes
+				updateSelectionBbox();
 			});
 
 		document.getElementById("set-name").addEventListener("click", (e) => {
@@ -2390,6 +3031,9 @@ import "../styles.css";
 				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
 					e.remove();
 				});
+				groupGlobal = [];
+				// SC-SEL-1: Clear selection bbox after deletion
+				updateSelectionBbox();
 				spawnLabel();
 			});
 
@@ -2502,6 +3146,9 @@ import "../styles.css";
 			tag.style.left = `${e.x}px`;
 			tag.style.top = `${e.y}px`;
 			tag.style.transform = `translate(0%, -40px)`;
+
+			// SC-SEL-1: Skip if marquee or bbox drag is active (handled separately)
+			if (marqueeActive || bboxDragMode) return;
 
 			if (mouseDown && mouseInContainer) {
 				spawnLabel();
@@ -2669,6 +3316,9 @@ import "../styles.css";
 			document.querySelectorAll(".selected").forEach((e) => {
 				e.style.fill = "#87CEEB";
 			});
+			
+			// SC-SEL-1: Update selection bbox after selection changes
+			updateSelectionBbox();
 		});
 
 		document.addEventListener("mouseup", spawnLabel);
@@ -2819,6 +3469,8 @@ import "../styles.css";
 				// Save the state after the move/scale operation completes
 				saveState();
 				applyCsvPathCollisions();
+				// SC-SEL-1: Update bbox after move/scale
+				updateSelectionBbox();
 			} else if (hasSavedStateForCurrentOperation) {
 				// If we saved state on mouse down but didn't move, remove it to avoid clutter
 				// (user just clicked without dragging)
@@ -3214,6 +3866,8 @@ import "../styles.css";
 			convertShapesToPaths(svgClone);
 			svgClone.querySelectorAll("image").forEach((el) => el.remove());
 			svgClone.querySelectorAll("#g-instance").forEach((g) => g.remove());
+			// SC-SEL-1: Remove selection UI overlay from export
+			svgClone.querySelectorAll("#selection-ui").forEach((g) => g.remove());
 			svgClone.querySelectorAll("circle").forEach((c) => c.remove());
 			svgClone.querySelectorAll("[data-triangle]").forEach((el) => el.remove());
 			svgClone.querySelectorAll("[data-csv-collision]").forEach((path) => {
@@ -4198,6 +4852,8 @@ import "../styles.css";
 					el.style.fill = '';
 				});
 				groupGlobal = [];
+				// SC-SEL-1: Clear selection bbox after merge
+				updateSelectionBbox();
 
 				showToast(`Merged ${selectedPaths.length} shapes`, 'success');
 
@@ -8014,19 +8670,23 @@ import "../styles.css";
 				return;
 			}
 			if (e.key == "Escape") {
-				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
-					e.classList.remove("svg-tool-selected");
-					e.style.fill = "";
-					groupGlobal = [];
-					document.querySelectorAll("#group").value = "";
-				});
+				// SC-SEL-1: Clear selection using centralized helper
+				clearSelection();
+				document.querySelectorAll("#group").value = "";
+				
+				// SC-SEL-1: Hide marquee if active
+				if (marqueeActive) {
+					hideMarquee();
+					marqueeActive = false;
+				}
+				
+				// SC-SEL-1: Cancel bbox drag if active
+				if (bboxDragMode) {
+					bboxDragMode = null;
+					bboxOriginalBounds = null;
+				}
 
 				if (multiSelect) {
-					groupGlobal.forEach((e) => {
-						e.classList.remove("svg-tool-selected");
-						e.style.fill = "";
-					});
-
 					multiSelect = false;
 				}
 			}
@@ -8095,6 +8755,9 @@ import "../styles.css";
 
 					// Indicate multi-selection mode
 					multiSelect = true;
+					
+					// SC-SEL-1: Update selection bbox
+					updateSelectionBbox();
 
 					console.log("All elements selected:", groupGlobal.length, "elements (", circles.length, "circles,", triangles.length, "triangles)");
 				}
@@ -8346,12 +9009,21 @@ import "../styles.css";
 
 		document.addEventListener("keydown", (e) => {
 			if (e.key == "Escape") {
-				document.querySelectorAll(".svg-tool-selected").forEach((e) => {
-					e.classList.remove("svg-tool-selected");
-					e.style.fill = "";
-					groupGlobal = [];
-					document.querySelectorAll("#group").value = "";
-				});
+				// SC-SEL-1: Clear selection using centralized helper
+				clearSelection();
+				document.querySelectorAll("#group").value = "";
+				
+				// SC-SEL-1: Hide marquee if active
+				if (marqueeActive) {
+					hideMarquee();
+					marqueeActive = false;
+				}
+				
+				// SC-SEL-1: Cancel bbox drag if active  
+				if (bboxDragMode) {
+					bboxDragMode = null;
+					bboxOriginalBounds = null;
+				}
 			}
 
 			if (e.key == "Shift") {
