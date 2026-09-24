@@ -2204,6 +2204,116 @@ import "../styles.css";
 		const EDGE_HANDLE_SIZE = 5;
 
 		// ─────────────────────────────────────────────────────────────────────────────
+		// SC-SEL-3: Shift axis lock state (gesture-start dominant algorithm)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		let axisLockGestureStartX = 0;  // SVG space X at gesture start
+		let axisLockGestureStartY = 0;  // SVG space Y at gesture start
+		let axisLock = null;            // 'x' | 'y' | null
+		let axisLockMoveGestureActive = false;  // True when any move gesture (bbox/vertex/edge/legacy) is active
+		let legacyMoveCumulativeX = 0;  // Cumulative X displacement for legacy move
+		let legacyMoveCumulativeY = 0;  // Cumulative Y displacement for legacy move
+		let legacyMoveGestureActive = false;  // Track if legacy move gesture is in progress
+
+		/**
+		 * SC-SEL-3: Constrain delta to locked axis (gesture-start dominant algorithm).
+		 * When Shift is held, determines axis based on total displacement from gesture start:
+		 * if |totalDx| >= |totalDy| → lock to X (zero Y), else lock to Y (zero X).
+		 * When Shift is released, returns freeform delta.
+		 * @param {number} dx - Frame delta X
+		 * @param {number} dy - Frame delta Y
+		 * @param {boolean} shiftHeld - Whether Shift key is pressed
+		 * @param {number} currentX - Current position X (SVG space)
+		 * @param {number} currentY - Current position Y (SVG space)
+		 * @returns {{dx: number, dy: number}} - Constrained deltas
+		 */
+		function constrainAxisDelta(dx, dy, shiftHeld, currentX, currentY) {
+			if (!shiftHeld) {
+				axisLock = null;
+				return { dx, dy };
+			}
+
+			const totalDx = currentX - axisLockGestureStartX;
+			const totalDy = currentY - axisLockGestureStartY;
+
+			if (Math.abs(totalDx) >= Math.abs(totalDy)) {
+				axisLock = 'x';
+				return { dx, dy: 0 };
+			} else {
+				axisLock = 'y';
+				return { dx: 0, dy };
+			}
+		}
+
+		/**
+		 * SC-SEL-3: Constrain delta using cumulative tracking (for legacy move).
+		 * Similar to constrainAxisDelta but uses pre-tracked cumulative displacement.
+		 * @param {number} dx - Frame delta X
+		 * @param {number} dy - Frame delta Y
+		 * @param {boolean} shiftHeld - Whether Shift key is pressed
+		 * @param {number} cumulativeX - Total X displacement so far
+		 * @param {number} cumulativeY - Total Y displacement so far
+		 * @returns {{dx: number, dy: number}} - Constrained deltas
+		 */
+		function constrainAxisDeltaCumulative(dx, dy, shiftHeld, cumulativeX, cumulativeY) {
+			if (!shiftHeld) {
+				axisLock = null;
+				return { dx, dy };
+			}
+
+			if (Math.abs(cumulativeX) >= Math.abs(cumulativeY)) {
+				axisLock = 'x';
+				return { dx, dy: 0 };
+			} else {
+				axisLock = 'y';
+				return { dx: 0, dy };
+			}
+		}
+
+		/**
+		 * SC-SEL-3: Start axis lock gesture tracking.
+		 * Call when any move gesture begins (bbox move, vertex drag, edge drag, legacy move).
+		 * @param {number} x - Starting X position (SVG space)
+		 * @param {number} y - Starting Y position (SVG space)
+		 */
+		function startAxisLockGesture(x, y) {
+			axisLockGestureStartX = x;
+			axisLockGestureStartY = y;
+			axisLock = null;
+			axisLockMoveGestureActive = true;
+		}
+
+		/**
+		 * SC-SEL-3: Start legacy move gesture tracking.
+		 * Uses cumulative displacement tracking since legacy move computes frame deltas.
+		 */
+		function startLegacyMoveGesture() {
+			legacyMoveCumulativeX = 0;
+			legacyMoveCumulativeY = 0;
+			legacyMoveGestureActive = true;
+			axisLockMoveGestureActive = true;
+			axisLock = null;
+		}
+
+		/**
+		 * SC-SEL-3: End axis lock gesture tracking.
+		 * Call when move gesture ends.
+		 */
+		function endAxisLockGesture() {
+			axisLock = null;
+			axisLockMoveGestureActive = false;
+		}
+
+		/**
+		 * SC-SEL-3: End legacy move gesture tracking.
+		 */
+		function endLegacyMoveGesture() {
+			legacyMoveGestureActive = false;
+			axisLock = null;
+			axisLockMoveGestureActive = false;
+		}
+
+		// ─────────────────────────────────────────────────────────────────────────────
 		// SC-SEL-1: Client ↔ SVG coordinate conversion
 		// ─────────────────────────────────────────────────────────────────────────────
 
@@ -2866,6 +2976,8 @@ import "../styles.css";
 			vertexDragIndex = idx;
 			vertexDragStartX = svgPt.x;
 			vertexDragStartY = svgPt.y;
+			// SC-SEL-3: Start axis lock gesture tracking
+			startAxisLockGesture(svgPt.x, svgPt.y);
 		}
 
 		function startEdgeDrag(handle, svgPt) {
@@ -2876,29 +2988,41 @@ import "../styles.css";
 			edgeDragIndex = idx;
 			edgeDragStartX = svgPt.x;
 			edgeDragStartY = svgPt.y;
+			// SC-SEL-3: Start axis lock gesture tracking
+			startAxisLockGesture(svgPt.x, svgPt.y);
 		}
 
-		function handleVertexDrag(svgPt) {
+		function handleVertexDrag(svgPt, shiftHeld) {
 			if (!vertexDragActive || vertexDragIndex < 0) return;
 			
-			const dx = svgPt.x - vertexDragStartX;
-			const dy = svgPt.y - vertexDragStartY;
+			let dx = svgPt.x - vertexDragStartX;
+			let dy = svgPt.y - vertexDragStartY;
+			
+			// SC-SEL-3: Apply axis lock when Shift is held
+			const constrained = constrainAxisDelta(dx, dy, shiftHeld, svgPt.x, svgPt.y);
+			dx = constrained.dx;
+			dy = constrained.dy;
 			
 			const v = pathEditVertices[vertexDragIndex];
 			v.x += dx;
 			v.y += dy;
 			
-			vertexDragStartX = svgPt.x;
-			vertexDragStartY = svgPt.y;
+			vertexDragStartX += dx;
+			vertexDragStartY += dy;
 			
 			applyVertexChanges();
 		}
 
-		function handleEdgeDrag(svgPt) {
+		function handleEdgeDrag(svgPt, shiftHeld) {
 			if (!edgeDragActive || edgeDragIndex < 0) return;
 			
-			const dx = svgPt.x - edgeDragStartX;
-			const dy = svgPt.y - edgeDragStartY;
+			let dx = svgPt.x - edgeDragStartX;
+			let dy = svgPt.y - edgeDragStartY;
+			
+			// SC-SEL-3: Apply axis lock when Shift is held
+			const constrained = constrainAxisDelta(dx, dy, shiftHeld, svgPt.x, svgPt.y);
+			dx = constrained.dx;
+			dy = constrained.dy;
 			
 			const v1 = pathEditVertices[edgeDragIndex];
 			const v2 = pathEditVertices[edgeDragIndex + 1];
@@ -2912,8 +3036,8 @@ import "../styles.css";
 				v2.y += dy;
 			}
 			
-			edgeDragStartX = svgPt.x;
-			edgeDragStartY = svgPt.y;
+			edgeDragStartX += dx;
+			edgeDragStartY += dy;
 			
 			applyVertexChanges();
 		}
@@ -2934,6 +3058,8 @@ import "../styles.css";
 				vertexDragActive = false;
 				vertexDragIndex = -1;
 				scheduleCsvPathCollisions();
+				// SC-SEL-3: End axis lock gesture tracking
+				endAxisLockGesture();
 			}
 		}
 
@@ -2942,6 +3068,8 @@ import "../styles.css";
 				edgeDragActive = false;
 				edgeDragIndex = -1;
 				scheduleCsvPathCollisions();
+				// SC-SEL-3: End axis lock gesture tracking
+				endAxisLockGesture();
 			}
 		}
 
@@ -3077,6 +3205,8 @@ import "../styles.css";
 				bboxDragMode = 'move';
 				bboxDragStartX = svgPt.x;
 				bboxDragStartY = svgPt.y;
+				// SC-SEL-3: Start axis lock gesture tracking
+				startAxisLockGesture(svgPt.x, svgPt.y);
 				
 				if (!hasSavedStateForCurrentOperation) {
 					saveState();
@@ -3129,13 +3259,14 @@ import "../styles.css";
 			const svgPt = clientToSvg(svg, e.clientX, e.clientY);
 
 			// SC-SEL-2: Handle vertex/edge drag during path edit mode
+			// SC-SEL-3: Pass shift key state for axis lock
 			if (pathEditMode) {
 				if (vertexDragActive) {
-					handleVertexDrag(svgPt);
+					handleVertexDrag(svgPt, e.shiftKey);
 					return;
 				}
 				if (edgeDragActive) {
-					handleEdgeDrag(svgPt);
+					handleEdgeDrag(svgPt, e.shiftKey);
 					return;
 				}
 			}
@@ -3153,13 +3284,19 @@ import "../styles.css";
 			}
 
 			// Handle bbox move
+			// SC-SEL-3: Apply axis lock when Shift is held
 			if (bboxDragMode === 'move') {
 				const svgPt = clientToSvg(svg, e.clientX, e.clientY);
-				const dx = svgPt.x - bboxDragStartX;
-				const dy = svgPt.y - bboxDragStartY;
+				let dx = svgPt.x - bboxDragStartX;
+				let dy = svgPt.y - bboxDragStartY;
 				
-				bboxDragStartX = svgPt.x;
-				bboxDragStartY = svgPt.y;
+				// SC-SEL-3: Constrain to axis when Shift held
+				const constrained = constrainAxisDelta(dx, dy, e.shiftKey, svgPt.x, svgPt.y);
+				dx = constrained.dx;
+				dy = constrained.dy;
+				
+				bboxDragStartX += dx;
+				bboxDragStartY += dy;
 				
 				moveSelectionBy(dx, dy);
 				hasMovedDuringDrag = true;
@@ -3258,6 +3395,10 @@ import "../styles.css";
 
 			// Handle bbox drag end
 			if (bboxDragMode) {
+				// SC-SEL-3: End axis lock gesture if bbox move was active
+				if (bboxDragMode === 'move') {
+					endAxisLockGesture();
+				}
 				bboxDragMode = null;
 				bboxOriginalBounds = null;
 			}
@@ -3321,6 +3462,11 @@ import "../styles.css";
 		document.getElementById('svg-container')
 		.addEventListener('mousemove', e => {
 			if (!primaryMouseIsDown || !e.shiftKey) return;
+
+			// SC-SEL-3: Skip paint-select when any move gesture is active
+			// (bbox move, vertex drag, edge drag, or legacy move)
+			// In those cases, Shift means axis lock, not paint-select
+			if (axisLockMoveGestureActive) return;
 
 			const target = e.target;
 			const parentIsG = target.parentNode?.nodeName.toLowerCase() === 'g';
@@ -3721,12 +3867,32 @@ import "../styles.css";
 					const { scaleX, scaleY } = calculateSensitivity(svgElement);
 
 					// Calculate mouse movement difference once
-					const deltaX = (e.clientX - prevMouseX) * scaleX;
-					const deltaY = (e.clientY - prevMouseY) * scaleY;
+					let deltaX = (e.clientX - prevMouseX) * scaleX;
+					let deltaY = (e.clientY - prevMouseY) * scaleY;
 
 					// Update previous mouse position once
 					prevMouseX = e.clientX;
 					prevMouseY = e.clientY;
+
+					// SC-SEL-3: Start legacy move gesture on first movement
+					const willMove = (tempSelected != null && !multiSelect && groupGlobal.length < 2) ||
+						(multiSelect && groupGlobal.length > 0);
+					
+					if (willMove && !legacyMoveGestureActive) {
+						startLegacyMoveGesture();
+					}
+
+					// SC-SEL-3: Update cumulative displacement and apply axis lock
+					if (legacyMoveGestureActive) {
+						legacyMoveCumulativeX += deltaX;
+						legacyMoveCumulativeY += deltaY;
+						const constrained = constrainAxisDeltaCumulative(
+							deltaX, deltaY, e.shiftKey,
+							legacyMoveCumulativeX, legacyMoveCumulativeY
+						);
+						deltaX = constrained.dx;
+						deltaY = constrained.dy;
+					}
 
 					// Move a single selected item
 					if (
@@ -4040,6 +4206,11 @@ import "../styles.css";
 				if (undoStack.length > 0) {
 					undoStack.pop();
 				}
+			}
+			
+			// SC-SEL-3: End legacy move gesture if active
+			if (legacyMoveGestureActive) {
+				endLegacyMoveGesture();
 			}
 			
 			tempSelected = null;
@@ -9245,6 +9416,10 @@ import "../styles.css";
 				
 				// SC-SEL-1: Cancel bbox drag if active
 				if (bboxDragMode) {
+					// SC-SEL-3: End axis lock gesture if bbox move was active
+					if (bboxDragMode === 'move') {
+						endAxisLockGesture();
+					}
 					bboxDragMode = null;
 					bboxOriginalBounds = null;
 				}
@@ -9584,6 +9759,10 @@ import "../styles.css";
 				
 				// SC-SEL-1: Cancel bbox drag if active  
 				if (bboxDragMode) {
+					// SC-SEL-3: End axis lock gesture if bbox move was active
+					if (bboxDragMode === 'move') {
+						endAxisLockGesture();
+					}
 					bboxDragMode = null;
 					bboxOriginalBounds = null;
 				}
