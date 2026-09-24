@@ -1530,7 +1530,9 @@ import "../styles.css";
 				console.log(`SVG parsed successfully: ${filename}, element:`, svgElement.tagName);
 
 				// Use existing SVG processing logic (same as in handleFileChange)
-				importedSVGs.push({ name: getBaseName(filename), element: svgElement });
+				// Store both lowercased name (for matching) and original basename (for export)
+				const originalBasename = String(filename || "").replace(/\.[^/.]+$/, "");
+				importedSVGs.push({ name: getBaseName(filename), originalName: originalBasename, element: svgElement });
 				console.log(`Added SVG to importedSVGs. Total SVGs now: ${importedSVGs.length}`);
 
 				// Process the SVG
@@ -6376,7 +6378,9 @@ import "../styles.css";
 						);
 						// For each file, we assume the root element is the SVG element
 						const svgElement = svgDoc.documentElement;
-						importedSVGs.push({ name: getBaseName(fileToProcess.name), element: svgElement });
+						// Store both lowercased name (for matching) and original basename (for export)
+						const originalBasename = String(fileToProcess.name || "").replace(/\.[^/.]+$/, "");
+						importedSVGs.push({ name: getBaseName(fileToProcess.name), originalName: originalBasename, element: svgElement });
 
 						// Once all SVGs have been processed, show the first one and spawn navigation
 						if (importedSVGs.length === filesToProcess.length) {
@@ -6423,7 +6427,9 @@ import "../styles.css";
 						);
 						// For each file, we assume the root element is the SVG element
 						const svgElement = svgDoc.documentElement;
-						importedSVGs.push({ name: getBaseName(file.name), element: svgElement });
+						// Store both lowercased name (for matching) and original basename (for export)
+						const originalBasename = String(fileToProcess.name || "").replace(/\.[^/.]+$/, "");
+						importedSVGs.push({ name: getBaseName(fileToProcess.name), originalName: originalBasename, element: svgElement });
 
 						// Once all files have been processed, show the first one and spawn navigation
 						if (importedSVGs.length === filesToProcess.length) {
@@ -10200,9 +10206,81 @@ import "../styles.css";
 			return `<?xml version="1.0" encoding="UTF-8"?>\n<svg ${svgAttrs.join(" ")}>\n${body}\n</svg>\n`;
 		}
 
+		/**
+		 * SC-EXPORT-1: Get the basename for SVG export.
+		 * Priority: 1) Active SVG source name (originalName preserves case)
+		 *           2) Active backplate/image name (from SVG <image> data-original-filename)
+		 *           3) Fallback "untitled"
+		 * Strips final extension; sanitizes path separators.
+		 */
+		function getActiveSvgExportBasename() {
+			// 1. Try active SVG source name
+			const currentSvg = importedSVGs[currentSVGIndex];
+			if (currentSvg) {
+				const name = currentSvg.originalName || currentSvg.name;
+				if (name && name.trim()) {
+					return sanitizeExportBasename(name);
+				}
+			}
+
+			// 2. Try backplate/image embedded in the SVG container
+			const svgEl = document.querySelector("#svg-container svg");
+			if (svgEl) {
+				const imageEl = svgEl.querySelector("image[data-original-filename]");
+				if (imageEl) {
+					const origFilename = imageEl.getAttribute("data-original-filename");
+					if (origFilename && origFilename.trim()) {
+						// Strip extension from image filename
+						const basename = String(origFilename).replace(/\.[^/.]+$/, "");
+						if (basename.trim()) {
+							return sanitizeExportBasename(basename);
+						}
+					}
+				}
+			}
+
+			// 3. Fallback
+			return "untitled";
+		}
+
+		/**
+		 * SC-EXPORT-1: Get the basename for CSV export.
+		 * Uses active CSV from carousel (currentCSVIndex).
+		 * Prefers original File.name for case fidelity.
+		 * Strips final extension; sanitizes path separators.
+		 */
+		function getActiveCsvExportBasename() {
+			const csvObj = importedCSVs[currentCSVIndex];
+			if (csvObj) {
+				// Prefer original File.name for case fidelity
+				const originalFileName = csvObj.file?.name;
+				if (originalFileName && originalFileName.trim()) {
+					const basename = String(originalFileName).replace(/\.[^/.]+$/, "");
+					if (basename.trim()) {
+						return sanitizeExportBasename(basename);
+					}
+				}
+				// Fall back to stored name (already lowercased/stripped)
+				if (csvObj.name && csvObj.name.trim()) {
+					return sanitizeExportBasename(csvObj.name);
+				}
+			}
+			return "untitled";
+		}
+
+		/**
+		 * SC-EXPORT-1: Sanitize a basename for safe export.
+		 * Removes path separators; preserves spaces and ordinary punctuation.
+		 */
+		function sanitizeExportBasename(name) {
+			return String(name || "")
+				.replace(/\.[^/.]+$/, "")  // strip final extension if any
+				.replace(/[\/\\]/g, "_")    // replace path separators
+				.trim() || "untitled";
+		}
+
 		//SVG Conversion
 		function exportSVG() {
-			const file = fileNameGlobal;
 			var svg = document
 				.querySelector("#svg-container")
 				.querySelector("svg");
@@ -10214,8 +10292,8 @@ import "../styles.css";
 				var link = document.createElement("a");
 				link.href = url;
 				
-				// Build filename with suffix
-				const baseName = file.replace(/\.[^/.]+$/, "");
+				// SC-EXPORT-1: Use source-file basename, not fileNameGlobal
+				const baseName = getActiveSvgExportBasename();
 				const typeSuffix = type ? "_" + type : "";
 				
 				// Add flip suffix if SVG has been flipped
@@ -10323,11 +10401,12 @@ import "../styles.css";
 					}
 				}
 
-				const file = fileNameGlobal;
+				// SC-EXPORT-1: Use CSV source-file basename directly, skip formatExportFilename
+				const baseName = getActiveCsvExportBasename();
 				var blob = new Blob([csv], { type: "text/csv" });
 				var link = document.createElement("a");
 				link.href = URL.createObjectURL(blob);
-				link.download = formatExportFilename(file) + ".csv";
+				link.download = baseName + ".csv";
 				link.click();
 			} else {
 				alert("Import an SVG to start!");
