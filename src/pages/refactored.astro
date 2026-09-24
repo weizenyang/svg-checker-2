@@ -2095,8 +2095,8 @@ import "../styles.css";
 
 		// helper – add one element to the multiselect lists (no duplicates)
 		function addToSelection(el) {
-		if (!el || el.nodeName.toLowerCase() === 'svg') return;        // ignore root SVG
-			if (!el.classList.contains('svg-tool-selected')) {             // not already in set
+			if (!el || el.nodeName.toLowerCase() === 'svg') return;
+			if (!el.classList.contains('svg-tool-selected')) {
 				el.classList.add('svg-tool-selected');
 				el.style.fill = '#87CEEB';
 				groupGlobal.push(el);
@@ -2262,29 +2262,26 @@ import "../styles.css";
 					currentSelected = e.srcElement;
 
 					const groupName = e.srcElement;
+					
+					// Preserve selection on right-click (context menu)
+					if (e.button === 2 && groupName.classList.contains('svg-tool-selected')) {
+						return;
+					}
+					
 					//Get Attributes
-					if (!multiSelect) {
+					if (!multiSelect && e.button !== 2) {
 						groupGlobal = [];
 						document
 							.querySelectorAll(".svg-tool-selected")
 							.forEach((e) => {
-								// console.log(e.classList)
 								e.classList.remove("svg-tool-selected");
-								// console.log(e.classList)
 								e.style.fill = "";
 							});
 
 						groupGlobal.push(groupName);
 						console.log(groupGlobal);
-					} else {
-						if (
-							!groupName.classList.contains("hovered") &&
-							groupName.classList.contains("svg-tool-selected")
-						) {
-							groupGlobal.push(groupName);
-						} else if (groupGlobal.length <= 1) {
-							groupGlobal.push(groupName);
-						}
+					} else if (multiSelect) {
+						addToSelection(groupName);
 						console.log(groupGlobal);
 					}
 
@@ -2605,22 +2602,24 @@ import "../styles.css";
 				currentSelected = e.srcElement;
 
 				const groupName = e.srcElement;
+				
+				// Preserve selection on right-click (context menu)
+				if (e.button === 2 && groupName.classList.contains('svg-tool-selected')) {
+					return;
+				}
+				
 				//Get Attributes
-				if (!multiSelect) {
+				if (!multiSelect && e.button !== 2) {
 					groupGlobal = [];
 					document
 						.querySelectorAll(".svg-tool-selected")
 						.forEach((e) => {
-							// console.log(e.classList)
 							e.classList.remove("svg-tool-selected");
-							// console.log(e.classList)
 							e.style.fill = "";
 						});
 					groupGlobal.push(groupName);
-				} else {
-					if (!groupGlobal.includes(groupName)) {
-						groupGlobal.push(groupName);
-					}
+				} else if (multiSelect) {
+					addToSelection(groupName);
 				}
 
 				if (groupGlobal.length < 2) {
@@ -3897,8 +3896,36 @@ import "../styles.css";
 				svgContextMenu.style.display = 'none';
 			});
 
+			// Merge shapes menu item
+			const mergeItem = document.createElement('button');
+			mergeItem.textContent = 'Merge shapes';
+			mergeItem.id = 'merge-shapes-item';
+			Object.assign(mergeItem.style, {
+				display: 'none',
+				width: '100%',
+				padding: '8px 12px',
+				textAlign: 'left',
+				background: 'none',
+				border: 'none',
+				cursor: 'pointer',
+				fontSize: '14px',
+				fontFamily: 'inherit',
+				borderTop: '1px solid #eee'
+			});
+			mergeItem.addEventListener('mouseenter', () => {
+				mergeItem.style.background = '#f0f0f0';
+			});
+			mergeItem.addEventListener('mouseleave', () => {
+				mergeItem.style.background = 'none';
+			});
+			mergeItem.addEventListener('click', () => {
+				mergeSelectedShapes();
+				svgContextMenu.style.display = 'none';
+			});
+
 			svgContextMenu.appendChild(flipXItem);
 			svgContextMenu.appendChild(flipYItem);
+			svgContextMenu.appendChild(mergeItem);
 			document.body.appendChild(svgContextMenu);
 
 			return svgContextMenu;
@@ -3929,6 +3956,192 @@ import "../styles.css";
 			updateSVGTransform();
 		}
 
+		// Merge selected shapes using Paper.js boolean union
+		async function mergeSelectedShapes() {
+			// Query the DOM for actually selected paths (more reliable than groupGlobal)
+			const svgContainer = document.getElementById('svg-container');
+			if (!svgContainer) {
+				showToast('No SVG container found', 'error');
+				return;
+			}
+
+			const selectedPaths = Array.from(svgContainer.querySelectorAll('path.svg-tool-selected')).filter(el => {
+				if (el.closest('#g-instance, defs, clipPath, mask, symbol')) return false;
+				return true;
+			});
+
+			if (selectedPaths.length < 2) {
+				showToast('Select at least 2 path shapes to merge', 'warning');
+				return;
+			}
+
+			try {
+				// Dynamic import of Paper.js
+				const paper = await import('paper');
+				
+				// Create a temporary off-screen canvas for Paper.js
+				const tempCanvas = document.createElement('canvas');
+				tempCanvas.width = 1;
+				tempCanvas.height = 1;
+				paper.default.setup(tempCanvas);
+
+				// Helper to get the cumulative transform matrix for an element
+				function getCumulativeTransform(element) {
+					const transforms = [];
+					let current = element;
+					while (current && current.tagName) {
+						const t = current.getAttribute('transform');
+						if (t) transforms.unshift(t);
+						current = current.parentElement;
+						if (current.tagName?.toLowerCase() === 'svg') break;
+					}
+					
+					const matrix = new paper.default.Matrix();
+					transforms.forEach(transformStr => {
+						const parsed = parseTransformAttribute(transformStr);
+						if (parsed) {
+							matrix.append(new paper.default.Matrix(
+								parsed.a, parsed.b, parsed.c, parsed.d, parsed.tx, parsed.ty
+							));
+						}
+					});
+					return matrix;
+				}
+
+				// Parse SVG transform attribute into matrix values
+				function parseTransformAttribute(transform) {
+					if (!transform) return null;
+					
+					const matrix = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 };
+					
+					const matrixMatch = transform.match(/matrix\s*\(\s*([^)]+)\s*\)/);
+					if (matrixMatch) {
+						const vals = matrixMatch[1].split(/[\s,]+/).map(Number);
+						if (vals.length >= 6) {
+							matrix.a = vals[0]; matrix.b = vals[1];
+							matrix.c = vals[2]; matrix.d = vals[3];
+							matrix.tx = vals[4]; matrix.ty = vals[5];
+						}
+						return matrix;
+					}
+
+					const translateMatch = transform.match(/translate\s*\(\s*([^,\s]+)[\s,]*([^)\s]*)\s*\)/);
+					if (translateMatch) {
+						matrix.tx = parseFloat(translateMatch[1]) || 0;
+						matrix.ty = parseFloat(translateMatch[2]) || 0;
+					}
+
+					const scaleMatch = transform.match(/scale\s*\(\s*([^,\s]+)[\s,]*([^)\s]*)\s*\)/);
+					if (scaleMatch) {
+						matrix.a = parseFloat(scaleMatch[1]) || 1;
+						matrix.d = parseFloat(scaleMatch[2]) || matrix.a;
+					}
+
+					const rotateMatch = transform.match(/rotate\s*\(\s*([^,\s]+)[\s,]*([^,\s]*)[\s,]*([^)\s]*)\s*\)/);
+					if (rotateMatch) {
+						const angle = (parseFloat(rotateMatch[1]) || 0) * Math.PI / 180;
+						const cx = parseFloat(rotateMatch[2]) || 0;
+						const cy = parseFloat(rotateMatch[3]) || 0;
+						const cos = Math.cos(angle);
+						const sin = Math.sin(angle);
+						matrix.a = cos; matrix.b = sin;
+						matrix.c = -sin; matrix.d = cos;
+						matrix.tx = cx - cos * cx + sin * cy;
+						matrix.ty = cy - sin * cx - cos * cy;
+					}
+
+					return matrix;
+				}
+
+				saveState();
+
+				// Keep reference to the first path (will receive the merged result)
+				const firstPath = selectedPaths[0];
+				const firstId = firstPath.getAttribute('id');
+				const firstParent = firstPath.parentElement;
+
+				// Import and transform paths to common coordinate space
+				let resultPath = null;
+
+				for (let i = 0; i < selectedPaths.length; i++) {
+					const pathEl = selectedPaths[i];
+					const d = pathEl.getAttribute('d');
+					if (!d || !d.trim()) continue;
+
+					// Create Paper.js path from d attribute
+					const paperPath = new paper.default.CompoundPath(d);
+					
+					// Apply cumulative transform to bring into common space
+					const transform = getCumulativeTransform(pathEl);
+					paperPath.transform(transform);
+
+					// Ensure path is closed for proper boolean operations
+					paperPath.closePath();
+
+					if (resultPath === null) {
+						resultPath = paperPath;
+					} else {
+						// Perform boolean union
+						const united = resultPath.unite(paperPath);
+						resultPath.remove();
+						paperPath.remove();
+						resultPath = united;
+					}
+				}
+
+				if (!resultPath) {
+					showToast('Could not merge paths', 'error');
+					paper.default.project.clear();
+					return;
+				}
+
+				// Export the merged path as SVG path data
+				const mergedD = resultPath.pathData;
+				paper.default.project.clear();
+
+				// Update the first path with merged data
+				firstPath.setAttribute('d', mergedD);
+				firstPath.removeAttribute('transform');
+				
+				// Remove the other paths
+				for (let i = 1; i < selectedPaths.length; i++) {
+					selectedPaths[i].remove();
+				}
+
+				// Clear selection
+				document.querySelectorAll('.svg-tool-selected').forEach(el => {
+					el.classList.remove('svg-tool-selected');
+					el.style.fill = '';
+				});
+				groupGlobal = [];
+
+				showToast(`Merged ${selectedPaths.length} shapes`, 'success');
+
+			} catch (err) {
+				console.error('Merge shapes error:', err);
+				showToast('Failed to merge shapes: ' + (err.message || err), 'error');
+			}
+		}
+
+		// Update merge menu item visibility when context menu opens
+		function updateMergeMenuVisibility() {
+			const mergeItem = document.getElementById('merge-shapes-item');
+			if (!mergeItem) return;
+
+			const svgContainer = document.getElementById('svg-container');
+			if (!svgContainer) {
+				mergeItem.style.display = 'none';
+				return;
+			}
+
+			const selectedPaths = Array.from(svgContainer.querySelectorAll('path.svg-tool-selected')).filter(el => {
+				if (el.closest('#g-instance, defs, clipPath, mask, symbol')) return false;
+				return true;
+			});
+
+			mergeItem.style.display = selectedPaths.length >= 2 ? 'block' : 'none';
+		}
+
 		function setupSVGContextMenu(svgElement) {
 			if (!svgElement) return;
 
@@ -3941,6 +4154,7 @@ import "../styles.css";
 				e.preventDefault();
 				e.stopPropagation();
 				if (svgContextMenu && currentSVGElement) {
+					updateMergeMenuVisibility();
 					svgContextMenu.style.left = `${e.clientX}px`;
 					svgContextMenu.style.top = `${e.clientY}px`;
 					svgContextMenu.style.display = 'block';
