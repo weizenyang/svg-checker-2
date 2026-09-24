@@ -275,7 +275,7 @@ import "../styles.css";
 							id="export-menu-trigger"
 							class="button-style w-full"
 							type="button"
-							aria-expanded="false"
+							aria-expanded="true"
 							aria-haspopup="true"
 						>
 							<span>Export</span>
@@ -289,6 +289,7 @@ import "../styles.css";
 								stroke-linecap="round"
 								stroke-linejoin="round"
 								class="ml-2"
+								aria-hidden="true"
 							>
 								<path
 									d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
@@ -302,11 +303,10 @@ import "../styles.css";
 									y2="3"
 									stroke-width="2"></line>
 							</svg>
-							<span class="ml-2 text-xs opacity-80" aria-hidden="true">▾</span>
 						</button>
 						<div
 							id="export-menu"
-							class="hidden flex-col gap-2 mt-2"
+							class="flex flex-col gap-2 mt-2"
 							role="menu"
 						>
 							<input
@@ -9047,36 +9047,7 @@ import "../styles.css";
 			document.addEventListener("click", closeMenu);
 		})();
 
-		(() => {
-			const wrap = document.getElementById("export-menu-wrap");
-			const trigger = document.getElementById("export-menu-trigger");
-			const menu = document.getElementById("export-menu");
-			if (!wrap || !trigger || !menu) return;
-
-			function closeMenu() {
-				menu.classList.remove("flex");
-				menu.classList.add("hidden");
-				trigger.setAttribute("aria-expanded", "false");
-			}
-			function openMenu() {
-				menu.classList.remove("hidden");
-				menu.classList.add("flex");
-				trigger.setAttribute("aria-expanded", "true");
-			}
-			function toggleMenu() {
-				if (menu.classList.contains("hidden")) openMenu();
-				else closeMenu();
-			}
-
-			trigger.addEventListener("click", (e) => {
-				e.stopPropagation();
-				toggleMenu();
-			});
-			menu.addEventListener("click", (e) => {
-				e.stopPropagation();
-			});
-			document.addEventListener("click", closeMenu);
-		})();
+		// SC-UI-2: Export panel stays permanently expanded (no toggle / outside-click close).
 
 		document.getElementById("batch-shape-bench-button")?.addEventListener("click", async () => {
 			const btn = document.getElementById("batch-shape-bench-button") as HTMLButtonElement | null;
