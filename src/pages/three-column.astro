@@ -7,6 +7,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
+		<link rel="help" type="text/markdown" href="/three-column-agent.md" />
 		<title>3-Column CSV Input</title>
 	</head>
 	<body class="bg-neutral-100 min-h-screen flex flex-col">
@@ -401,6 +402,11 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					<button type="button" class="token-btn px-2 py-1 text-xs rounded bg-neutral-100 hover:bg-neutral-200" data-token="BALCONY" aria-pressed="false">BALCONY</button>
 				</div>
 			</div>
+
+			<p id="agent-api-hint" class="text-center text-[11px] text-neutral-400">
+				Automating this page? Call <code class="font-mono">window.threeColumn.help()</code> or read
+				<a href="/three-column-agent.md" class="underline hover:text-neutral-600">/three-column-agent.md</a>.
+			</p>
 		</main>
 
 		<style>
@@ -608,6 +614,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 		</style>
 
 		<script>
+			import JSZip from 'jszip';
 			import {
 				normalizeImperialTypography,
 				normalizeMetricTypography,
@@ -638,9 +645,25 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				});
 			}
 
-			function sanitizeFilenameBase(name) {
-				const s = String(name ?? 'three-column').replace(/\.csv$/i, '').trim() || 'three-column';
-				return s.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'three-column';
+			type ExportFormat = 'png' | 'svg' | 'csv';
+
+			/**
+			 * Output basename = the sheet name exactly (e.g. the source image basename).
+			 * Only characters that are illegal in macOS/Windows filenames are replaced,
+			 * so names like `dims_a_s_1b_d651_s1_0` survive untouched. A trailing known
+			 * file extension is dropped so `foo.png` and `foo` name the same output.
+			 */
+			function outputBasename(name: unknown): string {
+				const s = String(name ?? '')
+					.trim()
+					.replace(/\.(png|svg|csv|jpe?g|webp|gif)$/i, '')
+					.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+					.replace(/^[\s.]+|[\s.]+$/g, '');
+				return s || 'three-column';
+			}
+
+			function outputFilename(name: unknown, format: ExportFormat): string {
+				return `${outputBasename(name)}.${format}`;
 			}
 
 			/** RFC-style CSV line: comma-separated, `"` escapes quotes. Returns all fields. */
@@ -1771,11 +1794,12 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				return true;
 			}
 
+			// Sheet label (and therefore export filename) for an attached image: its exact
+			// basename. Never truncated — the tab bar already ellipsizes visually via CSS.
 			function labelForAiAttachment(index: number, total: number, attachmentName?: string) {
-				if (total <= 1) return 'AI parsed';
 				const raw = (attachmentName ?? '').replace(/\.[^.]+$/i, '').trim();
-				if (raw) return raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
-				return `AI ${index + 1}`;
+				if (raw) return raw;
+				return total <= 1 ? 'AI parsed' : `AI ${index + 1}`;
 			}
 
 			function dedupeSheetLabel(baseLabel: string) {
@@ -3177,7 +3201,10 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 						if (verified.warnings.length) {
 							console.warn('[three-column] AI parse consistency warnings', verified.warnings);
 						}
-						const ok = importMatrixAsNewSheet(matrix, 'AI parsed');
+						const ok = importMatrixAsNewSheet(
+							matrix,
+							labelForAiAttachment(0, imageDataUrls.length, aiAttachments[0]?.name)
+						);
 						const totalRows = matrix.filter((r) => r.some((c) => c.length)).length;
 						if (!ok) {
 							if (aiStatus) aiStatus.textContent = 'No rows or sheet limit reached.';
@@ -3296,17 +3323,39 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				});
 			}
 
-			function triggerSvgDownload(svgString: string, filenameBase: string) {
-				const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+			function downloadBlob(blob: Blob, filename: string) {
 				const url = URL.createObjectURL(blob);
 				const a = document.createElement('a');
 				a.href = url;
-				a.download = `${filenameBase}-4096.svg`;
+				a.download = filename;
 				a.click();
-				URL.revokeObjectURL(url);
+				// Revoke on the next tick so the download has started.
+				setTimeout(() => URL.revokeObjectURL(url), 0);
 			}
 
-			async function exportPreviewToSvg4096(filenameLabel?: string): Promise<void> {
+			/**
+			 * The preview font loads lazily; drawing before it arrives silently falls back
+			 * to a default font in the PNG. Load both weights explicitly before rendering.
+			 */
+			async function ensurePreviewFontsLoaded() {
+				try {
+					await Promise.all([
+						document.fonts.load("400 14.4px 'monospace821'"),
+						document.fonts.load("700 14.4px 'monospace821'")
+					]);
+					await document.fonts.ready;
+				} catch {
+					// FontFaceSet unsupported — render with whatever is available.
+				}
+			}
+
+			function nextFrames(): Promise<void> {
+				return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+			}
+
+			/** SVG markup (4096×4096, embedded fonts + data) for the ACTIVE sheet's preview. */
+			async function buildActivePreviewSvgString(sheetLabel: string): Promise<string | null> {
+				await ensurePreviewFontsLoaded();
 				const CANVAS_SIZE = 4096;
 				const LINE_WIDTH = 654;
 
@@ -3315,7 +3364,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				const previewLines = previewWrap
 					? (Array.from(previewWrap.querySelectorAll('div.h-\\[2px\\]')) as HTMLDivElement[])
 					: [];
-				if (!previewWrap || !previewTable || previewLines.length === 0) return;
+				if (!previewWrap || !previewTable || previewLines.length === 0) return null;
 
 				const wrapRect = previewWrap.getBoundingClientRect();
 				const tableRect = previewTable.getBoundingClientRect();
@@ -3325,7 +3374,6 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				const offsetY = Math.round((CANVAS_SIZE - groupH) / 2);
 
 				const rows = getTableData();
-				const sheetLabel = filenameLabel ?? sheets[activeIndex]?.label ?? 'table';
 
 				const svg = document.createElementNS(SVG_NS, 'svg');
 				svg.setAttribute('xmlns', SVG_NS);
@@ -3403,25 +3451,31 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 
 				svg.appendChild(group);
 
-				const svgString = new XMLSerializer().serializeToString(svg);
-				const base = sanitizeFilenameBase(sheetLabel);
-				triggerSvgDownload(svgString, base);
+				return new XMLSerializer().serializeToString(svg);
+			}
+
+			async function exportPreviewToSvg4096(filenameLabel?: string): Promise<void> {
+				const label = filenameLabel ?? sheets[activeIndex]?.label ?? 'table';
+				const svgString = await buildActivePreviewSvgString(label);
+				if (!svgString) return;
+				downloadBlob(
+					new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }),
+					outputFilename(label, 'svg')
+				);
 			}
 
 			exportCsvBtn?.addEventListener('click', () => {
 				commitActiveSheet();
 				const csv = sheetRowsToCsv(getTableData());
-				const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				const base = sanitizeFilenameBase(sheets[activeIndex]?.label ?? 'three-column');
-				a.download = `${base}.csv`;
-				a.click();
-				URL.revokeObjectURL(url);
+				downloadBlob(
+					new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+					outputFilename(sheets[activeIndex]?.label ?? 'three-column', 'csv')
+				);
 			});
 
-			function exportPreviewToPng4096(filenameLabel?: string): Promise<void> {
+			/** Transparent 4096×4096 PNG of the ACTIVE sheet's preview, drawn at exact DOM positions. */
+			async function renderActivePreviewToPngBlob(): Promise<Blob | null> {
+				await ensurePreviewFontsLoaded();
 				return new Promise((resolve) => {
 				const CANVAS_SIZE = 4096;
 				const LINE_WIDTH = 654;
@@ -3435,7 +3489,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					? (Array.from(previewWrap.querySelectorAll('div.h-\\[2px\\]')) as HTMLDivElement[])
 					: [];
 				if (!previewWrap || !previewTable || previewLines.length === 0) {
-					resolve();
+					resolve(null);
 					return;
 				}
 
@@ -3454,7 +3508,7 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				canvas.height = CANVAS_SIZE;
 				const ctx = canvas.getContext('2d');
 				if (!ctx) {
-					resolve();
+					resolve(null);
 					return;
 				}
 
@@ -3529,21 +3583,14 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					}
 				}
 
-				const base = sanitizeFilenameBase(filenameLabel ?? sheets[activeIndex]?.label ?? 'table');
-				canvas.toBlob((blob) => {
-					if (!blob) {
-						resolve();
-						return;
-					}
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					a.href = url;
-					a.download = `${base}-4096.png`;
-					a.click();
-					URL.revokeObjectURL(url);
-					resolve();
-				}, 'image/png');
+				canvas.toBlob((blob) => resolve(blob), 'image/png');
 				});
+			}
+
+			async function exportPreviewToPng4096(filenameLabel?: string): Promise<void> {
+				const label = filenameLabel ?? sheets[activeIndex]?.label ?? 'table';
+				const blob = await renderActivePreviewToPngBlob();
+				if (blob) downloadBlob(blob, outputFilename(label, 'png'));
 			}
 
 			exportPngBtn?.addEventListener('click', () => {
@@ -3560,14 +3607,10 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 				commitActiveSheet();
 				for (let i = 0; i < sheets.length; i++) {
 					const sheet = sheets[i];
-					const csv = sheetRowsToCsv(sheet.rows);
-					const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-					const url = URL.createObjectURL(blob);
-					const a = document.createElement('a');
-					a.href = url;
-					a.download = `${sanitizeFilenameBase(sheet.label)}.csv`;
-					a.click();
-					URL.revokeObjectURL(url);
+					downloadBlob(
+						new Blob([sheetRowsToCsv(sheet.rows)], { type: 'text/csv;charset=utf-8' }),
+						outputFilename(sheet.label, 'csv')
+					);
 					await delayMs(220);
 				}
 			});
@@ -3681,6 +3724,598 @@ import { DIMENSION_PARSE_SYSTEM_PROMPT, DEFAULT_OPENROUTER_MODELS } from "../lib
 					insertTokenIntoActiveCell(token);
 				});
 			});
+
+			// ════════════════════════════════════════════════════════════════════════
+			// Agent API — window.threeColumn   (full docs: /three-column-agent.md)
+			// Loads sheets with exact names (rows / CSV / images read by the page's AI),
+			// verifies metric⇄imperial pairing, and exports PNG / SVG / CSV whose
+			// filenames match the source exactly. Used by browser agents and by the
+			// headless runner in tools/three-column-agent.mjs.
+			// ════════════════════════════════════════════════════════════════════════
+			type AgentRows = string[][];
+			type AgentItem = { name?: string; rows?: unknown; csv?: string; image?: string; imageName?: string };
+			type AgentAiOptions = {
+				provider?: 'gemini' | 'openrouter';
+				apiKey?: string;
+				model?: string;
+				concurrency?: number;
+			};
+			type AgentDeliver = 'zip' | 'base64' | 'none';
+			type AgentTypography = Partial<
+				Record<'col0' | 'col1' | 'col2', { weight?: string; tracking?: string | number }>
+			>;
+			type AgentJob = {
+				items?: AgentItem[];
+				fromAttachments?: boolean;
+				formats?: ExportFormat[];
+				replace?: boolean;
+				normalize?: boolean;
+				typography?: AgentTypography;
+				ai?: AgentAiOptions;
+				deliver?: AgentDeliver;
+				zipName?: string;
+				validateOnly?: boolean;
+			};
+			type AgentSource = 'rows' | 'csv' | 'image';
+			type AgentFile = {
+				sheet: string;
+				filename: string;
+				format: ExportFormat;
+				mimeType: string;
+				bytes: number;
+				base64?: string;
+			};
+			type AgentEntry = { sheet: string; filename: string; format: ExportFormat; blob: Blob };
+			type AgentVerified = { rows: AgentRows; warnings: string[]; autoFixed: number; flagged: number };
+			type AgentPlanItem = AgentVerified & {
+				item: AgentItem;
+				i: number;
+				source: AgentSource;
+				name: string;
+				error?: string;
+			};
+
+			const AGENT_API_VERSION = '1.0';
+			const AGENT_DEFAULT_FORMATS: ExportFormat[] = ['png', 'svg'];
+			const AGENT_MIME: Record<ExportFormat, string> = {
+				png: 'image/png',
+				svg: 'image/svg+xml',
+				csv: 'text/csv'
+			};
+			const AGENT_HELP_TEXT = `three-column agent API v${AGENT_API_VERSION} — full docs: /three-column-agent.md
+
+Makes 4096x4096 dimension-table images named exactly after their source:
+<name>.png / <name>.svg / <name>.csv  (no size suffix; names are never auto-renamed).
+
+const result = await threeColumn.run({
+  items: [
+    // Rows you read from the floorplan yourself. ASCII ' and " become ’ and ’’,
+    // and "6.15m 5.70m" becomes "6.15m  x  5.70m" automatically.
+    { name: 'dims_a_s_1b_d651_s1_0', rows: [['LIVING / DINING / KITCHEN', '5.05m 5.49m', '16’7’’ 18’0’’']] },
+    // A CSV string, one "room,metric,imperial" per line.
+    { name: 'dims_a_s_1b_d651_s1_1', csv: 'BEDROOM,3.41m 3.80m,11’2’’ 12’6’’' },
+    // An image for the page's AI to read. name defaults to imageName minus its extension.
+    { image: 'data:image/png;base64,...', imageName: 'dims_d_s_2b_d758_s1_0.png' }
+  ],
+  fromAttachments: false,    // true: also use images uploaded via the "Attach image" input (#ai-image-input)
+  formats: ['png', 'svg'],   // default; add 'csv' if wanted
+  deliver: 'zip',            // 'zip' = one download | 'base64' = return file data | 'none'
+  replace: false,            // true clears every existing sheet first
+  validateOnly: false,       // true: read + verify only, export nothing
+  ai: { provider: 'gemini' } // optional; key and model default to the page's configuration
+});
+// result: { ok, sheets: [{ name, rowCount, rows, warnings, autoFixed, flagged, files, error? }],
+//           files: [{ filename, format, bytes }], zip?, flaggedSheets, errors }
+
+Always check result.flaggedSheets: rows whose metric and imperial values still disagree.
+Also: parseImage({ image, ai }), verifyRows(rows), listSheets(), listAttachments(),
+renameSheet(from, to), exportSheets({ names, formats, deliver, zipName }), clear(),
+filenameFor(name, format).`;
+
+			let agentBusy = false;
+
+			function agentErrorMessage(e: unknown): string {
+				return e instanceof Error ? e.message : String(e);
+			}
+
+			function agentNormalizeFormats(formats?: unknown): ExportFormat[] {
+				if (formats == null) return [...AGENT_DEFAULT_FORMATS];
+				const list = (Array.isArray(formats) ? formats : [formats]).map((f) => String(f).toLowerCase().trim());
+				const out: ExportFormat[] = [];
+				for (const f of list) {
+					if (f !== 'png' && f !== 'svg' && f !== 'csv') {
+						throw new Error(`Unknown format "${f}" — use png, svg or csv.`);
+					}
+					if (!out.includes(f)) out.push(f);
+				}
+				if (!out.length) throw new Error('formats must include at least one of png, svg, csv.');
+				return out;
+			}
+
+			function agentNormalizeDeliver(deliver?: unknown): AgentDeliver {
+				const d = deliver == null ? 'zip' : String(deliver);
+				if (d !== 'zip' && d !== 'base64' && d !== 'none') {
+					throw new Error(`Unknown deliver "${d}" — use zip, base64 or none.`);
+				}
+				return d;
+			}
+
+			/** Accepts [room, metric, imperial] triples or {room|a, metric|b, imperial|c} objects. */
+			function agentCoerceRows(raw: unknown): AgentRows {
+				if (!Array.isArray(raw)) throw new Error('rows must be an array of [room, metric, imperial]');
+				return raw
+					.map((r, i) => {
+						if (Array.isArray(r)) return [String(r[0] ?? ''), String(r[1] ?? ''), String(r[2] ?? '')];
+						if (r && typeof r === 'object') {
+							const o = r as Record<string, unknown>;
+							return [
+								String(o.room ?? o.a ?? ''),
+								String(o.metric ?? o.b ?? ''),
+								String(o.imperial ?? o.c ?? '')
+							];
+						}
+						throw new Error(`rows[${i}] must be [room, metric, imperial] or {room, metric, imperial}`);
+					})
+					.filter((r) => r.some((c) => c.trim()))
+					.slice(0, MAX_IMPORT_ROWS);
+			}
+
+			/** Same typography normalisation + metric⇄imperial cross-check the AI path uses. */
+			function agentVerifyRows(rows: AgentRows, normalize = true): AgentVerified {
+				if (!normalize) return { rows, warnings: [], autoFixed: 0, flagged: 0 };
+				const typed = rows.map(([a, b, c]) => [
+					a.trim(),
+					normalizeMetricTypography(b.trim()),
+					normalizeImperialTypography(c.trim())
+				]);
+				const v = verifyAndFixCrossPairing(typed);
+				return { rows: v.matrix, warnings: v.warnings, autoFixed: v.fixedCount, flagged: v.flaggedCount };
+			}
+
+			/** Provider / key / model for the page's AI. Falls back to what the page UI has configured. */
+			function agentResolveAi(ai?: AgentAiOptions) {
+				if (ai?.provider && ai.provider !== 'gemini' && ai.provider !== 'openrouter') {
+					throw new Error(`Unknown ai.provider "${ai.provider}" — use gemini or openrouter.`);
+				}
+				const gemini = ai?.provider ? ai.provider === 'gemini' : isGeminiProvider();
+				let apiKey = String(ai?.apiKey ?? '').trim();
+				if (!apiKey) {
+					apiKey = gemini
+						? GEMINI_KEY_FROM_ENV || (aiApiKeyGemini?.value ?? '').trim()
+						: OPENROUTER_KEY_FROM_ENV || (aiApiKeyOpenRouter?.value ?? '').trim();
+				}
+				let model = String(ai?.model ?? '').trim();
+				// Only reuse the UI's model if it belongs to the same provider.
+				if (!model && gemini === isGeminiProvider()) {
+					model =
+						aiModelSelect?.value === '__custom'
+							? (aiModelCustom?.value ?? '').trim()
+							: (aiModelSelect?.value ?? '');
+				}
+				if (!model) model = (gemini ? DEFAULT_GEMINI_MODELS : DEFAULT_OPENROUTER_MODELS)[0]?.id ?? '';
+				if (gemini) model = normalizeGeminiModelId(model);
+				return { gemini, apiKey, model };
+			}
+
+			async function agentParseImage(image: unknown, ai?: AgentAiOptions) {
+				if (typeof image !== 'string' || !/^data:/i.test(image)) {
+					throw new Error('image must be a data URL, e.g. data:image/png;base64,...');
+				}
+				const mime = (image.match(/^data:([^;,]+)[;,]/i)?.[1] ?? '').toLowerCase();
+				if (!ACCEPTED_IMAGE_MIME_TYPES.has(mime)) {
+					throw new Error(`Unsupported image format "${mime || 'unknown'}" — use PNG, JPEG, WebP or GIF.`);
+				}
+				const { gemini, apiKey, model } = agentResolveAi(ai);
+				if (!apiKey) {
+					throw new Error(
+						gemini
+							? 'No Gemini API key: pass ai.apiKey, enter one in the page, or set PUBLIC_GEMINI_API_KEY.'
+							: 'No OpenRouter API key: pass ai.apiKey, enter one in the page, or set PUBLIC_OPENROUTER_API_KEY.'
+					);
+				}
+				const parse = gemini ? parseDimensionsWithGemini : parseDimensionsWithOpenRouter;
+				const { parts } = await parse({ apiKey, model, pastedText: '', imageDataUrls: [image] });
+				const part = parts[0];
+				if (!part?.rows) throw new Error('Empty response from model.');
+				const v = verifyAndFixCrossPairing(rowsFromAiPart(part));
+				const rows = v.matrix.filter((r) => r.some((c) => c.trim()));
+				if (!rows.length) throw new Error('The model found no rows in the image.');
+				return {
+					rows,
+					warnings: v.warnings,
+					autoFixed: v.fixedCount,
+					flagged: v.flaggedCount,
+					provider: gemini ? 'gemini' : 'openrouter',
+					model
+				};
+			}
+
+			async function agentPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
+				let next = 0;
+				const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+					while (next < items.length) await fn(items[next++]);
+				});
+				await Promise.all(workers);
+			}
+
+			function agentFindSheetIndex(target: unknown): number {
+				if (typeof target === 'number') return target >= 0 && target < sheets.length ? target : -1;
+				const want = outputBasename(target).toLowerCase();
+				return sheets.findIndex((s) => outputBasename(s.label).toLowerCase() === want);
+			}
+
+			/** Show a sheet WITHOUT committing the editor first (the caller already set its rows). */
+			function agentActivate(index: number) {
+				activeIndex = Math.max(0, Math.min(index, sheets.length - 1));
+				replaceEditorRows(sheets[activeIndex].rows);
+				renderTabBar();
+				renderPreview();
+			}
+
+			function blobToBase64(blob: Blob): Promise<string> {
+				return new Promise((resolve, reject) => {
+					const r = new FileReader();
+					r.onload = () => {
+						const s = String(r.result);
+						resolve(s.slice(s.indexOf(',') + 1));
+					};
+					r.onerror = () => reject(r.error ?? new Error('read failed'));
+					r.readAsDataURL(blob);
+				});
+			}
+
+			/** Render the ACTIVE sheet in each requested format, named exactly after `name`. */
+			async function agentExportActive(name: string, formats: ExportFormat[]): Promise<AgentEntry[]> {
+				await ensurePreviewFontsLoaded();
+				await nextFrames();
+				const out: AgentEntry[] = [];
+				for (const format of formats) {
+					let blob: Blob | null = null;
+					if (format === 'png') {
+						blob = await renderActivePreviewToPngBlob();
+					} else if (format === 'svg') {
+						const svg = await buildActivePreviewSvgString(name);
+						blob = svg ? new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }) : null;
+					} else {
+						blob = new Blob([sheetRowsToCsv(getTableData())], { type: 'text/csv;charset=utf-8' });
+					}
+					if (!blob) throw new Error(`could not render ${format} (empty table?)`);
+					out.push({ sheet: name, filename: outputFilename(name, format), format, blob });
+				}
+				return out;
+			}
+
+			async function agentDeliver(entries: AgentEntry[], deliver: AgentDeliver, zipName: string) {
+				const files: AgentFile[] = [];
+				for (const e of entries) {
+					const f: AgentFile = {
+						sheet: e.sheet,
+						filename: e.filename,
+						format: e.format,
+						mimeType: AGENT_MIME[e.format],
+						bytes: e.blob.size
+					};
+					if (deliver === 'base64') f.base64 = await blobToBase64(e.blob);
+					files.push(f);
+				}
+				let zip: { filename: string; bytes: number } | undefined;
+				if (deliver === 'zip' && entries.length) {
+					const z = new JSZip();
+					for (const e of entries) z.file(e.filename, e.blob);
+					const blob = await z.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+					const filename = `${outputBasename(zipName)}.zip`;
+					downloadBlob(blob, filename);
+					zip = { filename, bytes: blob.size };
+				}
+				return { files, zip };
+			}
+
+			function agentSheetResult(p: AgentPlanItem, files: string[]) {
+				return {
+					name: p.name || `items[${p.i}]`,
+					source: p.source,
+					rowCount: p.rows.length,
+					rows: p.rows,
+					warnings: p.warnings,
+					autoFixed: p.autoFixed,
+					flagged: p.flagged,
+					files,
+					...(p.error ? { error: p.error } : {})
+				};
+			}
+
+			async function agentRun(job: AgentJob) {
+				if (agentBusy) throw new Error('A threeColumn run is already in progress.');
+				if (!job || typeof job !== 'object') throw new Error('run(job) needs a job object — see threeColumn.help()');
+				const items: AgentItem[] = [
+					...(Array.isArray(job.items) ? job.items : []),
+					...(job.fromAttachments ? aiAttachments.map((a) => ({ image: a.dataUrl, imageName: a.name })) : [])
+				];
+				if (!items.length) {
+					throw new Error(
+						job.fromAttachments
+							? 'No items and no attached images — upload images via #ai-image-input first.'
+							: 'job.items must be a non-empty array — see threeColumn.help()'
+					);
+				}
+				const formats = agentNormalizeFormats(job.formats);
+				const deliver = agentNormalizeDeliver(job.deliver);
+				const normalize = job.normalize !== false;
+
+				agentBusy = true;
+				try {
+					// 1. Resolve each item's exact output name. Duplicates are errors — never renamed
+					//    (compared case-insensitively, since macOS filesystems are case-insensitive).
+					const seen = new Map<string, number>();
+					const plan: AgentPlanItem[] = items.map((item, i) => {
+						const source: AgentSource =
+							item?.rows != null ? 'rows' : item?.csv != null ? 'csv' : 'image';
+						const raw = item?.name ?? (source === 'image' ? item?.imageName : undefined);
+						const name = raw != null && String(raw).trim() ? outputBasename(raw) : '';
+						let error: string | undefined;
+						if (!name) {
+							error = `items[${i}]: name is required${source === 'image' ? ' (or imageName)' : ''}`;
+						} else if (source === 'image' && !item?.image) {
+							error = `items[${i}] "${name}": provide rows, csv or image`;
+						} else if (seen.has(name.toLowerCase())) {
+							error = `items[${i}]: duplicate output name "${name}" (also items[${seen.get(name.toLowerCase())}])`;
+						} else {
+							seen.set(name.toLowerCase(), i);
+						}
+						return { item, i, source, name, error, rows: [], warnings: [], autoFixed: 0, flagged: 0 };
+					});
+
+					// 2. Rows: verify the ones given directly; have the page's AI read the images.
+					for (const p of plan) {
+						if (p.error || p.source === 'image') continue;
+						try {
+							const raw = p.source === 'csv' ? parseCSV(String(p.item.csv ?? '')) : agentCoerceRows(p.item.rows);
+							Object.assign(p, agentVerifyRows(raw, normalize));
+							if (!p.rows.length) p.error = `"${p.name}": no rows`;
+						} catch (e) {
+							p.error = `"${p.name}": ${agentErrorMessage(e)}`;
+						}
+					}
+					const imagePlan = plan.filter((p) => !p.error && p.source === 'image');
+					let read = 0;
+					await agentPool(imagePlan, Math.max(1, Math.min(6, Number(job.ai?.concurrency) || 3)), async (p) => {
+						try {
+							const r = await agentParseImage(p.item.image, job.ai);
+							Object.assign(p, { rows: r.rows, warnings: r.warnings, autoFixed: r.autoFixed, flagged: r.flagged });
+						} catch (e) {
+							p.error = `"${p.name}": ${agentErrorMessage(e)}`;
+						} finally {
+							read++;
+							if (aiStatus) aiStatus.textContent = `Agent: read ${read}/${imagePlan.length} image(s)…`;
+						}
+					});
+
+					const errors: string[] = [];
+					const results: ReturnType<typeof agentSheetResult>[] = [];
+
+					// 3. validateOnly: report what would be generated, leave the page untouched.
+					if (job.validateOnly) {
+						for (const p of plan) {
+							if (p.error) errors.push(p.error);
+							results.push(agentSheetResult(p, []));
+						}
+						if (aiStatus) aiStatus.textContent = `Agent: validated ${results.length} item(s).`;
+						return {
+							ok: errors.length === 0,
+							version: AGENT_API_VERSION,
+							formats,
+							deliver: 'none' as AgentDeliver,
+							sheets: results,
+							files: [] as AgentFile[],
+							flaggedSheets: results.filter((r) => r.flagged > 0).map((r) => r.name),
+							errors
+						};
+					}
+
+					// 4. Load each item as a sheet named exactly `name`, then export it.
+					if (job.replace) {
+						sheets = [];
+						activeIndex = 0;
+					} else {
+						commitActiveSheet(); // keep any in-progress edits on the open sheet
+					}
+					if (job.typography) applyTypographyFromSvgPayload(job.typography as SvgTypographyPayload);
+
+					const entries: AgentEntry[] = [];
+					const runSheetIds = new Set<string>();
+					for (const p of plan) {
+						const files: string[] = [];
+						if (!p.error) {
+							try {
+								let idx = agentFindSheetIndex(p.name);
+								if (idx >= 0) {
+									sheets[idx].label = p.name;
+									sheets[idx].rows = p.rows;
+								} else {
+									// Stay under the sheet cap by evicting this run's oldest (already exported)
+									// sheet. Sheets that existed before the run are never evicted.
+									if (sheets.length >= MAX_SHEETS) {
+										const evict = sheets.findIndex((s) => runSheetIds.has(s.id));
+										if (evict < 0) {
+											throw new Error(`sheet limit (${MAX_SHEETS}) reached — use replace: true or a smaller batch`);
+										}
+										sheets.splice(evict, 1);
+									}
+									sheets.push({ id: uid(), label: p.name, rows: p.rows });
+									idx = sheets.length - 1;
+								}
+								runSheetIds.add(sheets[idx].id);
+								agentActivate(idx);
+								if (aiStatus) aiStatus.textContent = `Agent: exporting ${p.name}…`;
+								const made = await agentExportActive(p.name, formats);
+								entries.push(...made);
+								files.push(...made.map((m) => m.filename));
+							} catch (e) {
+								p.error = `"${p.name}": ${agentErrorMessage(e)}`;
+							}
+						}
+						if (p.error) errors.push(p.error);
+						results.push(agentSheetResult(p, files));
+					}
+
+					// 5. Leave the UI on this run's first sheet.
+					if (!sheets.length) sheets.push({ id: uid(), label: 'Sheet 1', rows: [['', '', '']] });
+					agentActivate(Math.max(0, sheets.findIndex((s) => runSheetIds.has(s.id))));
+					scrollActiveTabIntoView();
+					persistState();
+
+					// 6. Deliver.
+					const exported = results.filter((r) => r.files.length);
+					const zipName = job.zipName ?? (exported.length === 1 ? exported[0].name : 'three-column-export');
+					const delivered = await agentDeliver(entries, deliver, zipName);
+					if (aiStatus) {
+						aiStatus.textContent = `Agent: exported ${exported.length}/${results.length} sheet(s)${
+							errors.length ? ` · ${errors.length} error(s)` : ''
+						}.`;
+					}
+					return {
+						ok: errors.length === 0,
+						version: AGENT_API_VERSION,
+						formats,
+						deliver,
+						sheets: results,
+						files: delivered.files,
+						...(delivered.zip ? { zip: delivered.zip } : {}),
+						flaggedSheets: results.filter((r) => r.flagged > 0).map((r) => r.name),
+						errors
+					};
+				} finally {
+					agentBusy = false;
+				}
+			}
+
+			async function agentExportSheets(opts?: {
+				names?: Array<string | number>;
+				formats?: ExportFormat[];
+				deliver?: AgentDeliver;
+				zipName?: string;
+			}) {
+				if (agentBusy) throw new Error('A threeColumn run is already in progress.');
+				const formats = agentNormalizeFormats(opts?.formats);
+				const deliver = agentNormalizeDeliver(opts?.deliver);
+				agentBusy = true;
+				try {
+					commitActiveSheet();
+					const saved = activeIndex;
+					const targets = opts?.names?.length
+						? opts.names.map((n) => ({ n, idx: agentFindSheetIndex(n) }))
+						: sheets.map((_, idx) => ({ n: idx as string | number, idx }));
+					const entries: AgentEntry[] = [];
+					const errors: string[] = [];
+					const results: Array<{ name: string; rowCount: number; files: string[] }> = [];
+					const used = new Set<string>();
+					for (const { n, idx } of targets) {
+						if (idx < 0) {
+							errors.push(`No sheet named "${n}"`);
+							continue;
+						}
+						const name = outputBasename(sheets[idx].label);
+						if (used.has(name.toLowerCase())) {
+							errors.push(`Duplicate output name "${name}" — rename one of the sheets first`);
+							continue;
+						}
+						used.add(name.toLowerCase());
+						const rowCount = sheets[idx].rows.filter((r) => r.some((c) => String(c).trim())).length;
+						if (!rowCount) {
+							errors.push(`"${name}": no rows`);
+							continue;
+						}
+						try {
+							agentActivate(idx);
+							const made = await agentExportActive(name, formats);
+							entries.push(...made);
+							results.push({ name, rowCount, files: made.map((m) => m.filename) });
+						} catch (e) {
+							errors.push(`"${name}": ${agentErrorMessage(e)}`);
+						}
+					}
+					agentActivate(saved);
+					const zipName = opts?.zipName ?? (results.length === 1 ? results[0].name : 'three-column-export');
+					const delivered = await agentDeliver(entries, deliver, zipName);
+					return {
+						ok: errors.length === 0,
+						version: AGENT_API_VERSION,
+						formats,
+						deliver,
+						sheets: results,
+						files: delivered.files,
+						...(delivered.zip ? { zip: delivered.zip } : {}),
+						errors
+					};
+				} finally {
+					agentBusy = false;
+				}
+			}
+
+			function agentListSheets() {
+				commitActiveSheet();
+				return sheets.map((s, index) => {
+					const rows = s.rows.filter((r) => r.some((c) => String(c).trim())).map((r) => [...r]);
+					return {
+						index,
+						name: s.label,
+						active: index === activeIndex,
+						rowCount: rows.length,
+						rows,
+						filenames: {
+							png: outputFilename(s.label, 'png'),
+							svg: outputFilename(s.label, 'svg'),
+							csv: outputFilename(s.label, 'csv')
+						}
+					};
+				});
+			}
+
+			function agentRenameSheet(target: string | number, newName: string) {
+				commitActiveSheet();
+				const idx = agentFindSheetIndex(target);
+				if (idx < 0) throw new Error(`No sheet named "${target}"`);
+				const name = newName != null && String(newName).trim() ? outputBasename(newName) : '';
+				if (!name) throw new Error('newName is required');
+				const clash = sheets.findIndex(
+					(s, i) => i !== idx && outputBasename(s.label).toLowerCase() === name.toLowerCase()
+				);
+				if (clash >= 0) throw new Error(`Another sheet is already named "${sheets[clash].label}"`);
+				sheets[idx].label = name;
+				persistState();
+				renderTabBar();
+				return { index: idx, name, filenames: { png: outputFilename(name, 'png'), svg: outputFilename(name, 'svg') } };
+			}
+
+			const threeColumnApi = Object.freeze({
+				version: AGENT_API_VERSION,
+				ready: true,
+				defaults: Object.freeze({
+					formats: [...AGENT_DEFAULT_FORMATS],
+					maxSheets: MAX_SHEETS,
+					maxRowsPerSheet: MAX_IMPORT_ROWS
+				}),
+				help: () => AGENT_HELP_TEXT,
+				run: agentRun,
+				parseImage: (opts: { image?: string; ai?: AgentAiOptions }) => agentParseImage(opts?.image, opts?.ai),
+				verifyRows: (rows: unknown, opts?: { normalize?: boolean }) =>
+					agentVerifyRows(agentCoerceRows(rows), opts?.normalize !== false),
+				listSheets: agentListSheets,
+				listAttachments: () => aiAttachments.map((a) => ({ name: a.name })),
+				renameSheet: agentRenameSheet,
+				exportSheets: agentExportSheets,
+				clear: () => {
+					if (agentBusy) throw new Error('A threeColumn run is already in progress.');
+					sheets = [{ id: uid(), label: 'Sheet 1', rows: [['', '', '']] }];
+					agentActivate(0);
+					persistState();
+					return { ok: true };
+				},
+				filenameFor: (name: string, format: ExportFormat = 'png') =>
+					outputFilename(name, agentNormalizeFormats([format])[0])
+			});
+			(window as unknown as { threeColumn: typeof threeColumnApi }).threeColumn = threeColumnApi;
+			document.documentElement.dataset.threeColumnAgent = AGENT_API_VERSION;
 
 			renderPreview();
 		</script>
