@@ -414,6 +414,14 @@ import "../styles.css";
 								Export All (ZIP)
 							</button>
 							<button
+								id="bulk-export-labeled-png"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+								title="Export every loaded pair as a labeled PNG (floorplan + labels, no ghost outlines)"
+							>
+								Export labeled PNGs
+							</button>
+							<button
 								id="bulk-clear"
 								class="flex items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
 								type="button"
@@ -447,19 +455,19 @@ import "../styles.css";
 						<div class="flex gap-1">
 							<button
 								id="export-labeled-png"
-								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
 								type="button"
-								title="Export current floorplan with labels as PNG (no ghost outlines)"
+								title="Export current floorplan + visible labels as PNG (no ghost / measurement outlines)"
 							>
-								Export PNG
+								Export labeled PNG
 							</button>
 							<button
 								id="batch-export-labeled-png"
-								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-blue-500 hover:bg-blue-600 text-white font-medium"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
 								type="button"
-								title="Export all loaded floorplans with labels as PNG (no ghost outlines)"
+								title="Export every loaded pair as labeled PNGs in a ZIP (no ghost outlines)"
 							>
-								Batch PNG
+								Batch labeled ZIP
 							</button>
 						</div>
 					</div>
@@ -6089,6 +6097,7 @@ import "../styles.css";
 
 			aggregatePoints = true;
 			toggleFloors(aggregatePoints);
+			labelToggle();
 			spawnLabel();
 
 			aggregateOptionsCheckbox.addEventListener("change", (e) => {
@@ -12922,30 +12931,25 @@ import "../styles.css";
 		}
 
 		/**
-		 * Load a specific bulk pair into the main viewer
+		 * Load a specific bulk pair into the main viewer.
+		 * Waits until the backplate and CSV points are on the canvas.
 		 */
 		async function loadBulkPairIntoViewer(idx: number) {
 			const pair = bulkQAPairs[idx];
-			if (!pair) return;
+			if (!pair) return false;
 
 			currentPairStem = pair.stem;
 
-			// Create a synthetic FileList-like array
 			const files: File[] = [];
 			if (pair.imageFile) files.push(pair.imageFile);
 			if (pair.csvFile) files.push(pair.csvFile);
+			if (files.length === 0) return false;
 
-			if (files.length > 0) {
-				// Use the existing file handling mechanism
-				const dataTransfer = new DataTransfer();
-				files.forEach(f => dataTransfer.items.add(f));
-				
-				const input = document.getElementById("myFile") as HTMLInputElement;
-				if (input) {
-					input.files = dataTransfer.files;
-					input.dispatchEvent(new Event("change", { bubbles: true }));
-				}
-			}
+			handleFileChange(files);
+			return waitForLabeledExportReady({
+				expectImage: !!pair.imageFile,
+				expectPoints: !!pair.csvFile,
+			});
 		}
 
 		/**
@@ -13004,328 +13008,341 @@ import "../styles.css";
 			if (tbody) tbody.innerHTML = "";
 		}
 
+		function labeledPngBasename() {
+			return getActiveSvgExportBasename() || currentPairStem || "labeled_floorplan";
+		}
+
+		function downloadBlobFile(blob: Blob, filename: string) {
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+
+		function nextPaint() {
+			return new Promise<void>((resolve) => {
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+			});
+		}
+
+		function loadHtmlImage(src: string): Promise<HTMLImageElement> {
+			return new Promise((resolve, reject) => {
+				const img = new Image();
+				img.onload = () => resolve(img);
+				img.onerror = () => reject(new Error("Failed to load image"));
+				img.src = src;
+			});
+		}
+
+		function getSvgBackplateHref(svg: Element) {
+			const image = svg.querySelector("image");
+			if (!image) return null;
+			return (
+				image.getAttribute("href") ||
+				image.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+				image.getAttribute("xlink:href")
+			);
+		}
+
+		function getSvgCanvasSize(svg: Element) {
+			const raw = (svg.getAttribute("viewBox") || "0 0 4096 4096").trim().split(/[\s,]+/).map(Number);
+			return {
+				width: raw[2] || 4096,
+				height: raw[3] || 4096,
+			};
+		}
+
+		function setLabeledExportButtonsDisabled(disabled: boolean) {
+			["export-labeled-png", "batch-export-labeled-png", "bulk-export-labeled-png"].forEach((id) => {
+				const btn = document.getElementById(id) as HTMLButtonElement | null;
+				if (btn) btn.disabled = disabled;
+			});
+		}
+
+		function ensureLabelsOnForExport() {
+			labelToggle();
+			const toggle = document.getElementById("showLabelsToggle") as HTMLInputElement | null;
+			if (toggle && !toggle.checked) {
+				toggle.checked = true;
+			}
+			spawnLabel();
+		}
+
+		async function waitForLabeledExportReady(opts?: { expectImage?: boolean; expectPoints?: boolean; timeoutMs?: number }) {
+			const expectImage = opts?.expectImage !== false;
+			const expectPoints = opts?.expectPoints !== false;
+			const timeoutMs = opts?.timeoutMs ?? 12000;
+			const started = Date.now();
+
+			while (Date.now() - started < timeoutMs) {
+				const svg = document.querySelector("#svg-container svg");
+				const hasImage = !!(svg && getSvgBackplateHref(svg));
+				const pointCount = svg ? svg.querySelectorAll("circle, polygon[data-triangle='true']").length : 0;
+				if (svg && (!expectImage || hasImage) && (!expectPoints || pointCount > 0)) {
+					await nextPaint();
+					return true;
+				}
+				await new Promise((r) => setTimeout(r, 40));
+			}
+			return false;
+		}
+
+		function hideLabeledExportChrome() {
+			const hidden: Array<{ el: HTMLElement; display: string }> = [];
+			const labelDiv = document.getElementById("labelDiv");
+			const previewDivs = labelDiv
+				? (Array.from(labelDiv.querySelectorAll('[data-label-type="preview"]')) as HTMLElement[])
+				: [];
+			previewDivs.forEach((el) => {
+				hidden.push({ el, display: el.style.display });
+				el.style.display = "none";
+			});
+			const selectionUi = document.querySelector("#selection-ui") as HTMLElement | null;
+			if (selectionUi) {
+				hidden.push({ el: selectionUi, display: selectionUi.style.display });
+				selectionUi.style.display = "none";
+			}
+			return () => {
+				hidden.forEach(({ el, display }) => {
+					el.style.display = display;
+				});
+			};
+		}
+
+		function prepareSvgCloneForRaster(svg: Element, stripImage: boolean) {
+			const clone = svg.cloneNode(true) as SVGElement;
+			clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+			clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+			clone.querySelectorAll("#selection-ui").forEach((el) => el.remove());
+			if (stripImage) {
+				clone.querySelectorAll("image, foreignObject").forEach((el) => el.remove());
+			}
+			const { width, height } = getSvgCanvasSize(clone);
+			clone.setAttribute("width", String(width));
+			clone.setAttribute("height", String(height));
+			return clone;
+		}
+
+		async function drawSvgElementToCanvas(ctx: CanvasRenderingContext2D, svgEl: SVGElement, width: number, height: number) {
+			const xml = new XMLSerializer().serializeToString(svgEl);
+			const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
+			try {
+				const img = await loadHtmlImage(url);
+				ctx.drawImage(img, 0, 0, width, height);
+			} finally {
+				URL.revokeObjectURL(url);
+			}
+		}
+
+		function drawVisibleLabelsToCanvas(ctx: CanvasRenderingContext2D, svg: Element, canvasW: number, canvasH: number) {
+			const labelDiv = document.getElementById("labelDiv");
+			if (!labelDiv) return;
+
+			const mainLabels = Array.from(labelDiv.querySelectorAll('[data-label-type="main"]')) as HTMLElement[];
+			const svgRect = (svg as Element).getBoundingClientRect();
+			if (!svgRect.width || !svgRect.height) return;
+
+			const scaleX = canvasW / svgRect.width;
+			const scaleY = canvasH / svgRect.height;
+
+			for (const label of mainLabels) {
+				const rect = label.getBoundingClientRect();
+				if (rect.width < 1 || rect.height < 1) continue;
+
+				const x = (rect.left - svgRect.left) * scaleX;
+				const y = (rect.top - svgRect.top) * scaleY;
+				const w = rect.width * scaleX;
+				const h = rect.height * scaleY;
+				const computed = window.getComputedStyle(label);
+				const radius = Math.min(
+					(parseFloat(computed.borderRadius) || 12) * ((scaleX + scaleY) / 2),
+					w / 2,
+					h / 2,
+				);
+
+				ctx.fillStyle = computed.backgroundColor || "rgba(0, 0, 0, 0.5)";
+				ctx.beginPath();
+				ctx.roundRect(x, y, w, h, radius);
+				ctx.fill();
+
+				const borderColor = computed.borderColor || "";
+				if (borderColor.includes("255, 0, 0") || computed.borderTopColor === "red") {
+					ctx.strokeStyle = "rgb(255, 0, 0)";
+					ctx.lineWidth = Math.max(2, 3 * ((scaleX + scaleY) / 2));
+					ctx.stroke();
+				}
+
+				const p = label.querySelector("p");
+				const raw = p ? p.innerHTML : label.innerHTML;
+				const lines = raw
+					.replace(/<br\s*\/?>/gi, "\n")
+					.replace(/<[^>]+>/g, "")
+					.split("\n")
+					.map((line) => line.trim())
+					.filter(Boolean);
+				if (lines.length === 0) continue;
+
+				const fontPx = Math.max(10, (h * 0.72) / lines.length);
+				ctx.font = `400 ${fontPx}px Poppins, sans-serif`;
+				ctx.fillStyle = "white";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "middle";
+				const lineHeight = h / (lines.length + 0.35);
+				lines.forEach((line, i) => {
+					const ty = y + h / 2 + (i - (lines.length - 1) / 2) * lineHeight;
+					ctx.fillText(line, x + w / 2, ty);
+				});
+			}
+		}
+
+		/**
+		 * Render the current view (floorplan + visible labels, no ghost outlines) to a PNG blob.
+		 */
+		async function renderLabeledPngBlob(): Promise<Blob | null> {
+			const svg = document.querySelector("#svg-container svg");
+			if (!svg) return null;
+
+			ensureLabelsOnForExport();
+			await nextPaint();
+
+			const restoreChrome = hideLabeledExportChrome();
+			await nextPaint();
+
+			const { width, height } = getSvgCanvasSize(svg);
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) {
+				restoreChrome();
+				return null;
+			}
+
+			ctx.fillStyle = "#ffffff";
+			ctx.fillRect(0, 0, width, height);
+
+			try {
+				const href = getSvgBackplateHref(svg);
+				if (href) {
+					try {
+						const backplate = await loadHtmlImage(href);
+						ctx.drawImage(backplate, 0, 0, width, height);
+					} catch (e) {
+						console.warn("Labeled PNG: backplate draw failed, falling back to SVG raster", e);
+					}
+				}
+
+				try {
+					await drawSvgElementToCanvas(ctx, prepareSvgCloneForRaster(svg, true), width, height);
+				} catch (e) {
+					console.warn("Labeled PNG: SVG overlay raster failed", e);
+					try {
+						await drawSvgElementToCanvas(ctx, prepareSvgCloneForRaster(svg, false), width, height);
+					} catch (inner) {
+						console.warn("Labeled PNG: full SVG raster failed", inner);
+					}
+				}
+
+				drawVisibleLabelsToCanvas(ctx, svg, width, height);
+
+				return await new Promise<Blob | null>((resolve) => {
+					canvas.toBlob((blob) => resolve(blob), "image/png");
+				});
+			} finally {
+				restoreChrome();
+			}
+		}
+
 		/**
 		 * Export labeled PNG - floorplan with visible labels, no ghost measurement outlines.
-		 * Uses the shared renderLabeledPngBlob function.
 		 */
 		async function exportLabeledPng() {
-			const svgContainer = document.getElementById("svg-container");
-			const svg = svgContainer?.querySelector("svg");
+			const svg = document.querySelector("#svg-container svg");
 			if (!svg) {
 				showToast("No floorplan loaded to export", "warning");
 				return;
 			}
 
-			const blob = await renderLabeledPngBlob();
-			if (!blob) {
-				showToast("Failed to create PNG", "error");
-				return;
-			}
-
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			
-			// Generate filename from current pair or SVG name
-			const baseName = getActiveSvgExportBasename() || currentPairStem || "labeled_floorplan";
-			a.download = `${baseName}_labeled.png`;
-			a.click();
-			URL.revokeObjectURL(url);
-			showToast("Labeled PNG exported", "success");
-		}
-
-		/**
-		 * Render the current view (floorplan + labels, no ghosts) to a PNG blob.
-		 * Returns null if no SVG is loaded.
-		 */
-		async function renderLabeledPngBlob(): Promise<Blob | null> {
-			const svgContainer = document.getElementById("svg-container");
-			const svg = svgContainer?.querySelector("svg");
-			if (!svg) return null;
-
-			const labelDiv = document.getElementById("labelDiv");
-			const labelsOn = labelDiv !== null;
-
-			// Get canvas size from SVG viewBox or default to 4096
-			const viewBox = svg.getAttribute("viewBox")?.split(" ").map(Number) || [0, 0, 4096, 4096];
-			const canvasWidth = viewBox[2] || 4096;
-			const canvasHeight = viewBox[3] || 4096;
-
-			// Create an offscreen canvas
-			const canvas = document.createElement("canvas");
-			canvas.width = canvasWidth;
-			canvas.height = canvasHeight;
-			const ctx = canvas.getContext("2d");
-			if (!ctx) return null;
-
-			// Hide preview (ghost) measurement divs temporarily
-			const previewDivs = labelDiv ? Array.from(labelDiv.querySelectorAll('[data-label-type="preview"]')) as HTMLElement[] : [];
-			previewDivs.forEach(div => div.style.display = "none");
-
-			// Also hide selection UI if present
-			const selectionUi = svg.querySelector("#selection-ui") as HTMLElement | null;
-			if (selectionUi) selectionUi.style.display = "none";
-
+			setLabeledExportButtonsDisabled(true);
 			try {
-				// Draw the SVG (includes backplate image and paths)
-				const svgClone = svg.cloneNode(true) as SVGElement;
-				// Remove selection UI from clone
-				svgClone.querySelectorAll("#selection-ui").forEach(el => el.remove());
-
-				const svgData = new XMLSerializer().serializeToString(svgClone);
-				const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-				const svgUrl = URL.createObjectURL(svgBlob);
-
-				const svgImg = new Image();
-				await new Promise<void>((resolve, reject) => {
-					svgImg.onload = () => resolve();
-					svgImg.onerror = () => reject(new Error("Failed to load SVG as image"));
-					svgImg.src = svgUrl;
-				});
-
-				// Draw SVG to canvas
-				ctx.drawImage(svgImg, 0, 0, canvasWidth, canvasHeight);
-				URL.revokeObjectURL(svgUrl);
-
-				// Now draw the labels if visible
-				if (labelsOn && labelDiv) {
-					const mainLabels = Array.from(labelDiv.querySelectorAll('[data-label-type="main"]')) as HTMLElement[];
-					
-					for (const label of mainLabels) {
-						// Get position from style
-						const left = parseFloat(label.style.left) || 0;
-						const top = parseFloat(label.style.top) || 0;
-						
-						// Parse transform for translate offset
-						const transform = label.style.transform || "";
-						let offsetX = 0, offsetY = 0;
-						const translateMatch = transform.match(/translate\(([^,]+),\s*([^)]+)\)/);
-						if (translateMatch) {
-							const xVal = translateMatch[1].trim();
-							const yVal = translateMatch[2].trim();
-							// Handle percentage or rem values
-							if (xVal.includes("%")) {
-								offsetX = -0.5 * label.offsetWidth; // -50%
-							} else if (xVal.includes("rem")) {
-								offsetX = parseFloat(xVal) * 16;
-							} else {
-								offsetX = parseFloat(xVal) || 0;
-							}
-							if (yVal.includes("rem")) {
-								offsetY = parseFloat(yVal) * 16;
-							} else {
-								offsetY = parseFloat(yVal) || 0;
-							}
-						}
-						
-						// Get label text
-						const p = label.querySelector("p");
-						const text = p ? p.innerHTML.replace(/<br\s*\/?>/gi, "\n") : "";
-						
-						// Get computed styles
-						const computed = window.getComputedStyle(label);
-						const fontSize = parseFloat(computed.fontSize) || 36;
-						const paddingH = parseFloat(computed.paddingLeft) + parseFloat(computed.paddingRight) || 32;
-						const paddingV = parseFloat(computed.paddingTop) + parseFloat(computed.paddingBottom) || 16;
-						const borderRadius = parseFloat(computed.borderRadius) || 12;
-						
-						// Calculate position in canvas coordinates
-						const x = left + offsetX;
-						const y = top + offsetY;
-						
-						// Set font for measurement
-						ctx.font = `400 ${fontSize}px Poppins, sans-serif`;
-						ctx.textBaseline = "top";
-						
-						// Measure text (handle multiline)
-						const lines = text.split("\n");
-						const lineHeight = fontSize * 1.1;
-						let maxWidth = 0;
-						for (const line of lines) {
-							const metrics = ctx.measureText(line);
-							maxWidth = Math.max(maxWidth, metrics.width);
-						}
-						const textHeight = lines.length * lineHeight;
-						
-						const boxWidth = maxWidth + paddingH;
-						const boxHeight = textHeight + paddingV;
-						
-						// Draw background with rounded corners
-						ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-						ctx.beginPath();
-						const bx = x - boxWidth / 2;
-						const by = y;
-						ctx.roundRect(bx, by, boxWidth, boxHeight, borderRadius);
-						ctx.fill();
-						
-						// Draw border
-						ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-						ctx.lineWidth = 2;
-						ctx.stroke();
-						
-						// Draw text
-						ctx.fillStyle = "white";
-						ctx.textAlign = "center";
-						let textY = y + paddingV / 2;
-						for (const line of lines) {
-							ctx.fillText(line, x, textY);
-							textY += lineHeight;
-						}
-					}
+				const blob = await renderLabeledPngBlob();
+				if (!blob) {
+					showToast("Failed to create PNG", "error");
+					return;
 				}
-
-				// Convert canvas to PNG blob
-				return new Promise((resolve) => {
-					canvas.toBlob((blob) => resolve(blob), "image/png");
-				});
-
+				downloadBlobFile(blob, `${labeledPngBasename()}_labeled.png`);
+				showToast("Labeled PNG exported", "success");
+			} catch (e) {
+				console.error(e);
+				showToast("Failed to export labeled PNG", "error");
 			} finally {
-				// Restore preview divs visibility
-				previewDivs.forEach(div => div.style.display = "");
-				if (selectionUi) selectionUi.style.display = "";
+				setLabeledExportButtonsDisabled(false);
 			}
 		}
 
 		/**
-		 * Batch export labeled PNGs for all loaded pairs as a ZIP.
-		 * Works with both bulk QA pairs and imported SVGs.
+		 * Batch export labeled PNGs for every loaded pair as a ZIP.
+		 * Uses the same Load Multiple Pairs list as bulk QA.
 		 */
 		async function batchExportLabeledPng() {
-			// Check if we have bulk QA pairs loaded
 			const hasBulkPairs = bulkQAPairs && bulkQAPairs.length > 0;
-			const hasImportedSvgs = importedSVGs && importedSVGs.length > 1;
-
-			if (!hasBulkPairs && !hasImportedSvgs) {
-				// Only current view loaded - just export single PNG
+			if (!hasBulkPairs) {
+				const svg = document.querySelector("#svg-container svg");
+				if (!svg) {
+					showToast("Load Multiple Pairs first, or export the current pair", "warning");
+					return;
+				}
 				await exportLabeledPng();
 				return;
 			}
 
-			// Dynamic import of JSZip
-			const JSZip = (await import("jszip")).default;
-			const zip = new JSZip();
+			setLabeledExportButtonsDisabled(true);
+			const savedStem = currentPairStem;
+			const savedIdx = bulkQAPairs.findIndex((p) => p.stem === savedStem);
+			showToast(`Exporting ${bulkQAPairs.length} labeled PNGs to ZIP...`, "success");
 
-			const showLabelsToggle = document.getElementById("showLabelsToggle") as HTMLInputElement | null;
-			const labelsWereOn = showLabelsToggle?.checked || false;
-
-			// Turn on labels for export if not already on
-			if (showLabelsToggle && !labelsWereOn) {
-				showLabelsToggle.checked = true;
-			}
-
-			let exportedCount = 0;
-
-			if (hasBulkPairs) {
-				// Export from bulk QA pairs
-				showToast(`Exporting ${bulkQAPairs.length} labeled PNGs to ZIP...`, "success");
+			try {
+				const JSZip = (await import("jszip")).default;
+				const zip = new JSZip();
+				let exportedCount = 0;
 
 				for (let i = 0; i < bulkQAPairs.length; i++) {
 					const pair = bulkQAPairs[i];
-					
 					try {
-						// Load pair into viewer
 						await loadBulkPairIntoViewer(i);
-						
-						// Wait for rendering to complete
-						await new Promise<void>(r => setTimeout(r, 300));
-						await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-						
-						// Spawn labels
-						spawnLabel();
-						await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-						
-						// Render PNG
+						ensureLabelsOnForExport();
+						await nextPaint();
 						const blob = await renderLabeledPngBlob();
 						if (blob) {
-							const filename = `${pair.stem}_labeled.png`;
-							zip.file(filename, blob);
+							zip.file(`${pair.stem}_labeled.png`, blob);
 							exportedCount++;
 						}
 					} catch (e) {
 						console.error(`Error exporting pair ${pair.stem}:`, e);
 					}
 				}
-			} else if (hasImportedSvgs) {
-				// Export from imported SVGs
-				showToast(`Exporting ${importedSVGs.length} labeled PNGs to ZIP...`, "success");
-				const savedIndex = currentSVGIndex;
 
-				for (let i = 0; i < importedSVGs.length; i++) {
-					try {
-						// Switch to this SVG
-						currentSVGIndex = i;
-						const svgData = importedSVGs[i];
-						
-						// Process the SVG into the viewer
-						globalSvgContainer.innerHTML = "";
-						const parser = new DOMParser();
-						const doc = parser.parseFromString(
-							new XMLSerializer().serializeToString(svgData.element),
-							"image/svg+xml"
-						);
-						const svgEl = doc.querySelector("svg");
-						if (svgEl) {
-							globalSvgContainer.appendChild(document.importNode(svgEl, true));
-						}
-						
-						// Wait for rendering
-						await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-						
-						// Spawn labels
-						spawnLabel();
-						await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-						
-						// Render PNG
-						const blob = await renderLabeledPngBlob();
-						if (blob) {
-							const baseName = sanitizeExportBasename(svgData.originalName || svgData.name || `floorplan_${i}`);
-							const filename = `${baseName}_labeled.png`;
-							zip.file(filename, blob);
-							exportedCount++;
-						}
-					} catch (e) {
-						console.error(`Error exporting SVG ${i}:`, e);
-					}
+				if (savedIdx >= 0) {
+					await loadBulkPairIntoViewer(savedIdx);
+					ensureLabelsOnForExport();
 				}
 
-				// Restore original SVG
-				currentSVGIndex = savedIndex;
-				if (importedSVGs[savedIndex]) {
-					globalSvgContainer.innerHTML = "";
-					const parser = new DOMParser();
-					const doc = parser.parseFromString(
-						new XMLSerializer().serializeToString(importedSVGs[savedIndex].element),
-						"image/svg+xml"
-					);
-					const svgEl = doc.querySelector("svg");
-					if (svgEl) {
-						globalSvgContainer.appendChild(document.importNode(svgEl, true));
-					}
-					spawnLabel();
+				if (exportedCount === 0) {
+					showToast("No PNGs were exported", "warning");
+					return;
 				}
+
+				const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+				downloadBlobFile(zipBlob, `labeled_floorplans_${new Date().toISOString().slice(0, 10)}.zip`);
+				showToast(`Exported ${exportedCount} labeled PNGs to ZIP`, "success");
+			} catch (e) {
+				console.error(e);
+				showToast("Failed to export labeled PNG ZIP", "error");
+			} finally {
+				setLabeledExportButtonsDisabled(false);
 			}
-
-			// Restore labels toggle state
-			if (showLabelsToggle && !labelsWereOn) {
-				showLabelsToggle.checked = false;
-				killLabels();
-			}
-
-			if (exportedCount === 0) {
-				showToast("No PNGs were exported", "warning");
-				return;
-			}
-
-			// Generate and download the ZIP
-			const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-			const url = URL.createObjectURL(zipBlob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = `labeled_floorplans_${new Date().toISOString().slice(0, 10)}.zip`;
-			a.click();
-			URL.revokeObjectURL(url);
-
-			showToast(`Exported ${exportedCount} labeled PNGs to ZIP`, "success");
 		}
 
 		// Wire up QA Panel event listeners
@@ -13355,10 +13372,17 @@ import "../styles.css";
 			document.getElementById("export-qa-csv")?.addEventListener("click", exportCurrentLabelsCSV);
 
 			// Export labeled PNG (no ghost outlines)
-			document.getElementById("export-labeled-png")?.addEventListener("click", exportLabeledPng);
+			document.getElementById("export-labeled-png")?.addEventListener("click", () => {
+				void exportLabeledPng();
+			});
 
-			// Batch export labeled PNGs
-			document.getElementById("batch-export-labeled-png")?.addEventListener("click", batchExportLabeledPng);
+			// Batch export labeled PNGs (Current Pair Export + Bulk Summary)
+			document.getElementById("batch-export-labeled-png")?.addEventListener("click", () => {
+				void batchExportLabeledPng();
+			});
+			document.getElementById("bulk-export-labeled-png")?.addEventListener("click", () => {
+				void batchExportLabeledPng();
+			});
 		})();
 	</script>
 </html>
