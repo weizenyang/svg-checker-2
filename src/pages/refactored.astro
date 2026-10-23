@@ -11205,9 +11205,10 @@ import "../styles.css";
 			if (document.getElementById("showLabelsToggle")) {
 				if (document.getElementById("showLabelsToggle").checked) {
 					var circles = [];
-					const group = globalSvgContainer
-						.querySelector("svg")
-						.querySelector("g");
+					const svgEl = globalSvgContainer.querySelector("svg");
+					const group =
+						svgEl?.querySelector("#g-instance") ||
+						svgEl?.querySelector("g");
 					// console.log(
 					// 	globalSvgContainer
 					// 		.querySelector("svg")
@@ -11389,6 +11390,7 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
+							opacity: "0",
 						});
 
 						const formattedText = formatTextWithLineBreaks(e.id);
@@ -11463,7 +11465,8 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
-							visibility: "visible", // Make visible after measurement
+							visibility: "visible",
+							opacity: "0",
 						});
 
 						return div;
@@ -11529,7 +11532,8 @@ import "../styles.css";
 							cursor: "pointer",
 							textAlign: "center",
 							fontSize: "2.25rem",
-							visibility: "visible", // Make visible after measurement
+							visibility: "visible",
+							opacity: "0",
 						});
 
 						return div;
@@ -12934,22 +12938,97 @@ import "../styles.css";
 		 * Load a specific bulk pair into the main viewer.
 		 * Waits until the backplate and CSV points are on the canvas.
 		 */
+		function readFileAsDataUrl(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(String(reader.result || ""));
+				reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+				reader.readAsDataURL(file);
+			});
+		}
+
 		async function loadBulkPairIntoViewer(idx: number) {
 			const pair = bulkQAPairs[idx];
 			if (!pair) return false;
 
 			currentPairStem = pair.stem;
 
-			const files: File[] = [];
-			if (pair.imageFile) files.push(pair.imageFile);
-			if (pair.csvFile) files.push(pair.csvFile);
-			if (files.length === 0) return false;
+			let svg = document.querySelector("#svg-container svg") as SVGElement | null;
+			if (!svg) {
+				svg = createNewSVG();
+				document.getElementById("svg-container")?.appendChild(svg);
+			}
 
-			handleFileChange(files);
-			return waitForLabeledExportReady({
-				expectImage: !!pair.imageFile,
-				expectPoints: !!pair.csvFile,
-			});
+			killLabels(true);
+			svg.querySelector("#g-instance")?.replaceChildren();
+
+			if (pair.imageFile) {
+				const dataUrl = await readFileAsDataUrl(pair.imageFile);
+				await loadHtmlImage(dataUrl);
+				const vb = (svg.getAttribute("viewBox") || "0 0 4096 4096").trim().split(/[\s,]+/);
+				const vbW = vb[2] || "4096";
+				const vbH = vb[3] || "4096";
+				let image = svg.querySelector("image");
+				if (!image) {
+					image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+					svg.insertBefore(image, svg.firstChild);
+				}
+				image.setAttribute("href", dataUrl);
+				image.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
+				image.setAttribute("x", "0");
+				image.setAttribute("y", "0");
+				image.setAttribute("width", vbW);
+				image.setAttribute("height", vbH);
+				image.setAttribute("preserveAspectRatio", "none");
+				image.setAttribute("data-original-filename", pair.imageFile.name);
+			}
+
+			if (pair.csvFile) {
+				const csvText = await pair.csvFile.text();
+				applyCsvPointsForLabeledExport(csvText);
+			}
+
+			ensureLabelsOnForExport();
+			await nextPaint();
+			return true;
+		}
+
+		function applyCsvPointsForLabeledExport(contents: string) {
+			const svg = document.querySelector("#svg-container svg");
+			if (!svg) return;
+			svg.querySelectorAll("#g-instance").forEach((g) => g.remove());
+			const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+			g.setAttribute("id", "g-instance");
+			svg.appendChild(g);
+
+			const lines = String(contents || "").trim().split("\n").filter((l) => l.trim());
+			if (lines.length === 0) return;
+
+			const first = lines[0].split(",");
+			let rows = lines;
+			if (first.length > 3) {
+				rows = lines.map((line) => {
+					const fields = line.split(",");
+					const name = fields[0] || "";
+					const cleaned = `${name.split("_")[0]}~${name.split("_")[1] || name}`;
+					return `${cleaned},${-fields[2]},${-fields[1]},${name}`;
+				});
+			}
+
+			globalFloors = [];
+			for (let i = 0; i < rows.length; i++) {
+				const fields = rows[i].split(",");
+				if (!(Number(fields[1]) || Number(fields[2]))) continue;
+				const rawName = fields[0] || "";
+				const name = rawName.includes("~") ? rawName.split("~")[1] : rawName;
+				const circle = spawnCircle(
+					name,
+					Number(fields[flipYX ? 2 : 1]).toFixed(4),
+					Number(fields[flipYX ? 1 : 2]).toFixed(4),
+					[{ field: "data-csv-row", value: String(i) }],
+				);
+				if (circle) globalFloors.push({ floor: null, circle });
+			}
 		}
 
 		/**
@@ -13070,17 +13149,27 @@ import "../styles.css";
 			spawnLabel();
 		}
 
-		async function waitForLabeledExportReady(opts?: { expectImage?: boolean; expectPoints?: boolean; timeoutMs?: number }) {
+		async function waitForLabeledExportReady(opts?: { expectImage?: boolean; expectPoints?: boolean; timeoutMs?: number; imageName?: string }) {
 			const expectImage = opts?.expectImage !== false;
 			const expectPoints = opts?.expectPoints !== false;
 			const timeoutMs = opts?.timeoutMs ?? 12000;
 			const started = Date.now();
+			let lastPoints = -1;
+			let stable = 0;
 
 			while (Date.now() - started < timeoutMs) {
 				const svg = document.querySelector("#svg-container svg");
+				const imageEl = svg?.querySelector("image");
 				const hasImage = !!(svg && getSvgBackplateHref(svg));
-				const pointCount = svg ? svg.querySelectorAll("circle, polygon[data-triangle='true']").length : 0;
-				if (svg && (!expectImage || hasImage) && (!expectPoints || pointCount > 0)) {
+				const imageNameOk =
+					!opts?.imageName ||
+					imageEl?.getAttribute("data-original-filename") === opts.imageName;
+				const pointCount = svg ? svg.querySelectorAll("#g-instance circle, #g-instance polygon[data-triangle='true']").length : 0;
+				if (pointCount === lastPoints) stable += 1;
+				else stable = 0;
+				lastPoints = pointCount;
+				const pointsOk = !expectPoints || (pointCount > 0 && stable >= 3);
+				if (svg && (!expectImage || (hasImage && imageNameOk)) && pointsOk) {
 					await nextPaint();
 					return true;
 				}
@@ -13136,44 +13225,14 @@ import "../styles.css";
 			}
 		}
 
-		function drawVisibleLabelsToCanvas(ctx: CanvasRenderingContext2D, svg: Element, canvasW: number, canvasH: number) {
+		function drawVisibleLabelsToCanvas(ctx: CanvasRenderingContext2D) {
 			const labelDiv = document.getElementById("labelDiv");
 			if (!labelDiv) return;
 
 			const mainLabels = Array.from(labelDiv.querySelectorAll('[data-label-type="main"]')) as HTMLElement[];
-			const svgRect = (svg as Element).getBoundingClientRect();
-			if (!svgRect.width || !svgRect.height) return;
-
-			const scaleX = canvasW / svgRect.width;
-			const scaleY = canvasH / svgRect.height;
-
 			for (const label of mainLabels) {
-				const rect = label.getBoundingClientRect();
-				if (rect.width < 1 || rect.height < 1) continue;
-
-				const x = (rect.left - svgRect.left) * scaleX;
-				const y = (rect.top - svgRect.top) * scaleY;
-				const w = rect.width * scaleX;
-				const h = rect.height * scaleY;
-				const computed = window.getComputedStyle(label);
-				const radius = Math.min(
-					(parseFloat(computed.borderRadius) || 12) * ((scaleX + scaleY) / 2),
-					w / 2,
-					h / 2,
-				);
-
-				ctx.fillStyle = computed.backgroundColor || "rgba(0, 0, 0, 0.5)";
-				ctx.beginPath();
-				ctx.roundRect(x, y, w, h, radius);
-				ctx.fill();
-
-				const borderColor = computed.borderColor || "";
-				if (borderColor.includes("255, 0, 0") || computed.borderTopColor === "red") {
-					ctx.strokeStyle = "rgb(255, 0, 0)";
-					ctx.lineWidth = Math.max(2, 3 * ((scaleX + scaleY) / 2));
-					ctx.stroke();
-				}
-
+				const left = parseFloat(label.style.left) || 0;
+				const top = parseFloat(label.style.top) || 0;
 				const p = label.querySelector("p");
 				const raw = p ? p.innerHTML : label.innerHTML;
 				const lines = raw
@@ -13184,15 +13243,44 @@ import "../styles.css";
 					.filter(Boolean);
 				if (lines.length === 0) continue;
 
-				const fontPx = Math.max(10, (h * 0.72) / lines.length);
+				const fontPx = 36;
+				const lineHeight = 40;
+				const padX = 16;
+				const padY = 8;
 				ctx.font = `400 ${fontPx}px Poppins, sans-serif`;
+				let maxW = 0;
+				for (const line of lines) {
+					maxW = Math.max(maxW, ctx.measureText(line).width);
+				}
+				const boxW = maxW + padX * 2;
+				const boxH = lines.length * lineHeight + padY * 2;
+				const bx = left - boxW / 2;
+				const by = top + 4;
+				const radius = 12;
+
+				const colliding =
+					label.style.borderColor === "red" ||
+					(label.style.backgroundColor || "").includes("255, 0, 0");
+				ctx.fillStyle = colliding ? "rgba(255, 0, 0, 0.2)" : "rgba(0, 0, 0, 0.5)";
+				ctx.beginPath();
+				ctx.roundRect(bx, by, boxW, boxH, radius);
+				ctx.fill();
+				if (colliding) {
+					ctx.strokeStyle = "rgb(255, 0, 0)";
+					ctx.lineWidth = 3;
+					ctx.stroke();
+				} else {
+					ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+					ctx.lineWidth = 2;
+					ctx.stroke();
+				}
+
 				ctx.fillStyle = "white";
 				ctx.textAlign = "center";
 				ctx.textBaseline = "middle";
-				const lineHeight = h / (lines.length + 0.35);
 				lines.forEach((line, i) => {
-					const ty = y + h / 2 + (i - (lines.length - 1) / 2) * lineHeight;
-					ctx.fillText(line, x + w / 2, ty);
+					const ty = by + padY + lineHeight / 2 + i * lineHeight;
+					ctx.fillText(line, left, ty);
 				});
 			}
 		}
@@ -13205,6 +13293,9 @@ import "../styles.css";
 			if (!svg) return null;
 
 			ensureLabelsOnForExport();
+			if (document.fonts?.ready) {
+				try { await document.fonts.ready; } catch (_) { /* ignore */ }
+			}
 			await nextPaint();
 
 			const restoreChrome = hideLabeledExportChrome();
@@ -13245,7 +13336,7 @@ import "../styles.css";
 					}
 				}
 
-				drawVisibleLabelsToCanvas(ctx, svg, width, height);
+				drawVisibleLabelsToCanvas(ctx);
 
 				return await new Promise<Blob | null>((resolve) => {
 					canvas.toBlob((blob) => resolve(blob), "image/png");
