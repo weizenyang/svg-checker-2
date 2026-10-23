@@ -13036,8 +13036,15 @@ import "../styles.css";
 			if (tbody) tbody.innerHTML = "";
 		}
 
-		function labeledPngBasename() {
-			return getActiveSvgExportBasename() || currentPairStem || "labeled_floorplan";
+		function labeledPngBasename(): string {
+			const svgBasename = getActiveSvgExportBasename();
+			if (svgBasename && svgBasename !== "untitled") {
+				return svgBasename;
+			}
+			if (currentPairStem) {
+				return currentPairStem;
+			}
+			return svgBasename || "labeled_floorplan";
 		}
 
 		function downloadBlobFile(blob: Blob, filename: string) {
@@ -13317,12 +13324,7 @@ import "../styles.css";
 		async function batchExportLabeledPng() {
 			const hasBulkPairs = bulkQAPairs && bulkQAPairs.length > 0;
 			if (!hasBulkPairs) {
-				const svg = document.querySelector("#svg-container svg");
-				if (!svg) {
-					showToast("Load Multiple Pairs first, or export the current pair", "warning");
-					return;
-				}
-				await exportLabeledPng();
+				showToast("Load Multiple Pairs first", "warning");
 				return;
 			}
 
@@ -13427,7 +13429,16 @@ import "../styles.css";
 			}
 		}
 
-		async function renderLabeledSvgString(): Promise<string | null> {
+		function fileToDataUri(file: File): Promise<string> {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result as string);
+				reader.onerror = () => reject(new Error("Failed to read file as data URI"));
+				reader.readAsDataURL(file);
+			});
+		}
+
+		async function renderLabeledSvgString(opts?: { fallbackImageFile?: File | null }): Promise<string | null> {
 			const svg = document.querySelector("#svg-container svg");
 			if (!svg) return null;
 
@@ -13441,6 +13452,18 @@ import "../styles.css";
 			const href = getSvgBackplateHref(svg);
 			if (href) {
 				backplateDataUri = await convertImageHrefToDataUri(href);
+			}
+
+			if (!backplateDataUri && opts?.fallbackImageFile) {
+				try {
+					backplateDataUri = await fileToDataUri(opts.fallbackImageFile);
+				} catch (e) {
+					console.warn("Labeled SVG: failed to convert fallback image to data URI", e);
+				}
+			}
+
+			if (!backplateDataUri) {
+				return null;
 			}
 
 			const circles = Array.from(svg.querySelectorAll("circle, polygon[data-triangle='true']"));
@@ -13502,7 +13525,14 @@ import "../styles.css";
 		}
 
 		function labeledSvgBasename(): string {
-			return getActiveSvgExportBasename() || currentPairStem || "labeled_floorplan";
+			const svgBasename = getActiveSvgExportBasename();
+			if (svgBasename && svgBasename !== "untitled") {
+				return svgBasename;
+			}
+			if (currentPairStem) {
+				return currentPairStem;
+			}
+			return svgBasename || "labeled_floorplan";
 		}
 
 		async function exportLabeledSvg() {
@@ -13514,9 +13544,12 @@ import "../styles.css";
 
 			setLabeledSvgExportButtonsDisabled(true);
 			try {
-				const svgString = await renderLabeledSvgString();
+				const currentPair = bulkQAPairs.find((p) => p.stem === currentPairStem);
+				const fallbackImageFile = currentPair?.imageFile || null;
+
+				const svgString = await renderLabeledSvgString({ fallbackImageFile });
 				if (!svgString) {
-					showToast("Failed to create SVG", "error");
+					showToast("Failed to create labeled SVG: no backplate image found", "error");
 					return;
 				}
 				const blob = new Blob([svgString], { type: "image/svg+xml" });
@@ -13533,12 +13566,7 @@ import "../styles.css";
 		async function batchExportLabeledSvg() {
 			const hasBulkPairs = bulkQAPairs && bulkQAPairs.length > 0;
 			if (!hasBulkPairs) {
-				const svg = document.querySelector("#svg-container svg");
-				if (!svg) {
-					showToast("Load Multiple Pairs first, or export the current pair", "warning");
-					return;
-				}
-				await exportLabeledSvg();
+				showToast("Load Multiple Pairs first", "warning");
 				return;
 			}
 
@@ -13552,20 +13580,30 @@ import "../styles.css";
 				const zip = new JSZip();
 
 				let exportedCount = 0;
+				let failedCount = 0;
 
 				for (let i = 0; i < bulkQAPairs.length; i++) {
 					const pair = bulkQAPairs[i];
 					try {
-						await loadBulkPairIntoViewer(i);
+						const loaded = await loadBulkPairIntoViewer(i);
+						if (!loaded) {
+							console.warn(`Failed to load pair ${pair.stem} into viewer`);
+							failedCount++;
+							continue;
+						}
 						ensureLabelsOnForExport();
 						await nextPaint();
-						const svgString = await renderLabeledSvgString();
+						const svgString = await renderLabeledSvgString({ fallbackImageFile: pair.imageFile });
 						if (svgString) {
 							zip.file(`${pair.stem}_labeled.svg`, svgString);
 							exportedCount++;
+						} else {
+							console.warn(`No backplate image for pair ${pair.stem}, skipping`);
+							failedCount++;
 						}
 					} catch (e) {
 						console.error(`Error exporting pair ${pair.stem}:`, e);
+						failedCount++;
 					}
 				}
 
@@ -13580,8 +13618,14 @@ import "../styles.css";
 				}
 
 				const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-				downloadBlobFile(zipBlob, `labeled_floorplans_svg_${new Date().toISOString().slice(0, 10)}.zip`);
-				showToast(`Exported ${exportedCount} labeled SVGs to ZIP`, "success");
+				const dateStr = new Date().toISOString().slice(0, 10);
+				downloadBlobFile(zipBlob, `labeled_floorplans_svg_${dateStr}.zip`);
+
+				if (failedCount > 0) {
+					showToast(`Exported ${exportedCount} labeled SVGs to ZIP (${failedCount} failed)`, "warning");
+				} else {
+					showToast(`Exported ${exportedCount} labeled SVGs to ZIP`, "success");
+				}
 			} catch (e) {
 				console.error(e);
 				showToast("Failed to export labeled SVG ZIP", "error");
