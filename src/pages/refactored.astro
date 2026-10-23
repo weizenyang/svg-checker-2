@@ -345,6 +345,106 @@ import "../styles.css";
 					</div>
 				</section>
 
+				<!-- QA Panel Section -->
+				<section class="container" id="qa-panel-section">
+					<p class="section-label">QA Panel</p>
+					
+					<!-- Collision Report -->
+					<div class="sub-item" id="collision-report-container">
+						<p class="text-xs font-medium text-neutral-600 mb-1">Label Collisions</p>
+						<div id="collision-list" class="text-xs text-neutral-500 max-h-32 overflow-y-auto border border-neutral-200 rounded p-2 bg-neutral-50 mb-2">
+							<span class="text-neutral-400 italic">No collisions detected</span>
+						</div>
+						<button
+							id="export-collision-csv"
+							class="flex w-full items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
+							type="button"
+						>
+							Export Collision CSV
+						</button>
+					</div>
+
+					<!-- Bulk Import -->
+					<div class="sub-item mt-3">
+						<p class="text-xs font-medium text-neutral-600 mb-1">Bulk QA Import</p>
+						<label
+							for="bulk-qa-import"
+							class="flex items-center justify-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-700 cursor-pointer transition-colors"
+						>
+							Load Multiple Pairs
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+								<polyline points="17 8 12 3 7 8"></polyline>
+								<line x1="12" y1="3" x2="12" y2="15"></line>
+							</svg>
+						</label>
+						<input
+							type="file"
+							id="bulk-qa-import"
+							multiple
+							accept="image/*,.csv"
+							style="display:none"
+						/>
+					</div>
+
+					<!-- Bulk Summary Table -->
+					<div class="sub-item mt-3" id="bulk-summary-container" style="display:none">
+						<p class="text-xs font-medium text-neutral-600 mb-1">Bulk Summary</p>
+						<div id="bulk-summary-table-wrap" class="text-xs max-h-48 overflow-y-auto border border-neutral-200 rounded bg-neutral-50">
+							<table class="w-full text-left">
+								<thead class="bg-neutral-100 sticky top-0">
+									<tr>
+										<th class="px-2 py-1 font-medium">Pair</th>
+										<th class="px-2 py-1 font-medium text-center">Status</th>
+										<th class="px-2 py-1 font-medium text-center" title="Collisions">Col</th>
+										<th class="px-2 py-1 font-medium text-center" title="Off-Canvas">OC</th>
+										<th class="px-2 py-1 font-medium text-center" title="Floor Null">FN</th>
+									</tr>
+								</thead>
+								<tbody id="bulk-summary-tbody">
+								</tbody>
+							</table>
+						</div>
+						<div class="flex gap-1 mt-2">
+							<button
+								id="bulk-export-zip"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+							>
+								Export All (ZIP)
+							</button>
+							<button
+								id="bulk-clear"
+								class="flex items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
+								type="button"
+							>
+								Clear
+							</button>
+						</div>
+					</div>
+
+					<!-- Current Pair Export -->
+					<div class="sub-item mt-3">
+						<p class="text-xs font-medium text-neutral-600 mb-1">Current Pair Export</p>
+						<div class="flex gap-1">
+							<button
+								id="export-qa-json"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
+								type="button"
+							>
+								Export qa.json
+							</button>
+							<button
+								id="export-qa-csv"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
+								type="button"
+							>
+								Export CSV
+							</button>
+						</div>
+					</div>
+				</section>
+
 				<Tutorial x="some data" id="tutorial" />
 
 				<div class="container" id="id-container">
@@ -801,6 +901,24 @@ import "../styles.css";
 		let globalFloorsAggregated = [];
 		let aggregatePoints = false;
 		let checkboxesId = [];
+
+		// QA Panel: collision tracking and bulk processing
+		let currentCollisionPairs: Array<{ labelA: string; labelB: string }> = [];
+		let bulkQAPairs: Array<{
+			stem: string;
+			imageFile: File | null;
+			csvFile: File | null;
+			qa: {
+				collisions: Array<{ labelA: string; labelB: string }>;
+				collisionCount: number;
+				labelCount: number;
+				offCanvasCount: number;
+				floorNullCount: number;
+				viewBox: string;
+				status: string;
+			} | null;
+		}> = [];
+		let currentPairStem: string = "";
 
 		// Image transformation lookup for preview images
 		let imageTransformLookup = {};
@@ -11463,8 +11581,8 @@ import "../styles.css";
 						);
 					}
 
-					// Function to highlight colliding labels in red
-					function highlightCollisions(labelCircleMap) {
+					// Function to highlight colliding labels in red and track collision pairs
+					function highlightCollisions(labelCircleMap, collisionPairsOut: Array<{ labelA: string; labelB: string }> = []) {
 						if (labelCircleMap.length === 0) return;
 						
 						// Track which labels are colliding
@@ -11474,15 +11592,25 @@ import "../styles.css";
 						for (let i = 0; i < labelCircleMap.length; i++) {
 							const currentLabel = labelCircleMap[i].label;
 							const currentBox = getBoundingBox(currentLabel);
+							const currentName = extractLabelName(currentLabel);
 							
 							for (let j = i + 1; j < labelCircleMap.length; j++) {
 								const otherLabel = labelCircleMap[j].label;
 								const otherBox = getBoundingBox(otherLabel);
+								const otherName = extractLabelName(otherLabel);
 								
 								if (boxesOverlap(currentBox, otherBox)) {
 									// Mark both labels as colliding
 									collidingLabels.add(currentLabel);
 									collidingLabels.add(otherLabel);
+									// Record the collision pair (avoid duplicates)
+									const pairKey = [currentName, otherName].sort().join("|");
+									const exists = collisionPairsOut.some(p => 
+										[p.labelA, p.labelB].sort().join("|") === pairKey
+									);
+									if (!exists) {
+										collisionPairsOut.push({ labelA: currentName, labelB: otherName });
+									}
 								}
 							}
 						}
@@ -11501,6 +11629,15 @@ import "../styles.css";
 								// or by the toggleHover function for bottom labels
 							}
 						});
+					}
+
+					// Extract label name from a label element
+					function extractLabelName(labelEl: HTMLElement): string {
+						const p = labelEl.querySelector("p");
+						if (p) {
+							return p.innerHTML.replace(/<br\s*\/?>/gi, " ").trim();
+						}
+						return labelEl.textContent?.trim() || "unknown";
 					}
 
 					// Create all labels and group them by position type
@@ -11537,11 +11674,18 @@ import "../styles.css";
 					// Use double RAF to ensure layout is complete
 					requestAnimationFrame(() => {
 						requestAnimationFrame(() => {
-							// Highlight collisions for each group
-							highlightCollisions(labelGroups.top);
-							highlightCollisions(labelGroups.bottom);
-							highlightCollisions(labelGroups.left);
-							highlightCollisions(labelGroups.right);
+							// Clear previous collision pairs
+							const collisionPairs: Array<{ labelA: string; labelB: string }> = [];
+							
+							// Highlight collisions for each group and collect pairs
+							highlightCollisions(labelGroups.top, collisionPairs);
+							highlightCollisions(labelGroups.bottom, collisionPairs);
+							highlightCollisions(labelGroups.left, collisionPairs);
+							highlightCollisions(labelGroups.right, collisionPairs);
+							
+							// Update global collision pairs and refresh QA panel
+							currentCollisionPairs = collisionPairs;
+							updateCollisionReportUI();
 						});
 					});
 				}
@@ -11558,6 +11702,9 @@ import "../styles.css";
 				} else {
 					// console.log("toggleChecked true, retaining checked state")
 				}
+				// Clear collision pairs when labels are removed
+				currentCollisionPairs = [];
+				updateCollisionReportUI();
 			} else {
 				// console.log("labelDiv not found");
 			}
@@ -12338,6 +12485,522 @@ import "../styles.css";
 			dialog.addEventListener("click", (e) => {
 				if (e.target === dialog) closeDialog();
 			});
+		})();
+
+		// =============================================
+		// QA Panel Functions
+		// =============================================
+
+		/**
+		 * Update the collision report UI with current collision pairs
+		 */
+		function updateCollisionReportUI() {
+			const collisionList = document.getElementById("collision-list");
+			if (!collisionList) return;
+
+			if (currentCollisionPairs.length === 0) {
+				collisionList.innerHTML = '<span class="text-neutral-400 italic">No collisions detected</span>';
+			} else {
+				collisionList.innerHTML = currentCollisionPairs
+					.map(p => `<div class="py-0.5 border-b border-neutral-100 last:border-0">${escapeHtml(p.labelA)} ↔ ${escapeHtml(p.labelB)}</div>`)
+					.join("");
+			}
+		}
+
+		function escapeHtml(str: string): string {
+			return String(str)
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;");
+		}
+
+		/**
+		 * Compute QA metrics for the current view
+		 */
+		function computeCurrentQAMetrics(): {
+			collisions: Array<{ labelA: string; labelB: string }>;
+			collisionCount: number;
+			labelCount: number;
+			offCanvasCount: number;
+			floorNullCount: number;
+			viewBox: string;
+			pairName: string;
+			imageName: string;
+			csvName: string;
+		} {
+			const svg = globalSvgContainer?.querySelector("svg");
+			const viewBox = svg?.getAttribute("viewBox") || "0 0 4096 4096";
+			const vbParts = viewBox.split(/\s+/).map(Number);
+			const canvasWidth = vbParts[2] || 4096;
+			const canvasHeight = vbParts[3] || 4096;
+
+			// Get all circles from the current view
+			const group = svg?.querySelector("g");
+			const circles = group ? Array.from(group.querySelectorAll("circle")) : [];
+
+			let offCanvasCount = 0;
+			let floorNullCount = 0;
+
+			// Parse floor from current CSV filename (e.g., csv_floorplan_..._s1_0.csv -> floor 0)
+			const csvObj = importedCSVs[currentCSVIndex];
+			const csvName = csvObj?.name || csvObj?.file?.name || "";
+			const floorFromFilename = parseFloorFromFilename(csvName);
+
+			circles.forEach((circle) => {
+				const cx = parseFloat(circle.getAttribute("cx") || "0");
+				const cy = parseFloat(circle.getAttribute("cy") || "0");
+
+				// Check if off-canvas (outside 0..canvasWidth/Height)
+				if (cx < 0 || cx > canvasWidth || cy < 0 || cy > canvasHeight) {
+					offCanvasCount++;
+				}
+
+				// Check for floor-null: if filename indicates a floor (e.g., _0, _1), 
+				// but label doesn't have floor data
+				if (floorFromFilename !== null) {
+					const floorAttr = circle.getAttribute("data-floor");
+					if (!floorAttr) {
+						floorNullCount++;
+					}
+				}
+			});
+
+			// Get image name from current backplate
+			const imageEl = svg?.querySelector("image");
+			const imageName = imageEl?.getAttribute("data-original-name") || 
+				imageEl?.getAttribute("href")?.split("/").pop() || "";
+
+			return {
+				collisions: [...currentCollisionPairs],
+				collisionCount: currentCollisionPairs.length,
+				labelCount: circles.length,
+				offCanvasCount,
+				floorNullCount,
+				viewBox,
+				pairName: currentPairStem || csvName.replace(/^csv_floorplan_/, "").replace(/\.csv$/i, ""),
+				imageName,
+				csvName,
+			};
+		}
+
+		/**
+		 * Parse floor number from filename like csv_floorplan_..._s1_0.csv
+		 * Returns the floor number or null if not found
+		 */
+		function parseFloorFromFilename(filename: string): number | null {
+			// Match patterns like _s1_0 or _s2_1 at the end
+			const match = String(filename).match(/_s\d+_(\d+)(?:\.[^.]+)?$/i);
+			if (match) {
+				return parseInt(match[1], 10);
+			}
+			// Also try simple _0, _1 at end
+			const simpleMatch = String(filename).match(/_(\d+)(?:\.[^.]+)?$/i);
+			if (simpleMatch) {
+				return parseInt(simpleMatch[1], 10);
+			}
+			return null;
+		}
+
+		/**
+		 * Export collision pairs as CSV
+		 */
+		function exportCollisionCSV() {
+			if (currentCollisionPairs.length === 0) {
+				showToast("No collisions to export", "warning");
+				return;
+			}
+
+			const csvRows = ["label_a,label_b"];
+			currentCollisionPairs.forEach(p => {
+				csvRows.push(`"${p.labelA.replace(/"/g, '""')}","${p.labelB.replace(/"/g, '""')}"`);
+			});
+
+			const csvContent = csvRows.join("\n");
+			const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `collisions_${currentPairStem || "current"}.csv`;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+
+		/**
+		 * Export current QA metrics as JSON
+		 */
+		function exportQAJson() {
+			const qa = computeCurrentQAMetrics();
+			const qaJson = JSON.stringify(qa, null, 2);
+			const blob = new Blob([qaJson], { type: "application/json;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `qa_${qa.pairName || "current"}.json`;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+
+		/**
+		 * Export current labels as CSV (name,y,x with flipYX respected)
+		 */
+		function exportCurrentLabelsCSV() {
+			const svg = globalSvgContainer?.querySelector("svg");
+			const group = svg?.querySelector("g");
+			if (!group) {
+				showToast("No labels to export", "warning");
+				return;
+			}
+
+			const circles = Array.from(group.querySelectorAll("circle"));
+			const rows: string[] = [];
+
+			circles.forEach(circle => {
+				const name = circle.getAttribute("data-name") || circle.getAttribute("id") || "";
+				const cx = circle.getAttribute("cx") || "0";
+				const cy = circle.getAttribute("cy") || "0";
+
+				if (flipYX) {
+					rows.push(`${name},${cy},${cx}`);
+				} else {
+					rows.push(`${name},${cx},${cy}`);
+				}
+			});
+
+			const csvContent = rows.join("\n");
+			const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `labels_${currentPairStem || "current"}.csv`;
+			a.click();
+			URL.revokeObjectURL(url);
+		}
+
+		/**
+		 * Handle bulk file import for QA
+		 */
+		async function handleBulkQAImport(files: FileList) {
+			const fileArray = Array.from(files);
+			
+			// Separate images and CSVs
+			const imageFiles = fileArray.filter(f => 
+				f.type.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name)
+			);
+			const csvFiles = fileArray.filter(f => 
+				f.type === "text/csv" || /\.csv$/i.test(f.name)
+			);
+
+			// Match pairs by stem
+			const pairsMap = new Map<string, { imageFile: File | null; csvFile: File | null }>();
+
+			imageFiles.forEach(imgFile => {
+				const stem = getBulkQAStem(imgFile.name);
+				if (!pairsMap.has(stem)) {
+					pairsMap.set(stem, { imageFile: null, csvFile: null });
+				}
+				pairsMap.get(stem)!.imageFile = imgFile;
+			});
+
+			csvFiles.forEach(csvFile => {
+				const stem = getBulkQAStem(csvFile.name);
+				if (!pairsMap.has(stem)) {
+					pairsMap.set(stem, { imageFile: null, csvFile: null });
+				}
+				pairsMap.get(stem)!.csvFile = csvFile;
+			});
+
+			// Convert to array and analyze each pair
+			bulkQAPairs = [];
+			for (const [stem, pair] of pairsMap) {
+				bulkQAPairs.push({
+					stem,
+					imageFile: pair.imageFile,
+					csvFile: pair.csvFile,
+					qa: null
+				});
+			}
+
+			// Show the bulk summary container
+			const container = document.getElementById("bulk-summary-container");
+			if (container) container.style.display = "block";
+
+			// Process each pair and compute QA
+			for (let i = 0; i < bulkQAPairs.length; i++) {
+				const pair = bulkQAPairs[i];
+				try {
+					pair.qa = await analyzeBulkQAPair(pair);
+				} catch (e) {
+					console.error("Error analyzing pair:", pair.stem, e);
+					pair.qa = {
+						collisions: [],
+						collisionCount: 0,
+						labelCount: 0,
+						offCanvasCount: 0,
+						floorNullCount: 0,
+						viewBox: "0 0 4096 4096",
+						status: "error: " + (e as any).message
+					};
+				}
+			}
+
+			updateBulkSummaryTable();
+		}
+
+		/**
+		 * Get stem from filename for matching pairs
+		 */
+		function getBulkQAStem(filename: string): string {
+			return String(filename)
+				.replace(/\.[^.]+$/, "") // Remove extension
+				.toLowerCase()
+				.replace(/^backplate_image_floorplan_/, "")
+				.replace(/^backplate_image_/, "")
+				.replace(/^csv_floorplan_/, "")
+				.replace(/_export$/i, "");
+		}
+
+		/**
+		 * Analyze a single pair without loading into the main viewer
+		 */
+		async function analyzeBulkQAPair(pair: typeof bulkQAPairs[0]): Promise<typeof bulkQAPairs[0]["qa"]> {
+			// We need both files to analyze
+			if (!pair.csvFile) {
+				return {
+					collisions: [],
+					collisionCount: 0,
+					labelCount: 0,
+					offCanvasCount: 0,
+					floorNullCount: 0,
+					viewBox: "0 0 4096 4096",
+					status: "missing CSV"
+				};
+			}
+
+			// Parse the CSV to get label data
+			const csvText = await pair.csvFile.text();
+			const lines = csvText.trim().split("\n").filter(l => l.trim());
+			
+			// Parse labels from CSV
+			const labels: Array<{ name: string; x: number; y: number; floor: string | null }> = [];
+			const floorFromFilename = parseFloorFromFilename(pair.csvFile.name);
+			
+			for (const line of lines) {
+				const fields = line.split(",");
+				if (fields.length >= 3) {
+					const name = fields[0].includes("~") ? fields[0].split("~")[1] : fields[0];
+					const floor = fields[0].includes("~") ? fields[0].split("~")[0] : null;
+					// Assuming FTA order: name, y, x (with flipYX=true)
+					const y = parseFloat(fields[1]) || 0;
+					const x = parseFloat(fields[2]) || 0;
+					
+					if (x !== 0 || y !== 0) {
+						labels.push({ name, x, y, floor });
+					}
+				}
+			}
+
+			// Check for off-canvas (assuming 4096x4096 canvas)
+			const canvasSize = 4096;
+			let offCanvasCount = 0;
+			let floorNullCount = 0;
+
+			labels.forEach(label => {
+				if (label.x < 0 || label.x > canvasSize || label.y < 0 || label.y > canvasSize) {
+					offCanvasCount++;
+				}
+				if (floorFromFilename !== null && !label.floor) {
+					floorNullCount++;
+				}
+			});
+
+			// Compute collisions using bounding box simulation
+			// Use approximate collision detection based on label positions
+			const collisions = computeLabelCollisionsSim(labels);
+
+			const status = collisions.length > 0 ? "has collisions" : 
+				offCanvasCount > 0 ? "has off-canvas" : 
+				floorNullCount > 0 ? "has floor-null" : 
+				"ok";
+
+			return {
+				collisions,
+				collisionCount: collisions.length,
+				labelCount: labels.length,
+				offCanvasCount,
+				floorNullCount,
+				viewBox: "0 0 4096 4096",
+				status
+			};
+		}
+
+		/**
+		 * Simulate collision detection for labels without rendering
+		 * Uses approximate bounding box based on typical label size
+		 */
+		function computeLabelCollisionsSim(labels: Array<{ name: string; x: number; y: number }>): Array<{ labelA: string; labelB: string }> {
+			const collisions: Array<{ labelA: string; labelB: string }> = [];
+			const labelSize = 100; // Approximate label size in pixels
+			const padding = 8;
+
+			for (let i = 0; i < labels.length; i++) {
+				for (let j = i + 1; j < labels.length; j++) {
+					const a = labels[i];
+					const b = labels[j];
+					
+					// Check if labels overlap (simple distance check)
+					const dx = Math.abs(a.x - b.x);
+					const dy = Math.abs(a.y - b.y);
+					
+					if (dx < (labelSize + padding) && dy < (labelSize + padding)) {
+						collisions.push({ labelA: a.name, labelB: b.name });
+					}
+				}
+			}
+
+			return collisions;
+		}
+
+		/**
+		 * Update the bulk summary table UI
+		 */
+		function updateBulkSummaryTable() {
+			const tbody = document.getElementById("bulk-summary-tbody");
+			if (!tbody) return;
+
+			tbody.innerHTML = bulkQAPairs.map((pair, idx) => {
+				const qa = pair.qa;
+				const statusClass = qa?.status === "ok" ? "text-green-600" : 
+					qa?.status?.startsWith("error") ? "text-red-600" : "text-amber-600";
+				
+				return `
+					<tr class="border-b border-neutral-100 hover:bg-neutral-100 cursor-pointer" data-bulk-idx="${idx}">
+						<td class="px-2 py-1 truncate max-w-[120px]" title="${escapeHtml(pair.stem)}">${escapeHtml(pair.stem)}</td>
+						<td class="px-2 py-1 text-center ${statusClass}">${qa?.status || "pending"}</td>
+						<td class="px-2 py-1 text-center">${qa?.collisionCount ?? "-"}</td>
+						<td class="px-2 py-1 text-center">${qa?.offCanvasCount ?? "-"}</td>
+						<td class="px-2 py-1 text-center">${qa?.floorNullCount ?? "-"}</td>
+					</tr>
+				`;
+			}).join("");
+
+			// Add click handlers to load pair into viewer
+			tbody.querySelectorAll("tr[data-bulk-idx]").forEach(row => {
+				row.addEventListener("click", () => {
+					const idx = parseInt(row.getAttribute("data-bulk-idx") || "0", 10);
+					loadBulkPairIntoViewer(idx);
+				});
+			});
+		}
+
+		/**
+		 * Load a specific bulk pair into the main viewer
+		 */
+		async function loadBulkPairIntoViewer(idx: number) {
+			const pair = bulkQAPairs[idx];
+			if (!pair) return;
+
+			currentPairStem = pair.stem;
+
+			// Create a synthetic FileList-like array
+			const files: File[] = [];
+			if (pair.imageFile) files.push(pair.imageFile);
+			if (pair.csvFile) files.push(pair.csvFile);
+
+			if (files.length > 0) {
+				// Use the existing file handling mechanism
+				const dataTransfer = new DataTransfer();
+				files.forEach(f => dataTransfer.items.add(f));
+				
+				const input = document.getElementById("myFile") as HTMLInputElement;
+				if (input) {
+					input.files = dataTransfer.files;
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+				}
+			}
+		}
+
+		/**
+		 * Export all bulk pairs as a ZIP file
+		 */
+		async function exportBulkZip() {
+			if (bulkQAPairs.length === 0) {
+				showToast("No bulk pairs to export", "warning");
+				return;
+			}
+
+			// Dynamic import of JSZip
+			const JSZip = (await import("jszip")).default;
+			const zip = new JSZip();
+
+			for (const pair of bulkQAPairs) {
+				if (pair.qa) {
+					// Add qa.json for each pair
+					const qaJson = JSON.stringify({
+						stem: pair.stem,
+						imageName: pair.imageFile?.name || null,
+						csvName: pair.csvFile?.name || null,
+						...pair.qa
+					}, null, 2);
+					zip.file(`${pair.stem}/qa.json`, qaJson);
+
+					// Add the original CSV if available
+					if (pair.csvFile) {
+						const csvText = await pair.csvFile.text();
+						zip.file(`${pair.stem}/${pair.csvFile.name}`, csvText);
+					}
+				}
+			}
+
+			// Generate and download the zip
+			const blob = await zip.generateAsync({ type: "blob" });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `bulk_qa_export_${new Date().toISOString().slice(0, 10)}.zip`;
+			a.click();
+			URL.revokeObjectURL(url);
+
+			showToast(`Exported ${bulkQAPairs.length} pairs to ZIP`, "success");
+		}
+
+		/**
+		 * Clear bulk QA data
+		 */
+		function clearBulkQA() {
+			bulkQAPairs = [];
+			currentPairStem = "";
+			const container = document.getElementById("bulk-summary-container");
+			if (container) container.style.display = "none";
+			const tbody = document.getElementById("bulk-summary-tbody");
+			if (tbody) tbody.innerHTML = "";
+		}
+
+		// Wire up QA Panel event listeners
+		(function setupQAPanelListeners() {
+			// Export collision CSV
+			document.getElementById("export-collision-csv")?.addEventListener("click", exportCollisionCSV);
+
+			// Bulk QA import
+			document.getElementById("bulk-qa-import")?.addEventListener("change", (e) => {
+				const input = e.target as HTMLInputElement;
+				if (input.files && input.files.length > 0) {
+					handleBulkQAImport(input.files);
+					input.value = ""; // Reset for next import
+				}
+			});
+
+			// Bulk export ZIP
+			document.getElementById("bulk-export-zip")?.addEventListener("click", exportBulkZip);
+
+			// Bulk clear
+			document.getElementById("bulk-clear")?.addEventListener("click", clearBulkQA);
+
+			// Export qa.json
+			document.getElementById("export-qa-json")?.addEventListener("click", exportQAJson);
+
+			// Export current labels CSV
+			document.getElementById("export-qa-csv")?.addEventListener("click", exportCurrentLabelsCSV);
 		})();
 	</script>
 </html>
