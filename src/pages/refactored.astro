@@ -422,6 +422,14 @@ import "../styles.css";
 								Export labeled PNGs
 							</button>
 							<button
+								id="bulk-export-labeled-svg"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+								title="Export every loaded pair as a labeled SVG (floorplan + text labels, no ghost outlines)"
+							>
+								Export labeled SVGs
+							</button>
+							<button
 								id="bulk-clear"
 								class="flex items-center justify-center text-xs p-1.5 rounded bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700"
 								type="button"
@@ -468,6 +476,26 @@ import "../styles.css";
 								title="Export every loaded pair as labeled PNGs in a ZIP (no ghost outlines)"
 							>
 								Batch labeled ZIP
+							</button>
+						</div>
+						<!-- Labeled SVG Export -->
+						<p class="text-xs font-medium text-neutral-600 mb-1 mt-2">Labeled SVG Export</p>
+						<div class="flex gap-1">
+							<button
+								id="export-labeled-svg"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+								title="Export current floorplan + text labels as self-contained SVG (no ghost outlines)"
+							>
+								Export labeled SVG
+							</button>
+							<button
+								id="batch-export-labeled-svg"
+								class="flex-1 flex items-center justify-center text-xs p-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-white"
+								type="button"
+								title="Export every loaded pair as labeled SVGs in a ZIP (no ghost outlines)"
+							>
+								Batch labeled SVG ZIP
 							</button>
 						</div>
 					</div>
@@ -13345,6 +13373,223 @@ import "../styles.css";
 			}
 		}
 
+		// ─────────────────────────────────────────────────────────────────────────────
+		// Labeled SVG Export (SC-EXPORT-LABELED-SVG)
+		// ─────────────────────────────────────────────────────────────────────────────
+
+		function setLabeledSvgExportButtonsDisabled(disabled: boolean) {
+			["export-labeled-svg", "batch-export-labeled-svg", "bulk-export-labeled-svg"].forEach((id) => {
+				const btn = document.getElementById(id) as HTMLButtonElement | null;
+				if (btn) btn.disabled = disabled;
+			});
+		}
+
+		function formatLabelTextForSvg(text: string): string[] {
+			let cleanedText = text;
+			if (text.includes('_')) {
+				const parts = text.split('_');
+				const isFirstPartNumber = /^\d+$/.test(parts[0]);
+				const isLastPartNumber = /^\d+$/.test(parts[parts.length - 1]);
+				if (isFirstPartNumber && isLastPartNumber && parts.length >= 3) {
+					cleanedText = parts.slice(1, -1).join('');
+				} else if (isFirstPartNumber && parts.length >= 2) {
+					cleanedText = parts.slice(1).join('');
+				}
+			}
+			const spacedText = cleanedText.replace(/([A-Z0-9])/g, " $1").trim();
+			const words = spacedText.split(' ').filter(word => word.length > 0);
+			if (words.length > 2) {
+				const midPoint = Math.ceil(words.length / 2);
+				return [words.slice(0, midPoint).join(' '), words.slice(midPoint).join(' ')];
+			}
+			return [spacedText];
+		}
+
+		function escapeXmlText(s: string): string {
+			return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+		}
+
+		async function convertImageHrefToDataUri(href: string): Promise<string> {
+			if (!href) return '';
+			if (href.startsWith('data:')) return href;
+			try {
+				const response = await fetch(href);
+				const blob = await response.blob();
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onloadend = () => resolve(reader.result as string);
+					reader.onerror = reject;
+					reader.readAsDataURL(blob);
+				});
+			} catch (e) {
+				console.warn('Could not convert image href to data URI:', e);
+				return href;
+			}
+		}
+
+		async function renderLabeledSvgString(): Promise<string | null> {
+			const svg = document.querySelector("#svg-container svg");
+			if (!svg) return null;
+
+			ensureLabelsOnForExport();
+			await nextPaint();
+
+			const { width, height } = getSvgCanvasSize(svg);
+			const viewBox = svg.getAttribute("viewBox") || `0 0 ${width} ${height}`;
+
+			let backplateDataUri = '';
+			const href = getSvgBackplateHref(svg);
+			if (href) {
+				backplateDataUri = await convertImageHrefToDataUri(href);
+			}
+
+			const circles = Array.from(svg.querySelectorAll("circle, polygon[data-triangle='true']"));
+			const labelElements: Array<{ cx: number; cy: number; lines: string[] }> = [];
+
+			for (const el of circles) {
+				const cx = parseFloat(el.getAttribute("cx") || el.getAttribute("data-center-x") || "0");
+				const cy = parseFloat(el.getAttribute("cy") || el.getAttribute("data-center-y") || "0");
+				const name = el.getAttribute("id") || el.getAttribute("data-fullname") || "";
+				if (!name || name === "undefined") continue;
+				const lines = formatLabelTextForSvg(name);
+				labelElements.push({ cx, cy, lines });
+			}
+
+			const fontSize = 36;
+			const lineHeight = 40;
+			const paddingX = 16;
+			const paddingY = 8;
+			const borderRadius = 12;
+			const offsetY = 4;
+
+			let labelsMarkup = '';
+			for (const label of labelElements) {
+				const { cx, cy, lines } = label;
+				const textHeight = lines.length * lineHeight;
+				const maxLineWidth = Math.max(...lines.map(l => l.length)) * fontSize * 0.55;
+				const rectWidth = maxLineWidth + paddingX * 2;
+				const rectHeight = textHeight + paddingY * 2;
+				const rectX = cx - rectWidth / 2;
+				const rectY = cy + offsetY;
+
+				labelsMarkup += `
+		<g class="label-group">
+			<rect x="${rectX}" y="${rectY}" width="${rectWidth}" height="${rectHeight}" rx="${borderRadius}" ry="${borderRadius}" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>`;
+
+				lines.forEach((line, i) => {
+					const textY = rectY + paddingY + (i + 0.75) * lineHeight;
+					labelsMarkup += `
+			<text x="${cx}" y="${textY}" text-anchor="middle" fill="white" font-family="Poppins, sans-serif" font-size="${fontSize}" font-weight="400">${escapeXmlText(line)}</text>`;
+				});
+
+				labelsMarkup += `
+		</g>`;
+			}
+
+			const svgString = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="${viewBox}" width="${width}" height="${height}">
+	<defs>
+		<style>
+			@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400&amp;display=swap');
+		</style>
+	</defs>
+	${backplateDataUri ? `<image x="0" y="0" width="${width}" height="${height}" href="${backplateDataUri}" preserveAspectRatio="none"/>` : ''}
+	<g id="labels">${labelsMarkup}
+	</g>
+</svg>`;
+
+			return svgString;
+		}
+
+		function labeledSvgBasename(): string {
+			return getActiveSvgExportBasename() || currentPairStem || "labeled_floorplan";
+		}
+
+		async function exportLabeledSvg() {
+			const svg = document.querySelector("#svg-container svg");
+			if (!svg) {
+				showToast("No floorplan loaded to export", "warning");
+				return;
+			}
+
+			setLabeledSvgExportButtonsDisabled(true);
+			try {
+				const svgString = await renderLabeledSvgString();
+				if (!svgString) {
+					showToast("Failed to create SVG", "error");
+					return;
+				}
+				const blob = new Blob([svgString], { type: "image/svg+xml" });
+				downloadBlobFile(blob, `${labeledSvgBasename()}_labeled.svg`);
+				showToast("Labeled SVG exported", "success");
+			} catch (e) {
+				console.error(e);
+				showToast("Failed to export labeled SVG", "error");
+			} finally {
+				setLabeledSvgExportButtonsDisabled(false);
+			}
+		}
+
+		async function batchExportLabeledSvg() {
+			const hasBulkPairs = bulkQAPairs && bulkQAPairs.length > 0;
+			if (!hasBulkPairs) {
+				const svg = document.querySelector("#svg-container svg");
+				if (!svg) {
+					showToast("Load Multiple Pairs first, or export the current pair", "warning");
+					return;
+				}
+				await exportLabeledSvg();
+				return;
+			}
+
+			setLabeledSvgExportButtonsDisabled(true);
+			const savedStem = currentPairStem;
+			const savedIdx = bulkQAPairs.findIndex((p) => p.stem === savedStem);
+			showToast(`Exporting ${bulkQAPairs.length} labeled SVGs to ZIP...`, "success");
+
+			try {
+				const JSZip = (await import("jszip")).default;
+				const zip = new JSZip();
+
+				let exportedCount = 0;
+
+				for (let i = 0; i < bulkQAPairs.length; i++) {
+					const pair = bulkQAPairs[i];
+					try {
+						await loadBulkPairIntoViewer(i);
+						ensureLabelsOnForExport();
+						await nextPaint();
+						const svgString = await renderLabeledSvgString();
+						if (svgString) {
+							zip.file(`${pair.stem}_labeled.svg`, svgString);
+							exportedCount++;
+						}
+					} catch (e) {
+						console.error(`Error exporting pair ${pair.stem}:`, e);
+					}
+				}
+
+				if (savedIdx >= 0) {
+					await loadBulkPairIntoViewer(savedIdx);
+					ensureLabelsOnForExport();
+				}
+
+				if (exportedCount === 0) {
+					showToast("No SVGs were exported", "warning");
+					return;
+				}
+
+				const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+				downloadBlobFile(zipBlob, `labeled_floorplans_svg_${new Date().toISOString().slice(0, 10)}.zip`);
+				showToast(`Exported ${exportedCount} labeled SVGs to ZIP`, "success");
+			} catch (e) {
+				console.error(e);
+				showToast("Failed to export labeled SVG ZIP", "error");
+			} finally {
+				setLabeledSvgExportButtonsDisabled(false);
+			}
+		}
+
 		// Wire up QA Panel event listeners
 		(function setupQAPanelListeners() {
 			// Export collision CSV
@@ -13382,6 +13627,19 @@ import "../styles.css";
 			});
 			document.getElementById("bulk-export-labeled-png")?.addEventListener("click", () => {
 				void batchExportLabeledPng();
+			});
+
+			// Export labeled SVG (no ghost outlines)
+			document.getElementById("export-labeled-svg")?.addEventListener("click", () => {
+				void exportLabeledSvg();
+			});
+
+			// Batch export labeled SVGs (Current Pair Export + Bulk Summary)
+			document.getElementById("batch-export-labeled-svg")?.addEventListener("click", () => {
+				void batchExportLabeledSvg();
+			});
+			document.getElementById("bulk-export-labeled-svg")?.addEventListener("click", () => {
+				void batchExportLabeledSvg();
 			});
 		})();
 	</script>
