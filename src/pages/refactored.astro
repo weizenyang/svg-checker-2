@@ -13686,5 +13686,105 @@ import "../styles.css";
 				void batchExportLabeledSvg();
 			});
 		})();
-	</script>
+	
+		// ===== Headless automation API (window.svgChecker.labels) =====
+		// Thin wrappers around existing functions; UI behaviour unchanged. See docs/headless-api.md
+		(function setupLabelsHeadlessApi() {
+			const w = window as any;
+			w.svgChecker = w.svgChecker || {};
+			w.svgChecker.version = "1.0.0";
+			let readyResolve: (v: any) => void;
+			const readyPromise = new Promise((r) => (readyResolve = r));
+			async function toFile(source: any, name: string, type: string): Promise<File> {
+				if (source instanceof File) return source;
+				if (source instanceof Blob || source instanceof ArrayBuffer || ArrayBuffer.isView(source)) return new File([source as any], name, { type });
+				if (typeof source === "string") {
+					if (type === "text/csv" && /[\n,]/.test(source) && !/^(https?:|\/|blob:|data:)/.test(source)) return new File([source], name, { type });
+					const res = await fetch(source);
+					if (!res.ok) throw new Error(`fetch ${source} -> ${res.status}`);
+					const base = decodeURIComponent(source.split("?")[0].split("/").pop() || name);
+					return new File([await res.blob()], base, { type });
+				}
+				throw new Error("Unsupported source type");
+			}
+			async function settle() { await nextPaint(); await new Promise((r) => setTimeout(r, 150)); await nextPaint(); }
+			function collisionsCsv(): string {
+				const rows = ["label_a,label_b"];
+				currentCollisionPairs.forEach((p) => rows.push(`"${p.labelA.replace(/"/g, '""')}","${p.labelB.replace(/"/g, '""')}"`));
+				return rows.join("\n");
+			}
+			async function toPairFiles(p: any, i: number) {
+				const stem = p.stem || `pair_${i}`;
+				const csv = await toFile(p.csv, p.csvName || `csv_floorplan_${stem}.csv`, "text/csv");
+				const img = p.backplate ? await toFile(p.backplate, p.backplateName || `backplate_image_floorplan_${stem}.png`, "image/png") : null;
+				return { stem, csv, img };
+			}
+			const api = {
+				ready: false,
+				whenReady: () => readyPromise,
+				async loadPair(p: { csv: any; backplate?: any; stem?: string }) {
+					const f = await toPairFiles(p, 0);
+					const files = [f.csv, ...(f.img ? [f.img] : [])];
+					await handleBulkQAImport(files as any);
+					const idx = Math.max(0, bulkQAPairs.findIndex((x) => x.csvFile === f.csv));
+					if (p.stem) bulkQAPairs[idx].stem = p.stem;
+					const ok = await loadBulkPairIntoViewer(idx);
+					await settle();
+					return { loaded: !!ok, stem: bulkQAPairs[idx]?.stem };
+				},
+				async runQA() { await settle(); return computeCurrentQAMetrics(); },
+				getCollisionsCsv: () => collisionsCsv(),
+				async exportLabeledSvg(): Promise<string> {
+					const pair = bulkQAPairs.find((p) => p.stem === currentPairStem);
+					const s = await renderLabeledSvgString({ fallbackImageFile: pair?.imageFile || null });
+					if (!s) throw new Error("No backplate image found");
+					return s;
+				},
+				async exportLabeledPng(): Promise<Blob> {
+					const b = await renderLabeledPngBlob();
+					if (!b) throw new Error("No floorplan loaded");
+					return b;
+				},
+				async runBatch(pairs: any[], opts: { png?: boolean } = {}) {
+					const files: File[] = [];
+					for (let i = 0; i < pairs.length; i++) {
+						const f = await toPairFiles(pairs[i], i);
+						files.push(f.csv); if (f.img) files.push(f.img);
+					}
+					await handleBulkQAImport(files as any);
+					const JSZip = (await import("jszip")).default;
+					const zip = new JSZip();
+					const results: any[] = [];
+					for (let i = 0; i < bulkQAPairs.length; i++) {
+						const pair = bulkQAPairs[i];
+						const r: any = { stem: pair.stem, imageName: pair.imageFile?.name || null, csvName: pair.csvFile?.name || null, bulkQa: pair.qa };
+						try {
+							if (!(await loadBulkPairIntoViewer(i))) throw new Error("load failed");
+							await settle();
+							r.qa = computeCurrentQAMetrics();
+							r.collisionsCsv = collisionsCsv();
+							zip.file(`${pair.stem}/qa.json`, JSON.stringify({ stem: pair.stem, imageName: r.imageName, csvName: r.csvName, ...r.qa }, null, 2));
+							zip.file(`${pair.stem}/collisions.csv`, r.collisionsCsv);
+							if (pair.csvFile) zip.file(`${pair.stem}/${pair.csvFile.name}`, await pair.csvFile.text());
+							const svg = await renderLabeledSvgString({ fallbackImageFile: pair.imageFile });
+							if (svg) zip.file(`${pair.stem}_labeled.svg`, svg);
+							r.labeledSvg = !!svg;
+							if (opts.png !== false) {
+								const png = await renderLabeledPngBlob();
+								if (png) zip.file(`${pair.stem}_labeled.png`, png);
+								r.labeledPng = !!png;
+							}
+							r.status = "ok";
+						} catch (e: any) { r.status = "error: " + (e?.message || e); }
+						results.push(r);
+					}
+					const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+					return { results, zip: zipBlob };
+				},
+			};
+			w.svgChecker.labels = api;
+			api.ready = true;
+			readyResolve!(api);
+		})();
+</script>
 </html>
