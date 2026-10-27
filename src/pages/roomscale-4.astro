@@ -4931,7 +4931,7 @@ async function renderOverlayCanvas(cone) {
     }
 
     // Export GLB: static geometry (no skin / shape keys), Draco-compressed (KHR_draco_mesh_compression)
-    function exportToGLB(object, filename) {
+    function exportToGLB(object, filename, apiOpts = null) {
         let exportRoot;
         try {
             exportRoot = SkeletonUtils.clone(object);
@@ -5029,11 +5029,16 @@ async function renderOverlayCanvas(cone) {
                     return;
                 }
 
-                saveBlob(blob, filename);
+                if (apiOpts && typeof apiOpts.onResult === "function") {
+                    apiOpts.onResult(blob);
+                } else {
+                    saveBlob(blob, filename);
+                }
             },
             (error) => {
                 disposeExportObject3D(exportRoot);
                 console.error("An error occurred during the GLB export", error);
+                if (apiOpts && typeof apiOpts.onError === "function") apiOpts.onError(error);
             },
             { binary: true, animations: [] },
         );
@@ -11051,6 +11056,86 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
         });
     }
 
+    // ===== Headless automation API (window.svgChecker.roomscale) =====
+    // Thin wrappers around existing functions; UI behaviour unchanged. See docs/headless-api.md
+    (function setupRoomscaleHeadlessApi() {
+        const w = window as any;
+        w.svgChecker = w.svgChecker || {};
+        w.svgChecker.version = "1.0.0";
+        let readyResolve;
+        const readyPromise = new Promise((r) => (readyResolve = r));
+        async function toFile(source, name, type) {
+            if (source instanceof File) return source;
+            if (source instanceof Blob) return new File([source], name, { type });
+            if (source instanceof ArrayBuffer || ArrayBuffer.isView(source)) return new File([source], name, { type });
+            if (typeof source === "string") {
+                const res = await fetch(source);
+                if (!res.ok) throw new Error(`fetch ${source} -> ${res.status}`);
+                const base = source.split("?")[0].split("/").pop() || name;
+                return new File([await res.blob()], base, { type });
+            }
+            throw new Error("Unsupported source type");
+        }
+        function countFaces() {
+            let faces = 0, meshes = 0;
+            objects.forEach((o) => o.traverse((c) => {
+                if (c.isMesh && c.geometry?.attributes?.position) {
+                    meshes++;
+                    faces += (c.geometry.index ? c.geometry.index.count : c.geometry.attributes.position.count) / 3;
+                }
+            }));
+            return { meshes, faces };
+        }
+        const api = {
+            ready: false,
+            whenReady: () => readyPromise,
+            async loadMesh(source, opts = {}) {
+                const format = (opts.format || "glb").toLowerCase();
+                if (format !== "glb") throw new Error("Only 'glb' is supported by the headless API");
+                let file = await toFile(source, "model.glb", "model/gltf-binary");
+                if (!/\.glb$/i.test(file.name)) file = new File([file], file.name + ".glb", { type: file.type });
+                await loadModelFile(file);
+                if (opts.cameraCsv) {
+                    const csv = opts.cameraCsv.includes("\n") || opts.cameraCsv.includes(",")
+                        ? new File([opts.cameraCsv], "cameras.csv", { type: "text/csv" })
+                        : await toFile(opts.cameraCsv, "cameras.csv", "text/csv");
+                    await loadCSVFile(csv.name.toLowerCase().endsWith(".csv") ? csv : new File([csv], "cameras.csv"));
+                }
+                renderer.render(scene, camera);
+                return { name: file.name, objects: objects.length, cameras: markers.length, ...countFaces() };
+            },
+            detectReversedNormalsFromCamera(position) {
+                const p = position ? new THREE.Vector3(position.x, position.y, position.z) : camera.position.clone();
+                const faces = detectReversedNormalsFromCamera(p) || [];
+                return { count: faces.length, faces };
+            },
+            async selectAllReversedFaces() {
+                await selectAllReversedFaces();
+                return { selected: selectedReversedFaceIds.size };
+            },
+            flipSelectedNormals() {
+                const before = selectedReversedFaceIds.size;
+                flipSelectedNormals();
+                return { flipped: before };
+            },
+            getSelectedCount: () => selectedReversedFaceIds.size,
+            getSummary: () => ({ objects: objects.length, cameras: markers.length, selected: selectedReversedFaceIds.size, ...countFaces() }),
+            exportGLB(opts = {}) {
+                return new Promise((resolve, reject) => {
+                    if (objects.length === 0) return reject(new Error("No model loaded"));
+                    const target = opts.scene ? scene : objects[0];
+                    exportToGLB(target, "export.glb", {
+                        onResult: (blob) => blob.arrayBuffer().then(resolve, reject),
+                        onError: reject,
+                    });
+                });
+            },
+        };
+        w.svgChecker.roomscale = api;
+        api.ready = true;
+        readyResolve(api);
+    })();
+
     //Gizmo controls
     document.getElementById("camera-top").addEventListener("click", (e) => {
         camera.position.set(0, 400, 0);
@@ -11088,6 +11173,7 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
         
         updateLabelPositions(); // Fix label drift on window resize
     }
+
 </script>
 
 <style>
