@@ -6918,32 +6918,35 @@ import "../styles.css";
 			const mediaFiles = Array.from(files).filter((file) =>
 				isRasterOrVideoFile(file),
 			);
-			if (mediaFiles.length === 0) return;
+			if (mediaFiles.length === 0) return Promise.resolve();
 
-			mediaFiles.forEach((mediaFile) => {
-				const reader = new FileReader();
-				const isVideo =
-					String(mediaFile.type || "").startsWith("video/") ||
-					/\.(mp4|webm|ogg)$/i.test(mediaFile.name || "");
-				reader.onload = (event) => {
-					const contents = event.target.result;
-					const matchedSvgs = findMatchedSvgObjects(
-						mediaFile.name,
-						importedSVGs,
-					);
-					console.log(
-						isVideo ? "Video File" : "Image File",
-						mediaFile.name,
-						"->",
-						matchedSvgs.map((s) => s.name),
-					);
+			const filePromises = mediaFiles.map((mediaFile) => {
+				return new Promise((resolveFile) => {
+					const reader = new FileReader();
+					const isVideo =
+						String(mediaFile.type || "").startsWith("video/") ||
+						/\.(mp4|webm|ogg)$/i.test(mediaFile.name || "");
+					reader.onload = (event) => {
+						const contents = event.target.result;
+						const matchedSvgs = findMatchedSvgObjects(
+							mediaFile.name,
+							importedSVGs,
+						);
+						console.log(
+							isVideo ? "Video File" : "Image File",
+							mediaFile.name,
+							"->",
+							matchedSvgs.map((s) => s.name),
+						);
 
-					if (!isVideo && !imageList.some((img) => img.name === mediaFile.name)) {
-						imageList.push({ name: mediaFile.name, data: contents as string });
-					}
+						if (!isVideo && !imageList.some((img) => img.name === mediaFile.name)) {
+							imageList.push({ name: mediaFile.name, data: contents as string });
+						}
 
-					const applyToMatchedSvgs = () => {
-					matchedSvgs.forEach((svgObj) => {
+						// Collect promises for each media element to finish loading
+						const mediaLoadPromises = [];
+
+						matchedSvgs.forEach((svgObj) => {
 							const svgElement = svgObj.element;
 							const viewBox = svgElement.getAttribute("viewBox").split(" ");
 							
@@ -6996,6 +6999,16 @@ import "../styles.css";
 								foreignObject.appendChild(video);
 								console.log("Adding new background video to SVG");
 								svgElement.insertBefore(foreignObject, svgElement.firstChild);
+
+								// Wait for video to be ready
+								mediaLoadPromises.push(new Promise((resolveMedia) => {
+									if (video.readyState >= 2) {
+										resolveMedia();
+									} else {
+										video.addEventListener("loadeddata", () => resolveMedia(), { once: true });
+										video.addEventListener("error", () => resolveMedia(), { once: true });
+									}
+								}));
 							} else {
 								// Keep existing viewBox (4096×4096); CSV coords are authored in that space.
 								// Stretch the bitmap to fill — do not resize viewBox to naturalWidth.
@@ -7018,14 +7031,23 @@ import "../styles.css";
 								svgImage.setAttributeNS(null, "data-original-filename", mediaFile.name || "");
 								console.log("Adding new background image to SVG");
 								svgElement.insertBefore(svgImage, svgElement.firstChild);
-							}
-					});
-					};
 
-					applyToMatchedSvgs();
-				};
-				reader.readAsDataURL(mediaFile);
+								// Wait for image to load
+								mediaLoadPromises.push(new Promise((resolveMedia) => {
+									svgImage.addEventListener("load", () => resolveMedia(), { once: true });
+									svgImage.addEventListener("error", () => resolveMedia(), { once: true });
+								}));
+							}
+						});
+
+						// Resolve when all media elements for this file are loaded
+						Promise.all(mediaLoadPromises).then(() => resolveFile());
+					};
+					reader.readAsDataURL(mediaFile);
+				});
 			});
+
+			return Promise.all(filePromises);
 		}
 
 		function handleFileChange(files, opts) {
@@ -7147,10 +7169,11 @@ import "../styles.css";
 					reader.readAsText(fileToProcess);
 				});
 			} else if (isRasterOrVideoFile(file)) {
-				handleDraggedImages(fileArr)
-				if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-					setTimeout(() => processMultipleCsvFiles(pendingCsvFollowUp), 100);
-				}
+				handleDraggedImages(fileArr).then(() => {
+					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+						processMultipleCsvFiles(pendingCsvFollowUp);
+					}
+				});
 			} else if (isCsvFile(file)) {
 				const allCsvs = fileArr.filter((f) => isCsvFile(f) && !/^automation_/i.test(f.name || ""));
 				if (allCsvs.length > 0) {
@@ -7197,10 +7220,11 @@ import "../styles.css";
 				});
 			} else if (isRasterOrVideoFile(file)) {
 				if (importedSVGs.length > 0) {
-					handleDraggedImages(fileArr);
-					if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
-						processMultipleCsvFiles(pendingCsvFollowUp);
-					}
+					handleDraggedImages(fileArr).then(() => {
+						if (pendingCsvFollowUp && pendingCsvFollowUp.length > 0) {
+							processMultipleCsvFiles(pendingCsvFollowUp);
+						}
+					});
 				} else {
 				const isVideo =
 					String(file.type || "").startsWith("video/") ||
