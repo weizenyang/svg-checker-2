@@ -11131,6 +11131,62 @@ async function render360SnapshotForCone(cone, allCones = markers, showNormals = 
                 });
             },
         };
+        // ----- window.roomscale: one-call reversed-normal fix (scriptable, no clicks) -----
+        // Reuses detectReversedNormalsFromCamera / selectAllReversedFaces / flipSelectedNormals / exportToGLB.
+        function reversedFromPositions(positions) {
+            const ids = new Set();
+            positions.forEach((p) => (detectReversedNormalsFromCamera(p) || []).forEach((f) => ids.add(f.faceId)));
+            return ids;
+        }
+        function cameraPositions(opts) {
+            if (opts && Array.isArray(opts.positions) && opts.positions.length) {
+                return opts.positions.map((p) => new THREE.Vector3(p.x, p.y, p.z));
+            }
+            const list = [];
+            markers.forEach((cone) => {
+                if (cone.cameraPos && cone.parent && cone.parent.visible) {
+                    const v = new THREE.Vector3();
+                    cone.getWorldPosition(v);
+                    list.push(v);
+                }
+            });
+            if (!list.length) list.push(camera.position.clone());
+            return list;
+        }
+        // method: "render" (default when cameras exist; same as "Select all reversed" button)
+        //         "geometric" (dot-product test from camera/marker positions or opts.positions)
+        api.detectReversed = async function (opts = {}) {
+            const method = opts.method || (markers.length ? "render" : "geometric");
+            if (method === "render") {
+                await selectAllReversedFaces();
+            } else {
+                const ids = reversedFromPositions(cameraPositions(opts));
+                selectedReversedFaceIds.clear();
+                ids.forEach((id) => selectedReversedFaceIds.add(id));
+                updateSelectedReversedFacesHighlights();
+            }
+            return { method, count: selectedReversedFaceIds.size };
+        };
+        api.flipReversed = function () {
+            const n = selectedReversedFaceIds.size;
+            if (n) flipSelectedNormals();
+            return n;
+        };
+        api.run = async function (input, opts = {}) {
+            if (input) await api.loadMesh(input, opts);
+            const det = await api.detectReversed(opts);
+            const reversedBefore = det.count;
+            const flipped = api.flipReversed();
+            selectedReversedFaceIds.clear();
+            updateSelectedReversedFacesHighlights();
+            const after = await api.detectReversed({ ...opts, method: det.method });
+            const reversedAfter = after.count;
+            selectedReversedFaceIds.clear();
+            updateSelectedReversedFacesHighlights();
+            const glb = await api.exportGLB(opts);
+            return { method: det.method, reversedBefore, flipped, reversedAfter, glb };
+        };
+        w.roomscale = api;
         w.svgChecker.roomscale = api;
         api.ready = true;
         readyResolve(api);
